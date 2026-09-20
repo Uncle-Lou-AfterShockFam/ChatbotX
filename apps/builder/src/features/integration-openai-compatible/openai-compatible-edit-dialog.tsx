@@ -67,7 +67,11 @@ export function OpenaiCompatibleEditDialog({
     {
       actionProps: {
         onSuccess: () => {
-          toast.success(t("messages.updatedSuccess"))
+          toast.success(
+            t("messages.updatedSuccess", {
+              feature: t("openaiCompatible.provider"),
+            }),
+          )
           setOpen(false)
           router.refresh()
         },
