@@ -223,11 +223,13 @@ export function useSequenceStep({
         )
         router.refresh()
       } else {
-        toast.error(t("messages.deleteFailed"))
+        toast.error(
+          t("messages.deleteFailed", { feature: t("sequences.step") }),
+        )
       }
     } catch (error) {
       console.error("Error deleting step:", error)
-      toast.error(t("messages.deleteFailed"))
+      toast.error(t("messages.deleteFailed", { feature: t("sequences.step") }))
     }
   }, [step?.id, workspaceId, sequenceId, t, router])
 

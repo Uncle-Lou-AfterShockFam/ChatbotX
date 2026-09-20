@@ -43,7 +43,9 @@ export function ApiSettingsForm({ api }: { api: ApiResource }) {
       actionProps: {
         onSuccess: () => {
           setOpen(false)
-          toast.success(t("messages.updatedSuccess"))
+          toast.success(
+            t("messages.updatedSuccess", { feature: t("fields.api.label") }),
+          )
           router.refresh()
         },
         onError: ({ error }) => {

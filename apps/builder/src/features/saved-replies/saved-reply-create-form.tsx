@@ -40,7 +40,11 @@ const SavedReplyCreateForm = ({
             onSaved(data)
           }
 
-          toast.success(t("messages.createdSuccess"))
+          toast.success(
+            t("messages.createdSuccess", {
+              feature: t("fields.savedReplies.label"),
+            }),
+          )
           resetForm()
           onCancel()
         },
