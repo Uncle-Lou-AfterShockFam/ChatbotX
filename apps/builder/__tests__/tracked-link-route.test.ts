@@ -39,7 +39,7 @@ const PREVIEW_UA = "facebookexternalhit/1.1 Facebot Twitterbot/1.0"
 
 const ctx = (token: string) => ({ params: Promise.resolve({ token }) })
 const req = (ua: string, method = "GET") =>
-  new Request("http://localhost/l/AbCdEfGhIjK", {
+  new Request("http://localhost/go/AbCdEfGhIjK", {
     method,
     headers: { "user-agent": ua },
   })
@@ -53,7 +53,7 @@ beforeEach(() => {
   loadServableWorkspace.mockResolvedValue({ servable: true })
 })
 
-const { GET, HEAD } = await import("../src/app/l/[token]/route")
+const { GET, HEAD } = await import("../src/app/go/[token]/route")
 
 test("a human tap records a click, marks the contact, and redirects 302", async () => {
   const res = await GET(req(HUMAN_UA), ctx(LINK.token))

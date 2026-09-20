@@ -8,8 +8,13 @@ const ALPHABET =
   "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 /** 11 base62 characters carry 65 bits, so 8 random bytes fit with margin. */
 export const TRACKED_LINK_TOKEN_LENGTH = 11
-/** Path segment the public redirect route lives under (`apps/builder/src/app/l/[token]`). */
-export const TRACKED_LINK_PATH = "/l"
+/**
+ * Path segment the public redirect route lives under
+ * (`apps/builder/src/app/go/[token]`). Not `/l`: that prefix already holds the
+ * QR landing page `/l/[workspaceId]/[id]`, and Next.js refuses two different
+ * slug names at one path level (it crash-looped the builder, s165).
+ */
+export const TRACKED_LINK_PATH = "/go"
 /** Longest destination a text may carry; matches the flow step's text bound. */
 export const MAX_TRACKED_LINK_URL_LENGTH = 2048
 

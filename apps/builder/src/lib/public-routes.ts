@@ -8,6 +8,8 @@ export const PUBLIC_ROUTES = [
   "/integrations",
   "/r",
   "/l",
+  // Tracked short links texted to contacts (`/go/[token]`).
+  "/go",
   "/dynamic-images",
   "/minigames",
   "/auth",
