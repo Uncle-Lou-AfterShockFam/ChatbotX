@@ -15,6 +15,7 @@ export const appointmentExternalCalendarPublicResource = z.object({
   providerType: z.literal("googleCalendar"),
   label: z.string(),
   providerCalendarId: z.string(),
+  busyCalendarScope: z.enum(["connected", "all"]),
   email: z.string().nullable(),
   connectedCount: z.number().int(),
   createdAt: z.date(),

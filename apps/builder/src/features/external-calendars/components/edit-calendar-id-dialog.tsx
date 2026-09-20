@@ -1,6 +1,7 @@
 "use client"
 
 import { InputField } from "@chatbotx.io/ui/components/form/input-field"
+import { SelectField } from "@chatbotx.io/ui/components/form/select-field"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
 import {
   Dialog,
@@ -57,6 +58,7 @@ export function EditCalendarIdDialog({
         mode: "onChange",
         defaultValues: {
           providerCalendarId: connection?.providerCalendarId ?? "primary",
+          busyCalendarScope: connection?.busyCalendarScope ?? "connected",
         },
       },
     },
@@ -65,6 +67,7 @@ export function EditCalendarIdDialog({
   useEffect(() => {
     form.reset({
       providerCalendarId: connection?.providerCalendarId ?? "primary",
+      busyCalendarScope: connection?.busyCalendarScope ?? "connected",
     })
   }, [form, connection])
 
@@ -83,6 +86,21 @@ export function EditCalendarIdDialog({
               label={t("externalCalendars.fields.calendarId")}
               name="providerCalendarId"
               required
+            />
+            <SelectField
+              description={t("externalCalendars.fields.busyScope.description")}
+              label={t("externalCalendars.fields.busyScope.label")}
+              name="busyCalendarScope"
+              options={[
+                {
+                  value: "connected",
+                  label: t("externalCalendars.fields.busyScope.connected"),
+                },
+                {
+                  value: "all",
+                  label: t("externalCalendars.fields.busyScope.all"),
+                },
+              ]}
             />
             <DialogFooter>
               <Button

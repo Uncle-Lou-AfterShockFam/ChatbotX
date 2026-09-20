@@ -37,6 +37,13 @@ export type GoogleCalendarBusyEvent = {
   endAt: string
 }
 
+export type GoogleCalendarListEntry = {
+  id: string
+  summary: string | null
+  primary: boolean
+  accessRole: string | null
+}
+
 export type GoogleCalendarEventAttendee = {
   email: string
 }
@@ -54,6 +61,7 @@ export type GoogleCalendarActions = {
       ctx: Context<GoogleCalendarAuthValue>
       props: {
         calendarId: string
+        calendarIds?: string[]
         timeMin: string
         timeMax: string
         timeZone?: string
@@ -61,6 +69,13 @@ export type GoogleCalendarActions = {
       }
     },
     GoogleCalendarBusyEvent[]
+  >
+  listCalendars: Handler<
+    {
+      ctx: Context<GoogleCalendarAuthValue>
+      props: { timeoutMs?: number }
+    },
+    GoogleCalendarListEntry[]
   >
   createEvent: Handler<
     {

@@ -6061,6 +6061,12 @@
       "provider": "プロバイダー",
       "email": "メールアドレス",
       "calendarId": "カレンダーID",
+      "busyScope": {
+        "label": "Busy time from",
+        "description": "Which calendars of the connected Google account block appointment slots. Events are still created on the Calendar ID above.",
+        "connected": "This calendar only",
+        "all": "All calendars in this account"
+      },
       "connected": "連携済み",
       "date": "日付"
     },

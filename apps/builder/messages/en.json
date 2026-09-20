@@ -5525,6 +5525,12 @@
       "provider": "Provider",
       "email": "Email",
       "calendarId": "Calendar ID",
+      "busyScope": {
+        "label": "Busy time from",
+        "description": "Which calendars of the connected Google account block appointment slots. Events are still created on the Calendar ID above.",
+        "connected": "This calendar only",
+        "all": "All calendars in this account"
+      },
       "connected": "Connected",
       "date": "Date"
     },

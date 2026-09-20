@@ -94,6 +94,23 @@ export function getExternalCalendarColumns({
       ),
     },
     {
+      id: "busyScope",
+      accessorKey: "busyCalendarScope",
+      header: ({ column }) => (
+        <DataTableColumnHeader
+          column={column}
+          title={t("externalCalendars.fields.busyScope.label")}
+        />
+      ),
+      cell: ({ row }) => (
+        <Badge variant="outline">
+          {row.original.busyCalendarScope === "all"
+            ? t("externalCalendars.fields.busyScope.all")
+            : t("externalCalendars.fields.busyScope.connected")}
+        </Badge>
+      ),
+    },
+    {
       id: "connected",
       accessorKey: "connectedCount",
       header: ({ column }) => (
