@@ -1,3 +1,8 @@
+import {
+  apiChannelOutboxService,
+  normalizeAck,
+  OUTBOX_MAX_PULL,
+} from "@chatbotx.io/business"
 import { incomingApiMessageSchema } from "@chatbotx.io/integration-api"
 import { enqueueIntegrationJob } from "@chatbotx.io/worker-config"
 import { z } from "zod"
@@ -163,6 +168,110 @@ export const channelsPublicRouter = {
           payload: input,
         },
       })
+    }),
+
+  outboxPull: channelApiTokenAPI
+    .route({
+      method: "GET",
+      path: "/v1/channels/api/outbox",
+      summary: "Lease queued outbound messages (pull delivery mode)",
+      description:
+        "For an inbox whose integration runs in `pull` delivery mode (no callback URL): leases up to `limit` queued outbound envelopes, oldest first, for 10 minutes. Each row carries the same `message_created` envelope a push-mode callback would have received. Answer every row with `POST /v1/channels/api/outbox/{id}/ack`; an unacked lease expires and the row is handed out again, so use the row id as your idempotency key.",
+      tags: ["API Channel"],
+    })
+    .input(
+      z.object({
+        limit: z.coerce.number().int().min(1).max(OUTBOX_MAX_PULL).default(20),
+      }),
+    )
+    .output(
+      z.object({
+        rows: z.array(
+          z.object({
+            id: z.string(),
+            contactSourceId: z.string(),
+            envelope: z.record(z.string(), z.unknown()),
+            createdAt: z.string(),
+            leaseExpiresAt: z.string(),
+          }),
+        ),
+      }),
+    )
+    .errors(possibleErrorsOnCreatingResource)
+    .handler(async ({ context, input }) => {
+      await assertNotRateLimited(context.inbox.id)
+      const rows = await apiChannelOutboxService.pull({
+        inboxId: context.inbox.id,
+        limit: input.limit,
+      })
+      return {
+        rows: rows.map((row) => ({
+          id: row.id,
+          contactSourceId: row.contactSourceId,
+          envelope: row.envelope,
+          createdAt: row.createdAt.toISOString(),
+          leaseExpiresAt: (row.leaseExpiresAt ?? row.createdAt).toISOString(),
+        })),
+      }
+    }),
+
+  outboxAck: channelApiTokenAPI
+    .route({
+      method: "POST",
+      path: "/v1/channels/api/outbox/{id}/ack",
+      summary: "Settle a leased outbound message (pull delivery mode)",
+      description:
+        "The pull-mode twin of the callback response: `messageId` is your id for the queued send, a non-empty `reason` means you refused it (the hub marks the message failed with that reason), and `suppressed` together with a `messageId` is not a refusal (report it later as a failed delivery status). Acking a row that is already settled is a no-op.",
+      tags: ["API Channel"],
+      successStatus: 200,
+    })
+    .input(
+      z.object({
+        id: z.string().min(1),
+        messageId: z.string().max(500).nullish(),
+        reason: z.string().max(500).nullish(),
+        warning: z.string().max(500).nullish(),
+      }),
+    )
+    .output(
+      z.object({
+        outcome: z.enum(["acked", "refused", "already-settled", "not-found"]),
+      }),
+    )
+    .errors(possibleErrorsOnCreatingResource)
+    .handler(async ({ context, input }) => {
+      await assertNotRateLimited(context.inbox.id)
+      const { id, ...rest } = input
+      const ack = normalizeAck(rest)
+      const settled = await apiChannelOutboxService.ack({
+        inboxId: context.inbox.id,
+        id,
+        ack,
+      })
+      if (settled.outcome === "refused") {
+        // The same job a push-mode refusal ends in (`message:failed` + the
+        // bulktext verdict on the contact), keyed by the outbox id the
+        // message row carries as its channel id.
+        const warning =
+          typeof ack.warning === "string" && ack.warning !== ""
+            ? `: ${ack.warning}`
+            : ""
+        await enqueueIntegrationJob({
+          type: "messageStatus",
+          data: {
+            integrationType: "api",
+            integrationIdentifier: context.inbox.id,
+            payload: {
+              messageId: `outbox:${id}`,
+              contact: { sourceId: settled.contactSourceId },
+              status: "failed",
+              timestamp: new Date().toISOString(),
+              error: `bulktext refused the send (${ack.reason})${warning}`,
+            },
+          },
+        })
+      }
+      return { outcome: settled.outcome }
     }),
 
   me: channelApiTokenAPI

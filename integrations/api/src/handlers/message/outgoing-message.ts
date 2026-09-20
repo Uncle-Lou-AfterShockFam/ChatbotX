@@ -1,3 +1,4 @@
+import { apiChannelOutboxService } from "@chatbotx.io/business"
 import { bulktextSendOptions, stepTypes } from "@chatbotx.io/flow-config"
 import {
   contentTypes,
@@ -47,6 +48,41 @@ const assertNotRefused = (
   throw new Error(`bulktext refused the send (${response.reason})${warning}`)
 }
 
+/**
+ * Pull mode (fork, s164): the envelope is queued for the inbox's worker
+ * instead of POSTed. The queued row's id becomes the message's channel id
+ * (`outbox:<id>`), which is what the worker later names in its delivery
+ * statuses; a refusal arrives asynchronously through the ack route.
+ */
+const isPullMode = (ctx: { auth: ApiAuthValue }): boolean =>
+  ctx.auth.deliveryMode === "pull"
+
+const enqueueForPull = async (
+  ctx: { auth: ApiAuthValue; integrationDetail?: Record<string, unknown> },
+  contactSourceId: string,
+  envelope: { [x: string]: unknown },
+): Promise<{ messageIds: string[] }> => {
+  const inboxId = ctx.integrationDetail?.inboxId
+  const workspaceId = ctx.integrationDetail?.workspaceId
+  if (typeof inboxId !== "string" || typeof workspaceId !== "string") {
+    throw new Error(
+      "pull mode: the integration row carries no inbox / workspace id",
+    )
+  }
+  if (contactSourceId === "") {
+    throw new Error(
+      "pull mode: the contact has no channel identity (contact.sourceId)",
+    )
+  }
+  const id = await apiChannelOutboxService.enqueue({
+    workspaceId,
+    inboxId,
+    contactSourceId,
+    envelope,
+  })
+  return { messageIds: [`outbox:${id}`] }
+}
+
 export const sendMessage: MessageHandlers<ApiAuthValue>["sendMessage"] = async (
   props,
 ) => {
@@ -54,6 +90,26 @@ export const sendMessage: MessageHandlers<ApiAuthValue>["sendMessage"] = async (
     ctx,
     data: { contact, message, quickReplies },
   } = props
+
+  const envelope = {
+    event: "message_created",
+    timestamp: new Date().toISOString(),
+    contact: { id: contact.id, sourceId: contact.sourceId },
+    conversation: { id: message.conversationId },
+    message: {
+      id: message.id,
+      text: message.text,
+      messageType: message.messageType,
+      contentType: message.contentType,
+      attachments: message.attachments,
+      contentAttributes: message.contentAttributes,
+      quickReplies,
+    },
+  }
+
+  if (isPullMode(ctx)) {
+    return enqueueForPull(ctx, contact.sourceId, envelope)
+  }
 
   if (!ctx.auth.callbackUrl) {
     // Inbound-only channels (no callback URL configured) are valid, not an error.
@@ -63,21 +119,7 @@ export const sendMessage: MessageHandlers<ApiAuthValue>["sendMessage"] = async (
   const response = await postSignedEnvelope({
     callbackUrl: ctx.auth.callbackUrl,
     signingSecret: ctx.auth.signingSecret,
-    envelope: {
-      event: "message_created",
-      timestamp: new Date().toISOString(),
-      contact: { id: contact.id, sourceId: contact.sourceId },
-      conversation: { id: message.conversationId },
-      message: {
-        id: message.id,
-        text: message.text,
-        messageType: message.messageType,
-        contentType: message.contentType,
-        attachments: message.attachments,
-        contentAttributes: message.contentAttributes,
-        quickReplies,
-      },
-    },
+    envelope,
   })
 
   assertNotRefused(response)
@@ -97,27 +139,32 @@ export const sendFlowStep: MessageHandlers<ApiAuthValue>["sendFlowStep"] =
       data: { contact, step, quickReplies },
     } = props
 
+    const { text, contentAttributes } = mapFlowStepToEnvelope(step)
+    const envelope = {
+      event: "message_created",
+      timestamp: new Date().toISOString(),
+      contact: { id: contact.id, sourceId: contact.sourceId },
+      message: {
+        text,
+        messageType: "outgoing",
+        contentType: contentTypes.enum.text,
+        contentAttributes,
+        quickReplies,
+      },
+    }
+
+    if (isPullMode(ctx)) {
+      return enqueueForPull(ctx, contact.sourceId, envelope)
+    }
+
     if (!ctx.auth.callbackUrl) {
       return { messageIds: [] }
     }
 
-    const { text, contentAttributes } = mapFlowStepToEnvelope(step)
-
     const response = await postSignedEnvelope({
       callbackUrl: ctx.auth.callbackUrl,
       signingSecret: ctx.auth.signingSecret,
-      envelope: {
-        event: "message_created",
-        timestamp: new Date().toISOString(),
-        contact: { id: contact.id, sourceId: contact.sourceId },
-        message: {
-          text,
-          messageType: "outgoing",
-          contentType: contentTypes.enum.text,
-          contentAttributes,
-          quickReplies,
-        },
-      },
+      envelope,
     })
 
     assertNotRefused(response)
