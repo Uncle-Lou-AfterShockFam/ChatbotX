@@ -619,6 +619,16 @@ exports[`public API spec — operation naming guard > operation list (operationI
   },
   {
     "method": "POST",
+    "operationId": "channels.outboxAck",
+    "path": "/v1/channels/api/outbox/{id}/ack",
+  },
+  {
+    "method": "GET",
+    "operationId": "channels.outboxPull",
+    "path": "/v1/channels/api/outbox",
+  },
+  {
+    "method": "POST",
     "operationId": "channels.sendMessage",
     "path": "/v1/channels/api/messages",
   },

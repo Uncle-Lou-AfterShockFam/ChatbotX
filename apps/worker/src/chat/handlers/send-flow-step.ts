@@ -75,6 +75,9 @@ import { processWhatsappTemplate } from "./send-whatsapp-template"
 
 const CHANNEL_DELIVERABLE_STEP_TYPES = new Set<string>([
   stepTypes.enum.sendAudio,
+  // s164: the native "Text via bulktext" step; without this entry every
+  // native step was skipped here at debug level and no message row existed.
+  stepTypes.enum.bulktextSend,
   stepTypes.enum.sendCard,
   stepTypes.enum.sendCarousel,
   stepTypes.enum.sendFile,

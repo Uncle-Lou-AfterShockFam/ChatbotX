@@ -12,6 +12,16 @@ describe("bulktextSend worker registration", () => {
     expect(MESSAGE_PRODUCING_STEP_TYPES.has("bulktextSend")).toBe(true)
   })
 
+  test("is channel-deliverable: the chat sender's allowlist names it (s164: missing here meant every native step was skipped silently)", () => {
+    const source = readFileSync("src/chat/handlers/send-flow-step.ts", "utf8")
+    const start = source.indexOf(
+      "const CHANNEL_DELIVERABLE_STEP_TYPES = new Set<string>([",
+    )
+    const end = source.indexOf("])", start)
+    expect(start).toBeGreaterThan(-1)
+    expect(source.slice(start, end)).toContain("stepTypes.enum.bulktextSend")
+  })
+
   test("the chat sender reads its text and treats photo-only as a send", () => {
     const source = readFileSync("src/chat/handlers/send-flow-step.ts", "utf8")
     expect(source).toContain(

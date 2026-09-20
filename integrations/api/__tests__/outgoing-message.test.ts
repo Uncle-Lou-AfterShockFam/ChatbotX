@@ -8,7 +8,12 @@ vi.mock("../src/lib/delivery", () => ({
   postSignedEnvelope: mockPostSignedEnvelope,
 }))
 
-const { sendFlowStep } = await import(
+const { mockEnqueue } = vi.hoisted(() => ({ mockEnqueue: vi.fn() }))
+vi.mock("@chatbotx.io/business", () => ({
+  apiChannelOutboxService: { enqueue: mockEnqueue },
+}))
+
+const { sendFlowStep, sendMessage } = await import(
   "../src/handlers/message/outgoing-message"
 )
 
@@ -191,5 +196,157 @@ describe("api sendFlowStep — a bulktext refusal is a failed send, not a silent
     await expect(
       sendFlowStep({ ctx, data: { contact, quickReplies: [], step } } as never),
     ).resolves.toEqual({ messageIds: [] })
+  })
+})
+
+describe("api pull delivery mode (fork, s164)", () => {
+  const pullCtx = {
+    auth: { callbackUrl: null, signingSecret: "secret", deliveryMode: "pull" },
+    integrationDetail: { inboxId: "inbox-9", workspaceId: "ws-1" },
+  } as never
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockEnqueue.mockResolvedValue("ob_1")
+  })
+
+  test("sendMessage queues the envelope instead of posting and answers outbox:<id>", async () => {
+    const result = await sendMessage({
+      ctx: pullCtx,
+      data: {
+        contact,
+        quickReplies: [],
+        message: {
+          id: "m-1",
+          conversationId: "c-1",
+          text: "Hi",
+          messageType: "outgoing",
+          contentType: "text",
+          attachments: [],
+          contentAttributes: {},
+        },
+      },
+    } as never)
+    expect(mockPostSignedEnvelope).not.toHaveBeenCalled()
+    expect(mockEnqueue).toHaveBeenCalledTimes(1)
+    const [args] = mockEnqueue.mock.calls[0]
+    expect(args.inboxId).toBe("inbox-9")
+    expect(args.workspaceId).toBe("ws-1")
+    expect(args.contactSourceId).toBe("source-1")
+    expect(args.envelope.event).toBe("message_created")
+    expect(args.envelope.message.id).toBe("m-1")
+    expect(args.envelope.contact).toEqual({
+      id: "contact-1",
+      sourceId: "source-1",
+    })
+    expect(result).toEqual({ messageIds: ["outbox:ob_1"] })
+  })
+
+  test("sendFlowStep queues the same envelope a callback would carry, bulktext options included", async () => {
+    const result = await sendFlowStep({
+      ctx: pullCtx,
+      data: {
+        contact,
+        quickReplies: [],
+        step: {
+          id: "step-1",
+          nodeId: "node-1",
+          stepType: "bulktextSend",
+          text: "Hi Lou",
+          photoUrl: "",
+          ref: "native:1",
+          dryRun: true,
+          scheduleAt: "",
+          spreadOverMinutes: 2,
+          skipIfRepliedSince: "",
+        },
+      },
+    } as never)
+    expect(mockPostSignedEnvelope).not.toHaveBeenCalled()
+    const [args] = mockEnqueue.mock.calls[0]
+    expect(args.envelope.message.text).toBe("Hi Lou")
+    expect(args.envelope.message.contentAttributes.bulktext).toEqual({
+      dryRun: true,
+      ref: "native:1",
+      spreadOverMinutes: 2,
+    })
+    expect(result).toEqual({ messageIds: ["outbox:ob_1"] })
+  })
+
+  test("a pull inbox whose row carries no inbox id, or a contact with no identity, throws (nothing queued)", async () => {
+    await expect(
+      sendMessage({
+        ctx: { ...pullCtx, integrationDetail: {} } as never,
+        data: {
+          contact,
+          quickReplies: [],
+          message: {
+            id: "m",
+            text: "x",
+            messageType: "outgoing",
+            contentType: "text",
+            attachments: [],
+            contentAttributes: {},
+          },
+        },
+      } as never),
+    ).rejects.toThrow("no inbox")
+    await expect(
+      sendMessage({
+        ctx: pullCtx,
+        data: {
+          contact: { id: "c", sourceId: "" },
+          quickReplies: [],
+          message: {
+            id: "m",
+            text: "x",
+            messageType: "outgoing",
+            contentType: "text",
+            attachments: [],
+            contentAttributes: {},
+          },
+        },
+      } as never),
+    ).rejects.toThrow("no channel identity")
+    expect(mockEnqueue).not.toHaveBeenCalled()
+  })
+
+  test("push mode without a callback URL stays inbound-only (unchanged), and push mode with one still posts", async () => {
+    mockPostSignedEnvelope.mockResolvedValue({ messageId: "msg:1" })
+    const quiet = await sendFlowStep({
+      ctx: {
+        auth: { callbackUrl: null, signingSecret: "s" },
+        integrationDetail: {},
+      } as never,
+      data: {
+        contact,
+        quickReplies: [],
+        step: {
+          id: "s",
+          nodeId: "n",
+          stepType: "sendText",
+          text: "x",
+          buttons: [],
+        },
+      },
+    } as never)
+    expect(quiet).toEqual({ messageIds: [] })
+    expect(mockEnqueue).not.toHaveBeenCalled()
+    const posted = await sendFlowStep({
+      ctx,
+      data: {
+        contact,
+        quickReplies: [],
+        step: {
+          id: "s",
+          nodeId: "n",
+          stepType: "sendText",
+          text: "x",
+          buttons: [],
+        },
+      },
+    } as never)
+    expect(posted).toEqual({ messageIds: ["msg:1"] })
+    expect(mockPostSignedEnvelope).toHaveBeenCalledTimes(1)
   })
 })
