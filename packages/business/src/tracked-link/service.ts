@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto"
 import { db, eq, sql } from "@chatbotx.io/database/client"
 import type { TrackedLinkModel } from "@chatbotx.io/database/schema"
 import { trackedLinkModel } from "@chatbotx.io/database/schema"
@@ -26,8 +25,12 @@ export const isTrackedLinkToken = (value: unknown): value is string =>
  * sequential and guessable, and a guessable token would let anyone mark a
  * contact as having clicked.
  */
+/** Web Crypto, not `node:crypto`: the business barrel must stay Edge-Runtime safe. */
+const webRandomBytes = (n: number): Uint8Array =>
+  globalThis.crypto.getRandomValues(new Uint8Array(n))
+
 export const mintTrackedLinkToken = (
-  random: (bytes: number) => Uint8Array = (n) => randomBytes(n),
+  random: (bytes: number) => Uint8Array = webRandomBytes,
 ): string => {
   const bytes = random(8)
   let value = 0n
