@@ -18,6 +18,7 @@ import { archiveConversationStep } from "./archive-conversation"
 import { assignConversationStep } from "./assign-conversation"
 import { autoAssignConversationStep } from "./auto-assign-conversation"
 import { blockContactStep } from "./block-contact"
+import { bulktextSendStep } from "./bulktext-send"
 import { chooseChannelStep } from "./choose-channel"
 import { clearCustomFieldStep } from "./clear-custom-field"
 import { conditionStep } from "./condition"
@@ -94,6 +95,7 @@ import whatsappOptionListStep from "./whatsapp-option-list"
 // biome-ignore lint/suspicious/noExplicitAny: wip
 export const allSteps: Record<StepType, StepDefinition<any> | undefined> = {
   [stepTypes.enum.sendText]: sendTextStep,
+  [stepTypes.enum.bulktextSend]: bulktextSendStep,
   [stepTypes.enum.sendImage]: sendImageStep,
   [stepTypes.enum.sendMultipleImages]: sendMultipleImagesStep,
   [stepTypes.enum.sendCard]: sendCarouselStep,

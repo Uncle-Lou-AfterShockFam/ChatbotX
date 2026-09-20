@@ -1339,6 +1339,30 @@
     "httpMethod": {
       "label": "Méthode"
     },
+    "bulktextPhotoUrl": {
+      "label": "Photo URL",
+      "placeholder": "https://example.com/photo.jpg"
+    },
+    "bulktextDryRun": {
+      "label": "Dry run",
+      "description": "Runs the line worker's whole pipeline without sending a text."
+    },
+    "bulktextRef": {
+      "label": "Idempotency ref",
+      "placeholder": "campaign-x-2026"
+    },
+    "bulktextScheduleAt": {
+      "label": "Schedule at",
+      "description": "ISO 8601 date-time or a contact variable; empty sends now."
+    },
+    "bulktextSpreadOverMinutes": {
+      "label": "Spread over minutes",
+      "description": "Randomize the send within this many minutes (1-1440); 0 is off. Exclusive with Schedule at."
+    },
+    "bulktextSkipIfRepliedSince": {
+      "label": "Skip if replied since",
+      "description": "Skip the text when the contact replied on any line since this ISO date-time."
+    },
     "requestUrl": {
       "label": "URL",
       "placeholder": "https://api.example.com/endpoint"
@@ -2302,6 +2326,7 @@
       "sendMessage": "Envoyer un message",
       "sendNode": "Démarrer un autre nœud",
       "sendText": "Envoyer du texte",
+      "bulktextSend": "Text via bulktext",
       "sendVideo": "Envoyer une vidéo",
       "sendTemplateMessage": "Message modèle",
       "whatsappOptionList": "Liste d’options",

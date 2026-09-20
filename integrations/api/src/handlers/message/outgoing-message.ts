@@ -1,4 +1,4 @@
-import { stepTypes } from "@chatbotx.io/flow-config"
+import { bulktextSendOptions, stepTypes } from "@chatbotx.io/flow-config"
 import {
   contentTypes,
   type MessageHandlers,
@@ -21,6 +21,31 @@ const messageStatusPayloadSchema = z.object({
   status: z.string(),
   contact: z.object({ sourceId: z.string().min(1) }),
 })
+
+/**
+ * A bulktext line worker answers a send request it will NOT queue with a
+ * 200 and a non-null `reason` (`bad-options`, `duplicate`, `own-line`,
+ * `media-fetch`, `suppressed`...). Only `suppressed` also comes back later
+ * as an async `failed` status (it has a `hook:<id>` message id); every other
+ * refusal has no message id and would otherwise read as "sent" (skeptic
+ * s163). Throwing here lands in the chat sender's catch: `message:failed`
+ * with this text, terminal, visible in the inbox.
+ */
+const assertNotRefused = (
+  response: { messageId?: string; reason?: unknown; warning?: unknown } | null,
+): void => {
+  if (typeof response?.reason !== "string" || response.reason === "") {
+    return
+  }
+  if (response.reason === "suppressed" && response.messageId) {
+    return
+  }
+  const warning =
+    typeof response.warning === "string" && response.warning !== ""
+      ? `: ${response.warning}`
+      : ""
+  throw new Error(`bulktext refused the send (${response.reason})${warning}`)
+}
 
 export const sendMessage: MessageHandlers<ApiAuthValue>["sendMessage"] = async (
   props,
@@ -55,6 +80,7 @@ export const sendMessage: MessageHandlers<ApiAuthValue>["sendMessage"] = async (
     },
   })
 
+  assertNotRefused(response)
   return { messageIds: response?.messageId ? [response.messageId] : [] }
 }
 
@@ -94,6 +120,7 @@ export const sendFlowStep: MessageHandlers<ApiAuthValue>["sendFlowStep"] =
       },
     })
 
+    assertNotRefused(response)
     return { messageIds: response?.messageId ? [response.messageId] : [] }
   }
 
@@ -144,6 +171,18 @@ const mapFlowStepToEnvelope = (
       }
     case stepTypes.enum.sendQuickReply:
       return { text: step.message }
+    // "Text via bulktext": the line worker reads its delivery options from
+    // `contentAttributes.bulktext`; a photo rides as an ordinary attachment.
+    case stepTypes.enum.bulktextSend:
+      return {
+        text: step.text === "" ? null : step.text,
+        contentAttributes: {
+          ...(step.photoUrl === ""
+            ? {}
+            : { attachments: [{ url: step.photoUrl, fileType: "image" }] }),
+          bulktext: bulktextSendOptions(step),
+        },
+      }
     case stepTypes.enum.sendCarousel:
       return {
         text: null,

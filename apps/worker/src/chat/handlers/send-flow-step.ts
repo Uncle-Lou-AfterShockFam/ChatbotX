@@ -110,6 +110,11 @@ const isBlankTextCarrierStep = (step: SendFlowStepData) => {
     return !step.text.trim()
   }
 
+  // A bulktext send may be photo-only: blank text with a photo is a send.
+  if (step.stepType === stepTypes.enum.bulktextSend) {
+    return !(step.text.trim() || step.photoUrl.trim())
+  }
+
   if (step.stepType === stepTypes.enum.sendQuickReply) {
     return !step.message.trim()
   }
@@ -533,6 +538,7 @@ export async function sendFlowStep({
 
   const messageText =
     resolvedStep.stepType === stepTypes.enum.sendText ||
+    resolvedStep.stepType === stepTypes.enum.bulktextSend ||
     resolvedStep.stepType === stepTypes.enum.whatsappCallButton
       ? resolvedStep.text
       : null

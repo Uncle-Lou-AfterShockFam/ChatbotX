@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { actionSteps } from "../shared"
+import { bulktextSendStepSchema } from "../steps/bulktext-send"
 import { buttonStepSchema } from "../steps/button"
 import {
   chooseChannelStepDefaultFn,
@@ -41,6 +42,7 @@ export const sendMessageNodeSchema = baseNodeSchema.extend({
           sendImageStepSchema,
           sendMultipleImagesStepSchema,
           sendTextStepSchema,
+          bulktextSendStepSchema,
           sendVideoStepSchema,
           // sendCardStepSchema,
           sendCarouselStepSchema,

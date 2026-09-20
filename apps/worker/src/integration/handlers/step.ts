@@ -469,6 +469,7 @@ export const flowStepHandlers: Record<
   [stepTypes.enum.sendMessengerOtn]: undefined,
   [stepTypes.enum.sendMultipleImages]: sendFlowMessage,
   [stepTypes.enum.sendText]: sendFlowMessage,
+  [stepTypes.enum.bulktextSend]: sendFlowMessage,
   [stepTypes.enum.sendVideo]: sendFlowMessage,
   [stepTypes.enum.setCustomField]: setContactCustomField,
   [stepTypes.enum.setDebounce]: undefined,

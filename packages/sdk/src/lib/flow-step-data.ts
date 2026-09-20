@@ -1,4 +1,5 @@
 import type {
+  BulktextSendStepSchema,
   SendAudioStepSchema,
   SendCarouselStepSchema,
   SendFileStepSchema,
@@ -17,6 +18,7 @@ import type {
 
 export type SendFlowStepData =
   | SendTextStepSchema
+  | BulktextSendStepSchema
   | SendImageStepSchema
   | SendMultipleImagesStepSchema
   | SendGifStepSchema

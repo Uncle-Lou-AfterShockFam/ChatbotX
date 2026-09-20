@@ -8,6 +8,7 @@ import {
   KeyboardIcon,
   ListIcon,
   MessageSquareIcon,
+  MessageSquareTextIcon,
   PaperclipIcon,
   PhoneIcon,
   PictureInPicture2Icon,
@@ -33,6 +34,11 @@ const ALL_MENU_ITEMS = (
     label: t("flows.actions.sendText"),
     icon: TextIcon,
     stepType: stepTypes.enum.sendText,
+  },
+  bulktextSend: {
+    label: t("flows.actions.bulktextSend"),
+    icon: MessageSquareTextIcon,
+    stepType: stepTypes.enum.bulktextSend,
   },
   sendImage: {
     label: t("flows.actions.sendImage"),
@@ -181,7 +187,22 @@ const TIKTOK_MENU_ORDER = [
   "actions",
 ] as const
 
+/**
+ * An API-channel inbox served by a bulktext line worker (GV, iMessage,
+ * email): "Text via bulktext" first, then the envelope-native steps.
+ */
+const API_MENU_ORDER = [
+  "bulktextSend",
+  "sendText",
+  "sendImage",
+  "sendMultipleImages",
+  "getUserData",
+  "typing",
+  "actions",
+] as const
+
 const MENU_ORDER_BY_CHANNEL: Record<string, readonly string[]> = {
+  [channelTypes.enum.api]: API_MENU_ORDER,
   [channelTypes.enum.whatsapp]: WHATSAPP_MENU_ORDER,
   [channelTypes.enum.messenger]: MESSENGER_MENU_ORDER,
   [channelTypes.enum.tiktok]: TIKTOK_MENU_ORDER,
@@ -194,7 +215,11 @@ const MENU_ORDER_BY_CHANNEL: Record<string, readonly string[]> = {
  * send. The worker guards this too; hiding the menu entry prevents authoring
  * it in the first place.
  */
-const OMNICHANNEL_EXCLUDED_ITEMS = new Set(["whatsappCallButton"])
+// `bulktextSend` publishes only on an API-channel node (channel rule).
+const OMNICHANNEL_EXCLUDED_ITEMS = new Set([
+  "whatsappCallButton",
+  "bulktextSend",
+])
 
 export const sendMessageEditorMenus = (
   t: TranslationFn,
