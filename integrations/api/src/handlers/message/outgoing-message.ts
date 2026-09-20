@@ -10,9 +10,16 @@ import { postSignedEnvelope } from "../../lib/delivery"
 import { logger } from "../../lib/logger"
 import type { ApiAuthValue } from "../../schema"
 
+// The queue contract (`IntegrationJobMessageStatus`) and the public
+// `delivery-status` route both name the message id `messageId`; this schema
+// must agree with them or every accepted (204) status dies here as a
+// ZodError. The recipient identity is REQUIRED: the worker resolves the
+// conversation from `contact.sourceId` and refuses an empty identity by
+// design, so a status without one can never be recorded.
 const messageStatusPayloadSchema = z.object({
-  messageSourceId: z.string().min(1),
+  messageId: z.string().min(1),
   status: z.string(),
+  contact: z.object({ sourceId: z.string().min(1) }),
 })
 
 export const sendMessage: MessageHandlers<ApiAuthValue>["sendMessage"] = async (
@@ -173,12 +180,12 @@ export const handleMessageStatus: NonNullable<
 
   return Promise.resolve({
     message: {
-      sourceId: validated.messageSourceId,
+      sourceId: validated.messageId,
       messageType: "outgoing",
       contentType: contentTypes.enum.text,
       contentAttributes: { deliveryStatus: validated.status },
     },
-    contact: { sourceId: "" },
+    contact: { sourceId: validated.contact.sourceId },
     postbackAction: null,
     quickReplyAction: null,
     ref: null,

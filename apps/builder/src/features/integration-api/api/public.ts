@@ -119,7 +119,7 @@ export const channelsPublicRouter = {
       path: "/v1/channels/api/delivery-status",
       summary: "Report delivery status for outbound message",
       description:
-        "`messageId` correlates to the id returned in the outbound callback response, if one was supplied.",
+        "`messageId` correlates to the id returned in the outbound callback response, if one was supplied. `contact.sourceId` is the recipient's identity on this channel (the same value used as `contact.sourceId` on inbound messages); the status is attached to that contact's conversation.",
       tags: ["API Channel"],
       successStatus: 204,
     })
@@ -131,6 +131,16 @@ export const channelsPublicRouter = {
           .describe(
             "Id of the message being reported on, echoed back from the outbound callback.",
           ),
+        contact: z
+          .object({
+            sourceId: z
+              .string()
+              .min(1)
+              .describe(
+                "Recipient identity on this channel, identical to the inbound `contact.sourceId`.",
+              ),
+          })
+          .describe("The contact the message was sent to."),
         status: z
           .enum(["delivered", "failed", "read"])
           .describe("Delivery outcome for the message."),

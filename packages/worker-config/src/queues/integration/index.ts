@@ -171,6 +171,14 @@ export type IntegrationJobMessageStatus = {
       status: "delivered" | "failed" | "read"
       timestamp: string
       error?: unknown
+      /**
+       * Recipient identity on the channel (the same `contact.sourceId` the
+       * channel uses for inbound messages). Channels whose provider status
+       * carries no recipient (the API channel) must supply it here, because
+       * the worker resolves the conversation from the contact, never from the
+       * message id alone.
+       */
+      contact?: { sourceId: string }
     }
   }
 }
