@@ -174,14 +174,20 @@ export const channelsPublicRouter = {
     .route({
       method: "GET",
       path: "/v1/channels/api/outbox",
-      summary: "Lease queued outbound messages (pull delivery mode)",
+      summary: "Lease queued outbound messages for pull delivery",
       description:
         "For an inbox whose integration runs in `pull` delivery mode (no callback URL): leases up to `limit` queued outbound envelopes, oldest first, for 10 minutes. Each row carries the same `message_created` envelope a push-mode callback would have received. Answer every row with `POST /v1/channels/api/outbox/{id}/ack`; an unacked lease expires and the row is handed out again, so use the row id as your idempotency key.",
       tags: ["API Channel"],
     })
     .input(
       z.object({
-        limit: z.coerce.number().int().min(1).max(OUTBOX_MAX_PULL).default(20),
+        limit: z.coerce
+          .number()
+          .int()
+          .min(1)
+          .max(OUTBOX_MAX_PULL)
+          .default(20)
+          .describe("Maximum rows to lease in this call (1-50)."),
       }),
     )
     .output(
@@ -219,7 +225,7 @@ export const channelsPublicRouter = {
     .route({
       method: "POST",
       path: "/v1/channels/api/outbox/{id}/ack",
-      summary: "Settle a leased outbound message (pull delivery mode)",
+      summary: "Settle one leased outbound message",
       description:
         "The pull-mode twin of the callback response: `messageId` is your id for the queued send, a non-empty `reason` means you refused it (the hub marks the message failed with that reason), and `suppressed` together with a `messageId` is not a refusal (report it later as a failed delivery status). Acking a row that is already settled is a no-op.",
       tags: ["API Channel"],
@@ -227,10 +233,24 @@ export const channelsPublicRouter = {
     })
     .input(
       z.object({
-        id: z.string().min(1),
-        messageId: z.string().max(500).nullish(),
-        reason: z.string().max(500).nullish(),
-        warning: z.string().max(500).nullish(),
+        id: z.string().min(1).describe("Id of the leased outbox row."),
+        messageId: z
+          .string()
+          .max(500)
+          .nullish()
+          .describe(
+            "Your id for the queued send; echoed back on delivery statuses.",
+          ),
+        reason: z
+          .string()
+          .max(500)
+          .nullish()
+          .describe("Refusal reason; non-empty means the send was refused."),
+        warning: z
+          .string()
+          .max(500)
+          .nullish()
+          .describe("Human-readable detail for a refusal or a degraded send."),
       }),
     )
     .output(
