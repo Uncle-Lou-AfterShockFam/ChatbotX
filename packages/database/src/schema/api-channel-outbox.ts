@@ -16,7 +16,7 @@ import { workspaceModel } from "./workspace"
  * handed out again; the worker's own idempotency key (the row id) makes a
  * second hand-out harmless.
  */
-export const apiChannelOutboxStatuses = [
+const apiChannelOutboxStatuses = [
   "pending",
   "leased",
   "acked",

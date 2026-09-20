@@ -2,13 +2,11 @@
 
 import { describe, expect, test, vi } from "vitest"
 
-const { mockUpdateWhere, mockReturning, mockDelete, mockInsertValues } =
-  vi.hoisted(() => ({
-    mockUpdateWhere: vi.fn(),
-    mockReturning: vi.fn(),
-    mockDelete: vi.fn(),
-    mockInsertValues: vi.fn().mockResolvedValue(undefined),
-  }))
+const { mockUpdateWhere, mockReturning, mockInsertValues } = vi.hoisted(() => ({
+  mockUpdateWhere: vi.fn(),
+  mockReturning: vi.fn(),
+  mockInsertValues: vi.fn().mockResolvedValue(undefined),
+}))
 
 vi.mock("@chatbotx.io/database/client", () => ({
   db: {
@@ -26,7 +24,6 @@ vi.mock("@chatbotx.io/database/client", () => ({
         }),
       }),
     }),
-    delete: () => ({ where: () => ({ returning: () => mockDelete() }) }),
   },
   and: (...a: unknown[]) => ({ and: a }),
   or: (...a: unknown[]) => ({ or: a }),
@@ -82,7 +79,7 @@ describe("normalizeAck — closed, bounded", () => {
     expect(() => normalizeAck({ extra: 1 })).toThrow("unknown key extra")
     expect(() => normalizeAck({ reason: 5 })).toThrow("reason must be a string")
     expect(() => normalizeAck({ warning: "x".repeat(501) })).toThrow(
-      /at most 500/,
+      "at most 500",
     )
     expect(normalizeAck({ warning: "x".repeat(500) })).toEqual({
       warning: "x".repeat(500),
@@ -177,10 +174,5 @@ describe("service", () => {
     expect(
       await apiChannelOutboxService.ack({ inboxId: "other", id: "a", ack: {} }),
     ).toEqual({ outcome: "not-found" })
-  })
-
-  test("purgeSettled reports how many settled rows it dropped", async () => {
-    mockDelete.mockResolvedValueOnce([{ id: "x" }, { id: "y" }])
-    expect(await apiChannelOutboxService.purgeSettled()).toBe(2)
   })
 })

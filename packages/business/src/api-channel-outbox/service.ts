@@ -1,4 +1,4 @@
-import { and, db, eq, inArray, lt, or, sql } from "@chatbotx.io/database/client"
+import { and, db, eq, inArray, lt, or } from "@chatbotx.io/database/client"
 import { apiChannelOutboxModel } from "@chatbotx.io/database/schema"
 import { createId } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
@@ -7,8 +7,6 @@ import { BaseService } from "../base.service"
 export const OUTBOX_LEASE_MS = 10 * 60_000
 /** Upper bound on rows one pull may lease. */
 export const OUTBOX_MAX_PULL = 50
-/** Rows in a terminal state older than this are purged by `purgeSettled`. */
-export const OUTBOX_RETENTION_MS = 7 * 86_400_000
 
 export type OutboxAck = {
   messageId?: string | null
@@ -174,40 +172,6 @@ class ApiChannelOutboxService extends BaseService {
       )
       .limit(1)
     return { outcome: existing ? "already-settled" : "not-found" }
-  }
-
-  /** Drop settled rows older than the retention window; returns the count. */
-  async purgeSettled(input: { now?: Date } = {}): Promise<number> {
-    const now = input.now ?? new Date()
-    const cutoff = new Date(now.getTime() - OUTBOX_RETENTION_MS)
-    const rows = await db
-      .delete(apiChannelOutboxModel)
-      .where(
-        and(
-          inArray(apiChannelOutboxModel.status, ["acked", "refused"]),
-          lt(apiChannelOutboxModel.ackedAt, cutoff),
-        ),
-      )
-      .returning({ id: apiChannelOutboxModel.id })
-    return rows.length
-  }
-
-  /** Pending + leased counts for an inbox (the `me`-style health read). */
-  async depth(input: { inboxId: string }) {
-    const [row] = await db
-      .select({
-        pending:
-          sql<number>`count(*) filter (where ${apiChannelOutboxModel.status} = 'pending')`.mapWith(
-            Number,
-          ),
-        leased:
-          sql<number>`count(*) filter (where ${apiChannelOutboxModel.status} = 'leased')`.mapWith(
-            Number,
-          ),
-      })
-      .from(apiChannelOutboxModel)
-      .where(eq(apiChannelOutboxModel.inboxId, input.inboxId))
-    return { pending: row?.pending ?? 0, leased: row?.leased ?? 0 }
   }
 }
 
