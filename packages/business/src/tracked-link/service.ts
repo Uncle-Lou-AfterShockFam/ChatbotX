@@ -1,4 +1,4 @@
-import { db, eq, sql } from "@chatbotx.io/database/client"
+import { and, db, eq, sql } from "@chatbotx.io/database/client"
 import type { TrackedLinkModel } from "@chatbotx.io/database/schema"
 import { trackedLinkModel } from "@chatbotx.io/database/schema"
 import { BaseService } from "../base.service"
@@ -15,6 +15,8 @@ export const TRACKED_LINK_TOKEN_LENGTH = 11
  * slug names at one path level (it crash-looped the builder, s165).
  */
 export const TRACKED_LINK_PATH = "/go"
+/** Suffix under a pixel token: `/go/<token>/o` answers a 1x1 GIF. */
+export const TRACKED_PIXEL_SUFFIX = "/o"
 /** Longest destination a text may carry; matches the flow step's text bound. */
 export const MAX_TRACKED_LINK_URL_LENGTH = 2048
 
@@ -56,6 +58,9 @@ const HTTP_URL = /^https?:\/\/\S+$/
 export const buildTrackedLinkUrl = (appUrl: string, token: string): string =>
   `${appUrl.replace(TRAILING_SLASHES, "")}${TRACKED_LINK_PATH}/${token}`
 
+export const buildTrackedPixelUrl = (appUrl: string, token: string): string =>
+  `${buildTrackedLinkUrl(appUrl, token)}${TRACKED_PIXEL_SUFFIX}`
+
 class TrackedLinkService extends BaseService {
   /** Mint one short link for one URL in one contact's text; returns the token. */
   async mint(input: {
@@ -84,6 +89,61 @@ class TrackedLinkService extends BaseService {
       url: input.url,
     })
     return token
+  }
+
+  /**
+   * Mint the open beacon of one mail to one contact. The email line renders it
+   * as `<img src="${appUrl}/go/<token>/o">`; a fetch of that GIF is an open.
+   */
+  async mintPixel(input: {
+    workspaceId: string
+    contactId: string
+    contactInboxId: string | null
+    flowId: string | null
+    stepId: string | null
+  }): Promise<string> {
+    const token = mintTrackedLinkToken()
+    await db.insert(trackedLinkModel).values({
+      token,
+      kind: "pixel",
+      workspaceId: input.workspaceId,
+      contactId: input.contactId,
+      contactInboxId: input.contactInboxId,
+      flowId: input.flowId,
+      stepId: input.stepId,
+      url: "",
+    })
+    return token
+  }
+
+  /**
+   * Record one open of a pixel row (first/last instant, count). Opens are not
+   * filtered like clicks: mail clients fetch images through proxies (Gmail's
+   * image proxy, Apple Mail privacy prefetch), so every fetch counts and the
+   * known false positives are a documented limit, not a heuristic.
+   */
+  async recordOpen(
+    token: string,
+    now: Date = new Date(),
+  ): Promise<TrackedLinkModel | undefined> {
+    if (!isTrackedLinkToken(token)) {
+      return
+    }
+    const [row] = await db
+      .update(trackedLinkModel)
+      .set({
+        openCount: sql`${trackedLinkModel.openCount} + 1`,
+        firstOpenedAt: sql`COALESCE(${trackedLinkModel.firstOpenedAt}, ${now})`,
+        lastOpenedAt: now,
+      })
+      .where(
+        and(
+          eq(trackedLinkModel.token, token),
+          eq(trackedLinkModel.kind, "pixel"),
+        ),
+      )
+      .returning()
+    return row
   }
 
   async findByToken(token: string): Promise<TrackedLinkModel | undefined> {

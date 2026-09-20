@@ -26,6 +26,27 @@ describe("bulktextSend trackLinks", () => {
     expect(parsed.trackLinks).toBe(false)
   })
 
+  test("trackOpens defaults off and openPixel is empty; the worker-filled openPixel is the only one of the three that reaches the options", () => {
+    const step = bulktextSendStepDefaultFn({ text: "hi" })
+    expect([step.trackOpens, step.openPixel]).toEqual([false, ""])
+    const on = bulktextSendStepDefaultFn({
+      text: "hi",
+      trackOpens: true,
+      openPixel: "https://hub.x/go/AbCdEfGhIjK/o",
+    })
+    const options = bulktextSendOptions(on)
+    expect(options).toMatchObject({
+      openPixel: "https://hub.x/go/AbCdEfGhIjK/o",
+    })
+    expect(Object.keys(options)).not.toContain("trackOpens")
+    expect(Object.keys(bulktextSendOptions(step))).not.toContain("openPixel")
+    const { trackOpens: _t, openPixel: _o, ...legacy } = step
+    expect(bulktextSendStepSchema.parse(legacy)).toMatchObject({
+      trackOpens: false,
+      openPixel: "",
+    })
+  })
+
   test("a non-boolean is rejected", () => {
     const step = bulktextSendStepDefaultFn({ text: "hi" })
     expect(

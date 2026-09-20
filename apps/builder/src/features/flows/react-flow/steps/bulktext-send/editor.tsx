@@ -62,6 +62,11 @@ const BulktextSendStepEditor = ({
           label={t("fields.bulktextTrackLinks.label")}
           name={`${parentName}.trackLinks`}
         />
+        <SwitchField
+          description={t("fields.bulktextTrackOpens.description")}
+          label={t("fields.bulktextTrackOpens.label")}
+          name={`${parentName}.trackOpens`}
+        />
       </div>
     </div>
   )
