@@ -18,6 +18,14 @@ describe("bulktextSend trackLinks", () => {
     expect(Object.keys(bulktextSendOptions(step))).not.toContain("trackLinks")
   })
 
+  test("a graph saved before the option existed still publishes: a missing key reads as false (s165: the required boolean 422'd every older flow)", () => {
+    const { trackLinks: _omitted, ...withoutKey } = bulktextSendStepDefaultFn({
+      text: "hi",
+    })
+    const parsed = bulktextSendStepSchema.parse(withoutKey)
+    expect(parsed.trackLinks).toBe(false)
+  })
+
   test("a non-boolean is rejected", () => {
     const step = bulktextSendStepDefaultFn({ text: "hi" })
     expect(
