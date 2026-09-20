@@ -290,7 +290,7 @@ describe("api pull delivery mode (fork, s164)", () => {
           },
         },
       } as never),
-    ).rejects.toThrow(/no inbox/)
+    ).rejects.toThrow("no inbox")
     await expect(
       sendMessage({
         ctx: pullCtx,
@@ -307,7 +307,7 @@ describe("api pull delivery mode (fork, s164)", () => {
           },
         },
       } as never),
-    ).rejects.toThrow(/no channel identity/)
+    ).rejects.toThrow("no channel identity")
     expect(mockEnqueue).not.toHaveBeenCalled()
   })
 

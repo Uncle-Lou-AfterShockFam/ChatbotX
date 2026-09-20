@@ -76,11 +76,11 @@ describe("normalizeAck — closed, bounded", () => {
       normalizeAck({ messageId: "m", reason: null, warning: undefined }),
     ).toEqual({ messageId: "m" })
     expect(normalizeAck({})).toEqual({})
-    expect(() => normalizeAck(null)).toThrow(/object/)
-    expect(() => normalizeAck([])).toThrow(/object/)
-    expect(() => normalizeAck("x")).toThrow(/object/)
-    expect(() => normalizeAck({ extra: 1 })).toThrow(/unknown key extra/)
-    expect(() => normalizeAck({ reason: 5 })).toThrow(/reason must be a string/)
+    expect(() => normalizeAck(null)).toThrow("object")
+    expect(() => normalizeAck([])).toThrow("object")
+    expect(() => normalizeAck("x")).toThrow("object")
+    expect(() => normalizeAck({ extra: 1 })).toThrow("unknown key extra")
+    expect(() => normalizeAck({ reason: 5 })).toThrow("reason must be a string")
     expect(() => normalizeAck({ warning: "x".repeat(501) })).toThrow(
       /at most 500/,
     )
@@ -99,7 +99,7 @@ describe("service", () => {
         contactSourceId: "",
         envelope: {},
       }),
-    ).rejects.toThrow(/contactSourceId/)
+    ).rejects.toThrow("contactSourceId")
     expect(mockInsertValues).not.toHaveBeenCalled()
     const id = await apiChannelOutboxService.enqueue({
       workspaceId: "w",
