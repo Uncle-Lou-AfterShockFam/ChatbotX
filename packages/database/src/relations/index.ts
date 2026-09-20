@@ -128,6 +128,7 @@ import { tagChannelRelations } from "./tag-channel"
 import { templateRelations } from "./template"
 import { templateInstallationRelations } from "./template-installation"
 import { templateInstalledResourceRelations } from "./template-installed-resource"
+import { trackedLinkRelations } from "./tracked-link"
 import { triggerRelations } from "./trigger"
 import { conditionRelations } from "./trigger-condition"
 import { triggerContactHistoryRelations } from "./trigger-contact-history"
@@ -204,6 +205,7 @@ export const relations = {
   ...invitationRelations,
   ...emailTopicRelations,
   ...analyticsEmailTopicRelations,
+  ...trackedLinkRelations,
   ...appointmentRelations,
   ...appointmentCalendarRelations,
   ...appointmentReminderDispatchRelations,

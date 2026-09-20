@@ -2664,6 +2664,10 @@
       "label": "Skip if replied since",
       "description": "Skip the text when the contact replied on any line since this ISO date-time."
     },
+    "bulktextTrackLinks": {
+      "label": "Track links",
+      "description": "Replace every URL in the text with a short hub link; a tap tags the contact bt-clicked and sets bt_last_click."
+    },
     "requestUrl": {
       "label": "URL",
       "placeholder": "https://api.example.com/endpoint"
@@ -3065,6 +3069,12 @@
         "title": "拷贝您的 API 代币",
         "description": "此代币仅显示一次。请妥善保存 — 之后将无法再次查看。",
         "done": "完成"
+      },
+      "deliveryMode": {
+        "label": "Delivery mode",
+        "description": "How outbound messages reach your application: pushed to the callback URL, or leased from the outbox by a worker with no public URL.",
+        "push": "Push to callback URL",
+        "pull": "Pull from outbox"
       }
     },
     "tokenPermission": {

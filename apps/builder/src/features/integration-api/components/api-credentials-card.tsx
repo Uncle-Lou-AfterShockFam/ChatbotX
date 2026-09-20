@@ -4,6 +4,7 @@ import { Badge } from "@chatbotx.io/ui/components/ui/badge"
 import { useTranslations } from "next-intl"
 import type { ApiResource } from "../schema/resource"
 import { ApiDisconnect } from "./api-disconnect"
+import { ApiSettingsForm } from "./api-settings-form"
 import { RotateTokenButton } from "./rotate-token-button"
 
 export function ApiCredentialsCard({ api }: { api: ApiResource }) {
@@ -28,9 +29,14 @@ export function ApiCredentialsCard({ api }: { api: ApiResource }) {
           {t("fields.api.callbackUrl.label")}:{" "}
           {api.callbackUrl ?? t("fields.api.callbackUrl.notSet")}
         </span>
+        <span>
+          {t("fields.api.deliveryMode.label")}:{" "}
+          {t(`fields.api.deliveryMode.${api.deliveryMode}`)}
+        </span>
       </div>
 
       <div className="flex justify-end gap-2">
+        <ApiSettingsForm api={api} />
         <RotateTokenButton id={api.id} />
         <ApiDisconnect api={api} />
       </div>

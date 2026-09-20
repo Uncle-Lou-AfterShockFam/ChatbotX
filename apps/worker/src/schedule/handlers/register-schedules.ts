@@ -286,6 +286,37 @@ export const registerSchedules = async () => {
     },
   )
 
+  // Tracked links (bulktextSend `trackLinks`) and settled pull-mode outbox
+  // rows: retention applies to every edition, same reasoning as
+  // `purgeErrorLogs`; offset so the chunked deletes do not contend.
+  await scheduleQueue.upsertJobScheduler(
+    ScheduleJobData.purgeTrackedLinks,
+    {
+      pattern: "30 3 * * *",
+    },
+    {
+      name: ScheduleJobData.purgeTrackedLinks,
+      data: {
+        type: ScheduleJobData.purgeTrackedLinks,
+        data: {},
+      },
+    },
+  )
+
+  await scheduleQueue.upsertJobScheduler(
+    ScheduleJobData.purgeApiChannelOutbox,
+    {
+      pattern: "45 3 * * *",
+    },
+    {
+      name: ScheduleJobData.purgeApiChannelOutbox,
+      data: {
+        type: ScheduleJobData.purgeApiChannelOutbox,
+        data: {},
+      },
+    },
+  )
+
   await scheduleQueue.upsertJobScheduler(
     ScheduleJobData.purgeWhatsappSignupSessions,
     {

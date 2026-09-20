@@ -36,6 +36,8 @@ export const ScheduleJobData = {
   purgeAutomationThrottle: "purgeAutomationThrottle",
   purgeErrorLogs: "purgeErrorLogs",
   purgeCommentAutomationEvents: "purgeCommentAutomationEvents",
+  purgeTrackedLinks: "purgeTrackedLinks",
+  purgeApiChannelOutbox: "purgeApiChannelOutbox",
   refreshChannelTokens: "refreshChannelTokens",
   unsubscribeExpiredTrials: "unsubscribeExpiredTrials",
   teardownExpiredTrial: "teardownExpiredTrial",
@@ -218,6 +220,16 @@ export type ScheduleJobPurgeCommentAutomationEvents = {
   data: Record<string, never>
 }
 
+export type ScheduleJobPurgeTrackedLinks = {
+  type: typeof ScheduleJobData.purgeTrackedLinks
+  data: Record<string, never>
+}
+
+export type ScheduleJobPurgeApiChannelOutbox = {
+  type: typeof ScheduleJobData.purgeApiChannelOutbox
+  data: Record<string, never>
+}
+
 export type ScheduleJobRefreshChannelTokens = {
   type: typeof ScheduleJobData.refreshChannelTokens
   // No `channels` = refresh every channel. The short-lived scheduler passes
@@ -274,6 +286,8 @@ export type ScheduleJobData =
   | ScheduleJobPurgeAutomationThrottle
   | ScheduleJobPurgeErrorLogs
   | ScheduleJobPurgeCommentAutomationEvents
+  | ScheduleJobPurgeTrackedLinks
+  | ScheduleJobPurgeApiChannelOutbox
   | ScheduleJobRefreshChannelTokens
   | ScheduleJobUnsubscribeExpiredTrials
   | ScheduleJobTeardownExpiredTrial

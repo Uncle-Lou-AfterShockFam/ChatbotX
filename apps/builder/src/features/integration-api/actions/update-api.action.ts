@@ -36,17 +36,24 @@ export const updateApiAction = workspaceActionClient
         workspaceId,
       })
 
+      // An empty string from the form means "clear the callback".
+      const callbackUrl =
+        parsedInput.callbackUrl === "" ? null : parsedInput.callbackUrl
+
       const auth = existing.auth as ApiAuthValue
-      const nextAuth: ApiAuthValue =
-        parsedInput.callbackUrl === undefined
-          ? auth
-          : { ...auth, callbackUrl: parsedInput.callbackUrl }
+      const nextAuth: ApiAuthValue = {
+        ...auth,
+        ...(callbackUrl === undefined ? {} : { callbackUrl }),
+        ...(parsedInput.deliveryMode === undefined
+          ? {}
+          : { deliveryMode: parsedInput.deliveryMode }),
+      }
 
       await integrationApiRepository.updateSettings({
         id,
         workspaceId,
         name: parsedInput.name,
-        callbackUrl: parsedInput.callbackUrl,
+        callbackUrl,
         auth: nextAuth,
       })
 

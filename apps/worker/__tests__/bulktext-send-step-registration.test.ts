@@ -25,8 +25,23 @@ describe("bulktextSend worker registration", () => {
   test("the chat sender reads its text and treats photo-only as a send", () => {
     const source = readFileSync("src/chat/handlers/send-flow-step.ts", "utf8")
     expect(source).toContain(
-      "resolvedStep.stepType === stepTypes.enum.bulktextSend",
+      "stepWithSignedBookingLinks.stepType === stepTypes.enum.bulktextSend",
     )
     expect(source).toContain("step.stepType === stepTypes.enum.bulktextSend")
+  })
+})
+
+describe("bulktextSend tracked links (s165)", () => {
+  test("the chat sender rewrites links after booking-link signing and reads its text off the tracked step", () => {
+    const source = readFileSync("src/chat/handlers/send-flow-step.ts", "utf8")
+    const tracked = source.indexOf("await trackBulktextLinksInStep({")
+    const signed = source.indexOf("await signBookingLinksInStep({")
+    const text = source.indexOf("const messageText =")
+    expect(tracked).toBeGreaterThan(-1)
+    expect(signed).toBeGreaterThan(tracked)
+    expect(text).toBeGreaterThan(signed)
+    expect(source.slice(text, text + 400)).toContain(
+      "stepWithSignedBookingLinks.text",
+    )
   })
 })
