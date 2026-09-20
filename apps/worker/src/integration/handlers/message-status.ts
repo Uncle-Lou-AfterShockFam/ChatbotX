@@ -23,7 +23,7 @@ import {
   integrationService,
 } from "../../services/integrations"
 import { normalizeEpochTimestamp } from "../utils/message"
-import { applyBulktextVerdict } from "./bulktext-verdict"
+import { applyBulktextVerdict, isBulktextLine } from "./bulktext-verdict"
 import { runFlowPostback } from "./flow"
 
 type StatusContactInboxWhere = { inboxId: string } & (
@@ -190,6 +190,7 @@ export const handleMessageStatus = async (
     // send with a verdict; write it onto the contact so flows can branch.
     if (
       inbox.channel === "api" &&
+      isBulktextLine(integrationRow) &&
       (eventStatus === "delivered" || eventStatus === "failed")
     ) {
       try {

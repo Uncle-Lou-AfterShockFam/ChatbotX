@@ -129,3 +129,67 @@ describe("api sendFlowStep — bulktextSend", () => {
     })
   })
 })
+
+describe("api sendFlowStep — a bulktext refusal is a failed send, not a silent success", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const step = {
+    id: "step-1",
+    nodeId: "node-1",
+    stepType: "sendText",
+    text: "hi",
+    buttons: [],
+  }
+
+  test("a 200 with a non-null reason and no message id throws with the reason and warning", async () => {
+    mockPostSignedEnvelope.mockResolvedValue({
+      ok: true,
+      reason: "bad-options",
+      warning: "skipIfRepliedSince must not be in the future",
+      messageId: null,
+      batchId: null,
+    })
+    await expect(
+      sendFlowStep({ ctx, data: { contact, quickReplies: [], step } } as never),
+    ).rejects.toThrow(
+      "bulktext refused the send (bad-options): skipIfRepliedSince must not be in the future",
+    )
+  })
+
+  test("suppressed WITH a hook message id is not a refusal here: the async failed status carries the verdict", async () => {
+    mockPostSignedEnvelope.mockResolvedValue({
+      ok: true,
+      reason: "suppressed",
+      messageId: "hook:12",
+      warning: null,
+    })
+    await expect(
+      sendFlowStep({ ctx, data: { contact, quickReplies: [], step } } as never),
+    ).resolves.toEqual({ messageIds: ["hook:12"] })
+  })
+
+  test("a duplicate refusal (message id of the earlier send, reason set) still throws", async () => {
+    mockPostSignedEnvelope.mockResolvedValue({
+      ok: true,
+      reason: "duplicate",
+      messageId: "msg:5",
+      warning: null,
+    })
+    await expect(
+      sendFlowStep({ ctx, data: { contact, quickReplies: [], step } } as never),
+    ).rejects.toThrow("bulktext refused the send (duplicate)")
+  })
+
+  test("no reason key at all (an inbound-only or non-bulktext API channel) is untouched", async () => {
+    mockPostSignedEnvelope.mockResolvedValue({ messageId: "m_1" })
+    await expect(
+      sendFlowStep({ ctx, data: { contact, quickReplies: [], step } } as never),
+    ).resolves.toEqual({ messageIds: ["m_1"] })
+    mockPostSignedEnvelope.mockResolvedValue(null)
+    await expect(
+      sendFlowStep({ ctx, data: { contact, quickReplies: [], step } } as never),
+    ).resolves.toEqual({ messageIds: [] })
+  })
+})

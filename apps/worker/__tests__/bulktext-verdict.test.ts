@@ -18,9 +18,8 @@ vi.mock("@chatbotx.io/business", () => ({
   },
 }))
 
-const { applyBulktextVerdict, bulktextVerdictFor } = await import(
-  "../src/integration/handlers/bulktext-verdict"
-)
+const { applyBulktextVerdict, bulktextVerdictFor, isBulktextLine } =
+  await import("../src/integration/handlers/bulktext-verdict")
 
 const contactInbox = { id: "ci-1", inboxId: "inbox-1", channel: "api" }
 const base = { workspaceId: "ws-1", contactId: "c-1", contactInbox }
@@ -118,5 +117,34 @@ describe("applyBulktextVerdict", () => {
     await expect(
       applyBulktextVerdict({ ...base, status: "delivered", error: undefined }),
     ).rejects.toThrow("db down")
+  })
+})
+
+describe("isBulktextLine (scope of the verdict writer)", () => {
+  test("a bulktext callback URL or a bulktext-<line> name qualifies; any other API-channel integration does not", () => {
+    expect(
+      isBulktextLine({
+        name: "bulktext-gv",
+        callbackUrl: "https://x.ngrok-free.dev/api/hooks/chatbotx?platform=gv",
+      }),
+    ).toBe(true)
+    expect(
+      isBulktextLine({ name: "bulktext-imessage", callbackUrl: null }),
+    ).toBe(true)
+    expect(
+      isBulktextLine({
+        name: "Acme CRM bridge",
+        callbackUrl: "https://acme.example/api/hooks/chatbotx",
+      }),
+    ).toBe(true)
+    expect(
+      isBulktextLine({
+        name: "Acme CRM bridge",
+        callbackUrl: "https://acme.example/webhook",
+      }),
+    ).toBe(false)
+    expect(isBulktextLine({ name: "other", callbackUrl: null })).toBe(false)
+    expect(isBulktextLine(null)).toBe(false)
+    expect(isBulktextLine({})).toBe(false)
   })
 })

@@ -37,6 +37,22 @@ export const BULKTEXT_SKIP_REASONS: ReadonlySet<string> = new Set([
 
 export type BulktextVerdict = "send" | "skip"
 
+/**
+ * Whether an API-channel integration row is a bulktext line worker: its
+ * callback points at bulktext's hook route, or (pull mode, no callback) it
+ * is named `bulktext-<line>`. Any other API-channel integration on the same
+ * hub must never get bt_* fields written from its statuses (skeptic s163).
+ */
+export const isBulktextLine = (integrationRow: unknown): boolean => {
+  const row = integrationRow as { callbackUrl?: unknown; name?: unknown } | null
+  const callbackUrl =
+    typeof row?.callbackUrl === "string" ? row.callbackUrl : ""
+  const name = typeof row?.name === "string" ? row.name : ""
+  return (
+    callbackUrl.includes("/api/hooks/chatbotx") || name.startsWith("bulktext")
+  )
+}
+
 export const bulktextVerdictFor = (
   status: string,
   error: unknown,
