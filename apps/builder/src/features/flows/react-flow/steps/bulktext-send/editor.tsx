@@ -10,7 +10,9 @@ type BulktextSendStepEditorProps = {
   parentName: string
 }
 
-const BulktextSendStepEditor = ({ parentName }: BulktextSendStepEditorProps) => {
+const BulktextSendStepEditor = ({
+  parentName,
+}: BulktextSendStepEditorProps) => {
   const t = useTranslations()
 
   return (

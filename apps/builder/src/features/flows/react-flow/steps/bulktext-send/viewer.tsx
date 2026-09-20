@@ -14,7 +14,9 @@ const BulktextSendStepViewer = ({ data }: BulktextSendStepViewerProps) => {
   const previewText = useBotFieldTokenLabels(data.text)
   const options = [
     data.dryRun ? t("fields.bulktextDryRun.label") : null,
-    data.scheduleAt ? `${t("fields.bulktextScheduleAt.label")}: ${data.scheduleAt}` : null,
+    data.scheduleAt
+      ? `${t("fields.bulktextScheduleAt.label")}: ${data.scheduleAt}`
+      : null,
     data.spreadOverMinutes > 0
       ? `${t("fields.bulktextSpreadOverMinutes.label")}: ${data.spreadOverMinutes}`
       : null,
