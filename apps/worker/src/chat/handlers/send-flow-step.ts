@@ -65,6 +65,7 @@ import {
   settleCommentAutomationFailure,
 } from "../../lib/comment-automation-anchor"
 import { logger } from "../../lib/logger"
+import { trackBulktextLinksInStep } from "../lib/tracked-links"
 import {
   recordMessageSendError,
   sendFlowStepToChannel,
@@ -539,13 +540,6 @@ export async function sendFlowStep({
     return
   }
 
-  const messageText =
-    resolvedStep.stepType === stepTypes.enum.sendText ||
-    resolvedStep.stepType === stepTypes.enum.bulktextSend ||
-    resolvedStep.stepType === stepTypes.enum.whatsappCallButton
-      ? resolvedStep.text
-      : null
-
   let message: MessageModel | MessageWithAttachments | undefined
 
   try {
@@ -554,18 +548,33 @@ export async function sendFlowStep({
       resolveTenantSettings({ workspaceId: conversation.workspaceId }),
     ])
     const { appUrl, storageUrl } = tenantSettings
-    const stepWithSignedBookingLinks = await signBookingLinksInStep({
+    const stepWithSignedBookingLinks = await trackBulktextLinksInStep({
+      step: await signBookingLinksInStep({
+        workspaceId: conversation.workspaceId,
+        contactId: conversation.contactId,
+        conversationId: conversation.id,
+        contactInboxId: targetContactInbox.id,
+        channel: targetContactInbox.channel,
+        flowId,
+        flowVersionId,
+        executedFlowVersionId,
+        appUrl,
+        step: resolvedStep as SendFlowStepData,
+      }),
       workspaceId: conversation.workspaceId,
       contactId: conversation.contactId,
-      conversationId: conversation.id,
       contactInboxId: targetContactInbox.id,
-      channel: targetContactInbox.channel,
       flowId,
-      flowVersionId,
-      executedFlowVersionId,
       appUrl,
-      step: resolvedStep as SendFlowStepData,
     })
+    // Read off the step that goes to the channel, so a tracked-link rewrite
+    // is what the stored Message shows too.
+    const messageText =
+      stepWithSignedBookingLinks.stepType === stepTypes.enum.sendText ||
+      stepWithSignedBookingLinks.stepType === stepTypes.enum.bulktextSend ||
+      stepWithSignedBookingLinks.stepType === stepTypes.enum.whatsappCallButton
+        ? stepWithSignedBookingLinks.text
+        : null
     const quickRepliesWithSignedBookingLinks = await signBookingButtonsIfNeeded(
       {
         workspaceId: conversation.workspaceId,

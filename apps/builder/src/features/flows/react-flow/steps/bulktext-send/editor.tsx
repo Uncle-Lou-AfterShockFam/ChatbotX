@@ -57,6 +57,11 @@ const BulktextSendStepEditor = ({
           name={`${parentName}.skipIfRepliedSince`}
           placeholder="2026-09-20T00:00:00Z"
         />
+        <SwitchField
+          description={t("fields.bulktextTrackLinks.description")}
+          label={t("fields.bulktextTrackLinks.label")}
+          name={`${parentName}.trackLinks`}
+        />
       </div>
     </div>
   )

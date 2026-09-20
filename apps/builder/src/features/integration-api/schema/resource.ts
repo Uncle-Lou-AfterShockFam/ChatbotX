@@ -3,18 +3,23 @@ import {
   integrationApiModel,
 } from "@chatbotx.io/database/schema"
 import { zodBigintAsString } from "@chatbotx.io/utils"
-import type { z } from "zod"
+import { z } from "zod"
 
 export const apiResource = createSelectSchema(integrationApiModel, {
   id: zodBigintAsString(),
   inboxId: zodBigintAsString(),
   workspaceId: zodBigintAsString(),
-}).pick({
-  id: true,
-  name: true,
-  tokenPrefix: true,
-  callbackUrl: true,
-  enabled: true,
-  createdAt: true,
 })
+  .pick({
+    id: true,
+    name: true,
+    tokenPrefix: true,
+    callbackUrl: true,
+    enabled: true,
+    createdAt: true,
+  })
+  .extend({
+    /** From `auth.deliveryMode`; absent means push. */
+    deliveryMode: z.enum(["push", "pull"]),
+  })
 export type ApiResource = z.infer<typeof apiResource>

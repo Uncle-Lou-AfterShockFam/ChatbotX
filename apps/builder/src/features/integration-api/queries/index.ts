@@ -4,6 +4,11 @@ import type { IntegrationApiModel } from "@chatbotx.io/database/types"
 import { assertCurrentUserCanAccessChatbot } from "@/lib/auth/utils"
 import type { ApiResource } from "../schema/resource"
 
+const deliveryModeOf = (auth: unknown): ApiResource["deliveryMode"] => {
+  const mode = (auth as { deliveryMode?: unknown } | null)?.deliveryMode
+  return mode === "pull" ? "pull" : "push"
+}
+
 const toResource = (row: IntegrationApiModel): ApiResource => ({
   id: row.id,
   name: row.name,
@@ -11,6 +16,7 @@ const toResource = (row: IntegrationApiModel): ApiResource => ({
   callbackUrl: row.callbackUrl,
   enabled: row.enabled,
   createdAt: row.createdAt,
+  deliveryMode: deliveryModeOf(row.auth),
 })
 
 export const listIntegrationApis = async ({

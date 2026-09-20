@@ -23,6 +23,7 @@ const BulktextSendStepViewer = ({ data }: BulktextSendStepViewerProps) => {
     data.skipIfRepliedSince
       ? `${t("fields.bulktextSkipIfRepliedSince.label")}: ${data.skipIfRepliedSince}`
       : null,
+    data.trackLinks ? t("fields.bulktextTrackLinks.label") : null,
   ].filter((entry): entry is string => entry !== null)
 
   return (

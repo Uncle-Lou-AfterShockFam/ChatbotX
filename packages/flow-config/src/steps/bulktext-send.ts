@@ -39,6 +39,12 @@ export const bulktextSendStepSchema = baseStepSchema
     spreadOverMinutes: z.number().int().min(0).max(MAX_BULKTEXT_SPREAD_MINUTES),
     /** Skip when the contact replied on any line since this ISO instant; empty = off. */
     skipIfRepliedSince: z.string().trim().max(64),
+    /**
+     * Replace every URL in the text with a short hub link (`/l/<token>`) so a
+     * tap can be recorded on the contact (tag `bt-clicked`, field
+     * `bt_last_click`). Hub-side only: the worker never sees this option.
+     */
+    trackLinks: z.boolean(),
   })
   .superRefine((data, ctx) => {
     if (data.text === "" && data.photoUrl === "") {
@@ -90,6 +96,7 @@ export const bulktextSendStepDefaultFn = (
   scheduleAt: "",
   spreadOverMinutes: 0,
   skipIfRepliedSince: "",
+  trackLinks: false,
   ...props,
   id: createId(),
   stepType: stepTypes.enum.bulktextSend,
@@ -98,7 +105,9 @@ export const bulktextSendStepDefaultFn = (
 /**
  * The delivery options as the worker reads them from
  * `contentAttributes.bulktext`: empty strings and a zero spread are omitted
- * so the envelope carries only what was set.
+ * so the envelope carries only what was set. `trackLinks` is deliberately
+ * NOT here: the rewrite happens in the chat worker before the envelope is
+ * built, and bulktext refuses any option it does not know (`bad-options`).
  */
 export const bulktextSendOptions = (step: BulktextSendStepSchema) => ({
   dryRun: step.dryRun,

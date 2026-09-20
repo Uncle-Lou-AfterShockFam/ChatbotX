@@ -23,12 +23,14 @@ import { finalizeBroadcasts } from "./handlers/finalize-broadcasts"
 import { maintainMacPartitions } from "./handlers/maintain-mac-partitions"
 import { prepareBroadcast } from "./handlers/prepare-broadcast"
 import { processBroadcastContacts } from "./handlers/process-broadcast-contacts"
+import { purgeApiChannelOutbox } from "./handlers/purge-api-channel-outbox"
 import { purgeAutomationThrottle } from "./handlers/purge-automation-throttle"
 import { purgeBroadcasts } from "./handlers/purge-broadcasts"
 import { purgeCoexistStaging } from "./handlers/purge-coexist-staging"
 import { purgeCommentAutomationEvents } from "./handlers/purge-comment-automation-events"
 import { purgeErrorLogs } from "./handlers/purge-error-logs"
 import { purgeExpiredCallRecordings } from "./handlers/purge-expired-call-recordings"
+import { purgeTrackedLinks } from "./handlers/purge-tracked-links"
 import { purgeWhatsappSignupSessions } from "./handlers/purge-whatsapp-signup-sessions"
 import { purgeWorkspaces } from "./handlers/purge-workspaces"
 import { reconcileBroadcasts } from "./handlers/reconcile-broadcasts"
@@ -171,6 +173,14 @@ async function startScheduleWorker() {
 
             case ScheduleJobData.purgeCommentAutomationEvents:
               await purgeCommentAutomationEvents()
+              return
+
+            case ScheduleJobData.purgeTrackedLinks:
+              await purgeTrackedLinks()
+              return
+
+            case ScheduleJobData.purgeApiChannelOutbox:
+              await purgeApiChannelOutbox()
               return
 
             case ScheduleJobData.purgeExpiredCallRecordings:

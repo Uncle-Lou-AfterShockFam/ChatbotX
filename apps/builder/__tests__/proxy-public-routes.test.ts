@@ -32,3 +32,10 @@ describe("isPublicRoute", () => {
     expect(isPublicRoute("/authorized-apps")).toBe(false)
   })
 })
+
+describe("tracked links", () => {
+  test("/l/<token> is public so a texted short link needs no session", () => {
+    expect(isPublicRoute("/l/AbCdEfGhIjK")).toBe(true)
+    expect(isPublicRoute("/links")).toBe(false)
+  })
+})
