@@ -44,7 +44,7 @@ export const bulktextSendStepSchema = baseStepSchema
      * tap can be recorded on the contact (tag `bt-clicked`, field
      * `bt_last_click`). Hub-side only: the worker never sees this option.
      */
-    trackLinks: z.boolean(),
+    trackLinks: z.boolean().default(false),
   })
   .superRefine((data, ctx) => {
     if (data.text === "" && data.photoUrl === "") {
