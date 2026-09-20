@@ -6,7 +6,7 @@ const mint = vi.fn()
 vi.mock("@chatbotx.io/business", () => ({
   trackedLinkService: { mint: (...args: unknown[]) => mint(...args) },
   buildTrackedLinkUrl: (appUrl: string, token: string) =>
-    `${appUrl.replace(TRAILING_SLASHES, "")}/l/${token}`,
+    `${appUrl.replace(TRAILING_SLASHES, "")}/go/${token}`,
 }))
 
 const { rewriteTrackedLinks, trackBulktextLinksInStep } = await import(
@@ -33,7 +33,7 @@ describe("rewriteTrackedLinks", () => {
       },
     )
     expect(out).toEqual({
-      text: "a https://hub.example/l/t1 and https://hub.example/l/t2 end",
+      text: "a https://hub.example/go/t1 and https://hub.example/go/t2 end",
       minted: 2,
     })
     expect(seen).toEqual(["https://x.y/one", "http://z.w/two?q=1"])
@@ -46,18 +46,18 @@ describe("rewriteTrackedLinks", () => {
       (url) => Promise.resolve(`k:${url.length}`),
     )
     expect(out.text).toBe(
-      "see https://hub.example/l/k:13. Or (https://hub.example/l/k:13), ok?",
+      "see https://hub.example/go/k:13. Or (https://hub.example/go/k:13), ok?",
     )
   })
 
-  test("a URL already under /l/ is left alone", async () => {
+  test("a URL already under /go/ is left alone", async () => {
     const mintSpy = vi.fn(() => Promise.resolve("new"))
     const out = await rewriteTrackedLinks(
-      `tap ${APP}/l/AbCdEfGhIjK now`,
+      `tap ${APP}/go/AbCdEfGhIjK now`,
       APP,
       mintSpy,
     )
-    expect(out).toEqual({ text: `tap ${APP}/l/AbCdEfGhIjK now`, minted: 0 })
+    expect(out).toEqual({ text: `tap ${APP}/go/AbCdEfGhIjK now`, minted: 0 })
     expect(mintSpy).not.toHaveBeenCalled()
   })
 
@@ -94,7 +94,7 @@ describe("trackBulktextLinksInStep", () => {
       trackLinks: true,
     } as never
     const out = await trackBulktextLinksInStep({ ...base, step })
-    expect((out as { text: string }).text).toBe("hi https://hub.example/l/tok1")
+    expect((out as { text: string }).text).toBe("hi https://hub.example/go/tok1")
     expect(mint).toHaveBeenCalledWith({
       workspaceId: "w1",
       contactId: "c1",

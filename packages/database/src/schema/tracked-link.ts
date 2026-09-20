@@ -19,8 +19,8 @@ import { workspaceModel } from "./workspace"
  * A short, trackable stand-in for one URL inside one outbound text.
  *
  * Minted by the chat worker when a `bulktextSend` step has `trackLinks` on:
- * every URL in the rendered text is replaced by `${appUrl}/l/<token>` and the
- * public `/l/[token]` route redirects to `url` while recording the visit.
+ * every URL in the rendered text is replaced by `${appUrl}/go/<token>` and the
+ * public `/go/[token]` route redirects to `url` while recording the visit.
  * Short matters here (the text goes over SMS/iMessage), which is why this is
  * not `AnalyticsEmailTopic`: that row carries its destination in a signed
  * query parameter and needs an email topic to hang off.

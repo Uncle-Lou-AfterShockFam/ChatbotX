@@ -79,10 +79,10 @@ describe("tokens", () => {
 
   test("buildTrackedLinkUrl strips a trailing slash from the app URL", () => {
     expect(buildTrackedLinkUrl("https://hub.x/", "AbCdEfGhIjK")).toBe(
-      "https://hub.x/l/AbCdEfGhIjK",
+      "https://hub.x/go/AbCdEfGhIjK",
     )
     expect(buildTrackedLinkUrl("https://hub.x", "AbCdEfGhIjK")).toBe(
-      "https://hub.x/l/AbCdEfGhIjK",
+      "https://hub.x/go/AbCdEfGhIjK",
     )
   })
 })

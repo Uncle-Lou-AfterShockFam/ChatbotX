@@ -14,7 +14,7 @@ export type TrackedLinkMinter = (url: string) => Promise<string>
 
 /**
  * Pure rewrite: replaces every URL in `text` with the short URL the minter
- * returns for it. URLs already under `${appUrl}/l/` are left alone so a
+ * returns for it. URLs already under `${appUrl}/go/` are left alone so a
  * re-sent text is not double-wrapped. One token per occurrence, in order.
  */
 export async function rewriteTrackedLinks(

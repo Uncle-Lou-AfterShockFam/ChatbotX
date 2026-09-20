@@ -9,7 +9,7 @@ const ANDROID_CHROME_UA =
   "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36"
 
 const req = (headers: Record<string, string>, method = "GET") =>
-  new Request("http://localhost/l/AbCdEfGhIjK", { method, headers })
+  new Request("http://localhost/go/AbCdEfGhIjK", { method, headers })
 
 describe("isLinkPrefetch", () => {
   test("an iMessage link preview is a prefetch", () => {
