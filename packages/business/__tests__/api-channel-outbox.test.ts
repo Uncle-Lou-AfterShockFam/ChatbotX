@@ -20,7 +20,9 @@ vi.mock("@chatbotx.io/database/client", () => ({
       from: () => ({
         where: () => ({
           limit: () => mockReturning(),
-          orderBy: () => ({ limit: () => "candidates" }),
+          orderBy: () => ({
+            limit: () => ({ for: () => "candidates" }),
+          }),
         }),
       }),
     }),

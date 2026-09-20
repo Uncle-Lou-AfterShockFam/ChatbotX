@@ -116,6 +116,10 @@ class ApiChannelOutboxService extends BaseService {
       )
       .orderBy(apiChannelOutboxModel.createdAt, apiChannelOutboxModel.id)
       .limit(limit)
+      // Two pollers on one token (a deploy overlap, a misconfigured second
+      // worker) must never lease the same row: the candidate rows are locked
+      // and a concurrent caller skips them instead of waiting and re-reading.
+      .for("update", { skipLocked: true })
     const rows = await db
       .update(apiChannelOutboxModel)
       .set({ status: "leased", leasedAt: now, leaseExpiresAt: expires })
