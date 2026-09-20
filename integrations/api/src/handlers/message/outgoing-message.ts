@@ -1,4 +1,4 @@
-import { stepTypes } from "@chatbotx.io/flow-config"
+import { bulktextSendOptions, stepTypes } from "@chatbotx.io/flow-config"
 import {
   contentTypes,
   type MessageHandlers,
@@ -144,6 +144,18 @@ const mapFlowStepToEnvelope = (
       }
     case stepTypes.enum.sendQuickReply:
       return { text: step.message }
+    // "Text via bulktext": the line worker reads its delivery options from
+    // `contentAttributes.bulktext`; a photo rides as an ordinary attachment.
+    case stepTypes.enum.bulktextSend:
+      return {
+        text: step.text === "" ? null : step.text,
+        contentAttributes: {
+          ...(step.photoUrl === ""
+            ? {}
+            : { attachments: [{ url: step.photoUrl, fileType: "image" }] }),
+          bulktext: bulktextSendOptions(step),
+        },
+      }
     case stepTypes.enum.sendCarousel:
       return {
         text: null,

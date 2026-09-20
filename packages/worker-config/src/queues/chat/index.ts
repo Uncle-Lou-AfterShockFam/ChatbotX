@@ -5,6 +5,7 @@ import type {
   MessageModel,
 } from "@chatbotx.io/database/types"
 import type {
+  BulktextSendStepSchema,
   ButtonStepProps,
   MessengerTemplateParams,
   MetadataPayload,
@@ -76,6 +77,7 @@ export type ChatJobSendFlowStep = {
     executedFlowVersionId?: string
     step:
       | SendTextStepSchema
+      | BulktextSendStepSchema
       | SendImageStepSchema
       | SendMultipleImagesStepSchema
       | SendGifStepSchema

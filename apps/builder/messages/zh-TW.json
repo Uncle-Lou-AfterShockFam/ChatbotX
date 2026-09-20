@@ -621,6 +621,30 @@
     "httpMethod": {
       "label": "方法"
     },
+    "bulktextPhotoUrl": {
+      "label": "Photo URL",
+      "placeholder": "https://example.com/photo.jpg"
+    },
+    "bulktextDryRun": {
+      "label": "Dry run",
+      "description": "Runs the line worker's whole pipeline without sending a text."
+    },
+    "bulktextRef": {
+      "label": "Idempotency ref",
+      "placeholder": "campaign-x-2026"
+    },
+    "bulktextScheduleAt": {
+      "label": "Schedule at",
+      "description": "ISO 8601 date-time or a contact variable; empty sends now."
+    },
+    "bulktextSpreadOverMinutes": {
+      "label": "Spread over minutes",
+      "description": "Randomize the send within this many minutes (1-1440); 0 is off. Exclusive with Schedule at."
+    },
+    "bulktextSkipIfRepliedSince": {
+      "label": "Skip if replied since",
+      "description": "Skip the text when the contact replied on any line since this ISO date-time."
+    },
     "requestUrl": {
       "label": "URL",
       "placeholder": "https://api.example.com/endpoint"
@@ -2619,6 +2643,7 @@
       "sendMessage": "傳送訊息",
       "sendNode": "啟動另一個節點",
       "sendText": "傳送文字",
+      "bulktextSend": "Text via bulktext",
       "sendVideo": "傳送影片",
       "sendTemplateMessage": "範本訊息",
       "whatsappOptionList": "選項清單",

@@ -23,6 +23,7 @@ import {
   integrationService,
 } from "../../services/integrations"
 import { normalizeEpochTimestamp } from "../utils/message"
+import { applyBulktextVerdict } from "./bulktext-verdict"
 import { runFlowPostback } from "./flow"
 
 type StatusContactInboxWhere = { inboxId: string } & (
@@ -183,6 +184,30 @@ export const handleMessageStatus = async (
         // re-attempt it whatever the error body claims about retryability.
         willRetry: false,
       })
+    }
+
+    // An API-channel inbox served by a bulktext line worker answers every
+    // send with a verdict; write it onto the contact so flows can branch.
+    if (
+      inbox.channel === "api" &&
+      (eventStatus === "delivered" || eventStatus === "failed")
+    ) {
+      try {
+        await applyBulktextVerdict({
+          workspaceId: inbox.workspaceId,
+          contactId: contactInbox.contactId,
+          contactInbox,
+          status: eventStatus,
+          error: payload.error,
+        })
+      } catch (verdictError) {
+        // The status itself is recorded above; a field/tag write failure
+        // must not turn a delivered message into a failed job.
+        logger.error(
+          verdictError,
+          `bulktext verdict not applied for messageId: ${payload.messageId}`,
+        )
+      }
     }
 
     if (!message || (eventStatus !== "delivered" && eventStatus !== "failed")) {

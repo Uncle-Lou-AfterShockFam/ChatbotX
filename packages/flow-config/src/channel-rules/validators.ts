@@ -1,4 +1,5 @@
 import { type StepType, stepTypes } from "../steps/step-action"
+import { bulktextSendValidator } from "./bulktext-send-validator"
 import type { StepValidator } from "./channel-validator"
 import {
   sendAudioValidator,
@@ -27,6 +28,7 @@ import { sendWaTemplateMessageValidator } from "./send-wa-template-validator"
 export const channelAwareStepValidators: Partial<
   Record<StepType, StepValidator>
 > = {
+  [stepTypes.enum.bulktextSend]: bulktextSendValidator,
   [stepTypes.enum.sendAudio]: sendAudioValidator,
   [stepTypes.enum.sendCarousel]: sendCarouselValidator,
   [stepTypes.enum.sendFile]: sendFileValidator,

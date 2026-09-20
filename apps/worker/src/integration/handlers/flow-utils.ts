@@ -72,6 +72,7 @@ export type HeavyStepProps<T> = ExecuteStepProps<T> & {
  */
 export const MESSAGE_PRODUCING_STEP_TYPES = new Set<StepType>([
   stepTypes.enum.sendText,
+  stepTypes.enum.bulktextSend,
   stepTypes.enum.sendImage,
   stepTypes.enum.sendMultipleImages,
   stepTypes.enum.sendGif,
