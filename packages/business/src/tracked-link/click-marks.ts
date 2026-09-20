@@ -13,6 +13,9 @@ import { tagService } from "../tag/service"
  */
 export const BULKTEXT_CLICKED_TAG = "bt-clicked"
 export const BULKTEXT_LAST_CLICK_FIELD = "bt_last_click"
+/** An open pixel fetched: tag `bt-opened`, field `bt_last_open` (ISO instant). */
+export const BULKTEXT_OPENED_TAG = "bt-opened"
+export const BULKTEXT_LAST_OPEN_FIELD = "bt_last_open"
 
 export type ClickMarkContactInbox = {
   id: string
@@ -20,14 +23,16 @@ export type ClickMarkContactInbox = {
   channel: string | null
 }
 
-export async function markBulktextClick(props: {
+async function markEngagement(props: {
   workspaceId: string
   contactId: string
   contactInbox: ClickMarkContactInbox
   at: Date
+  fieldName: string
+  tagName: string
 }): Promise<void> {
   const { workspaceId, contactId, contactInbox, at } = props
-  const field = { name: BULKTEXT_LAST_CLICK_FIELD, type: "shortText" as const }
+  const field = { name: props.fieldName, type: "shortText" as const }
   const { idMap } = await customFieldService.resolveByNameAndType({
     workspaceId,
     fields: [field],
@@ -43,8 +48,32 @@ export async function markBulktextClick(props: {
   await tagService.attachByNamesToContacts({
     workspaceId,
     contactIds: [contactId],
-    names: [BULKTEXT_CLICKED_TAG],
+    names: [props.tagName],
     contactInbox,
     emitFor: "newlyLinked",
   })
 }
+
+export const markBulktextClick = (props: {
+  workspaceId: string
+  contactId: string
+  contactInbox: ClickMarkContactInbox
+  at: Date
+}): Promise<void> =>
+  markEngagement({
+    ...props,
+    fieldName: BULKTEXT_LAST_CLICK_FIELD,
+    tagName: BULKTEXT_CLICKED_TAG,
+  })
+
+export const markBulktextOpen = (props: {
+  workspaceId: string
+  contactId: string
+  contactInbox: ClickMarkContactInbox
+  at: Date
+}): Promise<void> =>
+  markEngagement({
+    ...props,
+    fieldName: BULKTEXT_LAST_OPEN_FIELD,
+    tagName: BULKTEXT_OPENED_TAG,
+  })

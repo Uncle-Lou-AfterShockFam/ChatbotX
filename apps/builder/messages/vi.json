@@ -1482,6 +1482,10 @@
       "label": "Track links",
       "description": "Replace every URL in the text with a short hub link; a tap tags the contact bt-clicked and sets bt_last_click."
     },
+    "bulktextTrackOpens": {
+      "label": "Track opens (email)",
+      "description": "Append an invisible open beacon to the mail; a fetch tags the contact bt-opened and sets bt_last_open. Ignored on text lines."
+    },
     "requestUrl": {
       "label": "URL",
       "placeholder": "https://api.example.com/endpoint"

@@ -45,6 +45,19 @@ export const bulktextSendStepSchema = baseStepSchema
      * `bt_last_click`). Hub-side only: the worker never sees this option.
      */
     trackLinks: z.boolean().default(false),
+    /**
+     * Email line only: mint an open beacon and let the line worker append it
+     * to the mail as a 1x1 image (`/go/<token>/o`); a fetch tags the contact
+     * `bt-opened` and sets `bt_last_open`. On a text line it is ignored by the
+     * worker's adapter.
+     */
+    trackOpens: z.boolean().default(false),
+    /**
+     * Filled by the chat worker when `trackOpens` is on: the minted pixel URL
+     * that travels to the line worker as the `openPixel` option. Never set by
+     * hand; empty = none.
+     */
+    openPixel: z.string().trim().max(2048).default(""),
   })
   .superRefine((data, ctx) => {
     if (data.text === "" && data.photoUrl === "") {
@@ -97,6 +110,8 @@ export const bulktextSendStepDefaultFn = (
   spreadOverMinutes: 0,
   skipIfRepliedSince: "",
   trackLinks: false,
+  trackOpens: false,
+  openPixel: "",
   ...props,
   id: createId(),
   stepType: stepTypes.enum.bulktextSend,
@@ -105,9 +120,10 @@ export const bulktextSendStepDefaultFn = (
 /**
  * The delivery options as the worker reads them from
  * `contentAttributes.bulktext`: empty strings and a zero spread are omitted
- * so the envelope carries only what was set. `trackLinks` is deliberately
- * NOT here: the rewrite happens in the chat worker before the envelope is
- * built, and bulktext refuses any option it does not know (`bad-options`).
+ * so the envelope carries only what was set. `trackLinks` / `trackOpens` are
+ * deliberately NOT here: the rewrite and the pixel mint happen in the chat
+ * worker before the envelope is built, and bulktext refuses any option it
+ * does not know (`bad-options`); `openPixel` IS an option the worker knows.
  */
 export const bulktextSendOptions = (step: BulktextSendStepSchema) => ({
   dryRun: step.dryRun,
@@ -119,4 +135,5 @@ export const bulktextSendOptions = (step: BulktextSendStepSchema) => ({
   ...(step.skipIfRepliedSince === ""
     ? {}
     : { skipIfRepliedSince: step.skipIfRepliedSince }),
+  ...(step.openPixel === "" ? {} : { openPixel: step.openPixel }),
 })

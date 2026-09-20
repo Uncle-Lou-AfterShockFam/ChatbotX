@@ -34,6 +34,9 @@ import { workspaceModel } from "./workspace"
  * (iMessage, Slack, ...) rather than a person tapping; only human-looking
  * visits bump `clickCount` and mark the contact.
  */
+const trackedLinkKinds = ["link", "pixel"] as const
+export type TrackedLinkKind = (typeof trackedLinkKinds)[number]
+
 export const trackedLinkModel = pgTable(
   "TrackedLink",
   {
@@ -58,12 +61,21 @@ export const trackedLinkModel = pgTable(
     }),
     flowId: text(),
     stepId: text(),
-    /** The destination as it stood in the text; validated as http(s) at mint. */
+    /**
+     * `link`: a URL rewritten in the text, served by `/go/[token]` (302).
+     * `pixel`: the open beacon of one mail, served by `/go/[token]/o` as a
+     * 1x1 GIF; `url` is empty and the open counters below apply.
+     */
+    kind: text().$type<TrackedLinkKind>().default("link").notNull(),
+    /** The destination as it stood in the text; validated as http(s) at mint; empty for a pixel. */
     url: text().notNull(),
     firstClickedAt: timestamp(timestampConfig),
     lastClickedAt: timestamp(timestampConfig),
     clickCount: integer().default(0).notNull(),
     prefetchCount: integer().default(0).notNull(),
+    firstOpenedAt: timestamp(timestampConfig),
+    lastOpenedAt: timestamp(timestampConfig),
+    openCount: integer().default(0).notNull(),
   },
   (table) => [
     uniqueIndex("TrackedLink_token_key").using(

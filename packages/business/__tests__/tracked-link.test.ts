@@ -20,6 +20,7 @@ vi.mock("@chatbotx.io/database/client", () => ({
     }),
   },
   eq: (...a: unknown[]) => ({ eq: a }),
+  and: (...a: unknown[]) => ({ and: a }),
   sql: Object.assign(
     (strings: TemplateStringsArray, ...values: unknown[]) => ({
       strings,
@@ -32,6 +33,9 @@ vi.mock("@chatbotx.io/database/client", () => ({
 vi.mock("@chatbotx.io/database/schema", () => ({
   trackedLinkModel: {
     token: "token",
+    kind: "kind",
+    openCount: "openCount",
+    firstOpenedAt: "firstOpenedAt",
     clickCount: "clickCount",
     prefetchCount: "prefetchCount",
     firstClickedAt: "firstClickedAt",
@@ -41,6 +45,7 @@ vi.mock("@chatbotx.io/redis", () => ({ invalidateCacheByTags: vi.fn() }))
 vi.mock("../src/audit/dispatcher", () => ({ dispatchAuditRecord: vi.fn() }))
 
 const {
+  buildTrackedPixelUrl,
   buildTrackedLinkUrl,
   isTrackedLinkToken,
   mintTrackedLinkToken,
@@ -153,5 +158,35 @@ describe("trackedLinkService", () => {
       await trackedLinkService.recordVisit("bad", "click", now),
     ).toBeUndefined()
     expect(mockUpdate).toHaveBeenCalledTimes(2)
+  })
+
+  test("mintPixel inserts a kind=pixel row with an empty url; recordOpen bumps opens on pixel rows only; the pixel URL ends in /o", async () => {
+    mockInsertValues.mockClear()
+    const token = await trackedLinkService.mintPixel({ ...input })
+    expect(isTrackedLinkToken(token)).toBe(true)
+    expect(mockInsertValues).toHaveBeenCalledWith({
+      token,
+      kind: "pixel",
+      ...input,
+      url: "",
+    })
+    mockUpdate.mockReset()
+    mockUpdate.mockResolvedValue([{ token }])
+    const now = new Date("2026-09-20T10:00:00Z")
+    await trackedLinkService.recordOpen(token, now)
+    const [set, where] = mockUpdate.mock.calls[0] as [
+      Record<string, unknown>,
+      unknown,
+    ]
+    expect(Object.keys(set).sort()).toEqual([
+      "firstOpenedAt",
+      "lastOpenedAt",
+      "openCount",
+    ])
+    expect(JSON.stringify(where)).toContain("pixel")
+    expect(await trackedLinkService.recordOpen("bad", now)).toBeUndefined()
+    expect(buildTrackedPixelUrl("https://hub.x/", token)).toBe(
+      `https://hub.x/go/${token}/o`,
+    )
   })
 })
