@@ -29,6 +29,10 @@ import { logger } from "../logger"
 
 export type ExternalCalendarProviderType = "googleCalendar"
 
+/** Which calendars of the connected account feed free/busy. */
+export const busyCalendarScopes = ["connected", "all"] as const
+export type BusyCalendarScope = (typeof busyCalendarScopes)[number]
+
 export type ExternalCalendarSelectItem = {
   id: string
   providerType: ExternalCalendarProviderType
@@ -39,6 +43,7 @@ export type ExternalCalendarSelectItem = {
 
 export type ExternalCalendarListItem = ExternalCalendarSelectItem & {
   workspaceId: string
+  busyCalendarScope: BusyCalendarScope
   connectedCount: number
   createdAt: Date
   updatedAt: Date
@@ -177,6 +182,7 @@ class AppointmentExternalCalendarService extends BaseService {
         id: integrationModel.id,
         workspaceId: integrationModel.workspaceId,
         providerCalendarId: integrationGoogleCalendarModel.providerCalendarId,
+        busyCalendarScope: integrationGoogleCalendarModel.busyCalendarScope,
         email: integrationGoogleCalendarModel.email,
         createdAt: integrationModel.createdAt,
         updatedAt: integrationModel.updatedAt,
@@ -215,6 +221,7 @@ class AppointmentExternalCalendarService extends BaseService {
       providerType: "googleCalendar",
       label: this.formatGoogleCalendarLabel(row),
       providerCalendarId: row.providerCalendarId,
+      busyCalendarScope: normalizeBusyCalendarScope(row.busyCalendarScope),
       email: row.email,
       connectedCount: row.connectedCount,
       createdAt: row.createdAt,
@@ -237,6 +244,43 @@ class AppointmentExternalCalendarService extends BaseService {
         providerCalendarId: input.providerCalendarId,
         email: input.email ?? null,
       })
+      .from(integrationModel)
+      .where(
+        and(
+          eq(integrationGoogleCalendarModel.integrationId, integrationModel.id),
+          eq(integrationGoogleCalendarModel.workspaceId, input.workspaceId),
+          eq(integrationGoogleCalendarModel.integrationId, input.integrationId),
+          eq(
+            integrationModel.integrationType,
+            integrationTypes.enum.googleCalendar,
+          ),
+        ),
+      )
+      .returning({ id: integrationGoogleCalendarModel.id })
+
+    if (!row) {
+      throw notFoundException("Google Calendar connection not found")
+    }
+  }
+
+  async updateGoogleBusyScope(
+    input: {
+      workspaceId: string
+      integrationId: string
+      busyCalendarScope: BusyCalendarScope
+    },
+    tx: DatabaseClient = db,
+  ) {
+    if (!busyCalendarScopes.includes(input.busyCalendarScope)) {
+      throw new ChatbotXException(
+        `Unknown busy calendar scope: ${String(input.busyCalendarScope)}`,
+        "invalidBusyCalendarScope",
+        422,
+      )
+    }
+    const [row] = await tx
+      .update(integrationGoogleCalendarModel)
+      .set({ busyCalendarScope: input.busyCalendarScope })
       .from(integrationModel)
       .where(
         and(
@@ -304,12 +348,26 @@ class AppointmentExternalCalendarService extends BaseService {
         auth,
       },
     })
+    const scope = normalizeBusyCalendarScope(connection.busyCalendarScope)
+    // `all`: every calendar the account can read free/busy for (owned,
+    // shared, subscribed) blocks slots, not just the connected one. Listing
+    // needs only calendar.readonly, which the connection already holds.
+    const calendarIds =
+      scope === "all"
+        ? (
+            await integrationGoogleCalendar.runAction("listCalendars", {
+              ctx,
+              props: { timeoutMs: input.timeoutMs },
+            })
+          ).map((calendar) => calendar.id)
+        : undefined
     const busyEvents = await integrationGoogleCalendar.runAction(
       "getBusyEvents",
       {
         ctx,
         props: {
           calendarId: connection.providerCalendarId,
+          ...(calendarIds ? { calendarIds } : {}),
           timeMin: input.timeMin,
           timeMax: input.timeMax,
           timeZone: input.timeZone,
@@ -431,6 +489,13 @@ class AppointmentExternalCalendarService extends BaseService {
       ? `${input.email} (${input.providerCalendarId})`
       : input.providerCalendarId
   }
+}
+
+/** A row written before the column existed, or by hand, reads as `connected`. */
+export function normalizeBusyCalendarScope(
+  value: string | null | undefined,
+): BusyCalendarScope {
+  return value === "all" ? "all" : "connected"
 }
 
 export const appointmentExternalCalendarService =

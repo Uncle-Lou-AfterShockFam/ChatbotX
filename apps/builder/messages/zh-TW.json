@@ -5966,6 +5966,12 @@
       "provider": "提供者",
       "email": "電子郵件",
       "calendarId": "日曆 ID",
+      "busyScope": {
+        "label": "Busy time from",
+        "description": "Which calendars of the connected Google account block appointment slots. Events are still created on the Calendar ID above.",
+        "connected": "This calendar only",
+        "all": "All calendars in this account"
+      },
       "connected": "已連接",
       "date": "日期"
     },

@@ -26,5 +26,10 @@ export const updateGoogleCalendarIdAction = workspaceActionClient
         providerCalendarId: verified.providerCalendarId,
         email: verified.email ?? null,
       })
+      await appointmentExternalCalendarService.updateGoogleBusyScope({
+        workspaceId,
+        integrationId,
+        busyCalendarScope: parsedInput.busyCalendarScope,
+      })
     },
   )

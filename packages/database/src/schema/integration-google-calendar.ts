@@ -21,6 +21,8 @@ export const integrationGoogleCalendarModel = pgTable(
       }),
     auth: jsonb().notNull(),
     providerCalendarId: text().default("primary").notNull(),
+    /** `connected` = free/busy from providerCalendarId only; `all` = every calendar in the account. */
+    busyCalendarScope: text().default("connected").notNull(),
     email: text(),
   },
   (table) => [

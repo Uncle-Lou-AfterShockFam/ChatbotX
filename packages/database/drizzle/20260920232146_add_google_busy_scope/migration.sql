@@ -1,0 +1,1 @@
+ALTER TABLE "IntegrationGoogleCalendar" ADD COLUMN "busyCalendarScope" text DEFAULT 'connected' NOT NULL;

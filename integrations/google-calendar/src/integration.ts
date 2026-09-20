@@ -8,6 +8,7 @@ import {
 import { getBusyEvents } from "./apis/busy-events"
 import { verifyCalendarAccess } from "./apis/calendars"
 import { cancelEvent, createEvent } from "./apis/events"
+import { listCalendars } from "./apis/list-calendars"
 import { generateAuthUrl, getClient, revokeToken } from "./client"
 import { handleError } from "./error"
 import { callbackHandler } from "./handlers/callback"
@@ -30,11 +31,14 @@ const config: IntegrationDefinition<
       await getBusyEvents({
         auth: ctx.auth,
         calendarId: props.calendarId,
+        calendarIds: props.calendarIds,
         timeMin: props.timeMin,
         timeMax: props.timeMax,
         timeZone: props.timeZone,
         timeoutMs: props.timeoutMs,
       }),
+    listCalendars: async ({ ctx, props }) =>
+      await listCalendars({ auth: ctx.auth, timeoutMs: props.timeoutMs }),
     createEvent: async ({ ctx, props }) =>
       await createEvent({
         auth: ctx.auth,

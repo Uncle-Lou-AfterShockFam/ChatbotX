@@ -1,5 +1,6 @@
 export * from "./apis/busy-events"
 export * from "./apis/calendars"
 export * from "./apis/events"
+export * from "./apis/list-calendars"
 export * from "./integration"
 export * from "./schemas"
