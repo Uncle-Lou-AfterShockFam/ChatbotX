@@ -154,6 +154,13 @@ export const channelsPublicRouter = {
           .unknown()
           .optional()
           .describe("Provider error details, present when status is `failed`."),
+        detail: z
+          .string()
+          .max(500)
+          .optional()
+          .describe(
+            "Diagnostic text behind a classified `error` (the adapter step that failed), present when status is `failed`.",
+          ),
       }),
     )
     .errors(possibleErrorsOnCreatingResource)
@@ -272,6 +279,9 @@ export const channelsPublicRouter = {
         // The same job a push-mode refusal ends in (`message:failed` + the
         // bulktext verdict on the contact), keyed by the outbox id the
         // message row carries as its channel id.
+        // `error` is the BARE reason so the bulktext verdict writer can
+        // classify it exactly like a push-mode status (s172; the prose form
+        // never matched a closed reason, so pull refusals wrote no verdict).
         const warning =
           typeof ack.warning === "string" && ack.warning !== ""
             ? `: ${ack.warning}`
@@ -286,7 +296,12 @@ export const channelsPublicRouter = {
               contact: { sourceId: settled.contactSourceId },
               status: "failed",
               timestamp: new Date().toISOString(),
-              error: `bulktext refused the send (${ack.reason})${warning}`,
+              error: ack.reason,
+              detail:
+                `bulktext refused the send (${ack.reason})${warning}`.slice(
+                  0,
+                  500,
+                ),
             },
           },
         })

@@ -176,7 +176,12 @@ export const handleMessageStatus = async (
     }
 
     if (eventStatus === "failed") {
-      eventLog.errorData = payload.error ?? {}
+      // s172: a bulktext line posts a closed reason code in `error` and the
+      // adapter step behind it in `detail`; keep both on the event.
+      eventLog.errorData =
+        typeof payload.detail === "string" && payload.detail !== ""
+          ? { error: payload.error ?? null, detail: payload.detail }
+          : (payload.error ?? {})
       await emit(messageEventTypeSchema.enum["message:failed"], {
         ...eventLog,
         // The provider has already decided: an async delivery status is the
@@ -200,6 +205,7 @@ export const handleMessageStatus = async (
           contactInbox,
           status: eventStatus,
           error: payload.error,
+          timestamp: payload.timestamp,
         })
       } catch (verdictError) {
         // The status itself is recorded above; a field/tag write failure
