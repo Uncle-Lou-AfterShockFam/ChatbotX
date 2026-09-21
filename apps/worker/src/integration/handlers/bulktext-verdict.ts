@@ -33,8 +33,14 @@ import type { TagAttachContactInbox } from "./contact"
  * trigger fires on EVERY failure, including a repeat on a contact that
  * already carries the tag; `delivered` detaches all three.
  *
- * Closed reason sets: an unknown `error` is a provider failure the hub
- * cannot classify and leaves the contact untouched.
+ * Any other non-empty `error` string is a line error too (skeptic s172): a
+ * pull-mode refusal reason the daemon never classifies (`bad-options`,
+ * `media-fetch`, `error`...) must alert the operator, never vanish. Only a
+ * `failed` with no usable error text leaves the contact untouched.
+ *
+ * `bt-repair-asked` is set by the repair flow when it asks the person once;
+ * `delivered` clears it with the failure tags so the next failure episode
+ * may ask again, and a repeat failure inside one episode never re-asks.
  */
 export const BULKTEXT_VERDICT_FIELD = "bt_verdict"
 export const BULKTEXT_REASON_FIELD = "bt_reason"
@@ -43,6 +49,7 @@ export const BULKTEXT_FAILED_INBOX_FIELD = "bt_failed_inbox"
 export const BULKTEXT_BLOCKED_TAG = "bt-blocked"
 export const BULKTEXT_UNREACHABLE_TAG = "bt-unreachable"
 export const BULKTEXT_SEND_ERROR_TAG = "bt-send-error"
+export const BULKTEXT_REPAIR_ASKED_TAG = "bt-repair-asked"
 export const BULKTEXT_FAILURE_TAGS: readonly string[] = [
   BULKTEXT_BLOCKED_TAG,
   BULKTEXT_UNREACHABLE_TAG,
@@ -67,7 +74,6 @@ export const BULKTEXT_UNREACHABLE_REASONS: ReadonlySet<string> = new Set([
   "undelivered",
   "bounce",
   "hard-bounce",
-  "hard_bounce",
   "complaint",
 ])
 
@@ -116,10 +122,10 @@ export const bulktextVerdictFor = (
   if (BULKTEXT_UNREACHABLE_REASONS.has(error)) {
     return { verdict: "unreachable", reason: error }
   }
-  if (BULKTEXT_LINE_ERROR_REASONS.has(error)) {
-    return { verdict: "error", reason: error }
+  if (error.trim() === "") {
+    return null
   }
-  return null
+  return { verdict: "error", reason: error.slice(0, 120) }
 }
 
 const failedAtFor = (verdict: BulktextVerdict, timestamp: unknown): string => {
@@ -178,7 +184,7 @@ export async function applyBulktextVerdict(props: {
     await tagService.detachByNamesFromContacts({
       workspaceId,
       contactIds: [contactId],
-      names: [...BULKTEXT_FAILURE_TAGS],
+      names: [...BULKTEXT_FAILURE_TAGS, BULKTEXT_REPAIR_ASKED_TAG],
     })
     return outcome.verdict
   }

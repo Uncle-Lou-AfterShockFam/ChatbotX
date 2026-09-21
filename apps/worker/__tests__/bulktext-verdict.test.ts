@@ -54,7 +54,20 @@ describe("bulktextVerdictFor (pure)", () => {
       verdict: "error",
       reason: "canceled",
     })
-    expect(bulktextVerdictFor("failed", "FillNumberInput")).toBeNull()
+    // Anything else with text = a line error the operator must see (skeptic
+    // s172: pull-mode refusal reasons such as bad-options / media-fetch).
+    expect(bulktextVerdictFor("failed", "FillNumberInput")).toEqual({
+      verdict: "error",
+      reason: "FillNumberInput",
+    })
+    expect(bulktextVerdictFor("failed", "bad-options")).toEqual({
+      verdict: "error",
+      reason: "bad-options",
+    })
+    expect(bulktextVerdictFor("failed", "x".repeat(300))?.reason).toHaveLength(
+      120,
+    )
+    expect(bulktextVerdictFor("failed", "  ")).toBeNull()
     expect(bulktextVerdictFor("failed", { reason: "stop-reply" })).toBeNull()
     expect(bulktextVerdictFor("failed", undefined)).toBeNull()
     expect(bulktextVerdictFor("read", undefined)).toBeNull()
@@ -175,22 +188,29 @@ describe("applyBulktextVerdict", () => {
     expect(mockDetach).toHaveBeenCalledWith(
       expect.objectContaining({
         contactIds: ["c-1"],
-        names: ["bt-blocked", "bt-unreachable", "bt-send-error"],
+        names: [
+          "bt-blocked",
+          "bt-unreachable",
+          "bt-send-error",
+          "bt-repair-asked",
+        ],
       }),
     )
     expect(mockAttach).not.toHaveBeenCalled()
   })
 
-  test("a provider failure that is not a gate verdict touches nothing", async () => {
+  test("a failed status with no error text touches nothing; an unclassified text is a send-error", async () => {
     await expect(
-      applyBulktextVerdict({
-        ...base,
-        status: "failed",
-        error: "smtp-rejected",
-      }),
+      applyBulktextVerdict({ ...base, status: "failed", error: undefined }),
     ).resolves.toBeNull()
     expect(mockResolve).not.toHaveBeenCalled()
     expect(mockSetValue).not.toHaveBeenCalled()
+    await expect(
+      applyBulktextVerdict({ ...base, status: "failed", error: "media-fetch" }),
+    ).resolves.toBe("error")
+    expect(mockAttach).toHaveBeenCalledWith(
+      expect.objectContaining({ names: ["bt-send-error"] }),
+    )
   })
 
   test("a field-resolution failure propagates (the caller logs, the status stays recorded)", async () => {
