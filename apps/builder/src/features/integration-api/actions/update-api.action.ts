@@ -47,6 +47,9 @@ export const updateApiAction = workspaceActionClient
         ...(parsedInput.deliveryMode === undefined
           ? {}
           : { deliveryMode: parsedInput.deliveryMode }),
+        ...(parsedInput.shortenLinks === undefined
+          ? {}
+          : { shortenLinks: parsedInput.shortenLinks }),
       }
 
       await integrationApiRepository.updateSettings({

@@ -45,13 +45,14 @@ vi.mock("@chatbotx.io/redis", () => ({ invalidateCacheByTags: vi.fn() }))
 vi.mock("../src/audit/dispatcher", () => ({ dispatchAuditRecord: vi.fn() }))
 
 const {
-  buildTrackedPixelUrl,
-  buildTrackedLinkUrl,
   isTrackedLinkToken,
   mintTrackedLinkToken,
   TRACKED_LINK_TOKEN_LENGTH,
   trackedLinkService,
 } = await import("../src/tracked-link/service")
+const { buildTrackedPixelUrl, buildTrackedLinkUrl } = await import(
+  "../src/tracked-link/url"
+)
 
 const BASE62 = /^[0-9A-Za-z]+$/
 

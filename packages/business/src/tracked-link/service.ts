@@ -2,24 +2,13 @@ import { and, db, eq, sql } from "@chatbotx.io/database/client"
 import type { TrackedLinkModel } from "@chatbotx.io/database/schema"
 import { trackedLinkModel } from "@chatbotx.io/database/schema"
 import { BaseService } from "../base.service"
+import { MAX_TRACKED_LINK_URL_LENGTH } from "./url"
 
 /** Base62 alphabet: URL-safe with no escaping, no look-alike separators. */
 const ALPHABET =
   "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 /** 11 base62 characters carry 65 bits, so 8 random bytes fit with margin. */
 export const TRACKED_LINK_TOKEN_LENGTH = 11
-/**
- * Path segment the public redirect route lives under
- * (`apps/builder/src/app/go/[token]`). Not `/l`: that prefix already holds the
- * QR landing page `/l/[workspaceId]/[id]`, and Next.js refuses two different
- * slug names at one path level (it crash-looped the builder, s165).
- */
-export const TRACKED_LINK_PATH = "/go"
-/** Suffix under a pixel token: `/go/<token>/o` answers a 1x1 GIF. */
-export const TRACKED_PIXEL_SUFFIX = "/o"
-/** Longest destination a text may carry; matches the flow step's text bound. */
-export const MAX_TRACKED_LINK_URL_LENGTH = 2048
-
 export type TrackedLinkVisitKind = "click" | "prefetch"
 
 export const isTrackedLinkToken = (value: unknown): value is string =>
@@ -52,14 +41,7 @@ export const mintTrackedLinkToken = (
   return out
 }
 
-const TRAILING_SLASHES = /\/+$/
 const HTTP_URL = /^https?:\/\/\S+$/
-
-export const buildTrackedLinkUrl = (appUrl: string, token: string): string =>
-  `${appUrl.replace(TRAILING_SLASHES, "")}${TRACKED_LINK_PATH}/${token}`
-
-export const buildTrackedPixelUrl = (appUrl: string, token: string): string =>
-  `${buildTrackedLinkUrl(appUrl, token)}${TRACKED_PIXEL_SUFFIX}`
 
 class TrackedLinkService extends BaseService {
   /** Mint one short link for one URL in one contact's text; returns the token. */

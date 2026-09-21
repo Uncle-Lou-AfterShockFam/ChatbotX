@@ -4,7 +4,10 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 const TRAILING_SLASHES = /\/+$/
 const mint = vi.fn()
 const mintPixel = vi.fn()
-vi.mock("@chatbotx.io/business", () => ({
+vi.mock("@chatbotx.io/business", async () => ({
+  ...(await vi.importActual<Record<string, unknown>>(
+    "../../../packages/business/src/tracked-link/rewrite",
+  )),
   trackedLinkService: {
     mint: (...args: unknown[]) => mint(...args),
     mintPixel: (...args: unknown[]) => mintPixel(...args),

@@ -9,6 +9,7 @@ import {
 import { z } from "zod"
 import { postSignedEnvelope } from "../../lib/delivery"
 import { logger } from "../../lib/logger"
+import { shortenEnvelopeLinks } from "../../lib/short-links"
 import type { ApiAuthValue } from "../../schema"
 
 // The queue contract (`IntegrationJobMessageStatus`) and the public
@@ -91,21 +92,25 @@ export const sendMessage: MessageHandlers<ApiAuthValue>["sendMessage"] = async (
     data: { contact, message, quickReplies },
   } = props
 
-  const envelope = {
-    event: "message_created",
-    timestamp: new Date().toISOString(),
-    contact: { id: contact.id, sourceId: contact.sourceId },
-    conversation: { id: message.conversationId },
-    message: {
-      id: message.id,
-      text: message.text,
-      messageType: message.messageType,
-      contentType: message.contentType,
-      attachments: message.attachments,
-      contentAttributes: message.contentAttributes,
-      quickReplies,
+  const envelope = await shortenEnvelopeLinks({
+    ctx,
+    contact,
+    envelope: {
+      event: "message_created",
+      timestamp: new Date().toISOString(),
+      contact: { id: contact.id, sourceId: contact.sourceId },
+      conversation: { id: message.conversationId },
+      message: {
+        id: message.id,
+        text: message.text,
+        messageType: message.messageType,
+        contentType: message.contentType,
+        attachments: message.attachments,
+        contentAttributes: message.contentAttributes,
+        quickReplies,
+      },
     },
-  }
+  })
 
   if (isPullMode(ctx)) {
     return enqueueForPull(ctx, contact.sourceId, envelope)
@@ -136,22 +141,28 @@ export const sendFlowStep: MessageHandlers<ApiAuthValue>["sendFlowStep"] =
   async (props) => {
     const {
       ctx,
-      data: { contact, step, quickReplies },
+      data: { contact, flowId, step, quickReplies },
     } = props
 
     const { text, contentAttributes } = mapFlowStepToEnvelope(step)
-    const envelope = {
-      event: "message_created",
-      timestamp: new Date().toISOString(),
-      contact: { id: contact.id, sourceId: contact.sourceId },
-      message: {
-        text,
-        messageType: "outgoing",
-        contentType: contentTypes.enum.text,
-        contentAttributes,
-        quickReplies,
+    const envelope = await shortenEnvelopeLinks({
+      ctx,
+      contact,
+      flowId,
+      stepId: step.id,
+      envelope: {
+        event: "message_created",
+        timestamp: new Date().toISOString(),
+        contact: { id: contact.id, sourceId: contact.sourceId },
+        message: {
+          text,
+          messageType: "outgoing",
+          contentType: contentTypes.enum.text,
+          contentAttributes,
+          quickReplies,
+        },
       },
-    }
+    })
 
     if (isPullMode(ctx)) {
       return enqueueForPull(ctx, contact.sourceId, envelope)

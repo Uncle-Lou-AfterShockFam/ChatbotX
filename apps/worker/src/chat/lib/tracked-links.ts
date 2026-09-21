@@ -1,52 +1,15 @@
 import {
-  buildTrackedLinkUrl,
   buildTrackedPixelUrl,
+  rewriteTrackedLinks,
   trackedLinkService,
 } from "@chatbotx.io/business"
+
+// The pure rewrite lives in the business package since s170 so the API
+// channel can shorten links with the same rules; re-exported for callers.
+export { rewriteTrackedLinks } from "@chatbotx.io/business"
+
 import { stepTypes } from "@chatbotx.io/flow-config"
 import type { SendFlowStepData } from "@chatbotx.io/sdk"
-
-/**
- * Every http(s) URL in a text. Trailing sentence punctuation is not part of
- * a URL a person typed ("see https://x.y/z." ends at "z"), so it is peeled
- * off after the match.
- */
-const HTTP_URL_PATTERN = /https?:\/\/[^\s<>"'\])]+/g
-const TRAILING_PUNCTUATION = /[.,;:!?]+$/
-
-export type TrackedLinkMinter = (url: string) => Promise<string>
-
-/**
- * Pure rewrite: replaces every URL in `text` with the short URL the minter
- * returns for it. URLs already under `${appUrl}/go/` are left alone so a
- * re-sent text is not double-wrapped. One token per occurrence, in order.
- */
-export async function rewriteTrackedLinks(
-  text: string,
-  appUrl: string,
-  mint: TrackedLinkMinter,
-): Promise<{ text: string; minted: number }> {
-  const trackedPrefix = buildTrackedLinkUrl(appUrl, "")
-  let minted = 0
-  let out = ""
-  let last = 0
-  for (const match of text.matchAll(HTTP_URL_PATTERN)) {
-    const raw = match[0]
-    const trailing = raw.match(TRAILING_PUNCTUATION)?.[0] ?? ""
-    const url = trailing === "" ? raw : raw.slice(0, -trailing.length)
-    const start = match.index ?? 0
-    out += text.slice(last, start)
-    if (url.startsWith(trackedPrefix)) {
-      out += raw
-    } else {
-      out += buildTrackedLinkUrl(appUrl, await mint(url)) + trailing
-      minted += 1
-    }
-    last = start + raw.length
-  }
-  out += text.slice(last)
-  return { text: out, minted }
-}
 
 /**
  * The chat-worker hook: a `bulktextSend` step with `trackLinks` on gets its

@@ -89,7 +89,14 @@ export const resolveWithSourceUserIdFallback = async <T>(
 
 export type OutgoingContact = {
   sourceId: string
+  /** The ContactInbox id (the worker spreads the ContactInbox row here). */
   id: string
+  /**
+   * The Contact the inbox row belongs to. Sourced from
+   * `ContactInbox.contactId`; a channel that mints per-contact objects (the
+   * API channel's short links) attributes them to this id.
+   */
+  contactId?: string | null
   sourceConversationId?: string | null
   lastIncomingMessageAt?: Date | string | null
   /**
