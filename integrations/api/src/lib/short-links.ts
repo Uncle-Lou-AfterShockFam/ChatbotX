@@ -38,27 +38,6 @@ const isUrlButton = (
 ): button is Extract<MessageButtonTemplate, { buttonType: "url" }> =>
   button.buttonType === "url" && typeof button.url === "string"
 
-const HTTP_URLS = /https?:\/\/\S+/g
-
-const hasCandidate = (
-  envelope: ShortenableEnvelope,
-  appUrl: string,
-): boolean => {
-  const options = { minLength: SHORT_LINK_MIN_LENGTH }
-  const text = envelope.message.text
-  if (typeof text === "string") {
-    for (const match of text.matchAll(HTTP_URLS)) {
-      if (shouldRewriteUrl(match[0], appUrl, options)) {
-        return true
-      }
-    }
-  }
-  return (envelope.message.quickReplies ?? []).some(
-    (button) =>
-      isUrlButton(button) && shouldRewriteUrl(button.url, appUrl, options),
-  )
-}
-
 const requireString = (value: unknown, what: string): string => {
   if (typeof value !== "string" || value === "") {
     throw new Error(
@@ -76,9 +55,8 @@ const requireString = (value: unknown, what: string): string => {
  * (`bt-clicked`, `bt_last_click`) apply to the shortened link too.
  *
  * Nothing to shorten (or the channel opted out) returns the envelope as is
- * without touching the ids, so an inbound-only or bare test context is never
- * asked for a workspace it does not carry. A candidate with no attribution
- * or a failing mint throws: the line would otherwise silently send the long
+ * without touching the ids. A candidate with no attribution or a failing
+ * mint throws: the line would otherwise silently send the long
  * form the operator asked to avoid. `contentAttributes` (attachments, the
  * open pixel, template payloads) is deliberately not rewritten.
  */
@@ -101,21 +79,30 @@ export async function shortenEnvelopeLinks<
     // shortened, whether or not the text carries a URL.
     return envelope
   }
-  if (!hasCandidate(envelope, appUrl)) {
-    return envelope
-  }
 
-  const attribution = {
-    workspaceId: requireString(
-      ctx.integrationDetail?.workspaceId,
-      "the integration row's workspace id",
-    ),
-    contactId: requireString(contact.contactId, "the contact id"),
-    contactInboxId: contact.id,
-    flowId: input.flowId ?? null,
-    stepId: input.stepId ?? null,
+  // Attribution resolves on the FIRST mint, so an envelope with nothing to
+  // shorten never asks a bare (inbound-only, test) context for ids it does
+  // not carry, and one with a candidate fails before anything is posted.
+  let attribution: {
+    workspaceId: string
+    contactId: string
+    contactInboxId: string
+    flowId: string | null
+    stepId: string | null
+  } | null = null
+  const mint = (url: string) => {
+    attribution ??= {
+      workspaceId: requireString(
+        ctx.integrationDetail?.workspaceId,
+        "the integration row's workspace id",
+      ),
+      contactId: requireString(contact.contactId, "the contact id"),
+      contactInboxId: contact.id,
+      flowId: input.flowId ?? null,
+      stepId: input.stepId ?? null,
+    }
+    return trackedLinkService.mint({ ...attribution, url })
   }
-  const mint = (url: string) => trackedLinkService.mint({ ...attribution, url })
   const options = { minLength: SHORT_LINK_MIN_LENGTH }
 
   const text =
