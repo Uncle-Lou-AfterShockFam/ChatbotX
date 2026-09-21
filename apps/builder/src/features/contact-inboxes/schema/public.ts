@@ -8,4 +8,5 @@ export const listContactInboxesPublicResponse = z.object({
 export const attachContactInboxPublicResponse = z.object({
   data: contactInboxResource,
   created: z.boolean(),
+  ownedByAnotherContact: z.boolean(),
 })

@@ -127,6 +127,7 @@ describe("POST /v1/contacts/{identifier}/inboxes", () => {
       inbox: { id: "9", name: "bulktext-gv" },
       conversation: { id: "conv-1" },
       created: true,
+      ownedByAnotherContact: false,
     })
 
     await expect(
@@ -137,6 +138,7 @@ describe("POST /v1/contacts/{identifier}/inboxes", () => {
     ).resolves.toEqual({
       data: { ...attached, inbox: { name: "bulktext-gv" } },
       created: true,
+      ownedByAnotherContact: false,
     })
 
     expect(resolveContactId).toHaveBeenCalledWith({
@@ -148,7 +150,40 @@ describe("POST /v1/contacts/{identifier}/inboxes", () => {
       contactId: "contact-1",
       inboxId: "9",
       sourceId: undefined,
+      onConflict: undefined,
     })
+  })
+
+  test("forwards onConflict and echoes ownedByAnotherContact", async () => {
+    attachContactToInbox.mockResolvedValueOnce({
+      contactInbox: { ...attached, contactId: "contact-9" },
+      inbox: { id: "9", name: "bulktext-gv" },
+      conversation: { id: "conv-9" },
+      created: false,
+      ownedByAnotherContact: true,
+    })
+
+    await expect(
+      procedure.handler?.({
+        context: { workspace: { id: "workspace-1" } },
+        input: { identifier: "id:1", inboxId: "9", onConflict: "resolve" },
+      }),
+    ).resolves.toMatchObject({
+      data: { contactId: "contact-9" },
+      created: false,
+      ownedByAnotherContact: true,
+    })
+    expect(attachContactToInbox).toHaveBeenCalledWith(
+      expect.objectContaining({ onConflict: "resolve" }),
+    )
+    const schema = procedure.inputSchema
+    expect(
+      schema?.safeParse({
+        identifier: "id:1",
+        inboxId: "9",
+        onConflict: "merge",
+      }).success,
+    ).toBe(false)
   })
 
   test("forwards an explicit sourceId and an id: identifier", async () => {
@@ -157,6 +192,7 @@ describe("POST /v1/contacts/{identifier}/inboxes", () => {
       inbox: { id: "9", name: "bulktext-gv" },
       conversation: { id: "conv-1" },
       created: false,
+      ownedByAnotherContact: false,
     })
 
     await expect(
@@ -171,6 +207,7 @@ describe("POST /v1/contacts/{identifier}/inboxes", () => {
       contactId: "contact-1",
       inboxId: "9",
       sourceId: "ext-1",
+      onConflict: undefined,
     })
   })
 

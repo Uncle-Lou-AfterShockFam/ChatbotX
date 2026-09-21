@@ -13,6 +13,7 @@ const {
   mockDispatchAuditRecord,
   mockEmit,
   mockEmitContactCreated,
+  mockConversationFindFirst,
 } = vi.hoisted(() => ({
   mockFindOrFail: vi.fn(),
   mockTransaction: vi.fn(),
@@ -26,6 +27,7 @@ const {
   mockDispatchAuditRecord: vi.fn(() => Promise.resolve()),
   mockEmit: vi.fn(() => Promise.resolve()),
   mockEmitContactCreated: vi.fn(() => Promise.resolve()),
+  mockConversationFindFirst: vi.fn(),
 }))
 
 const tx = {
@@ -42,7 +44,10 @@ vi.mock("@chatbotx.io/database/client", async (importOriginal) => {
   const original = await importOriginal<Record<string, unknown>>()
   return {
     ...original,
-    db: { transaction: mockTransaction },
+    db: {
+      transaction: mockTransaction,
+      query: { conversationModel: { findFirst: mockConversationFindFirst } },
+    },
     findOrFail: mockFindOrFail,
   }
 })
@@ -367,6 +372,105 @@ describe("attachContactToInbox", () => {
       422,
     )
     expect(mockTransaction).not.toHaveBeenCalled()
+  })
+
+  it("onConflict resolve: an identity owned by another contact returns that owner, writes nothing", async () => {
+    mockFindLatestBySource.mockResolvedValue(row("contact-2"))
+    mockConversationFindFirst.mockResolvedValue({
+      id: "conv-2",
+      contactId: "contact-2",
+    })
+
+    const result = await attachContactToInbox({
+      workspaceId,
+      contactId: contact.id,
+      inboxId: apiInbox.id,
+      onConflict: "resolve",
+    })
+
+    expect(result.ownedByAnotherContact).toBe(true)
+    expect(result.created).toBe(false)
+    expect(result.contactInbox.contactId).toBe("contact-2")
+    expect(result.conversation).toEqual({
+      id: "conv-2",
+      contactId: "contact-2",
+    })
+    expect(mockConversationFindFirst).toHaveBeenCalledWith({
+      where: {
+        workspaceId,
+        contactId: "contact-2",
+        sourceId: { isNull: true },
+      },
+    })
+    expect(mockFindOrCreate).not.toHaveBeenCalled()
+    expect(mockTransaction).not.toHaveBeenCalled()
+    expect(mockDispatchAuditRecord).not.toHaveBeenCalled()
+    expect(mockEmitContactCreated).not.toHaveBeenCalled()
+  })
+
+  it("onConflict resolve: a lost race to another contact also resolves to that owner", async () => {
+    mockInsertReturning.mockResolvedValue([])
+    mockFindLatestBySource
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(row("contact-2"))
+    mockConversationFindFirst.mockResolvedValue({
+      id: "conv-2",
+      contactId: "contact-2",
+    })
+
+    const result = await attachContactToInbox({
+      workspaceId,
+      contactId: contact.id,
+      inboxId: apiInbox.id,
+      onConflict: "resolve",
+    })
+
+    expect(result.ownedByAnotherContact).toBe(true)
+    expect(result.contactInbox.contactId).toBe("contact-2")
+    expect(mockCancelByInboxSource).not.toHaveBeenCalled()
+    expect(mockFindOrCreate).not.toHaveBeenCalled()
+  })
+
+  it("onConflict resolve: an owner without a DM conversation is still the 409 (nothing is created)", async () => {
+    mockFindLatestBySource.mockResolvedValue(row("contact-2"))
+    mockConversationFindFirst.mockResolvedValue(undefined)
+
+    await expectException(
+      attachContactToInbox({
+        workspaceId,
+        contactId: contact.id,
+        inboxId: apiInbox.id,
+        onConflict: "resolve",
+      }),
+      CONTACT_INBOX_OWNED_BY_ANOTHER_CONTACT,
+      409,
+    )
+    expect(mockFindOrCreate).not.toHaveBeenCalled()
+    expect(mockTransaction).not.toHaveBeenCalled()
+  })
+
+  it("onConflict resolve on the happy path still creates and reports ownedByAnotherContact false", async () => {
+    const result = await attachContactToInbox({
+      workspaceId,
+      contactId: contact.id,
+      inboxId: apiInbox.id,
+      onConflict: "resolve",
+    })
+    expect(result.created).toBe(true)
+    expect(result.ownedByAnotherContact).toBe(false)
+  })
+
+  it("rejects an unknown onConflict value", async () => {
+    await expectException(
+      attachContactToInbox({
+        workspaceId,
+        contactId: contact.id,
+        inboxId: apiInbox.id,
+        onConflict: "merge" as never,
+      }),
+      "validation",
+      422,
+    )
   })
 
   it("rejects a non-object input at the entry point", async () => {
