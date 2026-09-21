@@ -25,8 +25,9 @@ export type AttachContactToInboxInput = {
   /**
    * What to do when the identity already belongs to ANOTHER contact on the
    * inbox: `error` (default) throws the 409; `resolve` returns that owner's
-   * row with `ownedByAnotherContact: true` and writes nothing, so a caller
-   * (a flow) can address the existing contact instead of merging.
+   * row with `ownedByAnotherContact: true` and writes nothing (an owner with
+   * no DM conversation yet still gets the 409), so a caller (a flow) can
+   * address the existing contact instead of merging.
    */
   onConflict?: "error" | "resolve"
 }
@@ -40,7 +41,7 @@ export type AttachContactToInboxResult = {
   /**
    * true only with `onConflict: "resolve"` when the identity belongs to
    * another contact: `contactInbox.contactId` is that owner, `conversation` is
-   * the owner's DM conversation, nothing was written.
+   * the owner's existing DM conversation, nothing was written.
    */
   ownedByAnotherContact: boolean
 }
@@ -141,16 +142,21 @@ export const attachContactToInbox = async (
     sourceId = parsed.number
   }
 
-  // `onConflict: "resolve"`: hand back the owner instead of throwing. The
-  // owner's DM conversation is ensured (read-or-create, the same call the
-  // inbound path makes) so `resolveContactInboxForSend` finds it; no
-  // ContactInbox is written and no contact event fires.
+  // `onConflict: "resolve"`: hand back the owner instead of throwing. Pure
+  // read: the owner's DM conversation is looked up, never created (a resolve
+  // must write nothing, audited or not); an owner without one is reported as
+  // the plain 409, since a flow could not message it anyway.
   const resolveConflict = async (row: ContactInboxModel) => {
-    const conversation = await conversationService.findOrCreate({
-      workspaceId,
-      contactId: row.contactId,
-      sourceId: null,
+    const conversation = await db.query.conversationModel.findFirst({
+      where: {
+        workspaceId,
+        contactId: row.contactId,
+        sourceId: { isNull: true },
+      },
     })
+    if (!conversation) {
+      throw ownedByAnotherContact()
+    }
     return {
       contactInbox: row,
       conversation,
