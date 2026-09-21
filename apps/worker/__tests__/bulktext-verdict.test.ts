@@ -83,6 +83,7 @@ describe("applyBulktextVerdict", () => {
         ["shortText:bt_reason", "f-reason"],
         ["shortText:bt_failed_at", "f-failed-at"],
         ["shortText:bt_failed_inbox", "f-failed-inbox"],
+        ["shortText:bt_failed_to", "f-failed-to"],
       ]),
       createdIds: [],
     })
@@ -95,6 +96,7 @@ describe("applyBulktextVerdict", () => {
         status: "failed",
         error: "no-reply-streak",
         timestamp: "2026-09-21T22:00:00.000Z",
+        failedTo: "+12155550199",
       }),
     ).resolves.toBe("skip")
     expect(mockResolve).toHaveBeenCalledWith({
@@ -104,6 +106,7 @@ describe("applyBulktextVerdict", () => {
         { name: "bt_reason", type: "shortText" },
         { name: "bt_failed_at", type: "shortText" },
         { name: "bt_failed_inbox", type: "shortText" },
+        { name: "bt_failed_to", type: "shortText" },
       ],
     })
     expect(mockSetValue.mock.calls.map(([c]) => [c.keyword, c.value])).toEqual([
@@ -111,6 +114,7 @@ describe("applyBulktextVerdict", () => {
       ["f-reason", "no-reply-streak"],
       ["f-failed-at", "2026-09-21T22:00:00.000Z"],
       ["f-failed-inbox", "inbox-1"],
+      ["f-failed-to", "+12155550199"],
     ])
     expect(mockDetach).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -184,6 +188,7 @@ describe("applyBulktextVerdict", () => {
       ["f-reason", ""],
       ["f-failed-at", ""],
       ["f-failed-inbox", ""],
+      ["f-failed-to", ""],
     ])
     expect(mockDetach).toHaveBeenCalledWith(
       expect.objectContaining({

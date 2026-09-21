@@ -206,6 +206,7 @@ export const handleMessageStatus = async (
           status: eventStatus,
           error: payload.error,
           timestamp: payload.timestamp,
+          failedTo: contactInbox.sourceId,
         })
       } catch (verdictError) {
         // The status itself is recorded above; a field/tag write failure
