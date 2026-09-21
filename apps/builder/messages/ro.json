@@ -3030,7 +3030,7 @@
       },
       "shortenLinks": {
         "label": "Shorten links",
-        "description": "Replace long URLs in outbound texts and URL buttons with tracked short links (https://<your host>/go/...). Clicks count as engagement.",
+        "description": "Replace long URLs in outbound texts and URL buttons with tracked short links (https://your-hub-host/go/...). Clicks count as engagement.",
         "on": "Short links on",
         "off": "Short links off"
       }
