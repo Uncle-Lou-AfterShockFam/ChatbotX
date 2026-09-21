@@ -132,6 +132,12 @@ const { mockFindActiveByTenantId, mockFindByOwner } = vi.hoisted(() => ({
 
 vi.mock("@/env", () => ({ isCloud: () => true, env: {} }))
 
+// The Messenger reconnect passes the override-aware scope list (fork, s171);
+// the module that resolves it reads env + the Messenger package at load.
+vi.mock("@/lib/auth/upgrade-facebook-account", () => ({
+  FACEBOOK_SSO_SCOPES: ["pages_messaging", "pages_show_list"],
+}))
+
 await import("../src/features/integration-messenger/actions/reconnect.action")
 await import("../src/features/integration-instagram/actions/reconnect.action")
 await import("../src/features/integration-zalo/actions/reconnect.action")
