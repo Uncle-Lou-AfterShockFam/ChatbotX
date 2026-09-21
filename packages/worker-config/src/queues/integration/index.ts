@@ -171,6 +171,8 @@ export type IntegrationJobMessageStatus = {
       status: "delivered" | "failed" | "read"
       timestamp: string
       error?: unknown
+      /** Diagnostic text behind a classified `error` (API channel, s172). */
+      detail?: string
       /**
        * Recipient identity on the channel (the same `contact.sourceId` the
        * channel uses for inbound messages). Channels whose provider status
