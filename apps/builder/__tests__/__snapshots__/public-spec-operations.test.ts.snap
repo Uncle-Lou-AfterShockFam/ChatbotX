@@ -654,6 +654,11 @@ exports[`public API spec — operation naming guard > operation list (operationI
   },
   {
     "method": "POST",
+    "operationId": "contacts.attachInbox",
+    "path": "/v1/contacts/{identifier}/inboxes",
+  },
+  {
+    "method": "POST",
     "operationId": "contacts.block",
     "path": "/v1/contacts/{identifier}/block",
   },

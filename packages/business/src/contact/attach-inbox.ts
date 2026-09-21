@@ -1,0 +1,200 @@
+import { db, findOrFail } from "@chatbotx.io/database/client"
+import { channelTypes, contactSources } from "@chatbotx.io/database/partials"
+import { contactInboxModel, inboxModel } from "@chatbotx.io/database/schema"
+import type {
+  ContactInboxModel,
+  ConversationModel,
+  InboxModel,
+} from "@chatbotx.io/database/types"
+import { parsePhoneNumberFromString } from "libphonenumber-js"
+import { dispatchAuditRecord } from "../audit/dispatcher"
+import { contactInboxService } from "../contact-inbox/service"
+import { conversationService } from "../conversation/service"
+import { ChatbotXException, validationException } from "../errors"
+import { messageCleanupService } from "../message-cleanup/service"
+import { workspaceService } from "../workspace/service"
+import { resolveDefaultRegion } from "./create-with-inbox"
+import { contactService } from "./service"
+
+export type AttachContactToInboxInput = {
+  workspaceId: string
+  contactId: string
+  inboxId: string
+  /** Channel identity to register; defaults to the contact's E.164 phone. */
+  sourceId?: string
+}
+
+export type AttachContactToInboxResult = {
+  contactInbox: ContactInboxModel
+  conversation: ConversationModel
+  inbox: InboxModel
+  /** false when the identity was already attached to this contact. */
+  created: boolean
+}
+
+export const CONTACT_INBOX_OWNED_BY_ANOTHER_CONTACT =
+  "contactInboxOwnedByAnotherContact"
+
+const ownedByAnotherContact = () =>
+  new ChatbotXException(
+    "This channel identity already belongs to another contact on this inbox",
+    CONTACT_INBOX_OWNED_BY_ANOTHER_CONTACT,
+    409,
+  )
+
+/**
+ * Attach an EXISTING contact to an `api`-channel inbox by creating the
+ * `ContactInbox` row a flow or message on that inbox needs
+ * (`conversationService.resolveContactInboxForSend` only finds rows that
+ * exist; nothing else creates one for a contact born on another channel).
+ *
+ * `api` only: on every other channel the `sourceId` is minted by the
+ * provider (PSID, IGSID, wa_id, ...) and a caller-supplied value would be a
+ * row the channel can never deliver to. On the `api` channel the contract
+ * already says `contact.sourceId` is the caller's own id, so the caller owns
+ * it; the line worker posts inbound messages with `sourceId` = E.164 phone,
+ * which is why that is the default here.
+ *
+ * Idempotent: the same identity on the same contact returns the existing row
+ * with `created: false`. An identity owned by ANOTHER contact is a 409 and is
+ * never merged. Emits no contact event: `newContact` triggers, webhooks and
+ * the contact counter must not fire for an attach.
+ */
+export const attachContactToInbox = async (
+  input: AttachContactToInboxInput,
+): Promise<AttachContactToInboxResult> => {
+  if (!input || typeof input !== "object") {
+    throw validationException("input", "Attach input is required")
+  }
+  const { workspaceId, contactId, inboxId } = input
+
+  const inbox = await findOrFail({
+    table: inboxModel,
+    where: { workspaceId, id: inboxId },
+    message: "Inbox not found",
+  })
+  if (inbox.channel !== channelTypes.enum.api) {
+    throw validationException(
+      "inboxId",
+      "Only api-channel inboxes can be attached to an existing contact",
+    )
+  }
+
+  const contact = await contactService.findByIdOrFail({
+    workspaceId,
+    id: contactId,
+  })
+
+  const explicitSourceId = input.sourceId?.trim()
+  let sourceId: string
+  if (explicitSourceId) {
+    sourceId = explicitSourceId
+  } else {
+    if (!contact.phoneNumber) {
+      throw validationException(
+        "sourceId",
+        "Contact has no phone number; pass sourceId explicitly",
+      )
+    }
+    const workspace = await workspaceService.find({
+      where: { id: workspaceId },
+    })
+    const parsed = parsePhoneNumberFromString(
+      contact.phoneNumber,
+      resolveDefaultRegion(workspace?.targetCountry),
+    )
+    // Do not use isValid(); it rejects well-formed but unassigned numbers.
+    if (!parsed) {
+      throw validationException(
+        "phoneNumber",
+        "Please include the country code (e.g. +84)",
+      )
+    }
+    sourceId = parsed.number
+  }
+
+  const resolveOwner = (row: ContactInboxModel | undefined) => {
+    if (!row) {
+      return
+    }
+    if (row.contactId !== contact.id) {
+      throw ownedByAnotherContact()
+    }
+    return row
+  }
+
+  const existing = resolveOwner(
+    await contactInboxService.findLatestBySource({
+      inboxId: inbox.id,
+      sourceId,
+      workspaceId,
+    }),
+  )
+
+  const result = await db.transaction(async (tx) => {
+    let contactInbox = existing
+    let created = false
+    if (!contactInbox) {
+      // Targetless DO NOTHING: a concurrent attach or inbound message may
+      // have inserted the same (inboxId, sourceId) between the read above and
+      // this write; re-select and apply the same owner rule.
+      const [inserted] = await tx
+        .insert(contactInboxModel)
+        .values({
+          originalContactId: contact.id,
+          contactId: contact.id,
+          inboxId: inbox.id,
+          channel: inbox.channel,
+          source: contactSources.enum.api,
+          sourceId,
+        })
+        .onConflictDoNothing()
+        .returning()
+      if (inserted) {
+        contactInbox = inserted
+        created = true
+        // A re-created identity keeps its history: cancel any pending
+        // message cleanup recorded when a row with this identity was deleted.
+        await messageCleanupService.cancelByInboxSource({
+          inboxId: inbox.id,
+          sourceIds: [sourceId],
+          tx,
+        })
+      } else {
+        contactInbox = resolveOwner(
+          await contactInboxService.findLatestBySource({
+            tx,
+            inboxId: inbox.id,
+            sourceId,
+            workspaceId,
+          }),
+        )
+        if (!contactInbox) {
+          throw new ChatbotXException("Contact inbox not found")
+        }
+      }
+    }
+
+    const conversation = await conversationService.findOrCreate({
+      workspaceId,
+      contactId: contact.id,
+      sourceId: null,
+      tx,
+    })
+
+    return { contactInbox, conversation, created }
+  })
+
+  if (result.created) {
+    await contactInboxService.invalidateTracking({
+      cacheTags: [`contacts:${contact.id}:contact-inboxes`],
+    })
+    await dispatchAuditRecord({
+      workspaceId,
+      action: "update",
+      detail: `attached contact (#${contact.id}) to inbox (#${inbox.id})`,
+    })
+  }
+
+  return { ...result, inbox }
+}

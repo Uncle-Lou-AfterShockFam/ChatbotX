@@ -38,7 +38,7 @@ const UNKNOWN_TARGET_COUNTRY = "unknown"
 const E164_PREFIX_PATTERN = /^\+/
 
 // No workspace country means local-format WhatsApp numbers must include "+".
-const resolveDefaultRegion = (
+export const resolveDefaultRegion = (
   targetCountry: string | null | undefined,
 ): CountryCode | undefined =>
   targetCountry && targetCountry !== UNKNOWN_TARGET_COUNTRY
