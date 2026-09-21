@@ -130,7 +130,7 @@ const { mockFindActiveByTenantId, mockFindByOwner } = vi.hoisted(() => ({
   mockFindByOwner: vi.fn(),
 }))
 
-vi.mock("@/env", () => ({ isCloud: () => true }))
+vi.mock("@/env", () => ({ isCloud: () => true, env: {} }))
 
 await import("../src/features/integration-messenger/actions/reconnect.action")
 await import("../src/features/integration-instagram/actions/reconnect.action")
