@@ -13,6 +13,9 @@
  *
  * Unset or blank = the defaults. A malformed entry throws (fail closed): a
  * silently dropped scope would surface much later as a missing permission.
+ * `env.ts` runs the same parser as a schema refinement, so a malformed value
+ * fails the boot, not the first connect click. Callers pass the validated
+ * `env.MESSENGER_OAUTH_SCOPES` / `env.INSTAGRAM_FACEBOOK_OAUTH_SCOPES`.
  */
 const SCOPE_PATTERN = /^[a-z][a-z0-9_]*$/
 
@@ -57,24 +60,4 @@ export function resolveMetaOAuthScopes(
     throw new Error(`${envName}: no scopes after parsing "${raw}"`)
   }
   return scopes
-}
-
-export function messengerOAuthScopes(
-  defaults: readonly string[],
-): readonly string[] {
-  return resolveMetaOAuthScopes(
-    process.env[MESSENGER_OAUTH_SCOPES_ENV],
-    defaults,
-    MESSENGER_OAUTH_SCOPES_ENV,
-  )
-}
-
-export function instagramFacebookOAuthScopes(
-  defaults: readonly string[],
-): readonly string[] {
-  return resolveMetaOAuthScopes(
-    process.env[INSTAGRAM_FACEBOOK_OAUTH_SCOPES_ENV],
-    defaults,
-    INSTAGRAM_FACEBOOK_OAUTH_SCOPES_ENV,
-  )
 }

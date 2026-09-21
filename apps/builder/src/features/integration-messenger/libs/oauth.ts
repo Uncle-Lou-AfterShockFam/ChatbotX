@@ -1,10 +1,7 @@
 import type { MessengerCredentialPublic } from "@chatbotx.io/database/partials"
-import {
-  generateAuthUrl,
-  MESSENGER_SCOPES,
-} from "@chatbotx.io/integration-messenger"
+import { generateAuthUrl } from "@chatbotx.io/integration-messenger"
+import { FACEBOOK_SSO_SCOPES } from "@/lib/auth/upgrade-facebook-account"
 import { getOriginFromHeader } from "@/lib/domain"
-import { messengerOAuthScopes } from "@/lib/meta-oauth-scopes"
 import { buildProviderCallbackUrl } from "@/lib/provider-origin"
 
 /**
@@ -47,6 +44,6 @@ export async function generateMessengerRedirectUri(
       workspaceId,
       referer,
     },
-    scopes: messengerOAuthScopes(MESSENGER_SCOPES),
+    scopes: FACEBOOK_SSO_SCOPES,
   })
 }

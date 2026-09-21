@@ -4,14 +4,27 @@ import type {
 } from "@chatbotx.io/auth/server"
 import { MESSENGER_SCOPES } from "@chatbotx.io/integration-messenger"
 import { exchangeLongLivedToken } from "@chatbotx.io/integration-messenger/apis/page"
+import { env } from "@/env"
 import { logger } from "@/lib/log"
+import {
+  MESSENGER_OAUTH_SCOPES_ENV,
+  resolveMetaOAuthScopes,
+} from "@/lib/meta-oauth-scopes"
 
 /**
  * Scopes requested at Facebook SSO login — the same set the Messenger connect
  * flow requests, so the resulting token can later be reused to list Pages
- * without a second OAuth round-trip. See `tryReuseFacebookSsoToken`.
+ * without a second OAuth round-trip. See `tryReuseFacebookSsoToken`. Both
+ * flows read the ONE resolved list (MESSENGER_OAUTH_SCOPES narrows it for a
+ * Facebook Login for Business app), so they can never diverge.
  */
-export const FACEBOOK_SSO_SCOPES = MESSENGER_SCOPES
+export const FACEBOOK_SSO_SCOPES: string[] = [
+  ...resolveMetaOAuthScopes(
+    env.MESSENGER_OAUTH_SCOPES,
+    MESSENGER_SCOPES,
+    MESSENGER_OAUTH_SCOPES_ENV,
+  ),
+]
 
 /**
  * Wired into `createAuth` as `upgradeOAuthAccount` for the Facebook SSO
