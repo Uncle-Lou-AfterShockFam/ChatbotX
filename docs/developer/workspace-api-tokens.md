@@ -214,7 +214,10 @@ an endpoint's scope.
   `api/public.ts` (`contact-notes`, `contact-sequences`, `contact-inboxes` —
   which also exposes `contacts.attachInbox`, `POST /v1/contacts/{identifier}/inboxes`,
   registering an existing contact on an `api`-channel inbox so a flow or
-  message can run there for a contact born on another channel,
+  message can run there for a contact born on another channel; with
+  `onConflict: "resolve"` an identity that already belongs to another contact
+  answers 200 with that owner instead of 409, so a flow can message the
+  existing contact rather than merge,
   `contact-filter`, `import`) that `features/contacts/api/public.ts`
   composes in alongside its own submodules, and `contact-scan` — the one
   submodule composed directly into `apps/builder/src/routers/public.ts`

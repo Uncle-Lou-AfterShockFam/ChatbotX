@@ -22,6 +22,13 @@ export type AttachContactToInboxInput = {
   inboxId: string
   /** Channel identity to register; defaults to the contact's E.164 phone. */
   sourceId?: string
+  /**
+   * What to do when the identity already belongs to ANOTHER contact on the
+   * inbox: `error` (default) throws the 409; `resolve` returns that owner's
+   * row with `ownedByAnotherContact: true` and writes nothing, so a caller
+   * (a flow) can address the existing contact instead of merging.
+   */
+  onConflict?: "error" | "resolve"
 }
 
 export type AttachContactToInboxResult = {
@@ -30,6 +37,12 @@ export type AttachContactToInboxResult = {
   inbox: InboxModel
   /** false when the identity was already attached to this contact. */
   created: boolean
+  /**
+   * true only with `onConflict: "resolve"` when the identity belongs to
+   * another contact: `contactInbox.contactId` is that owner, `conversation` is
+   * the owner's DM conversation, nothing was written.
+   */
+  ownedByAnotherContact: boolean
 }
 
 export const CONTACT_INBOX_OWNED_BY_ANOTHER_CONTACT =
@@ -74,7 +87,13 @@ export const attachContactToInbox = async (
   if (!input || typeof input !== "object") {
     throw validationException("input", "Attach input is required")
   }
-  const { workspaceId, contactId, inboxId } = input
+  const { workspaceId, contactId, inboxId, onConflict = "error" } = input
+  if (onConflict !== "error" && onConflict !== "resolve") {
+    throw validationException(
+      "onConflict",
+      "onConflict must be error or resolve",
+    )
+  }
 
   const inbox = await findOrFail({
     table: inboxModel,
@@ -122,6 +141,25 @@ export const attachContactToInbox = async (
     sourceId = parsed.number
   }
 
+  // `onConflict: "resolve"`: hand back the owner instead of throwing. The
+  // owner's DM conversation is ensured (read-or-create, the same call the
+  // inbound path makes) so `resolveContactInboxForSend` finds it; no
+  // ContactInbox is written and no contact event fires.
+  const resolveConflict = async (row: ContactInboxModel) => {
+    const conversation = await conversationService.findOrCreate({
+      workspaceId,
+      contactId: row.contactId,
+      sourceId: null,
+    })
+    return {
+      contactInbox: row,
+      conversation,
+      inbox,
+      created: false,
+      ownedByAnotherContact: true,
+    }
+  }
+
   const resolveOwner = (row: ContactInboxModel | undefined) => {
     if (!row) {
       return
@@ -132,15 +170,28 @@ export const attachContactToInbox = async (
     return row
   }
 
-  const existing = resolveOwner(
-    await contactInboxService.findLatestBySource({
-      inboxId: inbox.id,
-      sourceId,
-      workspaceId,
-    }),
-  )
+  const preCheck = await contactInboxService.findLatestBySource({
+    inboxId: inbox.id,
+    sourceId,
+    workspaceId,
+  })
+  if (
+    preCheck &&
+    preCheck.contactId !== contact.id &&
+    onConflict === "resolve"
+  ) {
+    return resolveConflict(preCheck)
+  }
+  const existing = resolveOwner(preCheck)
 
-  const result = await db.transaction(async (tx) => {
+  type TxResult =
+    | { lostTo: ContactInboxModel }
+    | {
+        contactInbox: ContactInboxModel
+        conversation: ConversationModel
+        created: boolean
+      }
+  const result = await db.transaction(async (tx): Promise<TxResult> => {
     let contactInbox = existing
     let created = false
     if (!contactInbox) {
@@ -170,18 +221,28 @@ export const attachContactToInbox = async (
           tx,
         })
       } else {
-        contactInbox = resolveOwner(
-          await contactInboxService.findLatestBySource({
-            tx,
-            inboxId: inbox.id,
-            sourceId,
-            workspaceId,
-          }),
-        )
+        const raced = await contactInboxService.findLatestBySource({
+          tx,
+          inboxId: inbox.id,
+          sourceId,
+          workspaceId,
+        })
+        if (
+          raced &&
+          raced.contactId !== contact.id &&
+          onConflict === "resolve"
+        ) {
+          return { lostTo: raced }
+        }
+        contactInbox = resolveOwner(raced)
         if (!contactInbox) {
           throw new ChatbotXException("Contact inbox not found")
         }
       }
+    }
+
+    if (!contactInbox) {
+      throw new ChatbotXException("Contact inbox not found")
     }
 
     const conversation = await conversationService.findOrCreate({
@@ -193,6 +254,9 @@ export const attachContactToInbox = async (
 
     return { contactInbox, conversation, created }
   })
+  if ("lostTo" in result) {
+    return resolveConflict(result.lostTo)
+  }
 
   if (result.created) {
     await contactInboxService.invalidateTracking({
@@ -205,5 +269,5 @@ export const attachContactToInbox = async (
     })
   }
 
-  return { ...result, inbox }
+  return { ...result, inbox, ownedByAnotherContact: false }
 }

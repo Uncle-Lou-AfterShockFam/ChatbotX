@@ -81,6 +81,12 @@ export const contactsInboxesPublicRouter = {
           .describe(
             "Channel identity to register on the inbox. Defaults to the contact's phone number in E.164.",
           ),
+        onConflict: z
+          .enum(["error", "resolve"])
+          .optional()
+          .describe(
+            "When the identity already belongs to another contact: `error` (default) answers 409; `resolve` answers 200 with that owner's identity (`data.contactId` is the owner, `ownedByAnotherContact: true`) and writes nothing, so a flow can message the existing contact instead of merging.",
+          ),
       }),
     )
     .output(attachContactInboxPublicResponse)
@@ -91,15 +97,18 @@ export const contactsInboxesPublicRouter = {
         identifier: input.identifier,
         workspaceId,
       })
-      const { contactInbox, inbox, created } = await attachContactToInbox({
-        workspaceId,
-        contactId,
-        inboxId: input.inboxId,
-        sourceId: input.sourceId,
-      })
+      const { contactInbox, inbox, created, ownedByAnotherContact } =
+        await attachContactToInbox({
+          workspaceId,
+          contactId,
+          inboxId: input.inboxId,
+          sourceId: input.sourceId,
+          onConflict: input.onConflict,
+        })
       return {
         data: { ...contactInbox, inbox: { name: inbox.name } },
         created,
+        ownedByAnotherContact,
       }
     }),
 }
