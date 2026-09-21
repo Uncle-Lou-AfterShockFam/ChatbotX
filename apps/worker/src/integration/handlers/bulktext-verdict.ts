@@ -28,7 +28,9 @@ import type { TagAttachContactInbox } from "./contact"
  * contact as custom fields plus a tag: `bt_verdict`, `bt_reason`,
  * `bt_failed_at` (the instant, so a repeat failure still changes a field),
  * `bt_failed_inbox` (the hub inbox id of the LINE that failed, so a repair
- * flow knows whether to ask for a number or an address) and the class tag.
+ * flow knows whether to ask for a number or an address), `bt_failed_to` (the
+ * identity the send went to, so the flow can quote the number or address that
+ * did not work) and the class tag.
  * Failure tags are attached with `emitFor: "all"` so the `tagApplied`
  * trigger fires on EVERY failure, including a repeat on a contact that
  * already carries the tag; `delivered` detaches all three.
@@ -46,6 +48,7 @@ export const BULKTEXT_VERDICT_FIELD = "bt_verdict"
 export const BULKTEXT_REASON_FIELD = "bt_reason"
 export const BULKTEXT_FAILED_AT_FIELD = "bt_failed_at"
 export const BULKTEXT_FAILED_INBOX_FIELD = "bt_failed_inbox"
+export const BULKTEXT_FAILED_TO_FIELD = "bt_failed_to"
 export const BULKTEXT_BLOCKED_TAG = "bt-blocked"
 export const BULKTEXT_UNREACHABLE_TAG = "bt-unreachable"
 export const BULKTEXT_SEND_ERROR_TAG = "bt-send-error"
@@ -146,6 +149,8 @@ export async function applyBulktextVerdict(props: {
   error: unknown
   /** When the status happened (the worker's `timestamp`); defaults to now. */
   timestamp?: unknown
+  /** The channel identity the send went to (`ContactInbox.sourceId`). */
+  failedTo?: unknown
 }): Promise<BulktextVerdict | null> {
   const { workspaceId, contactId, contactInbox, status, error } = props
   const outcome = bulktextVerdictFor(status, error)
@@ -158,6 +163,7 @@ export async function applyBulktextVerdict(props: {
     { name: BULKTEXT_REASON_FIELD, type: "shortText" as const },
     { name: BULKTEXT_FAILED_AT_FIELD, type: "shortText" as const },
     { name: BULKTEXT_FAILED_INBOX_FIELD, type: "shortText" as const },
+    { name: BULKTEXT_FAILED_TO_FIELD, type: "shortText" as const },
   ]
   const { idMap } = await customFieldService.resolveByNameAndType({
     workspaceId,
@@ -168,6 +174,12 @@ export async function applyBulktextVerdict(props: {
     [fields[1], outcome.reason],
     [fields[2], failedAtFor(outcome.verdict, props.timestamp)],
     [fields[3], outcome.verdict === "send" ? "" : contactInbox.inboxId],
+    [
+      fields[4],
+      outcome.verdict === "send" || typeof props.failedTo !== "string"
+        ? ""
+        : props.failedTo.slice(0, 200),
+    ],
   ]
   for (const [field, value] of writes) {
     const keyword = idMap.get(customFieldResolutionKey(field)) ?? field.name
