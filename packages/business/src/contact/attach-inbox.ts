@@ -35,6 +35,14 @@ export type AttachContactToInboxResult = {
 export const CONTACT_INBOX_OWNED_BY_ANOTHER_CONTACT =
   "contactInboxOwnedByAnotherContact"
 
+// A caller-supplied sourceId that LOOKS like a phone number (digits with an
+// optional "+", spaces, dashes, dots or parentheses) is normalised to E.164
+// exactly like the default path, so it cannot silently diverge from - or
+// squat on - the canonical string the line worker posts inbound under.
+// Anything else (an external id like "ext-42") is the caller's own and is
+// stored verbatim.
+const PHONE_SHAPED_PATTERN = /^\+?[\d\s().-]{7,}$/
+
 const ownedByAnotherContact = () =>
   new ChatbotXException(
     "This channel identity already belongs to another contact on this inbox",
@@ -87,10 +95,11 @@ export const attachContactToInbox = async (
 
   const explicitSourceId = input.sourceId?.trim()
   let sourceId: string
-  if (explicitSourceId) {
+  if (explicitSourceId && !PHONE_SHAPED_PATTERN.test(explicitSourceId)) {
     sourceId = explicitSourceId
   } else {
-    if (!contact.phoneNumber) {
+    const phone = explicitSourceId ?? contact.phoneNumber
+    if (!phone) {
       throw validationException(
         "sourceId",
         "Contact has no phone number; pass sourceId explicitly",
@@ -100,13 +109,13 @@ export const attachContactToInbox = async (
       where: { id: workspaceId },
     })
     const parsed = parsePhoneNumberFromString(
-      contact.phoneNumber,
+      phone,
       resolveDefaultRegion(workspace?.targetCountry),
     )
     // Do not use isValid(); it rejects well-formed but unassigned numbers.
     if (!parsed) {
       throw validationException(
-        "phoneNumber",
+        explicitSourceId ? "sourceId" : "phoneNumber",
         "Please include the country code (e.g. +84)",
       )
     }

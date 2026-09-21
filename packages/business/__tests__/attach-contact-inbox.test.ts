@@ -332,6 +332,43 @@ describe("attachContactToInbox", () => {
     expect(mockWorkspaceFind).not.toHaveBeenCalled()
   })
 
+  it("normalises a phone-shaped explicit sourceId to E.164 (no divergence from the inbound key)", async () => {
+    mockFindByIdOrFail.mockResolvedValue({ ...contact, phoneNumber: null })
+
+    await attachContactToInbox({
+      workspaceId,
+      contactId: contact.id,
+      inboxId: apiInbox.id,
+      sourceId: "+1 (215) 407-5123",
+    })
+
+    const values = (
+      tx.insert.mock.results[0]?.value as { values: ReturnType<typeof vi.fn> }
+    ).values
+    expect(values).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceId: "+12154075123" }),
+    )
+  })
+
+  it("throws 422 for a phone-shaped explicit sourceId that cannot be parsed", async () => {
+    mockWorkspaceFind.mockResolvedValue({
+      id: workspaceId,
+      targetCountry: null,
+    })
+
+    await expectException(
+      attachContactToInbox({
+        workspaceId,
+        contactId: contact.id,
+        inboxId: apiInbox.id,
+        sourceId: "215 407 5123",
+      }),
+      "validation",
+      422,
+    )
+    expect(mockTransaction).not.toHaveBeenCalled()
+  })
+
   it("rejects a non-object input at the entry point", async () => {
     await expectException(
       attachContactToInbox(null as never),
