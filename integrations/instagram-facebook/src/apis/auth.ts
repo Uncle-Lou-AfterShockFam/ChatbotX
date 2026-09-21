@@ -5,7 +5,7 @@ import { exchangeLongLivedToken } from "./page"
 
 const FACEBOOK_OAUTH_BASE = "https://www.facebook.com"
 
-const INSTAGRAM_SCOPES = [
+export const INSTAGRAM_SCOPES = [
   "instagram_basic",
   "instagram_manage_comments",
   "instagram_manage_engagement",
@@ -48,16 +48,24 @@ export function generateAuthUrl({
   version = DEFAULT_API_VERSION,
   redirectUrl,
   stateParams,
+  scopes = INSTAGRAM_SCOPES,
 }: {
   clientId: string
   version?: string
   redirectUrl: string
   stateParams?: Record<string, unknown>
+  /**
+   * Permissions to request. Defaults to `INSTAGRAM_SCOPES`; a Facebook Login
+   * for Business app rejects any scope not attached to one of its use cases
+   * ("Invalid Scopes"), so a self-hosted install narrows this list via
+   * `INSTAGRAM_FACEBOOK_OAUTH_SCOPES`.
+   */
+  scopes?: readonly string[]
 }): string {
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUrl,
-    scope: INSTAGRAM_SCOPES.join(","),
+    scope: scopes.join(","),
     response_type: "code",
     state: btoa(JSON.stringify(stateParams ?? {})),
   })
