@@ -23,6 +23,14 @@ export const apiAuthSchema = customAuthSchema.extend({
    * callback URL; a `push` inbox without one is inbound-only.
    */
   deliveryMode: apiDeliveryModes.nullish(),
+  /**
+   * Short links (fork, s170): every URL of `SHORT_LINK_MIN_LENGTH` or more in
+   * an outbound text or URL quick reply is replaced by a tracked
+   * `<appUrl>/go/<token>` link before the envelope leaves (push and pull
+   * alike). Unset means ON: a text line has no room for a 1,200-character
+   * signed booking URL, and clicks on the short form count as engagement.
+   */
+  shortenLinks: z.boolean().nullish(),
 })
 export type ApiAuthValue = z.infer<typeof apiAuthSchema>
 

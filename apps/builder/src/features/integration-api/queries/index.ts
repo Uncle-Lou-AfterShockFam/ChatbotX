@@ -9,6 +9,9 @@ const deliveryModeOf = (auth: unknown): ApiResource["deliveryMode"] => {
   return mode === "pull" ? "pull" : "push"
 }
 
+const shortenLinksOf = (auth: unknown): boolean =>
+  (auth as { shortenLinks?: unknown } | null)?.shortenLinks !== false
+
 const toResource = (row: IntegrationApiModel): ApiResource => ({
   id: row.id,
   name: row.name,
@@ -17,6 +20,7 @@ const toResource = (row: IntegrationApiModel): ApiResource => ({
   enabled: row.enabled,
   createdAt: row.createdAt,
   deliveryMode: deliveryModeOf(row.auth),
+  shortenLinks: shortenLinksOf(row.auth),
 })
 
 export const listIntegrationApis = async ({

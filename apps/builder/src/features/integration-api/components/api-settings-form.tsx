@@ -2,6 +2,7 @@
 
 import { InputField } from "@chatbotx.io/ui/components/form/input-field"
 import { SelectField } from "@chatbotx.io/ui/components/form/select-field"
+import { SwitchField } from "@chatbotx.io/ui/components/form/switch-field"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
 import {
   Dialog,
@@ -60,6 +61,7 @@ export function ApiSettingsForm({ api }: { api: ApiResource }) {
           name: api.name,
           callbackUrl: api.callbackUrl ?? "",
           deliveryMode: api.deliveryMode,
+          shortenLinks: api.shortenLinks,
         },
       },
     },
@@ -104,6 +106,11 @@ export function ApiSettingsForm({ api }: { api: ApiResource }) {
               name="deliveryMode"
               options={deliveryModeOptions}
               required
+            />
+            <SwitchField
+              description={t("fields.api.shortenLinks.description")}
+              label={t("fields.api.shortenLinks.label")}
+              name="shortenLinks"
             />
             <DialogFooter>
               <DialogClose

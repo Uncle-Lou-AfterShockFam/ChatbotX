@@ -4,7 +4,10 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 const TRAILING_SLASHES = /\/+$/
 const mint = vi.fn()
 const mintPixel = vi.fn()
-vi.mock("@chatbotx.io/business", () => ({
+vi.mock("@chatbotx.io/business", async () => ({
+  ...(await vi.importActual<Record<string, unknown>>(
+    "../../../packages/business/src/tracked-link/rewrite",
+  )),
   trackedLinkService: {
     mint: (...args: unknown[]) => mint(...args),
     mintPixel: (...args: unknown[]) => mintPixel(...args),
@@ -30,58 +33,13 @@ beforeEach(() => {
 })
 
 describe("rewriteTrackedLinks", () => {
-  test("replaces every URL, one token per occurrence, in order", async () => {
-    const seen: string[] = []
-    const out = await rewriteTrackedLinks(
-      "a https://x.y/one and http://z.w/two?q=1 end",
-      APP,
-      (url) => {
-        seen.push(url)
-        return Promise.resolve(`t${seen.length}`)
-      },
+  // The rewrite itself is covered in packages/business (tracked-link-rewrite
+  // + tracked-link tests); this only proves the worker re-exports the real one.
+  test("re-exports the business rewrite", async () => {
+    const out = await rewriteTrackedLinks("go https://x.y/one", APP, () =>
+      Promise.resolve("t1"),
     )
-    expect(out).toEqual({
-      text: "a https://hub.example/go/t1 and https://hub.example/go/t2 end",
-      minted: 2,
-    })
-    expect(seen).toEqual(["https://x.y/one", "http://z.w/two?q=1"])
-  })
-
-  test("trailing sentence punctuation stays outside the link", async () => {
-    const out = await rewriteTrackedLinks(
-      "see https://x.y/z. Or (https://x.y/q), ok?",
-      APP,
-      (url) => Promise.resolve(`k:${url.length}`),
-    )
-    expect(out.text).toBe(
-      "see https://hub.example/go/k:13. Or (https://hub.example/go/k:13), ok?",
-    )
-  })
-
-  test("a URL already under /go/ is left alone", async () => {
-    const mintSpy = vi.fn(() => Promise.resolve("new"))
-    const out = await rewriteTrackedLinks(
-      `tap ${APP}/go/AbCdEfGhIjK now`,
-      APP,
-      mintSpy,
-    )
-    expect(out).toEqual({ text: `tap ${APP}/go/AbCdEfGhIjK now`, minted: 0 })
-    expect(mintSpy).not.toHaveBeenCalled()
-  })
-
-  test("no URL means no mint and the same text", async () => {
-    const mintSpy = vi.fn(() => Promise.resolve("new"))
-    const out = await rewriteTrackedLinks("plain text", APP, mintSpy)
-    expect(out).toEqual({ text: "plain text", minted: 0 })
-    expect(mintSpy).not.toHaveBeenCalled()
-  })
-
-  test("a mint failure propagates (the operator opted in)", async () => {
-    await expect(
-      rewriteTrackedLinks("https://x.y", APP, () =>
-        Promise.reject(new Error("db down")),
-      ),
-    ).rejects.toThrow("db down")
+    expect(out).toEqual({ text: "go https://hub.example/go/t1", minted: 1 })
   })
 })
 

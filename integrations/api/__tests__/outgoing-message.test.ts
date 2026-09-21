@@ -8,9 +8,21 @@ vi.mock("../src/lib/delivery", () => ({
   postSignedEnvelope: mockPostSignedEnvelope,
 }))
 
-const { mockEnqueue } = vi.hoisted(() => ({ mockEnqueue: vi.fn() }))
-vi.mock("@chatbotx.io/business", () => ({
+const { mockEnqueue, mockMint } = vi.hoisted(() => ({
+  mockEnqueue: vi.fn(),
+  mockMint: vi.fn(),
+}))
+vi.mock("@chatbotx.io/business", async () => ({
+  // The pure rewrite + URL helpers are the real ones; only the DB-backed
+  // service is mocked.
+  ...(await vi.importActual<Record<string, unknown>>(
+    "../../../packages/business/src/tracked-link/rewrite",
+  )),
+  ...(await vi.importActual<Record<string, unknown>>(
+    "../../../packages/business/src/tracked-link/url",
+  )),
   apiChannelOutboxService: { enqueue: mockEnqueue },
+  trackedLinkService: { mint: mockMint },
 }))
 
 const { sendFlowStep, sendMessage } = await import(
@@ -348,5 +360,216 @@ describe("api pull delivery mode (fork, s164)", () => {
     } as never)
     expect(posted).toEqual({ messageIds: ["msg:1"] })
     expect(mockPostSignedEnvelope).toHaveBeenCalledTimes(1)
+  })
+})
+
+const MISSING_CONTACT_ID = /short links: the contact id is missing/
+
+describe("api short links (fork, s170)", () => {
+  const APP = "https://hub.example"
+  const LONG = `${APP}/booking/picker?token=${"t".repeat(1200)}`
+  const SHORT = "https://x.y/a"
+  const shortCtx = {
+    auth: { callbackUrl: "https://example.com/callback", signingSecret: "s" },
+    integrationDetail: { inboxId: "inbox-9", workspaceId: "ws-1" },
+    platform: { appUrl: APP },
+  } as never
+  const inboxContact = {
+    id: "ci-1",
+    contactId: "contact-1",
+    sourceId: "+15550000008",
+  } as never
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPostSignedEnvelope.mockResolvedValue({ messageId: "m_1" })
+    mockEnqueue.mockResolvedValue("ob_1")
+    let n = 0
+    mockMint.mockImplementation(() => Promise.resolve(`tok${++n}`))
+  })
+
+  test("sendMessage: a long URL in the text and a URL quick reply become /go/ links, a short URL stays, attribution names the contact", async () => {
+    await sendMessage({
+      ctx: shortCtx,
+      data: {
+        contact: inboxContact,
+        message: {
+          id: "msg-1",
+          conversationId: "conv-1",
+          text: `Choose a time ${LONG} or ${SHORT}`,
+          messageType: "outgoing",
+          contentType: "text",
+        },
+        quickReplies: [
+          { id: "b1", label: "Select Date", buttonType: "url", url: LONG },
+          { id: "b2", label: "Site", buttonType: "url", url: SHORT },
+          { id: "b3", label: "Later", buttonType: "postback", postback: "x" },
+        ],
+      },
+    } as never)
+
+    const [{ envelope }] = mockPostSignedEnvelope.mock.calls[0]
+    expect(envelope.message.text).toBe(
+      `Choose a time ${APP}/go/tok1 or ${SHORT}`,
+    )
+    expect(envelope.message.quickReplies).toEqual([
+      {
+        id: "b1",
+        label: "Select Date",
+        buttonType: "url",
+        url: `${APP}/go/tok2`,
+      },
+      { id: "b2", label: "Site", buttonType: "url", url: SHORT },
+      { id: "b3", label: "Later", buttonType: "postback", postback: "x" },
+    ])
+    expect(mockMint).toHaveBeenCalledTimes(2)
+    expect(mockMint.mock.calls[0][0]).toEqual({
+      workspaceId: "ws-1",
+      contactId: "contact-1",
+      contactInboxId: "ci-1",
+      flowId: null,
+      stepId: null,
+      url: LONG,
+    })
+  })
+
+  test("sendFlowStep: the flow and step ids ride the attribution and the pull outbox carries the short form", async () => {
+    await sendFlowStep({
+      ctx: {
+        ...shortCtx,
+        auth: { ...shortCtx.auth, deliveryMode: "pull" },
+      } as never,
+      data: {
+        contact: inboxContact,
+        flowId: "flow-7",
+        quickReplies: [],
+        step: {
+          id: "step-3",
+          nodeId: "node-3",
+          stepType: "bulktextSend",
+          text: `Book here: ${LONG}`,
+          photoUrl: "",
+          dryRun: false,
+          platform: "gv",
+        },
+      },
+    } as never)
+
+    expect(mockPostSignedEnvelope).not.toHaveBeenCalled()
+    const [args] = mockEnqueue.mock.calls[0]
+    expect(args.envelope.message.text).toBe(`Book here: ${APP}/go/tok1`)
+    expect(mockMint.mock.calls[0][0]).toMatchObject({
+      flowId: "flow-7",
+      stepId: "step-3",
+      contactId: "contact-1",
+    })
+  })
+
+  test("a /go/ link already minted by the chat worker is not wrapped again, and the open pixel is untouched", async () => {
+    const pixel = `${APP}/go/pix00000001/o`
+    await sendFlowStep({
+      ctx: shortCtx,
+      data: {
+        contact: inboxContact,
+        flowId: "flow-7",
+        quickReplies: [],
+        step: {
+          id: "step-3",
+          nodeId: "node-3",
+          stepType: "bulktextSend",
+          text: `Tracked ${APP}/go/tok00000001 already`,
+          photoUrl: "",
+          dryRun: false,
+          platform: "gv",
+          openPixel: pixel,
+        },
+      },
+    } as never)
+
+    expect(mockMint).not.toHaveBeenCalled()
+    const [{ envelope }] = mockPostSignedEnvelope.mock.calls[0]
+    expect(envelope.message.text).toBe(`Tracked ${APP}/go/tok00000001 already`)
+    expect(envelope.message.contentAttributes.bulktext.openPixel).toBe(pixel)
+  })
+
+  test("shortenLinks: false leaves the long URL alone and mints nothing", async () => {
+    await sendMessage({
+      ctx: {
+        ...shortCtx,
+        auth: { ...shortCtx.auth, shortenLinks: false },
+      } as never,
+      data: {
+        contact: inboxContact,
+        message: {
+          id: "m",
+          conversationId: "c",
+          text: LONG,
+          messageType: "outgoing",
+          contentType: "text",
+        },
+        quickReplies: [],
+      },
+    } as never)
+    expect(mockMint).not.toHaveBeenCalled()
+    const [{ envelope }] = mockPostSignedEnvelope.mock.calls[0]
+    expect(envelope.message.text).toBe(LONG)
+  })
+
+  test("nothing to shorten never touches the ids: a bare context with a short text still posts", async () => {
+    await sendMessage({
+      ctx: { auth: shortCtx.auth } as never,
+      data: {
+        contact: { id: "ci-1", sourceId: "+15550000008" } as never,
+        message: {
+          id: "m",
+          conversationId: "c",
+          text: `hi ${SHORT}`,
+          messageType: "outgoing",
+          contentType: "text",
+        },
+        quickReplies: [],
+      },
+    } as never)
+    expect(mockMint).not.toHaveBeenCalled()
+    expect(mockPostSignedEnvelope).toHaveBeenCalledTimes(1)
+  })
+
+  test("a candidate with no contact id, or a failing mint, fails the send (nothing posted, nothing queued)", async () => {
+    await expect(
+      sendMessage({
+        ctx: shortCtx,
+        data: {
+          contact: { id: "ci-1", sourceId: "+15550000008" } as never,
+          message: {
+            id: "m",
+            conversationId: "c",
+            text: LONG,
+            messageType: "outgoing",
+            contentType: "text",
+          },
+          quickReplies: [],
+        },
+      } as never),
+    ).rejects.toThrow(MISSING_CONTACT_ID)
+
+    mockMint.mockRejectedValue(new Error("db down"))
+    await expect(
+      sendMessage({
+        ctx: shortCtx,
+        data: {
+          contact: inboxContact,
+          message: {
+            id: "m",
+            conversationId: "c",
+            text: LONG,
+            messageType: "outgoing",
+            contentType: "text",
+          },
+          quickReplies: [],
+        },
+      } as never),
+    ).rejects.toThrow("db down")
+    expect(mockPostSignedEnvelope).not.toHaveBeenCalled()
+    expect(mockEnqueue).not.toHaveBeenCalled()
   })
 })

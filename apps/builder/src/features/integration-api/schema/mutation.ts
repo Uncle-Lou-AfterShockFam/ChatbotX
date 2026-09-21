@@ -20,5 +20,10 @@ export const updateApiRequest = z.object({
    * no public URL); the callback URL is ignored.
    */
   deliveryMode: z.enum(apiDeliveryModeValues).optional(),
+  /**
+   * Replace long URLs in outbound texts and URL quick replies with tracked
+   * `/go/<token>` short links (on by default; see `apiAuthSchema`).
+   */
+  shortenLinks: z.boolean().optional(),
 })
 export type UpdateApiRequest = z.infer<typeof updateApiRequest>

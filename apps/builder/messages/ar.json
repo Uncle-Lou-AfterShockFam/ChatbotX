@@ -2342,6 +2342,12 @@
         "description": "How outbound messages reach your application: pushed to the callback URL, or leased from the outbox by a worker with no public URL.",
         "push": "Push to callback URL",
         "pull": "Pull from outbox"
+      },
+      "shortenLinks": {
+        "label": "Shorten links",
+        "description": "Replace long URLs in outbound texts and URL buttons with tracked short links (https://your-hub-host/go/...). Clicks count as engagement.",
+        "on": "Short links on",
+        "off": "Short links off"
       }
     },
     "tokenPermission": {

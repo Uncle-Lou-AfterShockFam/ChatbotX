@@ -33,6 +33,9 @@ export function ApiCredentialsCard({ api }: { api: ApiResource }) {
           {t("fields.api.deliveryMode.label")}:{" "}
           {t(`fields.api.deliveryMode.${api.deliveryMode}`)}
         </span>
+        <span>
+          {t(`fields.api.shortenLinks.${api.shortenLinks ? "on" : "off"}`)}
+        </span>
       </div>
 
       <div className="flex justify-end gap-2">
