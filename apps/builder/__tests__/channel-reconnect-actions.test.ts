@@ -207,6 +207,7 @@ describe("reconnectMessengerAction", () => {
           "https://app.example.com/space/ws-1/settings/channels?channel=messenger",
         reconnectIntegrationId: "im-1",
       },
+      scopes: ["pages_messaging", "pages_show_list"],
     })
     expect(mockRedirect).toHaveBeenCalledWith("https://facebook.example/auth")
   })
