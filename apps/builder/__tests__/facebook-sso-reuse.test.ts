@@ -25,6 +25,14 @@ vi.mock("@chatbotx.io/integration-messenger", () => ({
   getFacebookUser: mockGetFacebookUser,
   MESSENGER_REUSE_REQUIRED_SCOPES: REQUIRED_SCOPES,
   toAppAccessToken: mockToAppAccessToken,
+  // The reuse gate derives its required set from the SSO list at call time.
+  toReuseRequiredScopes: (scopes: readonly string[]) =>
+    scopes.filter(
+      (scope) => !["email", "public_profile", "page_events"].includes(scope),
+    ),
+}))
+vi.mock("@/lib/auth/upgrade-facebook-account", () => ({
+  FACEBOOK_SSO_SCOPES: ["email", ...REQUIRED_SCOPES],
 }))
 
 const { tryReuseFacebookSsoToken } = await import(

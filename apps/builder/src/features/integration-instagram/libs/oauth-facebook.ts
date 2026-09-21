@@ -1,6 +1,14 @@
 import type { InstagramCredentialPublic } from "@chatbotx.io/database/partials"
-import { generateAuthUrl } from "@chatbotx.io/integration-instagram-facebook"
+import {
+  generateAuthUrl,
+  INSTAGRAM_SCOPES,
+} from "@chatbotx.io/integration-instagram-facebook"
+import { env } from "@/env"
 import { getOriginFromHeader } from "@/lib/domain"
+import {
+  INSTAGRAM_FACEBOOK_OAUTH_SCOPES_ENV,
+  resolveMetaOAuthScopes,
+} from "@/lib/meta-oauth-scopes"
 import { buildProviderCallbackUrl } from "@/lib/provider-origin"
 
 export async function generateInstagramFacebookRedirectUri(
@@ -31,5 +39,10 @@ export async function generateInstagramFacebookRedirectUri(
       workspaceId,
       referer,
     },
+    scopes: resolveMetaOAuthScopes(
+      env.INSTAGRAM_FACEBOOK_OAUTH_SCOPES,
+      INSTAGRAM_SCOPES,
+      INSTAGRAM_FACEBOOK_OAUTH_SCOPES_ENV,
+    ),
   })
 }

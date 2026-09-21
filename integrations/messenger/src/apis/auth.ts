@@ -192,10 +192,17 @@ export const MESSENGER_SCOPES = [
  * every permission the Messenger connect flow would otherwise request, so the
  * page-connect step can reuse it instead of re-running OAuth.
  */
-export const MESSENGER_REUSE_REQUIRED_SCOPES = MESSENGER_SCOPES.filter(
-  (scope) =>
-    scope !== "email" && scope !== "public_profile" && scope !== "page_events",
-)
+const REUSE_EXEMPT_SCOPES = new Set(["email", "public_profile", "page_events"])
+
+/** The subset of `scopes` a reused SSO token must carry (identity-only scopes dropped). */
+export function toReuseRequiredScopes(
+  scopes: readonly string[],
+): readonly string[] {
+  return scopes.filter((scope) => !REUSE_EXEMPT_SCOPES.has(scope))
+}
+
+export const MESSENGER_REUSE_REQUIRED_SCOPES =
+  toReuseRequiredScopes(MESSENGER_SCOPES)
 
 /**
  * Scopes requested by the Facebook Lead Ads "Add New" re-auth. Granting these
@@ -218,17 +225,25 @@ export function generateAuthUrl({
   version = DEFAULT_API_VERSION,
   redirectUrl,
   stateParams,
+  scopes = MESSENGER_SCOPES,
 }: {
   clientId: string
   version?: string
   redirectUrl: string
   stateParams?: Record<string, unknown>
+  /**
+   * Permissions to request. Defaults to `MESSENGER_SCOPES`; a Facebook Login
+   * for Business app rejects any scope not attached to one of its use cases
+   * ("Invalid Scopes"), so a self-hosted install narrows this list via
+   * `MESSENGER_OAUTH_SCOPES`.
+   */
+  scopes?: readonly string[]
 }): string {
   const params = new URLSearchParams({
     auth_type: "rerequest",
     client_id: clientId,
     redirect_uri: redirectUrl,
-    scope: MESSENGER_SCOPES.join(","),
+    scope: scopes.join(","),
     response_type: "code",
     state: Buffer.from(JSON.stringify(stateParams ?? {})).toString("base64"),
   })

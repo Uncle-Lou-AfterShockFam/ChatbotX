@@ -4,10 +4,35 @@ import { keys as partysocket } from "@chatbotx.io/partysocket-config/keys"
 import { createEnv } from "@t3-oss/env-nextjs"
 import { z } from "zod"
 import { clientEnv } from "./lib/client-env"
+import {
+  INSTAGRAM_FACEBOOK_OAUTH_SCOPES_ENV,
+  MESSENGER_OAUTH_SCOPES_ENV,
+  resolveMetaOAuthScopes,
+} from "./lib/meta-oauth-scopes"
 
 const editionRule = z
   .enum(["community", "enterprise", "cloud"])
   .default("community")
+
+// Comma-separated Meta permission names; parsed by resolveMetaOAuthScopes at
+// boot so a typo fails here instead of on the first Messenger/Instagram connect.
+const metaScopeListRule = (envName: string) =>
+  z
+    .string()
+    .optional()
+    .refine(
+      (value) => {
+        try {
+          resolveMetaOAuthScopes(value, ["placeholder"], envName)
+          return true
+        } catch {
+          return false
+        }
+      },
+      {
+        message: `${envName} must be a comma-separated list of Meta permission names`,
+      },
+    )
 
 export const env = createEnv({
   extends: [partysocket(), database(), mail()],
@@ -22,6 +47,12 @@ export const env = createEnv({
     // WhatsApp VoIP calling (docs/whatsapp-calling.md) ICE/TURN relay.
     TURN_URL: z.string().optional(),
     TURN_STATIC_SECRET: z.string().optional(),
+    // Narrow the Facebook OAuth scope lists for a Facebook Login for Business
+    // app (see lib/meta-oauth-scopes.ts). Unset = the shipped defaults.
+    [MESSENGER_OAUTH_SCOPES_ENV]: metaScopeListRule(MESSENGER_OAUTH_SCOPES_ENV),
+    [INSTAGRAM_FACEBOOK_OAUTH_SCOPES_ENV]: metaScopeListRule(
+      INSTAGRAM_FACEBOOK_OAUTH_SCOPES_ENV,
+    ),
   },
   client: {
     NEXT_PUBLIC_BUILDER_URL: z.url(),

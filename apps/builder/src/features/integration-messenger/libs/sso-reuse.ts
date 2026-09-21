@@ -2,9 +2,10 @@ import { authAccountRepository } from "@chatbotx.io/database/repositories"
 import {
   debugToken,
   getFacebookUser,
-  MESSENGER_REUSE_REQUIRED_SCOPES,
   toAppAccessToken,
+  toReuseRequiredScopes,
 } from "@chatbotx.io/integration-messenger"
+import { FACEBOOK_SSO_SCOPES } from "@/lib/auth/upgrade-facebook-account"
 
 export type FacebookSsoReuse =
   | {
@@ -55,8 +56,8 @@ export async function tryReuseFacebookSsoToken(props: {
   }
 
   const grantedScopes = debug.scopes ?? []
-  const hasAllRequiredScopes = MESSENGER_REUSE_REQUIRED_SCOPES.every((scope) =>
-    grantedScopes.includes(scope),
+  const hasAllRequiredScopes = toReuseRequiredScopes(FACEBOOK_SSO_SCOPES).every(
+    (scope) => grantedScopes.includes(scope),
   )
   if (!hasAllRequiredScopes) {
     return { reusable: false }
