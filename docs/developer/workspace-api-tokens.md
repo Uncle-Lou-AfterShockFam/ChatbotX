@@ -211,7 +211,10 @@ an endpoint's scope.
   submodules — some in `features/contacts/api/public/` (`crud.ts`,
   `tags.ts`, `custom-fields.ts`, `bulk.ts`, `export.ts`,
   `refresh-profile.ts`, `messages.ts`), some in their own owning feature's
-  `api/public.ts` (`contact-notes`, `contact-sequences`, `contact-inboxes`,
+  `api/public.ts` (`contact-notes`, `contact-sequences`, `contact-inboxes` —
+  which also exposes `contacts.attachInbox`, `POST /v1/contacts/{identifier}/inboxes`,
+  registering an existing contact on an `api`-channel inbox so a flow or
+  message can run there for a contact born on another channel,
   `contact-filter`, `import`) that `features/contacts/api/public.ts`
   composes in alongside its own submodules, and `contact-scan` — the one
   submodule composed directly into `apps/builder/src/routers/public.ts`
@@ -547,6 +550,9 @@ these helpers — import from the business package directly.
   `appointment-external-calendars-public-api.test.ts` — handler-behavior tests
   for the appointments scope's four routers
 - `apps/builder/__tests__/contacts-public-scope.test.ts`
+- `packages/business/__tests__/attach-contact-inbox.test.ts` — the
+  api-inbox attach service behind `contacts.attachInbox` (idempotency, the
+  409 owner rule, api-only, phone normalisation, no contact event)
 - `apps/builder/__tests__/contacts-crud-public-api.test.ts`,
   `contacts-tags-and-fields-public-api.test.ts`,
   `contacts-notes-public-api.test.ts`, `contacts-sequences-public-api.test.ts`,

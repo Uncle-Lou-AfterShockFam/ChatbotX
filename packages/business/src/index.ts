@@ -18,6 +18,8 @@ export * from "./coexist"
 export * from "./coexist-import"
 export * from "./comment-automation/service"
 export * from "./contact"
+// Same placement, same reason: it imports conversation/service.
+export * from "./contact/attach-inbox"
 // Exported here, NOT from ./contact/index.ts, on purpose: it drags in
 // coexist-import + workspace-usage (→ analytics/mac-tracking → redis bloomFilter),
 // and conversation/service imports the ./contact barrel — re-exporting it there

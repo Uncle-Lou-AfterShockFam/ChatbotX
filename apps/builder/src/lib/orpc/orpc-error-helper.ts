@@ -93,6 +93,24 @@ export const possibleErrorsOnFindingResource = {
   businessError,
 } satisfies ErrorMap
 
+/**
+ * Attaching a contact to an `api` inbox throws `contactInboxOwnedByAnotherContact`
+ * (409) when that channel identity already belongs to another contact. Same
+ * declare-or-vanish rule as the appointment 409s below: code AND status must
+ * be declared here or the error never appears in the spec.
+ */
+const contactInboxOwnedByAnotherContact = {
+  message:
+    "This channel identity already belongs to another contact on this inbox",
+  status: 409,
+}
+
+export const possibleErrorsOnAttachingContactInbox = {
+  notFound,
+  businessError,
+  contactInboxOwnedByAnotherContact,
+} satisfies ErrorMap
+
 export const possibleErrorsOnListingResource = {
   businessError,
 } satisfies ErrorMap
