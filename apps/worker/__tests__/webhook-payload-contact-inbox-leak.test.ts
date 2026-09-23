@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 // public field. Every builder in webhook-payload.builder.ts EXCEPT
 // dateTimeBasedTrigger's selectively projects named fields, so seeding
 // eventData with contactInboxId and asserting it never appears in the built
-// payload is a true regression guard for those 16 event types.
+// payload is a true regression guard for those event types.
 //
 // dateTimeBasedTrigger is a DOCUMENTED EXCEPTION, not covered by the same
 // guarantee: its builder is `(basePayload, data) => ({ ...basePayload,
@@ -48,6 +48,20 @@ const timestamp = new Date("2026-08-27T00:00:00.000Z")
 // Minimal, per-event-type eventData that satisfies each builder's real field
 // reads, WITH a contactInboxId injected — exactly what the shared metadata
 // bag looks like once a producer threads one (§3.1/§3.5/§3.6).
+const DEAL_EVENT_DATA = {
+  dealId: "deal-1",
+  pipelineId: "pipe-1",
+  stageId: "stage-1",
+  sourceId: "pipe-1",
+  title: "Roof",
+  value: "100.00",
+  currency: "USD",
+  status: "open",
+  priority: "medium",
+  ownerId: null,
+  companyId: null,
+}
+
 const EVENT_DATA_BY_TYPE: Record<string, Record<string, unknown>> = {
   [triggerEventTypes.enum.tagApplied]: { tagId: "tag-1" },
   [triggerEventTypes.enum.tagRemoved]: { tagId: "tag-1" },
@@ -108,10 +122,27 @@ const EVENT_DATA_BY_TYPE: Record<string, Record<string, unknown>> = {
     refName: "summer",
     reflinkId: "reflink-1",
   },
+  [triggerEventTypes.enum.ticketCreated]: DEAL_EVENT_DATA,
+  [triggerEventTypes.enum.ticketMovedToStage]: {
+    ...DEAL_EVENT_DATA,
+    fromStageId: "stage-0",
+  },
+  [triggerEventTypes.enum.ticketValueChanged]: {
+    ...DEAL_EVENT_DATA,
+    oldValue: "50.00",
+  },
+  [triggerEventTypes.enum.ticketStatusChanged]: {
+    ...DEAL_EVENT_DATA,
+    oldStatus: "open",
+  },
+  [triggerEventTypes.enum.ticketPriorityChanged]: {
+    ...DEAL_EVENT_DATA,
+    oldPriority: "low",
+  },
 }
 
 // Every MatchableEventType EXCEPT dateTimeBasedTrigger (documented exception
-// above) — the 16 EMITTED_EVENT_TYPES from event-type-registry.ts.
+// above) — the EMITTED_EVENT_TYPES from event-type-registry.ts (26 as of the deal events).
 const SELECTIVELY_PROJECTED_EVENT_TYPES = Object.keys(EVENT_DATA_BY_TYPE)
 
 describe("buildWebhookPayload — contactInboxId never leaks (selectively-projecting builders)", () => {

@@ -21,6 +21,38 @@ export type CallTranscribedMetadata = CallEventMetadata & {
 }
 
 /**
+ * Deal (pipeline "ticket") event metadata carried to triggers/webhooks. The
+ * `ticket*` trigger types predate the deal tables; the events keep those names.
+ * Trigger conditions match on `sourceId` EXACTLY, so every deal event sets it:
+ * the pipeline id for created/value/status/priority, the DESTINATION stage id
+ * for a stage move (the pipeline and origin stage ride along in the metadata).
+ */
+export type DealEventMetadata = {
+  dealId: string
+  pipelineId: string
+  stageId: string
+  title: string
+  value: string | null
+  currency: string
+  status: string
+  priority: string
+  ownerId?: string | null
+  companyId?: string | null
+}
+export type DealMovedToStageMetadata = DealEventMetadata & {
+  fromStageId: string
+}
+export type DealValueChangedMetadata = DealEventMetadata & {
+  oldValue: string | null
+}
+export type DealStatusChangedMetadata = DealEventMetadata & {
+  oldStatus: string
+}
+export type DealPriorityChangedMetadata = DealEventMetadata & {
+  oldPriority: string
+}
+
+/**
  * Base event emitter class with common functionality
  */
 export abstract class BaseEventEmitter {
@@ -399,6 +431,68 @@ export abstract class BaseEventEmitter {
         { sourceId: sequenceId, sequenceId, sequenceName },
         contactInboxId,
       ),
+    })
+  }
+
+  // Deal events. `sourceId` = pipelineId, except a stage move where it is the
+  // destination stage id (see DealEventMetadata).
+  async dealCreated(
+    workspaceId: string,
+    contactId: string,
+    metadata: DealEventMetadata,
+  ): Promise<void> {
+    await this.emit(triggerEventTypes.enum.ticketCreated, {
+      workspaceId,
+      contactId,
+      metadata: { ...metadata, sourceId: metadata.pipelineId },
+    })
+  }
+
+  async dealMovedToStage(
+    workspaceId: string,
+    contactId: string,
+    metadata: DealMovedToStageMetadata,
+  ): Promise<void> {
+    await this.emit(triggerEventTypes.enum.ticketMovedToStage, {
+      workspaceId,
+      contactId,
+      metadata: { ...metadata, sourceId: metadata.stageId },
+    })
+  }
+
+  async dealValueChanged(
+    workspaceId: string,
+    contactId: string,
+    metadata: DealValueChangedMetadata,
+  ): Promise<void> {
+    await this.emit(triggerEventTypes.enum.ticketValueChanged, {
+      workspaceId,
+      contactId,
+      metadata: { ...metadata, sourceId: metadata.pipelineId },
+    })
+  }
+
+  async dealStatusChanged(
+    workspaceId: string,
+    contactId: string,
+    metadata: DealStatusChangedMetadata,
+  ): Promise<void> {
+    await this.emit(triggerEventTypes.enum.ticketStatusChanged, {
+      workspaceId,
+      contactId,
+      metadata: { ...metadata, sourceId: metadata.pipelineId },
+    })
+  }
+
+  async dealPriorityChanged(
+    workspaceId: string,
+    contactId: string,
+    metadata: DealPriorityChangedMetadata,
+  ): Promise<void> {
+    await this.emit(triggerEventTypes.enum.ticketPriorityChanged, {
+      workspaceId,
+      contactId,
+      metadata: { ...metadata, sourceId: metadata.pipelineId },
     })
   }
 }
