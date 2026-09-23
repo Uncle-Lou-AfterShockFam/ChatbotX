@@ -4,10 +4,13 @@ import {
   type WaitStepSchema,
   waitStepDateTypes,
   waitStepDelayTypes,
+  waitStepEventTypes,
   waitStepOffsetOperators,
 } from "@chatbotx.io/flow-config"
 import { useTranslations } from "next-intl"
 import { useCustomFieldStore } from "@/features/custom-fields/provider/custom-field-store-context"
+import { useTagSelectOptions } from "@/features/tags/provider/tag-hook"
+import { BaseStateViewer } from "../../states/viewer"
 
 type WaitStepViewerProps = {
   data: WaitStepSchema
@@ -19,11 +22,51 @@ const WaitStepViewer = (props: WaitStepViewerProps) => {
   const t = useTranslations()
   const { customFields } = useCustomFieldStore((state) => state)
 
+  const tagOptions = useTagSelectOptions()
+
   const customField =
     data.delayType === waitStepDelayTypes.enum.date &&
     data.dateType === waitStepDateTypes.enum.dynamic
       ? customFields.find((obj) => obj.id === data.outputFieldId)
       : undefined
+
+  if (data.delayType === waitStepDelayTypes.enum.event) {
+    const target =
+      data.eventType === waitStepEventTypes.enum.tagApplied
+        ? (tagOptions.find((tag) => tag.value === data.tagId)?.label ?? "")
+        : (customFields.find((obj) => obj.id === data.customFieldId)?.name ??
+          "")
+    return (
+      <div className="flex w-full flex-col gap-2 py-0 text-sm">
+        <div className="text-center">
+          {data.eventType === waitStepEventTypes.enum.tagApplied
+            ? t("flows.wait.eventDetailTag")
+            : t("flows.wait.eventDetailCustomField")}{" "}
+          <span className="rounded-full py-1 font-medium text-primary text-sm">
+            {target}
+          </span>
+          <div className="text-muted-foreground">
+            {t("flows.wait.eventDetailTimeout")} {data.timeoutValue}{" "}
+            {data.timeoutUnit}
+          </div>
+        </div>
+        {/* React Flow keeps each state's connector on physical Position.Right. */}
+        <div className="my-2 mr-3 flex flex-col gap-1">
+          {data.states.map((state) => (
+            <BaseStateViewer
+              data={state}
+              key={state.id}
+              label={
+                state.stateType === "success"
+                  ? t("flows.wait.eventStateEvent")
+                  : t("flows.wait.eventStateTimeout")
+              }
+            />
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex w-full flex-col items-center justify-center gap-2 py-0 text-center text-sm">

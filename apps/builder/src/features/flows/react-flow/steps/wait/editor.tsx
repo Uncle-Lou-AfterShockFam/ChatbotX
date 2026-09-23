@@ -5,6 +5,7 @@ import { useWatch } from "react-hook-form"
 import { DateDelayEditor } from "./components/date-delay-editor"
 import DelayTypeSelect from "./components/delay-type-select"
 import { DurationDelayEditor } from "./components/duration-delay-editor"
+import { EventDelayEditor } from "./components/event-delay-editor"
 import { RandomDelayEditor } from "./components/random-delay-editor"
 
 type WaitStepEditorProps = {
@@ -28,6 +29,10 @@ const WaitStepEditor = ({ parentName }: WaitStepEditorProps) => {
 
       {delayType === waitStepDelayTypes.enum.random && (
         <RandomDelayEditor parentName={parentName} />
+      )}
+
+      {delayType === waitStepDelayTypes.enum.event && (
+        <EventDelayEditor parentName={parentName} />
       )}
     </div>
   )

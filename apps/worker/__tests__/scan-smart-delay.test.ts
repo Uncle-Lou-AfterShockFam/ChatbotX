@@ -21,10 +21,30 @@ const {
 
 vi.mock("@chatbotx.io/business/smart-delay", () => ({ smartDelayService }))
 
+vi.mock("@chatbotx.io/database/partials", () => ({
+  smartDelayTypes: {
+    enum: {
+      waitNode: "waitNode",
+      followUp: "followUp",
+      waitForEvent: "waitForEvent",
+    },
+  },
+  smartDelayStatuses: {
+    enum: {
+      pending: "pending",
+      scheduled: "scheduled",
+      completed: "completed",
+      failed: "failed",
+      canceled: "canceled",
+    },
+  },
+}))
+
 vi.mock("@chatbotx.io/worker-config", () => ({
   IntegrationJobAction: {
     resumeFollowUp: "resumeFollowUp",
     resumeWait: "resumeWait",
+    resumeWaitForEvent: "resumeWaitForEvent",
     sendFlow: "sendFlow",
   },
   integrationQueue: {
@@ -320,6 +340,29 @@ describe("scanSmartDelay", () => {
     await expect(scanSmartDelay()).resolves.toEqual({ scanned: 1, enqueued: 0 })
     expect(smartDelayService.resetToPending).toHaveBeenCalledWith({
       ids: ["failed-row"],
+    })
+  })
+
+  test("a waitForEvent row with no timeout edge is NOT terminal: it is enqueued for its real timeout", async () => {
+    smartDelayService.claimDueRows.mockResolvedValueOnce([
+      makeRow({
+        id: "event-only",
+        nodeId: null,
+        type: "waitForEvent",
+        eventNodeId: "event-node",
+      }),
+    ])
+
+    await expect(scanSmartDelay()).resolves.toEqual({ scanned: 1, enqueued: 1 })
+    expect(smartDelayService.claimForRun).not.toHaveBeenCalled()
+    expect(integrationQueueAddBulk).toHaveBeenCalledTimes(1)
+    const [jobs] = integrationQueueAddBulk.mock.calls[0] as [
+      { name: string; data: unknown }[],
+    ]
+    expect(jobs[0]?.name).toBe("resumeWaitForEvent")
+    expect(jobs[0]?.data).toEqual({
+      type: "resumeWaitForEvent",
+      data: { reason: "timeout", smartDelayId: "event-only" },
     })
   })
 

@@ -2582,7 +2582,8 @@
       "date": "Ngày",
       "specificDate": "Ngày cụ thể",
       "specificDateValue": "{date}",
-      "random": "Ngẫu nhiên"
+      "random": "Ngẫu nhiên",
+      "event": "Event"
     },
     "formatTimezone": {
       "timezone": "Múi giờ tài khoản",
@@ -2630,7 +2631,18 @@
       "unitLabel": "Đơn vị",
       "specific": "Cụ thể",
       "dynamic": "Tùy chỉnh",
-      "selectTimePlaceholder": "Chọn thời gian"
+      "selectTimePlaceholder": "Chọn thời gian",
+      "eventTypeLabel": "Wait for",
+      "eventTagApplied": "A tag is applied",
+      "eventCustomFieldChanged": "A custom field changes",
+      "eventTagLabel": "Tag",
+      "eventCustomFieldLabel": "Custom field",
+      "eventTimeoutLabel": "Give up after",
+      "eventDetailTag": "Wait until tag",
+      "eventDetailCustomField": "Wait until field",
+      "eventDetailTimeout": "or after",
+      "eventStateEvent": "Event",
+      "eventStateTimeout": "Timeout"
     },
     "followUp": {
       "durationLabel": "Thời lượng",

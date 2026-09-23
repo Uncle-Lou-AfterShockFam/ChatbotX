@@ -9,9 +9,33 @@ import {
   setSeconds,
 } from "date-fns"
 import { z } from "zod"
+import {
+  type SkipStateSchema,
+  type SuccessStateSchema,
+  skipStateDefaultFn,
+  skipStateSchema,
+  successStateDefaultFn,
+  successStateSchema,
+} from "../states"
 import { stepTypes } from "./step-action"
 
-export const waitStepDelayTypes = z.enum(["duration", "date", "random"])
+export const waitStepDelayTypes = z.enum([
+  "duration",
+  "date",
+  "random",
+  "event",
+])
+
+/** `event`: park the run until this lands on the contact, or the timeout fires. */
+export const waitStepEventTypes = z.enum(["tagApplied", "customFieldChanged"])
+
+/** What a parked `waitForEvent` row waits for (stored as ContactOnSmartDelay.eventSpec). */
+export const waitForEventSpecSchema = z.object({
+  eventType: waitStepEventTypes,
+  tagId: z.string().trim().min(1).optional(),
+  customFieldId: z.string().trim().min(1).optional(),
+})
+export type WaitForEventSpec = z.infer<typeof waitForEventSpecSchema>
 
 export const waitStepDelayUnits = z.enum([
   "seconds",
@@ -69,9 +93,49 @@ export const waitStepSchema = z
         max: z.coerce.number().int().min(1).max(MAX_DELAY),
         unit: waitStepDelayUnits,
       }),
+      // Every field defaults: a required field without one 422s every saved graph (fork PR #6).
+      z.object({
+        delayType: z.literal(waitStepDelayTypes.enum.event),
+        eventType: waitStepEventTypes.default(
+          waitStepEventTypes.enum.tagApplied,
+        ),
+        tagId: z.string().trim().optional().default(""),
+        customFieldId: z.string().trim().optional().default(""),
+        timeoutValue: z.coerce.number().int().min(1).max(MAX_DELAY).default(1),
+        timeoutUnit: waitStepDelayUnits.default(waitStepDelayUnits.enum.days),
+        // success = the event landed, skip = timed out
+        states: z
+          .tuple([successStateSchema, skipStateSchema])
+          .default(
+            () =>
+              [successStateDefaultFn(), skipStateDefaultFn()] as [
+                SuccessStateSchema,
+                SkipStateSchema,
+              ],
+          ),
+      }),
     ]),
   )
   .superRefine((data, ctx) => {
+    if (data.delayType === waitStepDelayTypes.enum.event) {
+      if (
+        data.eventType === waitStepEventTypes.enum.tagApplied &&
+        !data.tagId
+      ) {
+        ctx.addIssue({ code: "custom", path: ["tagId"], message: "Required" })
+      }
+      if (
+        data.eventType === waitStepEventTypes.enum.customFieldChanged &&
+        !data.customFieldId
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["customFieldId"],
+          message: "Required",
+        })
+      }
+    }
+
     if (
       data.delayType === waitStepDelayTypes.enum.random &&
       data.min > data.max
@@ -138,6 +202,30 @@ export const delayTypeDurationDefaultFn = () => ({
   endTime: null,
 })
 
+export const delayTypeEventDefaultFn = () => ({
+  eventType: waitStepEventTypes.enum.tagApplied,
+  tagId: "",
+  customFieldId: "",
+  timeoutValue: 1,
+  timeoutUnit: waitStepDelayUnits.enum.days,
+  states: [successStateDefaultFn(), skipStateDefaultFn()] as [
+    SuccessStateSchema,
+    SkipStateSchema,
+  ],
+})
+
+/** The spec a parked row stores, from an `event` wait step; null for any other delayType. */
+export const waitForEventSpecFromStep = (
+  step: WaitStepSchema,
+): WaitForEventSpec | null => {
+  if (step.delayType !== waitStepDelayTypes.enum.event) {
+    return null
+  }
+  return step.eventType === waitStepEventTypes.enum.tagApplied
+    ? { eventType: step.eventType, tagId: step.tagId }
+    : { eventType: step.eventType, customFieldId: step.customFieldId }
+}
+
 export const buildJobId = (rowId: string, triggerAt: Date) =>
   `smart-delay-${rowId}-${triggerAt.getTime()}`
 
@@ -193,6 +281,14 @@ export async function computeTriggerAt(
       return setTimeOfDay(addDays(base, 1), windowStart)
     }
     return base
+  }
+
+  if (step.delayType === waitStepDelayTypes.enum.event) {
+    // The timeout instant; the event itself resumes the row early.
+    return addMilliseconds(
+      Date.now(),
+      step.timeoutValue * delayUnitToMs(step.timeoutUnit),
+    )
   }
 
   if (step.delayType === waitStepDelayTypes.enum.random) {

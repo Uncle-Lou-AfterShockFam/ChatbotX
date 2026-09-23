@@ -22,6 +22,10 @@ const DelayTypeSelect = (props: DelayTypeSelectProps) => {
       value: waitStepDelayTypes.enum.random,
       label: t("flows.delayType.random"),
     },
+    {
+      value: waitStepDelayTypes.enum.event,
+      label: t("flows.delayType.event"),
+    },
   ]
 
   return (

@@ -6,6 +6,7 @@ const {
   mockDbFor,
   mockDbFrom,
   mockDbGroupBy,
+  mockDbInnerJoin,
   mockDbInsert,
   mockDbLimit,
   mockDbOrderBy,
@@ -45,12 +46,14 @@ const {
     for: vi.fn(),
     from: vi.fn(),
     groupBy: vi.fn(),
+    innerJoin: vi.fn(),
     limit: vi.fn(),
     orderBy: vi.fn(),
     where: vi.fn(),
   }
   selectChain.for.mockReturnValue(selectChain)
   selectChain.from.mockReturnValue(selectChain)
+  selectChain.innerJoin.mockReturnValue(selectChain)
   selectChain.limit.mockReturnValue(selectChain)
   selectChain.orderBy.mockReturnValue(selectChain)
   selectChain.where.mockReturnValue(selectChain)
@@ -62,6 +65,7 @@ const {
     mockDbFrom: selectChain.from,
     mockDbFor: selectChain.for,
     mockDbGroupBy: selectChain.groupBy,
+    mockDbInnerJoin: selectChain.innerJoin,
     mockDbInsert,
     mockDbLimit: selectChain.limit,
     mockDbOrderBy: selectChain.orderBy,
@@ -268,6 +272,51 @@ describe("smartDelayService", () => {
     ).resolves.toBe(false)
   })
 
+  test("claimForEvent claims a waitForEvent row from pending OR scheduled, once", async () => {
+    mockDbReturning.mockResolvedValueOnce([{ id: "row-1" }])
+
+    await expect(
+      smartDelayService.claimForEvent({ id: "row-1" }),
+    ).resolves.toBe(true)
+    expect(mockDbSet).toHaveBeenCalledWith({ status: "completed" })
+    expect(mockEq).toHaveBeenCalledWith(expect.anything(), "waitForEvent")
+    expect(mockInArray).toHaveBeenCalledWith(expect.anything(), [
+      "pending",
+      "scheduled",
+    ])
+
+    // The timeout (or another event) already completed the row: nothing claimed.
+    mockDbReturning.mockResolvedValueOnce([])
+    await expect(
+      smartDelayService.claimForEvent({ id: "row-1" }),
+    ).resolves.toBe(false)
+  })
+
+  test("findActiveWaitForEvent joins the contact inbox and keeps only live waitForEvent rows", async () => {
+    const waitRow = {
+      ...smartDelayRow,
+      type: "waitForEvent",
+      status: "scheduled",
+      eventNodeId: "event-node",
+      eventSpec: { eventType: "tagApplied", tagId: "tag-1" },
+    }
+    mockDbOrderBy.mockResolvedValueOnce([{ row: waitRow }])
+
+    const rows = await smartDelayService.findActiveWaitForEvent({
+      workspaceId: "workspace-1",
+      contactId: "contact-1",
+    })
+
+    expect(rows).toEqual([waitRow])
+    expect(mockDbInnerJoin).toHaveBeenCalledOnce()
+    expect(mockEq).toHaveBeenCalledWith(expect.anything(), "waitForEvent")
+    expect(mockEq).toHaveBeenCalledWith(expect.anything(), "contact-1")
+    expect(mockInArray).toHaveBeenCalledWith(expect.anything(), [
+      "pending",
+      "scheduled",
+    ])
+  })
+
   test("requeueClaimedRun only restores rows claimed as completed", async () => {
     mockDbReturning.mockResolvedValueOnce([{ id: "row-1" }])
 
@@ -277,6 +326,24 @@ describe("smartDelayService", () => {
 
     expect(mockDbSet).toHaveBeenCalledWith({ status: "scheduled" })
     expect(mockEq).toHaveBeenCalledWith(expect.anything(), "completed")
+  })
+
+  test("requeueClaimedRun with resumeAt re-points a waitForEvent row at the edge that fired", async () => {
+    mockDbReturning.mockResolvedValueOnce([{ id: "row-1" }])
+    const triggerAt = new Date("2026-09-23T18:02:00.000Z")
+
+    await expect(
+      smartDelayService.requeueClaimedRun({
+        id: "row-1",
+        resumeAt: { nodeId: "event-node", triggerAt },
+      }),
+    ).resolves.toBe(true)
+
+    expect(mockDbSet).toHaveBeenCalledWith({
+      status: "scheduled",
+      nodeId: "event-node",
+      triggerAt,
+    })
   })
 
   test("listStuckScheduled returns a bounded batch of overdue scheduled rows", async () => {

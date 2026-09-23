@@ -7,10 +7,15 @@ import type {
   IncomingCallMetadata,
 } from "./base-emitter"
 import { logger } from "./logger"
+import { SmartDelayEventEmitter } from "./smart-delay/emitter"
 import { TriggerEventEmitter } from "./trigger/emitter"
 import { WebhookEventEmitter } from "./webhook/emitter"
 
-const EMITTER_REGISTRY = [TriggerEventEmitter, WebhookEventEmitter] as const
+const EMITTER_REGISTRY = [
+  TriggerEventEmitter,
+  WebhookEventEmitter,
+  SmartDelayEventEmitter,
+] as const
 
 type EmitterEventMethod = {
   [K in keyof BaseEventEmitter]: K extends "emit"

@@ -2757,7 +2757,8 @@
       "date": "日期",
       "specificDate": "具體日期",
       "specificDateValue": "{date}",
-      "random": "隨機"
+      "random": "隨機",
+      "event": "Event"
     },
     "formatTimezone": {
       "timezone": "帳戶時區",
@@ -2805,7 +2806,18 @@
       "unitLabel": "單位",
       "specific": "具體",
       "dynamic": "動態",
-      "selectTimePlaceholder": "選擇時間"
+      "selectTimePlaceholder": "選擇時間",
+      "eventTypeLabel": "Wait for",
+      "eventTagApplied": "A tag is applied",
+      "eventCustomFieldChanged": "A custom field changes",
+      "eventTagLabel": "Tag",
+      "eventCustomFieldLabel": "Custom field",
+      "eventTimeoutLabel": "Give up after",
+      "eventDetailTag": "Wait until tag",
+      "eventDetailCustomField": "Wait until field",
+      "eventDetailTimeout": "or after",
+      "eventStateEvent": "Event",
+      "eventStateTimeout": "Timeout"
     },
     "followUp": {
       "durationLabel": "持續時間",

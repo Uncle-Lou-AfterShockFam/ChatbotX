@@ -2440,7 +2440,8 @@
       "date": "Dato",
       "specificDate": "Specific Dato",
       "specificDateValue": "{date}",
-      "random": "Random"
+      "random": "Random",
+      "event": "Event"
     },
     "formatTimezone": {
       "timezone": "Konto Tidszone",
@@ -2488,7 +2489,18 @@
       "unitLabel": "Unit",
       "specific": "Specific",
       "dynamic": "Dynamic",
-      "selectTimePlaceholder": "Vælg en tid"
+      "selectTimePlaceholder": "Vælg en tid",
+      "eventTypeLabel": "Wait for",
+      "eventTagApplied": "A tag is applied",
+      "eventCustomFieldChanged": "A custom field changes",
+      "eventTagLabel": "Tag",
+      "eventCustomFieldLabel": "Custom field",
+      "eventTimeoutLabel": "Give up after",
+      "eventDetailTag": "Wait until tag",
+      "eventDetailCustomField": "Wait until field",
+      "eventDetailTimeout": "or after",
+      "eventStateEvent": "Event",
+      "eventStateTimeout": "Timeout"
     },
     "followUp": {
       "durationLabel": "Duration",

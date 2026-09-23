@@ -483,7 +483,8 @@
       "date": "תאריך",
       "specificDate": "תאריך מסוים",
       "specificDateValue": "{date}",
-      "random": "אקראי"
+      "random": "אקראי",
+      "event": "Event"
     },
     "formatTimezone": {
       "timezone": "אזור הזמן של החשבון",
@@ -531,7 +532,18 @@
       "unitLabel": "יחידה",
       "specific": "מסוים",
       "dynamic": "דינמי",
-      "selectTimePlaceholder": "בחירת שעה"
+      "selectTimePlaceholder": "בחירת שעה",
+      "eventTypeLabel": "Wait for",
+      "eventTagApplied": "A tag is applied",
+      "eventCustomFieldChanged": "A custom field changes",
+      "eventTagLabel": "Tag",
+      "eventCustomFieldLabel": "Custom field",
+      "eventTimeoutLabel": "Give up after",
+      "eventDetailTag": "Wait until tag",
+      "eventDetailCustomField": "Wait until field",
+      "eventDetailTimeout": "or after",
+      "eventStateEvent": "Event",
+      "eventStateTimeout": "Timeout"
     },
     "followUp": {
       "durationLabel": "משך",

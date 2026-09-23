@@ -56,6 +56,10 @@ export const contactOnSmartDelayModel = pgTable(
     nodeId: text(),
     stepId: text(),
     metadata: jsonb().$type<Record<string, unknown> | null>(),
+    // waitForEvent only: the node the EVENT edge leads to (nodeId keeps the
+    // timeout edge's target) and the event the row waits for.
+    eventNodeId: text(),
+    eventSpec: jsonb().$type<Record<string, unknown> | null>(),
     type: contactOnSmartDelayType().notNull(),
     createdAt: timestamp(timestampConfig).defaultNow().notNull(),
     triggerAt: timestamp(timestampConfig).notNull(),
@@ -77,6 +81,16 @@ export const contactOnSmartDelayModel = pgTable(
       "btree",
       table.status,
       table.triggerAt,
+    ),
+    // waitForEvent lookup on an incoming tag / custom-field event.
+    index(
+      "ContactOnSmartDelay_workspaceId_type_status_contactInboxId_idx",
+    ).using(
+      "btree",
+      table.workspaceId,
+      table.type,
+      table.status,
+      table.contactInboxId,
     ),
     index("ContactOnSmartDelay_conversationId_idx").using(
       "btree",

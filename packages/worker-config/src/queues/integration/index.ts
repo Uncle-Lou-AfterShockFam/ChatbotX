@@ -41,6 +41,7 @@ export const IntegrationJobAction = {
   runChallenge: "runChallenge",
   resumeWait: "resumeWait",
   resumeFollowUp: "resumeFollowUp",
+  resumeWaitForEvent: "resumeWaitForEvent",
   blockContact: "blockContact",
   unblockContact: "unblockContact",
   assignConversation: "assignConversation",
@@ -344,6 +345,25 @@ export type IntegrationJobResumeFollowUp = {
 export type IntegrationJobResumeWait = {
   type: typeof IntegrationJobAction.resumeWait
   data: { smartDelayId: string }
+}
+
+/**
+ * A `waitForEvent` smart delay wakes up two ways: its timeout job (`timeout`,
+ * one row) or a tag / custom-field event on the contact (`event`, every
+ * active row of that contact that waits for it).
+ */
+export type IntegrationJobResumeWaitForEvent = {
+  type: typeof IntegrationJobAction.resumeWaitForEvent
+  data:
+    | { reason: "timeout"; smartDelayId: string }
+    | {
+        reason: "event"
+        workspaceId: string
+        contactId: string
+        eventType: "tagApplied" | "customFieldChanged"
+        tagId?: string
+        customFieldId?: string
+      }
 }
 
 export type IntegrationJobCreateMessage = {
@@ -871,6 +891,7 @@ export type IntegrationJobData =
   | IntegrationJobRunRef
   | IntegrationJobRunChallenge
   | IntegrationJobResumeWait
+  | IntegrationJobResumeWaitForEvent
   | IntegrationJobResumeFollowUp
   | IntegrationJobCreateMessage
   | IntegrationJobProcessAutomatedResponse
