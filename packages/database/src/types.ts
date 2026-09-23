@@ -263,3 +263,7 @@ export type MediaLibraryFolderModel =
   typeof schema.mediaLibraryFolderModel.$inferSelect
 export type MediaLibraryFileModel =
   typeof schema.mediaLibraryFileModel.$inferSelect
+export type PipelineModel = typeof schema.pipelineModel.$inferSelect
+export type PipelineStageModel = typeof schema.pipelineStageModel.$inferSelect
+export type DealModel = typeof schema.dealModel.$inferSelect
+export type DealActivityModel = typeof schema.dealActivityModel.$inferSelect

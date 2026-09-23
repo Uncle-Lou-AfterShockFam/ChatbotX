@@ -12,5 +12,9 @@ export const companyRelations = defineRelationsPart(schema, (r) => ({
       from: r.companyModel.id,
       to: r.contactModel.companyId,
     }),
+    deals: r.many.dealModel({
+      from: r.companyModel.id,
+      to: r.dealModel.companyId,
+    }),
   },
 }))

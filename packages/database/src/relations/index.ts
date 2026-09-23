@@ -47,6 +47,7 @@ import { conversationParticipantRelations } from "./conversation-participant"
 import { couponRelations } from "./coupon"
 import { platformCredentialRelations } from "./credential"
 import { customFieldRelations } from "./custom-field"
+import { dealRelations } from "./deal"
 import { dynamicImageRelations } from "./dynamic-image"
 import { emailTopicRelations } from "./email-topic"
 import { auditLogRelations } from "./enterprise/audit-log"
@@ -115,6 +116,7 @@ import { metaCatalogRelations } from "./meta-catalog"
 import { minigameRelations } from "./minigame"
 import { minigameContactRelations } from "./minigame-contact"
 import { minigamePlayRelations } from "./minigame-play"
+import { pipelineRelations } from "./pipeline"
 import { productRelations } from "./product"
 import { productCategoryRelations } from "./product-category"
 import { questionnaireRelations } from "./questionnaire"
@@ -205,6 +207,8 @@ export const relations = {
   ...integrationZaloRelations,
   ...invitationRelations,
   ...companyRelations,
+  ...dealRelations,
+  ...pipelineRelations,
   ...emailTopicRelations,
   ...analyticsEmailTopicRelations,
   ...trackedLinkRelations,
