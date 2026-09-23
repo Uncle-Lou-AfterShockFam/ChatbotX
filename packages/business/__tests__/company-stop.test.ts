@@ -112,7 +112,6 @@ const { stopCompany, stopCompanyForContact } = await import(
 
 const WS = "ws-1"
 const COMPANY = "company-1"
-const NOT_FOUND = /not found/
 
 function companyRow(
   overrides: Partial<{ stoppedAt: Date | null; stopOnReply: boolean }> = {},
