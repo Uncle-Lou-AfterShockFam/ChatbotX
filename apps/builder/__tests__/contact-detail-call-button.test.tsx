@@ -113,6 +113,10 @@ vi.mock("@/features/contact-filter/lib/timezone", () => ({
   getBrowserTimezone: () => "UTC",
 }))
 
+vi.mock("@/features/companies/contact-company-field", () => ({
+  ContactCompanyField: () => null,
+}))
+
 vi.mock("@/features/custom-fields/contact-custom-field-manage", () => ({
   ContactCustomFieldManage: () => null,
 }))

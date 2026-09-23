@@ -11,9 +11,24 @@ const domainsField = z
 export const createCompanyRequest = z.object({
   name: z.string().trim().min(1).max(255).describe("Company name."),
   domains: domainsField.optional(),
-  website: z.string().trim().max(2048).nullish(),
-  phone: z.string().trim().max(64).nullish(),
-  notes: z.string().trim().max(10_000).nullish(),
+  website: z
+    .string()
+    .trim()
+    .max(2048)
+    .nullish()
+    .describe("Company website URL, informational only."),
+  phone: z
+    .string()
+    .trim()
+    .max(64)
+    .nullish()
+    .describe("Company switchboard phone, informational only."),
+  notes: z
+    .string()
+    .trim()
+    .max(10_000)
+    .nullish()
+    .describe("Free-text notes shown on the company page."),
   stopOnReply: z
     .boolean()
     .optional()

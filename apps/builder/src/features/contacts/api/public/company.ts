@@ -53,7 +53,8 @@ export const contactsCompanyPublicRouter = {
       method: "DELETE",
       path: "/v1/contacts/{identifier}/company",
       summary: "Clear contact company",
-      description: "Unlinks the contact from its company.",
+      description:
+        "Removes the link between the contact and its company; the company itself is kept. Use `contacts.setCompany` to link a different one.",
       successStatus: 204,
       tags: ["Contacts"],
     })

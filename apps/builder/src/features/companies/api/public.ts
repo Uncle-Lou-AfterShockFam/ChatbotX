@@ -90,10 +90,11 @@ export const companiesPublicRouter = {
 
   update: workspaceTokenAuthAPI
     .route({
-      method: "PUT",
+      method: "PATCH",
       path: "/v1/companies/{id}",
       summary: "Update company",
-      description: "Changes a company's name, domains, details or stopOnReply.",
+      description:
+        "Merges the given fields into a company: name, email domains, website, phone, notes or stopOnReply. Omitted fields are left unchanged.",
       tags: ["Companies"],
     })
     .input(updateCompanyPublicRequest)
