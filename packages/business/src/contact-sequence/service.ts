@@ -39,7 +39,10 @@ type RemoveEnrollmentsResult = {
   dispatchesToRemove: DispatchToRemove[]
   removedEnrollments: RemovedEnrollment[]
 }
-type RemoveReason = "subscription_removed" | "unsubscribed_via_flow"
+type RemoveReason =
+  | "subscription_removed"
+  | "unsubscribed_via_flow"
+  | "company_stopped"
 
 type RemoveContactSequencesForContactsParams = {
   client?: DrizzleClient

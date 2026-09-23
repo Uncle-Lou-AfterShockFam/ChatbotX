@@ -300,6 +300,11 @@ const CONTACT_PROFILE_NAME_CAPABILITIES: Record<
   omnichannel: { inbound: null, onDemand: false },
 }
 
+vi.mock("@chatbotx.io/business/company-stop", () => ({
+  stopCompany: vi.fn(),
+  stopCompanyForContact: vi.fn(),
+}))
+
 vi.mock("@chatbotx.io/business", () => ({
   appointmentService: { cancelAppointmentByToken: vi.fn() },
   broadcastToWorkspaceParty: vi.fn(),

@@ -60,6 +60,11 @@ export const router = {
       default: m.dynamicImagesAPI,
     })),
   ),
+  companiesAPI: lazy(() =>
+    import("@/features/companies/api").then((m) => ({
+      default: m.companiesAPI,
+    })),
+  ),
   emailTopicsAPI: lazy(() =>
     import("@/features/email-topics/api").then((m) => ({
       default: m.emailTopicsAPI,

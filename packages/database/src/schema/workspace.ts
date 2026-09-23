@@ -68,6 +68,9 @@ export const workspaceModel = pgTable(
     // `workspaceService` in both CAPI send handlers; default off so existing
     // workspaces are unaffected until a user opts in.
     capiLimitedDataUse: boolean().default(false).notNull(),
+    // Name of the tag that stops a whole company when applied to one of its
+    // contacts; null = `DEFAULT_COMPANY_STOP_TAG_NAME` (partials/company.ts).
+    companyStopTagName: text(),
     // @deprecated legacy plaintext {{api_key}} source. Auth never reads this
     // column and nothing writes it anymore — WorkspaceApiToken (hash +
     // encrypted default token) is authoritative. Kept only so existing

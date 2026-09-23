@@ -14,6 +14,7 @@ import {
   sharedColumns,
   timestampConfig,
 } from "../partials/shared"
+import { companyModel } from "./company"
 import { workspaceModel } from "./workspace"
 
 export const gender = pgEnum(
@@ -55,6 +56,10 @@ export const contactModel = pgTable(
     subscribedAt: timestamp(timestampConfig),
     broadcastSubscribedAt: timestamp(timestampConfig),
     blockedAt: timestamp(timestampConfig),
+    companyId: bigintAsString().references(() => companyModel.id, {
+      onDelete: "set null",
+      onUpdate: "cascade",
+    }),
     workspaceId: bigintAsString()
       .notNull()
       .references(() => workspaceModel.id, {
@@ -76,6 +81,10 @@ export const contactModel = pgTable(
     // previously only the GIN trigram indexes existed, which are built for
     // substring/similarity search, not exact-match lookups.
     index("idx_contact_workspace_email").on(table.workspaceId, table.email),
+    index("idx_contact_workspace_company").on(
+      table.workspaceId,
+      table.companyId,
+    ),
     index("idx_contact_workspace_phone_number").on(
       table.workspaceId,
       table.phoneNumber,

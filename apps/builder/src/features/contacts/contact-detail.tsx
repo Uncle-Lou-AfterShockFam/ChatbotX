@@ -50,6 +50,7 @@ import { useWhatsappCallStarter } from "@/features/integration-whatsapp/calling/
 import { useOptionalWhatsappVoipCallContext } from "@/features/integration-whatsapp/calling/voip/whatsapp-voip-call-context"
 import { useWorkspaceId } from "@/hooks/routing"
 import { useChatStore } from "../chat/store/chat-store-provider"
+import { ContactCompanyField } from "../companies/contact-company-field"
 import { getBrowserTimezone } from "../contact-filter/lib/timezone"
 import type { ContactInboxResource } from "../contact-inboxes/schema/resource"
 import { ContactCustomFieldManage } from "../custom-fields/contact-custom-field-manage"
@@ -776,6 +777,11 @@ export const ContactDetail = ({
             </div>
           )
         })}
+        <ContactCompanyField
+          company={contact.company ?? null}
+          contactId={contact.id}
+          workspaceId={workspaceId}
+        />
         <ContactCustomFieldManage
           disabledIds={contactFields.map((field) => field.key)}
           onChooseCustomField={handleChooseCustomField}

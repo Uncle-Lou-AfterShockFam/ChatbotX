@@ -15,6 +15,7 @@ import {
   capabilitiesPublicRouter,
   schemasPublicRouter,
 } from "@/features/capabilities/api/public"
+import { companiesPublicRouter } from "@/features/companies/api/public"
 import { contactScanPublicRouter } from "@/features/contact-scan/api/public"
 import { contactsPublicRouter } from "@/features/contacts/api/public"
 import { conversationsPublicRouter } from "@/features/conversations/api/public"
@@ -77,6 +78,7 @@ export const publicRouter = {
   capabilities: capabilitiesPublicRouter,
   channels: channelsPublicRouter,
   contactScans: contactScanPublicRouter,
+  companies: companiesPublicRouter,
   contacts: contactsPublicRouter,
   conversations: conversationsPublicRouter,
   coupons: couponsPublicRouter,

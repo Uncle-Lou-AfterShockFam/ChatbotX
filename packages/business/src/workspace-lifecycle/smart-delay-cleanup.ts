@@ -1,6 +1,4 @@
-import { buildJobId } from "@chatbotx.io/flow-config"
-import { integrationQueue } from "@chatbotx.io/worker-config"
-import { logger } from "../logger"
+import { runSmartDelayCancelLoop } from "../smart-delay/cancel-loop"
 import { smartDelayService } from "../smart-delay/service"
 
 export const SMART_DELAY_CANCEL_BATCH_SIZE = 500
@@ -24,39 +22,15 @@ const MAX_CANCEL_BATCHES = 400
 export async function cancelSmartDelaysForWorkspace(props: {
   workspaceId: string
 }): Promise<number> {
-  let canceled = 0
-
-  for (let batch = 0; batch < MAX_CANCEL_BATCHES; batch += 1) {
-    const rows = await smartDelayService.cancelActiveForWorkspace({
-      limit: SMART_DELAY_CANCEL_BATCH_SIZE,
-      workspaceId: props.workspaceId,
-    })
-
-    if (rows.length === 0) {
-      break
-    }
-
-    canceled += rows.length
-
-    // Best-effort: the rows are already canceled, so a job that survives is
-    // inert. Never let a Redis hiccup abort the cancellation loop.
-    const removals = await Promise.allSettled(
-      rows.map((row) =>
-        integrationQueue.remove(buildJobId(row.id, row.triggerAt)),
-      ),
-    )
-    const failed = removals.filter((result) => result.status === "rejected")
-    if (failed.length > 0) {
-      logger.warn(
-        { failedCount: failed.length, workspaceId: props.workspaceId },
-        "workspace-freeze: failed to remove smart-delay jobs",
-      )
-    }
-
-    if (rows.length < SMART_DELAY_CANCEL_BATCH_SIZE) {
-      break
-    }
-  }
-
-  return canceled
+  return await runSmartDelayCancelLoop({
+    workspaceId: props.workspaceId,
+    batchSize: SMART_DELAY_CANCEL_BATCH_SIZE,
+    maxBatches: MAX_CANCEL_BATCHES,
+    logLabel: "workspace-freeze",
+    fetchBatch: (limit) =>
+      smartDelayService.cancelActiveForWorkspace({
+        limit,
+        workspaceId: props.workspaceId,
+      }),
+  })
 }

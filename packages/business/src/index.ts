@@ -17,6 +17,7 @@ export * from "./broadcast"
 export * from "./coexist"
 export * from "./coexist-import"
 export * from "./comment-automation/service"
+export * from "./company"
 export * from "./contact"
 // Same placement, same reason: it imports conversation/service.
 export * from "./contact/attach-inbox"

@@ -97,6 +97,7 @@ export const contactRepository = {
         contactNotes: true,
         contactsOnSequences: { with: { sequence: true } },
         conversation: true,
+        company: true,
       },
     })
   },
