@@ -12,6 +12,10 @@ export const contactRelations = defineRelationsPart(schema, (r) => ({
       from: r.contactModel.workspaceId,
       to: r.workspaceModel.id,
     }),
+    company: r.one.companyModel({
+      from: r.contactModel.companyId,
+      to: r.companyModel.id,
+    }),
     customFields: r.many.customFieldModel({
       from: r.contactModel.id.through(r.contactCustomFieldModel.contactId),
       to: r.customFieldModel.id.through(

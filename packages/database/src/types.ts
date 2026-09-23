@@ -34,6 +34,7 @@ export type TemplateInstallationModel =
   typeof schema.templateInstallationModel.$inferSelect
 export type TemplateInstalledResourceModel =
   typeof schema.templateInstalledResourceModel.$inferSelect
+export type CompanyModel = typeof schema.companyModel.$inferSelect
 export type EmailTopicModel = typeof schema.emailTopicModel.$inferSelect
 export type AnalyticsEmailTopicModel =
   typeof schema.analyticsEmailTopicModel.$inferSelect
