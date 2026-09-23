@@ -16,3 +16,11 @@ export const getCompanyRSC = async (input: {
   await assertCurrentUserCanAccessChatbot(input.workspaceId)
   return companyService.findOrFail(input)
 }
+
+export const listCompanyContactsRSC = async (input: {
+  workspaceId: string
+  companyId: string
+}) => {
+  await assertCurrentUserCanAccessChatbot(input.workspaceId)
+  return companyService.listContacts(input)
+}

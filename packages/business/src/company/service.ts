@@ -2,6 +2,7 @@ import {
   and,
   type DatabaseClient,
   db,
+  desc,
   eq,
   findOrFail,
   inArray,
@@ -385,6 +386,48 @@ class CompanyService extends BaseService {
         ),
       )
     return rows.map((row) => row.id)
+  }
+
+  /** The company's contacts, newest first, for the company page. */
+  async listContacts(props: {
+    workspaceId: string
+    companyId: string
+    limit?: number
+    tx?: DatabaseClient
+  }): Promise<
+    Pick<
+      typeof contactModel.$inferSelect,
+      | "id"
+      | "firstName"
+      | "lastName"
+      | "fullName"
+      | "email"
+      | "phoneNumber"
+      | "avatar"
+      | "createdAt"
+    >[]
+  > {
+    const { workspaceId, companyId, limit = 200, tx = db } = props
+    return await tx
+      .select({
+        id: contactModel.id,
+        firstName: contactModel.firstName,
+        lastName: contactModel.lastName,
+        fullName: contactModel.fullName,
+        email: contactModel.email,
+        phoneNumber: contactModel.phoneNumber,
+        avatar: contactModel.avatar,
+        createdAt: contactModel.createdAt,
+      })
+      .from(contactModel)
+      .where(
+        and(
+          eq(contactModel.workspaceId, workspaceId),
+          eq(contactModel.companyId, companyId),
+        ),
+      )
+      .orderBy(desc(contactModel.createdAt))
+      .limit(limit)
   }
 
   async countForWorkspace(props: {

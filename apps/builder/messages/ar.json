@@ -2388,6 +2388,9 @@
     },
     "lastCallTranscript": {
       "label": "آخر تفريغ مكالمة"
+    },
+    "company": {
+      "label": "Company"
     }
   },
   "flows": {
@@ -3628,6 +3631,40 @@
   },
   "emailTopics": {
     "title": "موضوعات البريد الإلكتروني"
+  },
+  "companies": {
+    "title": "Companies",
+    "one": "Company",
+    "details": "Details",
+    "status": "Status",
+    "active": "Active",
+    "stopped": "Stopped",
+    "stoppedAt": "Stopped at",
+    "stop": "Stop company",
+    "rerunStop": "Re-run stop",
+    "stopTitle": "Stop {name}",
+    "stopConfirm": "Every automation for every contact of this company stops: sequence enrolments are removed, waiting flows are canceled, unsent broadcast messages are skipped and each contact is tagged \"company-stopped\". This cannot be undone.",
+    "rerunStopConfirm": "This company is already stopped. Re-running applies the stop cascade again to every contact (useful after a contact was added or a previous run failed).",
+    "stoppedToast": "{name} stopped for {count, plural, one {1 contact} other {# contacts}}",
+    "alreadyStopped": "This company is already stopped.",
+    "stopSkipped": "Stop skipped: this company has \"stop on reply\" turned off.",
+    "stopOnReply": "Stop on reply",
+    "stopOnReplyDescription": "When on, an inbound reply from any contact of this company (or the stop tag) stops the whole company. The API and deals always stop it.",
+    "deleteConfirm": "Delete the selected companies? Their contacts are kept and unlinked.",
+    "noCompany": "No company",
+    "assign": "Set company",
+    "empty": "No companies yet",
+    "noContacts": "No contacts are linked to this company.",
+    "yes": "Yes",
+    "no": "No",
+    "fields": {
+      "domains": "Email domains",
+      "domainsHint": "Comma-separated, without @. An inbound email from one of these domains links the contact to this company automatically. Consumer mailbox domains are not allowed.",
+      "website": "Website",
+      "phone": "Phone",
+      "notes": "Notes",
+      "contactCount": "Contacts"
+    }
   },
   "tags": {
     "title": "الوسوم"

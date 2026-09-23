@@ -5,6 +5,7 @@ import {
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import z from "zod"
 import { inboxTeamResource } from "@/enterprise/features/inbox-teams/schema/resource"
+import { companyResource } from "@/features/companies/schema/resource"
 import { contactFilterCriteriaSchema } from "@/features/contact-filter/schema"
 import { contactInboxResource } from "@/features/contact-inboxes/schema/resource"
 import { contactOnSequenceWithRelations } from "@/features/contact-sequences/schema"
@@ -178,6 +179,7 @@ export type GetContactRequest = z.infer<typeof getContactRequest>
 
 export const getContactResponse = contactResource.and(
   z.object({
+    company: companyResource.nullable().optional(),
     tags: z.array(tagResource),
     customFields: z.array(publicContactCustomFieldResource),
     contactNotes: z.array(contactNoteResource),

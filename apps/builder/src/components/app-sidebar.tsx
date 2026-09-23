@@ -10,6 +10,7 @@ import {
 import {
   AtomIcon,
   BrainIcon,
+  Building2Icon,
   ChartPieIcon,
   ChevronsRight,
   LightbulbIcon,
@@ -111,6 +112,12 @@ export function AppSidebar({
         title: t("fields.contacts.label"),
         url: `/space/${workspaceId}/contacts`,
         icon: UsersIcon,
+        permission: PERMISSION_NAV.contacts,
+      },
+      {
+        title: t("companies.title"),
+        url: `/space/${workspaceId}/companies`,
+        icon: Building2Icon,
         permission: PERMISSION_NAV.contacts,
       },
       {
