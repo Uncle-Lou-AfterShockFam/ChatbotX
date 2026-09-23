@@ -6,6 +6,7 @@ import type {
   CallTranscribedMetadata,
   IncomingCallMetadata,
 } from "./base-emitter"
+import { CompanyStopEventEmitter } from "./company-stop/emitter"
 import { logger } from "./logger"
 import { SmartDelayEventEmitter } from "./smart-delay/emitter"
 import { TriggerEventEmitter } from "./trigger/emitter"
@@ -15,6 +16,7 @@ const EMITTER_REGISTRY = [
   TriggerEventEmitter,
   WebhookEventEmitter,
   SmartDelayEventEmitter,
+  CompanyStopEventEmitter,
 ] as const
 
 type EmitterEventMethod = {

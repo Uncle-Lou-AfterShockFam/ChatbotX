@@ -49,10 +49,16 @@ vi.mock("@chatbotx.io/analytics", () => ({
   ]),
 }))
 
+vi.mock("@chatbotx.io/business/company-stop", () => ({
+  stopCompanyForContact: vi.fn(),
+}))
+
 vi.mock("@chatbotx.io/business", () => ({
   contactInboxService: {
     recordSendFailure: mockRecordSendFailure,
   },
+  companyService: { countForWorkspace: vi.fn(), autoLinkContact: vi.fn() },
+  contactService: { findById: vi.fn() },
   adsConversionService: {
     enqueueContactRepliedEvaluation: mockEnqueueContactRepliedEvaluation,
     hasEnabledTriggerRule: mockHasEnabledTriggerRule,

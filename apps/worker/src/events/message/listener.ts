@@ -32,6 +32,7 @@ import type {
 import { EVENT_BUS_MESSAGE_ID } from "@chatbotx.io/event-bus"
 import { messageEventTypeSchema } from "@chatbotx.io/flow-config"
 import { logger } from "../../lib/logger"
+import { handleCompanyStopOnReply } from "./handlers/company-stop-on-reply"
 import { recordProviderErrorLog } from "./handlers/record-provider-error-log"
 
 /**
@@ -360,6 +361,10 @@ export const messageListeners: Partial<MessageEvenTypeMap> = {
     {
       name: "ads-conversion-contact-replied",
       handler: enqueueContactRepliedEvaluations,
+    },
+    {
+      name: "company-stop-on-reply",
+      handler: handleCompanyStopOnReply,
     },
   ],
 }

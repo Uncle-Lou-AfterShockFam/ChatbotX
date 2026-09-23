@@ -42,6 +42,7 @@ export const IntegrationJobAction = {
   resumeWait: "resumeWait",
   resumeFollowUp: "resumeFollowUp",
   resumeWaitForEvent: "resumeWaitForEvent",
+  companyStopOnTag: "companyStopOnTag",
   blockContact: "blockContact",
   unblockContact: "unblockContact",
   assignConversation: "assignConversation",
@@ -364,6 +365,15 @@ export type IntegrationJobResumeWaitForEvent = {
         tagId?: string
         customFieldId?: string
       }
+}
+
+/**
+ * Company stop rule: one job per `tagApplied`; the worker stops the contact's
+ * company when the tag is the workspace's stop tag.
+ */
+export type IntegrationJobCompanyStopOnTag = {
+  type: typeof IntegrationJobAction.companyStopOnTag
+  data: { workspaceId: string; contactId: string; tagId: string }
 }
 
 export type IntegrationJobCreateMessage = {
@@ -892,6 +902,7 @@ export type IntegrationJobData =
   | IntegrationJobRunChallenge
   | IntegrationJobResumeWait
   | IntegrationJobResumeWaitForEvent
+  | IntegrationJobCompanyStopOnTag
   | IntegrationJobResumeFollowUp
   | IntegrationJobCreateMessage
   | IntegrationJobProcessAutomatedResponse

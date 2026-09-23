@@ -44,6 +44,7 @@ import { coexistMessengerSync } from "./handlers/coexist/messenger-sync"
 import { coexistWhatsappBuffer } from "./handlers/coexist/whatsapp-buffer"
 import { coexistWhatsappFlush } from "./handlers/coexist/whatsapp-flush"
 import { processCommentAutomation } from "./handlers/comment-automation"
+import { runCompanyStopOnTag } from "./handlers/company-stop-on-tag"
 import { updateContactAvatar } from "./handlers/contact/update-avatar"
 import { runContactScan } from "./handlers/contact-scan/engine"
 import { agentMarkAsRead, contactMarkAsRead } from "./handlers/conversation"
@@ -384,6 +385,10 @@ async function startIntegrationWorker() {
               }
               case IntegrationJobAction.resumeWaitForEvent: {
                 await runWaitForEventResume(job.data.data, job)
+                return
+              }
+              case IntegrationJobAction.companyStopOnTag: {
+                await runCompanyStopOnTag(job.data.data)
                 return
               }
               case IntegrationJobAction.messageStatus: {
