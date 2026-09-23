@@ -65,6 +65,11 @@ export const router = {
       default: m.companiesAPI,
     })),
   ),
+  pipelinesAPI: lazy(() =>
+    import("@/features/pipelines/api").then((m) => ({
+      default: m.pipelinesAPI,
+    })),
+  ),
   emailTopicsAPI: lazy(() =>
     import("@/features/email-topics/api").then((m) => ({
       default: m.emailTopicsAPI,

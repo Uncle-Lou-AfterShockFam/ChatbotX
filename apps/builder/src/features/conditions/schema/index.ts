@@ -3,6 +3,13 @@ import { contactInfoUpdated } from "./contact-info-updated"
 import { customFieldValueChanged } from "./custom-field-value-changed"
 import { dateTimeBasedTrigger } from "./date-time-based-trigger"
 import {
+  ticketCreated,
+  ticketMovedToStage,
+  ticketPriorityChanged,
+  ticketStatusChanged,
+  ticketValueChanged,
+} from "./deal-conditions"
+import {
   archived,
   contactReferredANewContact,
   contactReferredExistingContact,
@@ -37,6 +44,11 @@ export const allConditions = {
   unsubscribedFromSequence,
   contactReferredANewContact,
   contactReferredExistingContact,
+  ticketCreated,
+  ticketMovedToStage,
+  ticketValueChanged,
+  ticketStatusChanged,
+  ticketPriorityChanged,
 }
 
 export const conditionSchema = z.union(Object.values(allConditions))

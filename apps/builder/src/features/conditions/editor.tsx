@@ -9,6 +9,10 @@ import { useTranslations } from "next-intl"
 import { useMemo } from "react"
 import { useFormContext } from "react-hook-form"
 import { getContactInfoTypeOptions } from "@/features/contact-filter/components/contact-filter-config"
+import {
+  usePipelineOptions,
+  useStageOptionsGroupedByPipeline,
+} from "@/features/pipelines/provider/pipeline-hook"
 import { useSequenceOptions } from "@/features/sequences/provider/sequence-hook"
 import { useTagSelectOptions } from "@/features/tags/provider/tag-hook"
 import { CustomFieldValueChanged } from "./custom-field-value-changed"
@@ -36,6 +40,8 @@ export const ConditionEditor = ({
       })),
     [sequences],
   )
+  const pipelineOptions = usePipelineOptions()
+  const stageOptions = useStageOptionsGroupedByPipeline()
   const form = useFormContext()
 
   switch (type) {
@@ -66,6 +72,30 @@ export const ConditionEditor = ({
           name={`${parentName}.sourceId`}
           options={sequenceOptions}
           placeholder={t("actions.pleaseSelect")}
+          popoverClassName="w-[var(--anchor-width)]"
+        />
+      )
+    // Deal conditions: pinned to a pipeline, or to the destination stage for a move.
+    case triggerEventTypes.enum.ticketCreated:
+    case triggerEventTypes.enum.ticketValueChanged:
+    case triggerEventTypes.enum.ticketStatusChanged:
+    case triggerEventTypes.enum.ticketPriorityChanged:
+      return (
+        <ComboboxField
+          emptyText={t("deals.noPipelines")}
+          name={`${parentName}.sourceId`}
+          options={pipelineOptions}
+          placeholder={t("deals.pipeline")}
+          popoverClassName="w-[var(--anchor-width)]"
+        />
+      )
+    case triggerEventTypes.enum.ticketMovedToStage:
+      return (
+        <ComboboxField
+          emptyText={t("deals.noPipelines")}
+          name={`${parentName}.sourceId`}
+          options={stageOptions}
+          placeholder={t("deals.stage")}
           popoverClassName="w-[var(--anchor-width)]"
         />
       )

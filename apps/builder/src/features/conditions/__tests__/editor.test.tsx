@@ -65,6 +65,23 @@ vi.mock("@/features/tags/provider/tag-hook", () => ({
   ],
 }))
 
+vi.mock("@/features/pipelines/provider/pipeline-hook", () => ({
+  usePipelineOptions: () => [
+    { label: "Sales", value: "pipe-1" },
+    { label: "Support", value: "pipe-2" },
+  ],
+  useStageOptionsGroupedByPipeline: () => [
+    {
+      label: "Sales",
+      value: "pipeline:pipe-1",
+      children: [
+        { label: "Sales / New", value: "stage-1" },
+        { label: "Sales / Won", value: "stage-2" },
+      ],
+    },
+  ],
+}))
+
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }))
@@ -246,5 +263,45 @@ describe("ConditionEditor", () => {
       { label: "fields.email.label", value: "email" },
     ])
     expect((select as HTMLSelectElement).value).toBe("phone")
+  })
+
+  test.each([
+    triggerEventTypes.enum.ticketCreated,
+    triggerEventTypes.enum.ticketValueChanged,
+    triggerEventTypes.enum.ticketStatusChanged,
+    triggerEventTypes.enum.ticketPriorityChanged,
+  ])("%s pins the condition to a pipeline through a combobox", (type) => {
+    render(<TestConditionEditor defaultSourceId="pipe-2" type={type} />)
+    const select = container.querySelector(
+      'select[name="conditions.0.sourceId"]',
+    ) as HTMLSelectElement
+    expect(select.getAttribute("data-component")).toBe("combobox")
+    expect(
+      Array.from(select.querySelectorAll("option")).map((option) =>
+        option.getAttribute("value"),
+      ),
+    ).toEqual(["pipe-1", "pipe-2"])
+    expect(select.value).toBe("pipe-2")
+  })
+
+  test("ticketMovedToStage pins the condition to a destination stage, never a pipeline", () => {
+    render(
+      <TestConditionEditor
+        defaultSourceId="stage-2"
+        type={triggerEventTypes.enum.ticketMovedToStage}
+      />,
+    )
+    const select = container.querySelector(
+      'select[name="conditions.0.sourceId"]',
+    ) as HTMLSelectElement
+    expect(select.getAttribute("data-component")).toBe("combobox")
+    // The field mock renders top-level options only: the stage picker passes
+    // pipeline GROUPS whose children are the stages, so a pipeline id is never
+    // a selectable value here.
+    expect(
+      Array.from(select.querySelectorAll("option")).map((option) =>
+        option.getAttribute("value"),
+      ),
+    ).toEqual(["pipeline:pipe-1"])
   })
 })

@@ -24,6 +24,7 @@ import { clearCustomFieldStep } from "./clear-custom-field"
 import { conditionStep } from "./condition"
 import { countCharactersStep } from "./count-characters"
 import { markCouponUsedStep, setUpCouponStep } from "./coupon"
+import { createDealStep } from "./create-deal"
 import type { StepDefinition } from "./definition"
 import { deleteContactStep } from "./delete-contact"
 import { disableBotStep } from "./disable-bot"
@@ -48,6 +49,7 @@ import { mailerLiteAddSubscriberStep } from "./mailer-lite-add-subscriber"
 import { makeStep } from "./make"
 import { markEmailVerifiedStep } from "./mark-email-verified"
 import { moosendCreateContactStep } from "./moosend-create-contact"
+import { moveDealStageStep } from "./move-deal-stage"
 import { openWebsiteStep } from "./open-website"
 import { optInEmailStep } from "./opt-in-email"
 import { optOutEmailStep } from "./opt-out-email"
@@ -66,6 +68,7 @@ import { sendVideoStep } from "./send-video"
 import sendWaTemplateMessageStep from "./send-wa-template-message"
 import { sendGridAddContactStep } from "./sendgrid-add-contact"
 import { setCustomFieldStep } from "./set-custom-field"
+import { setDealStatusStep } from "./set-deal-status"
 import { setMessengerPersonaStep } from "./set-messenger-persona"
 import { setMessengerUserPersistentMenuStep } from "./set-messenger-user-persistent-menu"
 import { splitTrafficStep } from "./split-traffic"
@@ -162,6 +165,9 @@ export const allSteps: Record<StepType, StepDefinition<any> | undefined> = {
   [stepTypes.enum.unsubscribeBroadcast]: unsubscribeBroadcastStep,
   [stepTypes.enum.subscribeSequence]: subscribeSequenceStep,
   [stepTypes.enum.unsubscribeSequence]: unsubscribeSequenceStep,
+  [stepTypes.enum.createDeal]: createDealStep,
+  [stepTypes.enum.moveDealStage]: moveDealStageStep,
+  [stepTypes.enum.setDealStatus]: setDealStatusStep,
   [stepTypes.enum.chooseChannel]: chooseChannelStep,
   [stepTypes.enum.appointmentScheduling]: appointmentSchedulingStep,
   [stepTypes.enum.questionnaires]: questionnairesStep,

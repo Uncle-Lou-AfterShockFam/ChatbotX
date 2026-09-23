@@ -140,7 +140,11 @@
       "importStarted": "Fluxul se importă. Verifică istoricul importurilor pentru rezultate.",
       "importJsonOnly": "Doar fișiere JSON",
       "whatsappCallButton": "Sună pe WhatsApp",
-      "metaConversions": "Meta Conversions API"
+      "metaConversions": "Meta Conversions API",
+      "dealActions": "Deal Actions",
+      "createDeal": "Create Deal",
+      "moveDealStage": "Move Deal to Stage",
+      "setDealStatus": "Mark Deal Won / Lost"
     },
     "splitTraffic": {
       "balanceHint": "Suma totală trebuie să fie egală cu 100%.",
@@ -4385,11 +4389,11 @@
       "incomingCall": "Apel primit",
       "missedAudioCall": "Apel audio pierdut",
       "callEnded": "Apel încheiat",
-      "ticketCreated": "Tichet creat",
-      "ticketMovedToStage": "Tichet mutat în etapă",
-      "ticketValueChanged": "Valoare tichet schimbată",
-      "ticketStatusChanged": "Status tichet schimbat",
-      "ticketPriorityChanged": "Prioritate tichet schimbată",
+      "ticketCreated": "Deal Created",
+      "ticketMovedToStage": "Deal Moved To Stage",
+      "ticketValueChanged": "Deal Value Changed",
+      "ticketStatusChanged": "Deal Status Changed",
+      "ticketPriorityChanged": "Deal Priority Changed",
       "subscribedToSequence": "Abonat la secvență",
       "unsubscribedFromSequence": "Dezabonat de la secvență",
       "WhatsappShoppingCartSent": "Coș de cumpărături WhatsApp trimis",
@@ -6693,5 +6697,43 @@
   },
   "accountFields": {
     "title": "Câmpurile botului"
+  },
+  "deals": {
+    "title": "Deals",
+    "one": "Deal",
+    "pipeline": "Pipeline",
+    "pipelines": "Pipelines",
+    "stage": "Stage",
+    "stages": "Stages",
+    "noPipelines": "No pipelines yet. Create one under Settings > Pipelines.",
+    "pickPipelineFirst": "Pick a pipeline first.",
+    "firstStage": "First stage of the pipeline",
+    "titleHint": "Variables like {{contact.full_name}} are replaced per contact. Empty = \"Deal for <contact>\".",
+    "valueHint": "A number, or a variable that resolves to one (e.g. a custom field). Empty = no value.",
+    "skipIfOpenDealExists": "Skip if an open deal exists",
+    "skipIfOpenDealExistsHint": "When on, a contact who already has an open deal in this pipeline gets no second one.",
+    "fields": {
+      "title": "Title",
+      "value": "Value",
+      "currency": "Currency",
+      "priority": "Priority",
+      "status": "Status",
+      "owner": "Owner",
+      "dueAt": "Due date",
+      "contact": "Contact",
+      "company": "Company",
+      "probability": "Probability (%)",
+      "color": "Color"
+    },
+    "priorities": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
+    },
+    "statuses": {
+      "open": "Open",
+      "won": "Won",
+      "lost": "Lost"
+    }
   }
 }

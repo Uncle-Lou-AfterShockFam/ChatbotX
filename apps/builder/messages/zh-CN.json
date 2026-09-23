@@ -3293,7 +3293,11 @@
       "importStarted": "流程正在导入中，请稍后查看导入记录以获取结果。",
       "importJsonOnly": "仅限 JSON 文件",
       "whatsappCallButton": "通过 WhatsApp 通话",
-      "metaConversions": "Meta Conversions API"
+      "metaConversions": "Meta Conversions API",
+      "dealActions": "Deal Actions",
+      "createDeal": "Create Deal",
+      "moveDealStage": "Move Deal to Stage",
+      "setDealStatus": "Mark Deal Won / Lost"
     },
     "additionalSteps": "附加步骤",
     "aiAnalyzeImage": {
@@ -5163,11 +5167,11 @@
       "subscribedToSequence": "订阅串行",
       "tagApplied": "标签已应用",
       "tagRemoved": "标签已删除",
-      "ticketCreated": "工单已创建",
-      "ticketMovedToStage": "门票已移至舞台",
-      "ticketPriorityChanged": "票证优先权已更改",
-      "ticketStatusChanged": "票证状态已更改",
-      "ticketValueChanged": "票价已更改",
+      "ticketCreated": "Deal Created",
+      "ticketMovedToStage": "Deal Moved To Stage",
+      "ticketPriorityChanged": "Deal Priority Changed",
+      "ticketStatusChanged": "Deal Status Changed",
+      "ticketValueChanged": "Deal Value Changed",
       "unsubscribedFromSequence": "取消订阅串行",
       "userAskedAboutProduct": "用户询问产品",
       "callRecorded": "通话已录音",
@@ -6693,5 +6697,43 @@
   },
   "accountFields": {
     "title": "机器人字段"
+  },
+  "deals": {
+    "title": "Deals",
+    "one": "Deal",
+    "pipeline": "Pipeline",
+    "pipelines": "Pipelines",
+    "stage": "Stage",
+    "stages": "Stages",
+    "noPipelines": "No pipelines yet. Create one under Settings > Pipelines.",
+    "pickPipelineFirst": "Pick a pipeline first.",
+    "firstStage": "First stage of the pipeline",
+    "titleHint": "Variables like {{contact.full_name}} are replaced per contact. Empty = \"Deal for <contact>\".",
+    "valueHint": "A number, or a variable that resolves to one (e.g. a custom field). Empty = no value.",
+    "skipIfOpenDealExists": "Skip if an open deal exists",
+    "skipIfOpenDealExistsHint": "When on, a contact who already has an open deal in this pipeline gets no second one.",
+    "fields": {
+      "title": "Title",
+      "value": "Value",
+      "currency": "Currency",
+      "priority": "Priority",
+      "status": "Status",
+      "owner": "Owner",
+      "dueAt": "Due date",
+      "contact": "Contact",
+      "company": "Company",
+      "probability": "Probability (%)",
+      "color": "Color"
+    },
+    "priorities": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
+    },
+    "statuses": {
+      "open": "Open",
+      "won": "Won",
+      "lost": "Lost"
+    }
   }
 }

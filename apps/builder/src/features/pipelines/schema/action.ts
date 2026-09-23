@@ -1,0 +1,99 @@
+import { pipelineStopCompanyOn } from "@chatbotx.io/database/partials"
+import { zodBigintAsString } from "@chatbotx.io/utils"
+import z from "zod"
+
+export const pipelineSettingsInput = z
+  .object({
+    stopCompanyOn: pipelineStopCompanyOn
+      .optional()
+      .describe(
+        "When a deal in this pipeline stops the contact's company: never, when a deal is created (default), or when a deal is won.",
+      ),
+    defaultCurrency: z
+      .string()
+      .trim()
+      .length(3)
+      .optional()
+      .describe(
+        "3-letter ISO currency code a new deal gets when none is given (default USD).",
+      ),
+  })
+  .strict()
+
+export const pipelineStageInput = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .describe("Stage name shown as the board column header."),
+  color: z
+    .string()
+    .trim()
+    .max(32)
+    .nullish()
+    .describe("Optional CSS color for the stage header, e.g. #22c55e."),
+  probability: z
+    .number()
+    .int()
+    .min(0)
+    .max(100)
+    .optional()
+    .describe("Informational win probability of deals in this stage, 0-100."),
+  isWon: z
+    .boolean()
+    .optional()
+    .describe("A deal moved onto this stage is marked won and closed."),
+  isLost: z
+    .boolean()
+    .optional()
+    .describe("A deal moved onto this stage is marked lost and closed."),
+})
+export type PipelineStageInput = z.infer<typeof pipelineStageInput>
+
+export const createPipelineRequest = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .describe("Pipeline name, unique per workspace."),
+  settings: pipelineSettingsInput.optional(),
+  stages: z
+    .array(pipelineStageInput)
+    .min(1)
+    .max(30)
+    .optional()
+    .describe("Initial stages in order; omitted = New, Qualified, Won, Lost."),
+})
+export type CreatePipelineRequest = z.infer<typeof createPipelineRequest>
+
+export const updatePipelineRequest = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .optional()
+    .describe("New pipeline name, unique per workspace."),
+  settings: pipelineSettingsInput.optional(),
+})
+export type UpdatePipelineRequest = z.infer<typeof updatePipelineRequest>
+
+export const upsertStageRequest = pipelineStageInput.extend({
+  stageId: zodBigintAsString().nullish(),
+})
+export type UpsertStageRequest = z.infer<typeof upsertStageRequest>
+
+export const reorderStagesRequest = z.object({
+  stageIds: z.array(zodBigintAsString()).min(1).max(30),
+})
+
+export const removeStageRequest = z.object({
+  stageId: zodBigintAsString(),
+  moveDealsTo: zodBigintAsString().nullish(),
+})
+
+export const deletePipelineRequest = z.object({
+  force: z.boolean().optional(),
+})

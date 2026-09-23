@@ -158,46 +158,46 @@ export function AddCondition({
         ],
       },
 
-      // {
-      //   label: t("fields.pipelines.label"),
-      //   children: [
-      //     {
-      //       label: t("trigger.conditions.ticketCreated"),
-      //       value: triggerEventTypes.enum.ticketCreated,
-      //       defaultFn: () => ({
-      //         type: triggerEventTypes.enum.ticketCreated,
-      //       }),
-      //     },
-      //     {
-      //       label: t("trigger.conditions.ticketMovedToStage"),
-      //       value: triggerEventTypes.enum.ticketMovedToStage,
-      //       defaultFn: () => ({
-      //         type: triggerEventTypes.enum.ticketMovedToStage,
-      //       }),
-      //     },
-      //     {
-      //       label: t("trigger.conditions.ticketValueChanged"),
-      //       value: triggerEventTypes.enum.ticketValueChanged,
-      //       defaultFn: () => ({
-      //         type: triggerEventTypes.enum.ticketValueChanged,
-      //       }),
-      //     },
-      //     {
-      //       label: t("trigger.conditions.ticketStatusChanged"),
-      //       value: triggerEventTypes.enum.ticketStatusChanged,
-      //       defaultFn: () => ({
-      //         type: triggerEventTypes.enum.ticketStatusChanged,
-      //       }),
-      //     },
-      //     {
-      //       label: t("trigger.conditions.ticketPriorityChanged"),
-      //       value: triggerEventTypes.enum.ticketPriorityChanged,
-      //       defaultFn: () => ({
-      //         type: triggerEventTypes.enum.ticketPriorityChanged,
-      //       }),
-      //     },
-      //   ],
-      // },
+      {
+        label: t("fields.pipelines.label"),
+        children: [
+          {
+            label: t("trigger.conditions.ticketCreated"),
+            value: triggerEventTypes.enum.ticketCreated,
+            defaultFn: createDefaultFnWithSourceId(
+              triggerEventTypes.enum.ticketCreated,
+            ),
+          },
+          {
+            label: t("trigger.conditions.ticketMovedToStage"),
+            value: triggerEventTypes.enum.ticketMovedToStage,
+            defaultFn: createDefaultFnWithSourceId(
+              triggerEventTypes.enum.ticketMovedToStage,
+            ),
+          },
+          {
+            label: t("trigger.conditions.ticketValueChanged"),
+            value: triggerEventTypes.enum.ticketValueChanged,
+            defaultFn: createDefaultFnWithSourceId(
+              triggerEventTypes.enum.ticketValueChanged,
+            ),
+          },
+          {
+            label: t("trigger.conditions.ticketStatusChanged"),
+            value: triggerEventTypes.enum.ticketStatusChanged,
+            defaultFn: createDefaultFnWithSourceId(
+              triggerEventTypes.enum.ticketStatusChanged,
+            ),
+          },
+          {
+            label: t("trigger.conditions.ticketPriorityChanged"),
+            value: triggerEventTypes.enum.ticketPriorityChanged,
+            defaultFn: createDefaultFnWithSourceId(
+              triggerEventTypes.enum.ticketPriorityChanged,
+            ),
+          },
+        ],
+      },
 
       {
         label: t("fields.sequences.label"),

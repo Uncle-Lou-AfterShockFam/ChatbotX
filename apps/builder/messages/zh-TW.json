@@ -2709,7 +2709,11 @@
       "importStarted": "流程匯入中，請稍後查看匯入紀錄以取得結果。",
       "importJsonOnly": "僅限 JSON 檔案",
       "whatsappCallButton": "透過 WhatsApp 通話",
-      "metaConversions": "Meta Conversions API"
+      "metaConversions": "Meta Conversions API",
+      "dealActions": "Deal Actions",
+      "createDeal": "Create Deal",
+      "moveDealStage": "Move Deal to Stage",
+      "setDealStatus": "Mark Deal Won / Lost"
     },
     "splitTraffic": {
       "balanceHint": "總和必須等於 100%。",
@@ -4418,11 +4422,11 @@
       "incomingCall": "來電",
       "missedAudioCall": "錯過的音訊通話",
       "callEnded": "通話結束",
-      "ticketCreated": "工單已建立",
-      "ticketMovedToStage": "門票已移至舞台",
-      "ticketValueChanged": "票價已更改",
-      "ticketStatusChanged": "票證狀態已更改",
-      "ticketPriorityChanged": "票證優先權已更改",
+      "ticketCreated": "Deal Created",
+      "ticketMovedToStage": "Deal Moved To Stage",
+      "ticketValueChanged": "Deal Value Changed",
+      "ticketStatusChanged": "Deal Status Changed",
+      "ticketPriorityChanged": "Deal Priority Changed",
       "subscribedToSequence": "訂閱序列",
       "unsubscribedFromSequence": "取消訂閱序列",
       "WhatsappShoppingCartSent": "Whatsapp 購物車已傳送",
@@ -6693,5 +6697,43 @@
   },
   "accountFields": {
     "title": "機器人欄位"
+  },
+  "deals": {
+    "title": "Deals",
+    "one": "Deal",
+    "pipeline": "Pipeline",
+    "pipelines": "Pipelines",
+    "stage": "Stage",
+    "stages": "Stages",
+    "noPipelines": "No pipelines yet. Create one under Settings > Pipelines.",
+    "pickPipelineFirst": "Pick a pipeline first.",
+    "firstStage": "First stage of the pipeline",
+    "titleHint": "Variables like {{contact.full_name}} are replaced per contact. Empty = \"Deal for <contact>\".",
+    "valueHint": "A number, or a variable that resolves to one (e.g. a custom field). Empty = no value.",
+    "skipIfOpenDealExists": "Skip if an open deal exists",
+    "skipIfOpenDealExistsHint": "When on, a contact who already has an open deal in this pipeline gets no second one.",
+    "fields": {
+      "title": "Title",
+      "value": "Value",
+      "currency": "Currency",
+      "priority": "Priority",
+      "status": "Status",
+      "owner": "Owner",
+      "dueAt": "Due date",
+      "contact": "Contact",
+      "company": "Company",
+      "probability": "Probability (%)",
+      "color": "Color"
+    },
+    "priorities": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
+    },
+    "statuses": {
+      "open": "Open",
+      "won": "Won",
+      "lost": "Lost"
+    }
   }
 }
