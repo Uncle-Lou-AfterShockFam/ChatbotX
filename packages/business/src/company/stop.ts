@@ -14,6 +14,10 @@
 import { and, db, eq } from "@chatbotx.io/database/client"
 import { COMPANY_STOPPED_TAG_NAME } from "@chatbotx.io/database/partials"
 import { companyModel, contactModel } from "@chatbotx.io/database/schema"
+// Registers the audit recorder as a side effect: the stop cascade runs in
+// worker processes (events / integration) that never import the audit
+// subpath themselves, and an unregistered recorder logs a warning per stop.
+import "../audit/service"
 import { dispatchAuditRecordSafely } from "../audit/dispatcher"
 import { broadcastService } from "../broadcast/service"
 import { contactSequenceService } from "../contact-sequence/service"
