@@ -438,6 +438,53 @@ class SmartDelayService extends BaseService {
       })
   }
 
+  /**
+   * Company stop: cancel every still-firable row of the given contacts. Same
+   * shape as `cancelActiveForWorkspace` (bounded, SKIP LOCKED, the ROW is what
+   * stops the work); the row stores a contactInbox, so the contact filter goes
+   * through `ContactInbox` exactly as `findActiveWaitForEvent` does.
+   */
+  async cancelActiveForContacts(props: {
+    tx?: DatabaseClient
+    workspaceId: string
+    contactIds: string[]
+    limit: number
+  }): Promise<Pick<SmartDelayRow, "id" | "triggerAt">[]> {
+    const { tx = db, workspaceId, contactIds, limit } = props
+    if (contactIds.length === 0) {
+      return []
+    }
+    const activeRowIds = tx
+      .select({ id: contactOnSmartDelayModel.id })
+      .from(contactOnSmartDelayModel)
+      .innerJoin(
+        contactInboxModel,
+        eq(contactInboxModel.id, contactOnSmartDelayModel.contactInboxId),
+      )
+      .where(
+        and(
+          eq(contactOnSmartDelayModel.workspaceId, workspaceId),
+          inArray(contactOnSmartDelayModel.status, [
+            smartDelayStatuses.enum.pending,
+            smartDelayStatuses.enum.scheduled,
+          ]),
+          inArray(contactInboxModel.contactId, contactIds),
+        ),
+      )
+      .orderBy(contactOnSmartDelayModel.triggerAt)
+      .limit(limit)
+      .for("update", { skipLocked: true, of: contactOnSmartDelayModel })
+
+    return await tx
+      .update(contactOnSmartDelayModel)
+      .set({ status: smartDelayStatuses.enum.canceled })
+      .where(inArray(contactOnSmartDelayModel.id, activeRowIds))
+      .returning({
+        id: contactOnSmartDelayModel.id,
+        triggerAt: contactOnSmartDelayModel.triggerAt,
+      })
+  }
+
   private async markStatus(props: {
     tx?: DatabaseClient
     id: string

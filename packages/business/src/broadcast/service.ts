@@ -2386,6 +2386,50 @@ class BroadcastService extends BaseService {
     })) as BroadcastRecipientForSend[]
   }
 
+  /**
+   * Company stop: every unsent, not-yet-failed recipient row of the given
+   * contacts in a broadcast that can still send (`scheduled` or `sending`)
+   * is marked failed so `listPendingRecipients` skips it. Returns the count.
+   */
+  async markContactsFailedForContacts(input: {
+    workspaceId: string
+    contactIds: string[]
+    reason: string
+  }): Promise<number> {
+    if (input.contactIds.length === 0) {
+      return 0
+    }
+    const sendableBroadcastIds = db
+      .select({ id: broadcastModel.id })
+      .from(broadcastModel)
+      .where(
+        and(
+          eq(broadcastModel.workspaceId, input.workspaceId),
+          inArray(broadcastModel.status, [
+            broadcastStatuses.enum.scheduled,
+            broadcastStatuses.enum.sending,
+          ]),
+          isNull(broadcastModel.deletedAt),
+        ),
+      )
+    const rows = await db
+      .update(contactsOnBroadcastsModel)
+      .set({
+        failedAt: sql`CURRENT_TIMESTAMP`,
+        errorContent: input.reason,
+      })
+      .where(
+        and(
+          inArray(contactsOnBroadcastsModel.contactId, input.contactIds),
+          eq(contactsOnBroadcastsModel.sent, false),
+          isNull(contactsOnBroadcastsModel.failedAt),
+          inArray(contactsOnBroadcastsModel.broadcastId, sendableBroadcastIds),
+        ),
+      )
+      .returning({ contactId: contactsOnBroadcastsModel.contactId })
+    return rows.length
+  }
+
   /** `process-broadcast-contacts.ts`: marks one recipient failed with a reason. */
   async markContactFailed(input: {
     broadcastId: string
