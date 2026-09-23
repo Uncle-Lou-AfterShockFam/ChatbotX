@@ -42,8 +42,17 @@ export function ContactCompanyField({
   const t = useTranslations()
   const router = useRouter()
   const [open, setOpen] = useState(false)
+  // The contact panel holds its contact in local state (contact-inbox-panel.tsx),
+  // which `router.refresh()` never touches, so the row shows what was just
+  // saved from the chosen option and re-syncs whenever the prop changes.
+  const [current, setCurrent] = useState(company)
+  const [syncedFromId, setSyncedFromId] = useState(company?.id ?? null)
+  if ((company?.id ?? null) !== syncedFromId) {
+    setSyncedFromId(company?.id ?? null)
+    setCurrent(company)
+  }
   const form = useForm<{ companyId: string }>({
-    defaultValues: { companyId: company?.id ?? "" },
+    defaultValues: { companyId: current?.id ?? "" },
   })
 
   const options = useCompanySelectOptions({ enabled: open })
@@ -51,7 +60,19 @@ export function ContactCompanyField({
   const { execute: save, isPending: saving } = useAction(
     setContactCompanyAction.bind(null, workspaceId),
     {
-      onSuccess: () => {
+      onSuccess: ({ input }) => {
+        const chosen = options.find(
+          (option) => option.value === input.companyId,
+        )
+        setCurrent(
+          input.companyId && chosen
+            ? {
+                id: chosen.value,
+                name: chosen.label,
+                stoppedAt: chosen.stopped ? new Date() : null,
+              }
+            : null,
+        )
         toast.success(
           t("messages.updatedSuccess", { feature: t("companies.one") }),
         )
@@ -69,9 +90,9 @@ export function ContactCompanyField({
 
   useEffect(() => {
     if (open) {
-      form.reset({ companyId: company?.id ?? "" })
+      form.reset({ companyId: current?.id ?? "" })
     }
-  }, [open, company?.id, form])
+  }, [open, current?.id, form])
 
   return (
     <div className="flex items-center gap-2 py-1 text-xs">
@@ -79,13 +100,13 @@ export function ContactCompanyField({
       <span className="w-24 shrink-0 text-muted-foreground">
         {t("companies.one")}
       </span>
-      {company ? (
+      {current ? (
         <Link
           className="flex-1 truncate hover:underline"
-          href={`/space/${workspaceId}/companies/${company.id}`}
+          href={`/space/${workspaceId}/companies/${current.id}`}
         >
-          {company.name}
-          {company.stoppedAt ? ` (${t("companies.stopped")})` : ""}
+          {current.name}
+          {current.stoppedAt ? ` (${t("companies.stopped")})` : ""}
         </Link>
       ) : (
         <span className="flex-1 truncate text-muted-foreground">
