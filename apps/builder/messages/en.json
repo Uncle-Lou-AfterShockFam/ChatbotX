@@ -2770,7 +2770,8 @@
       "date": "Date",
       "specificDate": "Specific Date",
       "specificDateValue": "{date}",
-      "random": "Random"
+      "random": "Random",
+      "event": "Event"
     },
     "formatTimezone": {
       "timezone": "Account Timezone",
@@ -2818,7 +2819,18 @@
       "unitLabel": "Unit",
       "specific": "Specific",
       "dynamic": "Dynamic",
-      "selectTimePlaceholder": "Select a time"
+      "selectTimePlaceholder": "Select a time",
+      "eventTypeLabel": "Wait for",
+      "eventTagApplied": "A tag is applied",
+      "eventCustomFieldChanged": "A custom field changes",
+      "eventTagLabel": "Tag",
+      "eventCustomFieldLabel": "Custom field",
+      "eventTimeoutLabel": "Give up after",
+      "eventDetailTag": "Wait until tag",
+      "eventDetailCustomField": "Wait until field",
+      "eventDetailTimeout": "or after",
+      "eventStateEvent": "Event",
+      "eventStateTimeout": "Timeout"
     },
     "followUp": {
       "durationLabel": "Duration",

@@ -12,6 +12,7 @@ import {
   ENQUEUE_DELAY_MS,
   type MetadataPayload,
   metadataSchema,
+  type WaitForEventSpec,
 } from "@chatbotx.io/flow-config"
 import { createId } from "@chatbotx.io/utils"
 import {
@@ -76,6 +77,14 @@ const buildResumeFollowUpJob = (row: SmartDelayRow): SmartDelayJobSpec => ({
   },
 })
 
+const buildResumeWaitForEventJob = (row: SmartDelayRow): SmartDelayJobSpec => ({
+  name: IntegrationJobAction.resumeWaitForEvent,
+  data: {
+    type: IntegrationJobAction.resumeWaitForEvent,
+    data: { reason: "timeout", smartDelayId: row.id },
+  },
+})
+
 const buildResumeWaitJob = (row: SmartDelayRow): SmartDelayJobSpec => ({
   name: IntegrationJobAction.resumeWait,
   data: {
@@ -90,6 +99,7 @@ export const smartDelayResumeJobFactories: Record<
 > = {
   [smartDelayTypes.enum.waitNode]: buildResumeWaitJob,
   [smartDelayTypes.enum.followUp]: buildResumeFollowUpJob,
+  [smartDelayTypes.enum.waitForEvent]: buildResumeWaitForEventJob,
 }
 
 const smartDelayPersistenceHandlers: Record<
@@ -102,6 +112,10 @@ const smartDelayPersistenceHandlers: Record<
   },
   [smartDelayTypes.enum.followUp]: async (data) =>
     await smartDelayService.upsertFollowUp({ data }),
+  [smartDelayTypes.enum.waitForEvent]: async (data) => {
+    await smartDelayService.create({ data })
+    return data
+  },
 }
 
 export async function scheduleSmartDelayResume(props: {
@@ -112,11 +126,15 @@ export async function scheduleSmartDelayResume(props: {
   flowVersionId: string | null
   conversationId: string
   contactInboxId: string
-  connectedNodeId: string
+  /** The node the timer resumes at; null = a waitForEvent whose timeout edge is unconnected (the scanner completes it silently). */
+  connectedNodeId: string | null
   stepId: string
   metadata?: MetadataPayload
   sendFrom?: "inbox"
   appointmentId?: string
+  /** waitForEvent only. */
+  eventNodeId?: string | null
+  eventSpec?: WaitForEventSpec | null
 }): Promise<void> {
   const rowId = createId()
   const row: SmartDelayRow = {
@@ -130,6 +148,8 @@ export async function scheduleSmartDelayResume(props: {
     nodeId: props.connectedNodeId,
     stepId: props.stepId,
     metadata: props.metadata ?? null,
+    eventNodeId: props.eventNodeId ?? null,
+    eventSpec: props.eventSpec ?? null,
     type: props.type,
     createdAt: new Date(),
     triggerAt: props.triggerAt,

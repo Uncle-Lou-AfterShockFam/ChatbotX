@@ -2582,7 +2582,8 @@
       "date": "Fecha",
       "specificDate": "Specific Fecha",
       "specificDateValue": "{date}",
-      "random": "Aleatorio"
+      "random": "Aleatorio",
+      "event": "Event"
     },
     "formatTimezone": {
       "timezone": "Cuenta Tiempozone",
@@ -2630,7 +2631,18 @@
       "unitLabel": "Unidad",
       "specific": "Específico",
       "dynamic": "Dinámico",
-      "selectTimePlaceholder": "Seleccionar un tiempo"
+      "selectTimePlaceholder": "Seleccionar un tiempo",
+      "eventTypeLabel": "Wait for",
+      "eventTagApplied": "A tag is applied",
+      "eventCustomFieldChanged": "A custom field changes",
+      "eventTagLabel": "Tag",
+      "eventCustomFieldLabel": "Custom field",
+      "eventTimeoutLabel": "Give up after",
+      "eventDetailTag": "Wait until tag",
+      "eventDetailCustomField": "Wait until field",
+      "eventDetailTimeout": "or after",
+      "eventStateEvent": "Event",
+      "eventStateTimeout": "Timeout"
     },
     "followUp": {
       "durationLabel": "Duración",

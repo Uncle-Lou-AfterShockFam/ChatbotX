@@ -2440,7 +2440,8 @@
       "date": "日付",
       "specificDate": "指定日",
       "specificDateValue": "{date}",
-      "random": "ランダム"
+      "random": "ランダム",
+      "event": "Event"
     },
     "formatTimezone": {
       "timezone": "アカウントのタイムゾーン",
@@ -2488,7 +2489,18 @@
       "unitLabel": "単位",
       "specific": "指定",
       "dynamic": "動的",
-      "selectTimePlaceholder": "時刻を選択"
+      "selectTimePlaceholder": "時刻を選択",
+      "eventTypeLabel": "Wait for",
+      "eventTagApplied": "A tag is applied",
+      "eventCustomFieldChanged": "A custom field changes",
+      "eventTagLabel": "Tag",
+      "eventCustomFieldLabel": "Custom field",
+      "eventTimeoutLabel": "Give up after",
+      "eventDetailTag": "Wait until tag",
+      "eventDetailCustomField": "Wait until field",
+      "eventDetailTimeout": "or after",
+      "eventStateEvent": "Event",
+      "eventStateTimeout": "Timeout"
     },
     "followUp": {
       "durationLabel": "期間",

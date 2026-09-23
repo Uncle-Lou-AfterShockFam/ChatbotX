@@ -69,6 +69,7 @@ import {
 import { runRef } from "./handlers/ref"
 import { handleSendSequenceFlow } from "./handlers/sequence-flow"
 import { captureTemplateFlowResponse } from "./handlers/template-flow-response"
+import { runWaitForEventResume } from "./handlers/wait-for-event-resume"
 import { runWaitResume } from "./handlers/wait-resume"
 import { handleWhatsappCallEvent } from "./handlers/whatsapp-call"
 import { handleWhatsappCallNativeRecordingFetch } from "./handlers/whatsapp-call-native-recording"
@@ -379,6 +380,10 @@ async function startIntegrationWorker() {
               }
               case IntegrationJobAction.resumeFollowUp: {
                 await runFollowUpResume(job.data.data)
+                return
+              }
+              case IntegrationJobAction.resumeWaitForEvent: {
+                await runWaitForEventResume(job.data.data, job)
                 return
               }
               case IntegrationJobAction.messageStatus: {

@@ -2440,7 +2440,8 @@
       "date": "Tanggal",
       "specificDate": "Tanggal Tertentu",
       "specificDateValue": "{date}",
-      "random": "Acak"
+      "random": "Acak",
+      "event": "Event"
     },
     "formatTimezone": {
       "timezone": "Zona Waktu Akun",
@@ -2488,7 +2489,18 @@
       "unitLabel": "Satuan",
       "specific": "Tertentu",
       "dynamic": "Dinamis",
-      "selectTimePlaceholder": "Pilih waktu"
+      "selectTimePlaceholder": "Pilih waktu",
+      "eventTypeLabel": "Wait for",
+      "eventTagApplied": "A tag is applied",
+      "eventCustomFieldChanged": "A custom field changes",
+      "eventTagLabel": "Tag",
+      "eventCustomFieldLabel": "Custom field",
+      "eventTimeoutLabel": "Give up after",
+      "eventDetailTag": "Wait until tag",
+      "eventDetailCustomField": "Wait until field",
+      "eventDetailTimeout": "or after",
+      "eventStateEvent": "Event",
+      "eventStateTimeout": "Timeout"
     },
     "followUp": {
       "durationLabel": "Durasi",

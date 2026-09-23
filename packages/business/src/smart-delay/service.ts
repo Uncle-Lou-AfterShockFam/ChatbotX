@@ -16,7 +16,10 @@ import {
   smartDelayStatuses,
   smartDelayTypes,
 } from "@chatbotx.io/database/partials"
-import { contactOnSmartDelayModel } from "@chatbotx.io/database/schema"
+import {
+  contactInboxModel,
+  contactOnSmartDelayModel,
+} from "@chatbotx.io/database/schema"
 import { BaseService } from "../base.service"
 
 export type SmartDelayRow = Omit<
@@ -227,6 +230,65 @@ class SmartDelayService extends BaseService {
   }
 
   /**
+   * Every non-terminal `waitForEvent` row of a contact (the event carries a
+   * contactId; the row stores the contactInbox). The caller matches the spec.
+   */
+  async findActiveWaitForEvent(props: {
+    tx?: DatabaseClient
+    workspaceId: string
+    contactId: string
+  }): Promise<SmartDelayRow[]> {
+    const { tx = db, workspaceId, contactId } = props
+    const rows = await tx
+      .select({ row: contactOnSmartDelayModel })
+      .from(contactOnSmartDelayModel)
+      .innerJoin(
+        contactInboxModel,
+        eq(contactInboxModel.id, contactOnSmartDelayModel.contactInboxId),
+      )
+      .where(
+        and(
+          eq(contactOnSmartDelayModel.workspaceId, workspaceId),
+          eq(contactOnSmartDelayModel.type, smartDelayTypes.enum.waitForEvent),
+          inArray(contactOnSmartDelayModel.status, [
+            smartDelayStatuses.enum.pending,
+            smartDelayStatuses.enum.scheduled,
+          ]),
+          eq(contactInboxModel.contactId, contactId),
+        ),
+      )
+      .orderBy(contactOnSmartDelayModel.createdAt)
+    return rows.map(({ row }) => toSmartDelayRow(row))
+  }
+
+  /**
+   * CAS for the event path: a `waitForEvent` row more than five minutes from
+   * its timeout is still `pending` (no job yet), so unlike claimForRun this
+   * claims from pending OR scheduled. Exactly one of event / timeout wins.
+   */
+  async claimForEvent(props: {
+    tx?: DatabaseClient
+    id: string
+  }): Promise<boolean> {
+    const { tx = db, id } = props
+    const rows = await tx
+      .update(contactOnSmartDelayModel)
+      .set({ status: smartDelayStatuses.enum.completed })
+      .where(
+        and(
+          eq(contactOnSmartDelayModel.id, id),
+          eq(contactOnSmartDelayModel.type, smartDelayTypes.enum.waitForEvent),
+          inArray(contactOnSmartDelayModel.status, [
+            smartDelayStatuses.enum.pending,
+            smartDelayStatuses.enum.scheduled,
+          ]),
+        ),
+      )
+      .returning({ id: contactOnSmartDelayModel.id })
+    return rows.length > 0
+  }
+
+  /**
    * Re-open a wait row whose claimed resume job failed before completing the
    * flow. The compare-and-set prevents a stale retry from resurrecting a row
    * that a different terminal path has since changed.
@@ -234,11 +296,23 @@ class SmartDelayService extends BaseService {
   async requeueClaimedRun(props: {
     tx?: DatabaseClient
     id: string
+    /**
+     * waitForEvent, event path: the flow failed AFTER the event won. Re-point
+     * the row at the event edge and make it due now, so whichever recovery
+     * path picks it up (the retried event job, or the sweeper -> scanner ->
+     * timeout job) resumes on the edge that actually fired (skeptic HIGH).
+     */
+    resumeAt?: { nodeId: string; triggerAt: Date }
   }): Promise<boolean> {
-    const { tx = db, id } = props
+    const { tx = db, id, resumeAt } = props
     const rows = await tx
       .update(contactOnSmartDelayModel)
-      .set({ status: smartDelayStatuses.enum.scheduled })
+      .set({
+        status: smartDelayStatuses.enum.scheduled,
+        ...(resumeAt
+          ? { nodeId: resumeAt.nodeId, triggerAt: resumeAt.triggerAt }
+          : {}),
+      })
       .where(
         and(
           eq(contactOnSmartDelayModel.id, id),

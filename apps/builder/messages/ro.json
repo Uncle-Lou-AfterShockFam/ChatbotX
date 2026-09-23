@@ -191,7 +191,8 @@
       "date": "Dată",
       "specificDate": "Dată specifică",
       "specificDateValue": "{date}",
-      "random": "Aleatoriu"
+      "random": "Aleatoriu",
+      "event": "Event"
     },
     "formatTimezone": {
       "timezone": "Fusul orar al contului",
@@ -239,7 +240,18 @@
       "unitLabel": "Unitate",
       "specific": "Specifică",
       "dynamic": "Dinamică",
-      "selectTimePlaceholder": "Selectați o oră"
+      "selectTimePlaceholder": "Selectați o oră",
+      "eventTypeLabel": "Wait for",
+      "eventTagApplied": "A tag is applied",
+      "eventCustomFieldChanged": "A custom field changes",
+      "eventTagLabel": "Tag",
+      "eventCustomFieldLabel": "Custom field",
+      "eventTimeoutLabel": "Give up after",
+      "eventDetailTag": "Wait until tag",
+      "eventDetailCustomField": "Wait until field",
+      "eventDetailTimeout": "or after",
+      "eventStateEvent": "Event",
+      "eventStateTimeout": "Timeout"
     },
     "followUp": {
       "durationLabel": "Durată",

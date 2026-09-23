@@ -2440,7 +2440,8 @@
       "date": "Päivämäärä",
       "specificDate": "Tietty päivämäärä",
       "specificDateValue": "{date}",
-      "random": "Satunnainen"
+      "random": "Satunnainen",
+      "event": "Event"
     },
     "formatTimezone": {
       "timezone": "Tilin aikavyöhyke",
@@ -2488,7 +2489,18 @@
       "unitLabel": "Yksikkö",
       "specific": "Tietty",
       "dynamic": "Dynaaminen",
-      "selectTimePlaceholder": "Valitse aika"
+      "selectTimePlaceholder": "Valitse aika",
+      "eventTypeLabel": "Wait for",
+      "eventTagApplied": "A tag is applied",
+      "eventCustomFieldChanged": "A custom field changes",
+      "eventTagLabel": "Tag",
+      "eventCustomFieldLabel": "Custom field",
+      "eventTimeoutLabel": "Give up after",
+      "eventDetailTag": "Wait until tag",
+      "eventDetailCustomField": "Wait until field",
+      "eventDetailTimeout": "or after",
+      "eventStateEvent": "Event",
+      "eventStateTimeout": "Timeout"
     },
     "followUp": {
       "durationLabel": "Kesto",

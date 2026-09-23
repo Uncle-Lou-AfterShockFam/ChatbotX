@@ -9,8 +9,11 @@ import {
   type StartExternalFlowStepSchema,
   type StartExternalNodeStepSchema,
   type StepType,
+  stateTypes,
   stepTypes,
   type WaitStepSchema,
+  waitForEventSpecFromStep,
+  waitStepDelayTypes,
 } from "@chatbotx.io/flow-config"
 import { createId } from "@chatbotx.io/utils"
 import {
@@ -262,6 +265,44 @@ async function handleWait({
       errorMessage: "Unable to compute wait triggerAt",
       result: null,
     }
+  }
+
+  if (step.delayType === waitStepDelayTypes.enum.event) {
+    // Two exits: the event edge (success state) and the timeout edge (skip
+    // state). The row keeps the timeout target in nodeId (null = the wait just
+    // ends on timeout) and the event target beside it.
+    const eventState = step.states.find(
+      (state) => state.stateType === stateTypes.success,
+    )
+    const timeoutState = step.states.find(
+      (state) => state.stateType === stateTypes.skip,
+    )
+    const eventNodeId = eventState
+      ? seekConnectedNode(flowVersion, eventState.id)
+      : undefined
+    const timeoutNodeId = timeoutState
+      ? seekConnectedNode(flowVersion, timeoutState.id)
+      : undefined
+    if (!(eventNodeId || timeoutNodeId)) {
+      return { status: "skip", result: null }
+    }
+    await scheduleSmartDelayResume({
+      type: smartDelayTypes.enum.waitForEvent,
+      triggerAt,
+      workspaceId: conversation.workspaceId,
+      flowId: flowVersion.flowId,
+      flowVersionId: useLatestFlowVersion ? null : flowVersion.id,
+      conversationId: conversation.id,
+      contactInboxId,
+      connectedNodeId: timeoutNodeId ?? null,
+      eventNodeId: eventNodeId ?? null,
+      eventSpec: waitForEventSpecFromStep(step),
+      stepId: step.id,
+      metadata,
+      sendFrom,
+      appointmentId,
+    })
+    return { status: "wait", result: null }
   }
 
   const connectedNodeId = seekConnectedNode(flowVersion, targetId)

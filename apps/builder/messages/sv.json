@@ -3295,7 +3295,8 @@
       "durationValue": "{duration}",
       "random": "Slumpmässigt",
       "specificDate": "Specifikt datum",
-      "specificDateValue": "{date}"
+      "specificDateValue": "{date}",
+      "event": "Event"
     },
     "fields": {
       "filterModeAnd": "OCH",
@@ -3363,7 +3364,18 @@
       "selectTimePlaceholder": "Välj en tid",
       "setInterval": "Ange intervall",
       "specific": "Specifik",
-      "unitLabel": "Enhet"
+      "unitLabel": "Enhet",
+      "eventTypeLabel": "Wait for",
+      "eventTagApplied": "A tag is applied",
+      "eventCustomFieldChanged": "A custom field changes",
+      "eventTagLabel": "Tag",
+      "eventCustomFieldLabel": "Custom field",
+      "eventTimeoutLabel": "Give up after",
+      "eventDetailTag": "Wait until tag",
+      "eventDetailCustomField": "Wait until field",
+      "eventDetailTimeout": "or after",
+      "eventStateEvent": "Event",
+      "eventStateTimeout": "Timeout"
     },
     "whatsappFlow": {
       "addCustomField": "Lägg till ny",

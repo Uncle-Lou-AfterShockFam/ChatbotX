@@ -2582,7 +2582,8 @@
       "date": "Tarih",
       "specificDate": "Belirli Tarih",
       "specificDateValue": "{date}",
-      "random": "Rastgele"
+      "random": "Rastgele",
+      "event": "Event"
     },
     "formatTimezone": {
       "timezone": "Hesap Saat Dilimi",
@@ -2630,7 +2631,18 @@
       "unitLabel": "Birim",
       "specific": "Belirli",
       "dynamic": "Dinamik",
-      "selectTimePlaceholder": "Bir saat seçin"
+      "selectTimePlaceholder": "Bir saat seçin",
+      "eventTypeLabel": "Wait for",
+      "eventTagApplied": "A tag is applied",
+      "eventCustomFieldChanged": "A custom field changes",
+      "eventTagLabel": "Tag",
+      "eventCustomFieldLabel": "Custom field",
+      "eventTimeoutLabel": "Give up after",
+      "eventDetailTag": "Wait until tag",
+      "eventDetailCustomField": "Wait until field",
+      "eventDetailTimeout": "or after",
+      "eventStateEvent": "Event",
+      "eventStateTimeout": "Timeout"
     },
     "followUp": {
       "durationLabel": "Süre",

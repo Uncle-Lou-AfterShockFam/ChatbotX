@@ -3289,7 +3289,8 @@
       "durationValue": "{duration}",
       "random": "随机",
       "specificDate": "具体日期",
-      "specificDateValue": "{date}"
+      "specificDateValue": "{date}",
+      "event": "Event"
     },
     "fields": {
       "filterModeAnd": "和",
@@ -3366,7 +3367,18 @@
       "selectTimePlaceholder": "选择时间",
       "setInterval": "设置间隔",
       "specific": "具体",
-      "unitLabel": "单位"
+      "unitLabel": "单位",
+      "eventTypeLabel": "Wait for",
+      "eventTagApplied": "A tag is applied",
+      "eventCustomFieldChanged": "A custom field changes",
+      "eventTagLabel": "Tag",
+      "eventCustomFieldLabel": "Custom field",
+      "eventTimeoutLabel": "Give up after",
+      "eventDetailTag": "Wait until tag",
+      "eventDetailCustomField": "Wait until field",
+      "eventDetailTimeout": "or after",
+      "eventStateEvent": "Event",
+      "eventStateTimeout": "Timeout"
     },
     "whatsappFlow": {
       "addCustomField": "添加新",

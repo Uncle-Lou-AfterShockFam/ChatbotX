@@ -2582,7 +2582,8 @@
       "date": "التاريخ",
       "specificDate": "تاريخ محدد",
       "specificDateValue": "{date}",
-      "random": "عشوائي"
+      "random": "عشوائي",
+      "event": "Event"
     },
     "formatTimezone": {
       "timezone": "المنطقة الزمنية للحساب",
@@ -2630,7 +2631,18 @@
       "unitLabel": "الوحدة",
       "specific": "محدد",
       "dynamic": "ديناميكي",
-      "selectTimePlaceholder": "اختر وقتًا"
+      "selectTimePlaceholder": "اختر وقتًا",
+      "eventTypeLabel": "Wait for",
+      "eventTagApplied": "A tag is applied",
+      "eventCustomFieldChanged": "A custom field changes",
+      "eventTagLabel": "Tag",
+      "eventCustomFieldLabel": "Custom field",
+      "eventTimeoutLabel": "Give up after",
+      "eventDetailTag": "Wait until tag",
+      "eventDetailCustomField": "Wait until field",
+      "eventDetailTimeout": "or after",
+      "eventStateEvent": "Event",
+      "eventStateTimeout": "Timeout"
     },
     "followUp": {
       "durationLabel": "المدة",

@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-export const smartDelayTypes = z.enum(["waitNode", "followUp"])
+export const smartDelayTypes = z.enum(["waitNode", "followUp", "waitForEvent"])
 export type SmartDelayType = z.infer<typeof smartDelayTypes>
 
 export const smartDelayStatuses = z.enum([

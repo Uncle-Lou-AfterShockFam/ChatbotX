@@ -2440,7 +2440,8 @@
       "date": "Date",
       "specificDate": "Date précise",
       "specificDateValue": "{date}",
-      "random": "Aléatoire"
+      "random": "Aléatoire",
+      "event": "Event"
     },
     "formatTimezone": {
       "timezone": "Fuseau horaire du compte",
@@ -2488,7 +2489,18 @@
       "unitLabel": "Unité",
       "specific": "Précis",
       "dynamic": "Dynamique",
-      "selectTimePlaceholder": "Sélectionnez une heure"
+      "selectTimePlaceholder": "Sélectionnez une heure",
+      "eventTypeLabel": "Wait for",
+      "eventTagApplied": "A tag is applied",
+      "eventCustomFieldChanged": "A custom field changes",
+      "eventTagLabel": "Tag",
+      "eventCustomFieldLabel": "Custom field",
+      "eventTimeoutLabel": "Give up after",
+      "eventDetailTag": "Wait until tag",
+      "eventDetailCustomField": "Wait until field",
+      "eventDetailTimeout": "or after",
+      "eventStateEvent": "Event",
+      "eventStateTimeout": "Timeout"
     },
     "followUp": {
       "durationLabel": "Durée",

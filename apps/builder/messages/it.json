@@ -2440,7 +2440,8 @@
       "date": "Data",
       "specificDate": "Data specifica",
       "specificDateValue": "{date}",
-      "random": "Casuale"
+      "random": "Casuale",
+      "event": "Event"
     },
     "formatTimezone": {
       "timezone": "Fuso orario dell'account",
@@ -2488,7 +2489,18 @@
       "unitLabel": "Unità",
       "specific": "Specifica",
       "dynamic": "Dinamica",
-      "selectTimePlaceholder": "Seleziona un'ora"
+      "selectTimePlaceholder": "Seleziona un'ora",
+      "eventTypeLabel": "Wait for",
+      "eventTagApplied": "A tag is applied",
+      "eventCustomFieldChanged": "A custom field changes",
+      "eventTagLabel": "Tag",
+      "eventCustomFieldLabel": "Custom field",
+      "eventTimeoutLabel": "Give up after",
+      "eventDetailTag": "Wait until tag",
+      "eventDetailCustomField": "Wait until field",
+      "eventDetailTimeout": "or after",
+      "eventStateEvent": "Event",
+      "eventStateTimeout": "Timeout"
     },
     "followUp": {
       "durationLabel": "Durata",

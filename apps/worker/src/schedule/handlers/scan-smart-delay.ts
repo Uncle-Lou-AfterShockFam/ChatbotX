@@ -2,6 +2,7 @@ import {
   type SmartDelayRow,
   smartDelayService,
 } from "@chatbotx.io/business/smart-delay"
+import { smartDelayTypes } from "@chatbotx.io/database/partials"
 import { buildJobId, ENQUEUE_DELAY_MS } from "@chatbotx.io/flow-config"
 import { integrationQueue } from "@chatbotx.io/worker-config"
 import { endOfMinute, subMilliseconds } from "date-fns"
@@ -73,8 +74,14 @@ const sweepStuckScheduled = async (olderThan: Date): Promise<void> => {
   }
 }
 
+// A row with no nodeId has nothing to resume -- EXCEPT a waitForEvent, whose
+// nodeId is only the timeout edge: its event edge stays live until the real
+// timeout, so it goes through the timer like every other row (skeptic HIGH).
+const isTerminal = (row: SmartDelayRow) =>
+  !row.nodeId && row.type !== smartDelayTypes.enum.waitForEvent
+
 const enqueueClaimedBatch = async (claimed: SmartDelayRow[]) => {
-  const terminalRows = claimed.filter((row) => !row.nodeId)
+  const terminalRows = claimed.filter(isTerminal)
   if (terminalRows.length > 0) {
     // allSettled: one failed terminal update must not abort the enqueueable
     // part of an already-claimed batch; a failed row stays 'scheduled' and the
@@ -97,7 +104,7 @@ const enqueueClaimedBatch = async (claimed: SmartDelayRow[]) => {
     )
   }
 
-  const enqueueable = claimed.filter((row) => row.nodeId)
+  const enqueueable = claimed.filter((row) => !isTerminal(row))
   if (enqueueable.length === 0) {
     return 0
   }
