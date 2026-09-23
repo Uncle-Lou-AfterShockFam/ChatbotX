@@ -1,5 +1,12 @@
 // Main unified emitters
 
+export type {
+  DealEventMetadata,
+  DealMovedToStageMetadata,
+  DealPriorityChangedMetadata,
+  DealStatusChangedMetadata,
+  DealValueChangedMetadata,
+} from "./base-emitter"
 export * from "./contact-inbox-context"
 export * from "./context"
 export * from "./event-dispatcher"
