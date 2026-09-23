@@ -1,5 +1,6 @@
 "use server"
 
+import { companyService } from "@chatbotx.io/business"
 import { stopCompany } from "@chatbotx.io/business/company-stop"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import type z from "zod"
@@ -22,11 +23,13 @@ export const stopCompanyAction = workspaceActionClient
     }: {
       parsedInput: z.infer<typeof input>
       bindArgsParsedInputs: WorkspaceIdRequestParams
-    }) =>
-      stopCompany({
+    }) => {
+      await companyService.findOrFail({ workspaceId, id: parsedInput.id })
+      return await stopCompany({
         workspaceId,
         companyId: parsedInput.id,
         reason: "api",
         force: parsedInput.force,
-      }),
+      })
+    },
   )

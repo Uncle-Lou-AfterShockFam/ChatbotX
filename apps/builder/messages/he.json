@@ -1688,6 +1688,7 @@
     "stoppedToast": "{name} stopped for {count, plural, one {1 contact} other {# contacts}}",
     "alreadyStopped": "This company is already stopped.",
     "stopSkipped": "Stop skipped: this company has \"stop on reply\" turned off.",
+    "stopPartial": "Company stopped, but these steps failed and need a re-run: {phases}",
     "stopOnReply": "Stop on reply",
     "stopOnReplyDescription": "When on, an inbound reply from any contact of this company (or the stop tag) stops the whole company. The API and deals always stop it.",
     "deleteConfirm": "Delete the selected companies? Their contacts are kept and unlinked.",

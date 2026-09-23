@@ -24,6 +24,17 @@ export const companyStopResultSchema = z.discriminatedUnion("status", [
     smartDelaysCanceled: z.number().int(),
     broadcastRowsFailed: z.number().int(),
     tagId: z.string().optional(),
+    failedPhases: z.array(z.string()),
+  }),
+  z.object({
+    status: z.literal("partial"),
+    companyId: z.string(),
+    contactCount: z.number().int(),
+    enrollmentsRemoved: z.number().int(),
+    smartDelaysCanceled: z.number().int(),
+    broadcastRowsFailed: z.number().int(),
+    tagId: z.string().optional(),
+    failedPhases: z.array(z.string()),
   }),
   z.object({ status: z.literal("already_stopped"), companyId: z.string() }),
   z.object({

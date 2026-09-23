@@ -49,6 +49,12 @@ export function StopCompanyDialog({
               count: data.contactCount,
             }),
           )
+        } else if (data?.status === "partial") {
+          toast.warning(
+            t("companies.stopPartial", {
+              phases: data.failedPhases.join(", "),
+            }),
+          )
         } else if (data?.status === "already_stopped") {
           toast.info(t("companies.alreadyStopped"))
         } else if (data?.status === "skipped") {

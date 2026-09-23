@@ -161,6 +161,7 @@ describe("stopCompany", () => {
       smartDelaysCanceled: 1,
       broadcastRowsFailed: 1,
       tagId: "tag-stopped",
+      failedPhases: [],
     })
     expect(mockTxUpdateWhere).toHaveBeenCalledTimes(1)
     expect(mockRemoveSequences).toHaveBeenCalledWith({
@@ -271,7 +272,7 @@ describe("stopCompany", () => {
     expect(mockBulkAttach).toHaveBeenCalledTimes(1)
   })
 
-  test("a failing phase is logged and the remaining phases still run", async () => {
+  test("a failing phase is logged, the remaining phases still run, and the result is partial", async () => {
     mockRemoveSequences.mockRejectedValue(new Error("sequence boom"))
     mockQueueRemove.mockRejectedValue(new Error("redis down"))
     mockCancelActiveForContacts
@@ -283,11 +284,12 @@ describe("stopCompany", () => {
       reason: "api",
     })
     expect(result).toMatchObject({
-      status: "stopped",
+      status: "partial",
       enrollmentsRemoved: 0,
       smartDelaysCanceled: 1,
       broadcastRowsFailed: 1,
       tagId: "tag-stopped",
+      failedPhases: ["sequences"],
     })
     expect(mockLoggerWarn).toHaveBeenCalledWith(
       expect.objectContaining({ phase: "sequences" }),
@@ -315,11 +317,47 @@ describe("stopCompany", () => {
     expect(mockRemoveSequences).not.toHaveBeenCalled()
   })
 
-  test("unknown company rejects", async () => {
+  test("a failing tag phase is partial with the tag named (the signal flows depend on)", async () => {
+    mockEnsureTag.mockRejectedValue(new Error("tag boom"))
+    const result = await stopCompany({
+      workspaceId: WS,
+      companyId: COMPANY,
+      reason: "api",
+    })
+    expect(result).toMatchObject({
+      status: "partial",
+      failedPhases: ["tag"],
+      tagId: undefined,
+    })
+  })
+
+  test("unknown company rejects with a typed notFound", async () => {
     mockTxSelectFor.mockResolvedValue([])
     await expect(
       stopCompany({ workspaceId: WS, companyId: "nope", reason: "api" }),
-    ).rejects.toThrow(NOT_FOUND)
+    ).rejects.toMatchObject({ code: "notFound", httpStatusCode: 404 })
+  })
+
+  test("two concurrent force re-runs both complete (every phase is idempotent)", async () => {
+    mockTxSelectFor.mockResolvedValue([companyRow({ stoppedAt: new Date() })])
+    const [a, b] = await Promise.all([
+      stopCompany({
+        workspaceId: WS,
+        companyId: COMPANY,
+        reason: "api",
+        force: true,
+      }),
+      stopCompany({
+        workspaceId: WS,
+        companyId: COMPANY,
+        reason: "api",
+        force: true,
+      }),
+    ])
+    expect(a.status).toBe("stopped")
+    expect(b.status).toBe("stopped")
+    expect(mockBulkAttach).toHaveBeenCalledTimes(2)
+    expect(mockTxUpdateWhere).not.toHaveBeenCalled()
   })
 })
 

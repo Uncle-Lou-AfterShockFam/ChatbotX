@@ -14,12 +14,12 @@
 import { and, db, eq } from "@chatbotx.io/database/client"
 import { COMPANY_STOPPED_TAG_NAME } from "@chatbotx.io/database/partials"
 import { companyModel, contactModel } from "@chatbotx.io/database/schema"
-import { buildJobId } from "@chatbotx.io/flow-config"
-import { integrationQueue } from "@chatbotx.io/worker-config"
 import { dispatchAuditRecordSafely } from "../audit/dispatcher"
 import { broadcastService } from "../broadcast/service"
 import { contactSequenceService } from "../contact-sequence/service"
+import { notFoundException } from "../errors"
 import { logger } from "../logger"
+import { runSmartDelayCancelLoop } from "../smart-delay/cancel-loop"
 import { smartDelayService } from "../smart-delay/service"
 import { tagService } from "../tag/service"
 import { companyService } from "./service"
@@ -30,15 +30,23 @@ export type CompanyStopReason =
   | "api"
   | "deal"
 
+export type CompanyStopPhase =
+  | "sequences"
+  | "smart-delays"
+  | "broadcasts"
+  | "tag"
+
 export type CompanyStopResult =
   | {
-      status: "stopped"
+      /** `partial` = the row is stamped but at least one phase failed; re-run with `force`. */
+      status: "stopped" | "partial"
       companyId: string
       contactCount: number
       enrollmentsRemoved: number
       smartDelaysCanceled: number
       broadcastRowsFailed: number
       tagId?: string
+      failedPhases: CompanyStopPhase[]
     }
   | { status: "already_stopped"; companyId: string }
   | { status: "skipped"; companyId: string; why: "stopOnReply_off" }
@@ -87,7 +95,7 @@ async function claimCompanyStop(props: {
       )
       .for("update")
     if (!row) {
-      throw new Error(`Company ${props.companyId} not found`)
+      throw notFoundException("Company not found")
     }
     if (row.stoppedAt) {
       return { kind: "already_stopped" }
@@ -138,35 +146,18 @@ async function cancelSmartDelays(props: {
   workspaceId: string
   contactIds: string[]
 }): Promise<number> {
-  let canceled = 0
-  for (let batch = 0; batch < MAX_SMART_DELAY_BATCHES; batch += 1) {
-    const rows = await smartDelayService.cancelActiveForContacts({
-      workspaceId: props.workspaceId,
-      contactIds: props.contactIds,
-      limit: SMART_DELAY_CANCEL_BATCH,
-    })
-    if (rows.length === 0) {
-      break
-    }
-    canceled += rows.length
-    // Best-effort: the rows are already canceled, so a surviving job is inert.
-    const removals = await Promise.allSettled(
-      rows.map((row) =>
-        integrationQueue.remove(buildJobId(row.id, row.triggerAt)),
-      ),
-    )
-    const failed = removals.filter((result) => result.status === "rejected")
-    if (failed.length > 0) {
-      logger.warn(
-        { failedCount: failed.length, workspaceId: props.workspaceId },
-        "company-stop: failed to remove smart-delay jobs",
-      )
-    }
-    if (rows.length < SMART_DELAY_CANCEL_BATCH) {
-      break
-    }
-  }
-  return canceled
+  return await runSmartDelayCancelLoop({
+    workspaceId: props.workspaceId,
+    batchSize: SMART_DELAY_CANCEL_BATCH,
+    maxBatches: MAX_SMART_DELAY_BATCHES,
+    logLabel: "company-stop",
+    fetchBatch: (limit) =>
+      smartDelayService.cancelActiveForContacts({
+        workspaceId: props.workspaceId,
+        contactIds: props.contactIds,
+        limit,
+      }),
+  })
 }
 
 async function applyStoppedTag(props: {
@@ -189,13 +180,14 @@ async function applyStoppedTag(props: {
 }
 
 /**
- * Runs one cascade phase; a failure is logged and counted as zero so the
- * remaining phases still run (the company is already marked stopped, and the
- * API caller can re-run with `force` to redo the cascade).
+ * Runs one cascade phase; a failure is logged, recorded in `failed` and
+ * counted as zero so the remaining phases still run (the company is already
+ * marked stopped). The caller reports `partial` so the API consumer knows to
+ * re-run with `force`.
  */
 async function phase<T>(
-  name: string,
-  props: { workspaceId: string; companyId: string },
+  name: CompanyStopPhase,
+  props: { workspaceId: string; companyId: string; failed: CompanyStopPhase[] },
   run: () => Promise<T>,
   fallback: T,
 ): Promise<T> {
@@ -203,9 +195,15 @@ async function phase<T>(
     return await run()
   } catch (error) {
     logger.warn(
-      { error, phase: name, ...props },
+      {
+        error,
+        phase: name,
+        workspaceId: props.workspaceId,
+        companyId: props.companyId,
+      },
       "company-stop: cascade phase failed",
     )
+    props.failed.push(name)
     return fallback
   }
 }
@@ -239,7 +237,8 @@ export async function stopCompany(props: {
     workspaceId,
     companyId,
   })
-  const ctx = { workspaceId, companyId }
+  const failed: CompanyStopPhase[] = []
+  const ctx = { workspaceId, companyId, failed }
 
   const enrollmentsRemoved = await phase(
     "sequences",
@@ -280,7 +279,9 @@ export async function stopCompany(props: {
   )
   logger.info(
     {
-      ...ctx,
+      workspaceId,
+      companyId,
+      failedPhases: failed,
       reason,
       contactCount: contactIds.length,
       enrollmentsRemoved,
@@ -291,13 +292,14 @@ export async function stopCompany(props: {
   )
 
   return {
-    status: "stopped",
+    status: failed.length === 0 ? "stopped" : "partial",
     companyId,
     contactCount: contactIds.length,
     enrollmentsRemoved,
     smartDelaysCanceled,
     broadcastRowsFailed,
     tagId,
+    failedPhases: failed,
   }
 }
 

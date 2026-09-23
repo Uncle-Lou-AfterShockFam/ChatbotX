@@ -20,8 +20,11 @@ import { useAction } from "next-safe-action/hooks"
 import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
-import { listCompanyOptionsAction } from "./actions/list-company-options-action"
 import { setContactCompanyAction } from "./actions/set-contact-company-action"
+import {
+  useCompanySelectOptions,
+  useInvalidateCompanies,
+} from "./provider/company-hook"
 
 /**
  * The contact drawer's company row: the linked company (a link to its page)
@@ -43,11 +46,8 @@ export function ContactCompanyField({
     defaultValues: { companyId: company?.id ?? "" },
   })
 
-  const {
-    execute: loadOptions,
-    result: optionsResult,
-    isPending: loadingOptions,
-  } = useAction(listCompanyOptionsAction.bind(null, workspaceId))
+  const options = useCompanySelectOptions({ enabled: open })
+  const invalidateCompanies = useInvalidateCompanies()
   const { execute: save, isPending: saving } = useAction(
     setContactCompanyAction.bind(null, workspaceId),
     {
@@ -56,6 +56,7 @@ export function ContactCompanyField({
           t("messages.updatedSuccess", { feature: t("companies.one") }),
         )
         setOpen(false)
+        invalidateCompanies()
         router.refresh()
       },
       onError: ({ error }) => {
@@ -69,11 +70,8 @@ export function ContactCompanyField({
   useEffect(() => {
     if (open) {
       form.reset({ companyId: company?.id ?? "" })
-      loadOptions({})
     }
-  }, [open, company?.id, form, loadOptions])
-
-  const options = optionsResult.data ?? []
+  }, [open, company?.id, form])
 
   return (
     <div className="flex items-center gap-2 py-1 text-xs">
@@ -117,9 +115,7 @@ export function ContactCompanyField({
               <ComboboxField
                 allowClear
                 clearLabel={t("companies.noCompany")}
-                emptyText={
-                  loadingOptions ? t("actions.loading") : t("companies.empty")
-                }
+                emptyText={t("companies.empty")}
                 label={t("companies.one")}
                 name="companyId"
                 options={options.map((option) => ({
