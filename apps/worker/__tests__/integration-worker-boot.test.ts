@@ -92,6 +92,11 @@ vi.mock("@chatbotx.io/automated-response", () => ({
   automatedResponseService: { enqueue: vi.fn() },
 }))
 
+vi.mock("@chatbotx.io/business/company-stop", () => ({
+  stopCompany: vi.fn(),
+  stopCompanyForContact: vi.fn(),
+}))
+
 vi.mock("@chatbotx.io/business", () => ({
   conversationService: { ensureActive: vi.fn() },
   withBlockedOwnerGuard: vi.fn(
