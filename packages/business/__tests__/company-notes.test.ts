@@ -59,9 +59,9 @@ const m = vi.hoisted(() => {
     state,
     tx,
     companyFindOrFail: vi.fn(),
-    activityRecord: vi.fn(async (p: Record<string, unknown>) => {
+    activityRecord: vi.fn((p: Record<string, unknown>) => {
       state.calls.push(`activity:${String(p.type)}`)
-      return p
+      return Promise.resolve(p)
     }),
   }
 })

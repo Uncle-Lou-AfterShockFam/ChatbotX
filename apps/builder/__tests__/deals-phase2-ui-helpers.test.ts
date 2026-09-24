@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest"
 import { isOverdue } from "@/features/deals/deal-card"
 import { describeActivity } from "@/features/deals/deal-drawer/activity-list"
-import { toDateInput } from "@/features/deals/deal-drawer/details-form"
 import { parseFieldInput } from "@/features/deals/deal-field-input"
+import { toDateInput } from "@/features/deals/lib/date-input"
 import type { DealActivityResource } from "@/features/deals/schema/resource"
 import { optionsFromText } from "@/features/pipelines/field-defs-editor"
 
