@@ -1,9 +1,11 @@
 import { describe, expect, test } from "vitest"
 import {
+  clipText,
   MENTION_LABEL_MAX,
   mentionToken,
   parseMentions,
   renderMentionsPlain,
+  splitMentions,
 } from "../src/mentions"
 
 describe("deal-comment mention tokens (s193)", () => {
@@ -74,5 +76,24 @@ describe("deal-comment mention tokens (s193)", () => {
     expect(mentionToken({ userId: "1", label: "" })).toBe("@[1](u:1)")
     const long = mentionToken({ userId: "1", label: "y".repeat(100) })
     expect(parseMentions(long)[0].label).toHaveLength(MENTION_LABEL_MAX)
+  })
+
+  test("splitMentions yields text runs and tokens in order (adjacent tokens, leading/trailing text)", () => {
+    expect(splitMentions("hi @[A](u:1)@[B](u:2) bye")).toEqual([
+      { kind: "text", text: "hi " },
+      { kind: "mention", userId: "1", label: "A" },
+      { kind: "mention", userId: "2", label: "B" },
+      { kind: "text", text: " bye" },
+    ])
+    expect(splitMentions("")).toEqual([])
+    expect(splitMentions("plain")).toEqual([{ kind: "text", text: "plain" }])
+  })
+
+  test("clipText counts code points and never splits a surrogate pair", () => {
+    expect(clipText("abc", 3)).toBe("abc")
+    expect(clipText("abcd", 3)).toBe("ab\u2026")
+    const clipped = clipText("ab\u{1F600}cd", 3)
+    expect(Array.from(clipped)).toEqual(["a", "b", "\u2026"])
+    expect(clipText("a\u{1F600}\u{1F600}", 3)).toBe("a\u{1F600}\u{1F600}")
   })
 })

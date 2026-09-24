@@ -39,3 +39,34 @@ export function mentionToken(ref: MentionRef): string {
     .slice(0, MENTION_LABEL_MAX)
   return `@[${label || ref.userId}](u:${ref.userId})`
 }
+
+export type MentionPart =
+  | { kind: "text"; text: string }
+  | { kind: "mention"; userId: string; label: string }
+
+/** The body split into text runs and mention tokens, in order (for rendering chips). */
+export function splitMentions(body: string): MentionPart[] {
+  if (typeof body !== "string" || body.length === 0) {
+    return []
+  }
+  const parts: MentionPart[] = []
+  let cursor = 0
+  for (const match of body.matchAll(MENTION_TOKEN)) {
+    const start = match.index ?? 0
+    if (start > cursor) {
+      parts.push({ kind: "text", text: body.slice(cursor, start) })
+    }
+    parts.push({ kind: "mention", userId: match[2], label: match[1].trim() })
+    cursor = start + match[0].length
+  }
+  if (cursor < body.length) {
+    parts.push({ kind: "text", text: body.slice(cursor) })
+  }
+  return parts
+}
+
+/** Clip to `max` code points (never splits a surrogate pair), with an ellipsis. */
+export function clipText(value: string, max: number): string {
+  const points = Array.from(value)
+  return points.length > max ? `${points.slice(0, max - 1).join("")}…` : value
+}

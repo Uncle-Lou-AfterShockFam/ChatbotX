@@ -10,43 +10,47 @@ import {
   SelectValue,
 } from "@chatbotx.io/ui/components/ui/select"
 import { Textarea } from "@chatbotx.io/ui/components/ui/textarea"
-import { mentionToken } from "@chatbotx.io/utils/mentions"
+import { mentionToken, splitMentions } from "@chatbotx.io/utils/mentions"
 import { AtSignIcon, Loader2Icon, SendIcon, TrashIcon } from "lucide-react"
 import { useFormatter, useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { Fragment, useState } from "react"
+import { onActionError } from "@/features/common/lib/on-action-error"
 import {
   createDealCommentAction,
   deleteDealCommentAction,
 } from "@/features/deal-comments/actions/deal-comment-actions"
 import { useDealComments } from "@/features/deal-comments/provider/deal-comment-hook"
 import type { DealCommentResource } from "@/features/deal-comments/schema/resource"
-import { onActionError } from "@/features/deal-tasks/lib/on-action-error"
 
-// Same token as `@chatbotx.io/utils/mentions`, split-capable (label, id).
-const MENTION_SPLIT = /(@\[[^\]\n]{1,60}\]\(u:\d{1,20}\))/g
-const MENTION_PARTS = /^@\[([^\]\n]{1,60})\]\(u:(\d{1,20})\)$/
+/** Character offset of every part: a stable key that is not the array index. */
+const withOffsets = (parts: ReturnType<typeof splitMentions>) => {
+  let offset = 0
+  return parts.map((part) => {
+    const at = offset
+    offset += part.kind === "text" ? part.text.length : part.label.length + 8
+    return { part, offset: at }
+  })
+}
 
 /** Body text with every mention token rendered as a chip. */
 export function CommentBody({ body }: { body: string }) {
   return (
     <span className="whitespace-pre-wrap break-words">
-      {body.split(MENTION_SPLIT).map((part, index) => {
-        const m = MENTION_PARTS.exec(part)
-        const key = `${index}-${part.slice(0, 16)}`
-        return m ? (
+      {withOffsets(splitMentions(body)).map(({ part, offset }) =>
+        part.kind === "mention" ? (
           <Badge
             className="mx-0.5 align-baseline"
             data-testid="deal-comment-mention"
-            key={key}
+            key={`m-${offset}-${part.userId}`}
             variant="secondary"
           >
-            @{m[1]}
+            @{part.label}
           </Badge>
         ) : (
-          <Fragment key={key}>{part}</Fragment>
-        )
-      })}
+          <Fragment key={`t-${offset}`}>{part.text}</Fragment>
+        ),
+      )}
     </span>
   )
 }

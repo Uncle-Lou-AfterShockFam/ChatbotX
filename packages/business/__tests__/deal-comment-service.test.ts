@@ -170,6 +170,7 @@ vi.mock("../src/logger", () => ({
 const { dealCommentService } = await import("../src/deal-comment/service")
 
 const WS = "ws-1"
+const TRAILING_HIGH_SURROGATE = /[\uD800-\uDBFF]$/
 const DEAL = {
   id: "deal-1",
   workspaceId: WS,
@@ -258,6 +259,18 @@ describe("dealCommentService.create", () => {
     expect(m.dealFindOrFail).toHaveBeenCalledWith(
       expect.objectContaining({ id: "deal-1", viewer: AUTHOR }),
     )
+  })
+
+  test("the excerpt clips at 500 code points without splitting a surrogate pair", async () => {
+    m.state.selects = [[{ count: 0 }]]
+    const body = `${"a".repeat(498)}\u{1F600}\u{1F600}${"b".repeat(50)}`
+    await dealCommentService.create({ workspaceId: WS, dealId: "deal-1", body })
+    const activity = m.state.inserted.find((i) => i.table === "DealActivity")
+    const excerpt = (activity?.rows[0].payload as { excerpt: string }).excerpt
+    expect(Array.from(excerpt)).toHaveLength(500)
+    expect(excerpt.endsWith("\u2026")).toBe(true)
+    expect(excerpt).not.toMatch(TRAILING_HIGH_SURROGATE)
+    expect(Array.from(excerpt).at(-2)).toBe("\u{1F600}")
   })
 
   test("no mentions = no mention rows and no event; a contact-less deal writes rows but emits nothing", async () => {
@@ -395,6 +408,38 @@ describe("dealCommentService.update / remove", () => {
     ])
     const rows = m.state.inserted.find((i) => i.table === "DealCommentMention")
     expect(rows?.rows.map((r) => r.userId)).toEqual(["3"])
+  })
+
+  test("an earlier mention whose user left the workspace does not block an edit; its label is refreshed from the body", async () => {
+    m.state.existingUserIds = ["1"] // user 2 is gone
+    m.state.selects = [[COMMENT]]
+    m.state.updates = [[{ ...COMMENT, body: "hello @[Bob](u:2) fixed" }]]
+    await expect(
+      dealCommentService.update({
+        workspaceId: WS,
+        dealId: "deal-1",
+        commentId: "c-1",
+        body: "hello @[Bob](u:2) fixed",
+        actorId: "u-1",
+        viewer: AUTHOR,
+      }),
+    ).resolves.toBeDefined()
+    expect(m.emitMentioned).not.toHaveBeenCalled()
+    expect(m.state.calls).toEqual(["select", "update:body,mentions,editedAt"])
+    // a NEW mention of a departed user is still refused
+    m.state.selects = [[COMMENT]]
+    await expect(
+      dealCommentService.update({
+        workspaceId: WS,
+        dealId: "deal-1",
+        commentId: "c-1",
+        body: "hello @[Two](u:2) @[Three](u:3)",
+        actorId: "u-1",
+        viewer: AUTHOR,
+      }),
+    ).rejects.toMatchObject({
+      data: { reason: "mentionNotMember", userIds: "3" },
+    })
   })
 
   test("removing a token keeps the old mention (its row may be read) and emits nothing", async () => {

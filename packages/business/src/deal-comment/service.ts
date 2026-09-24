@@ -24,7 +24,11 @@ import type {
 } from "@chatbotx.io/database/types"
 import { emitDealMentioned } from "@chatbotx.io/events"
 import { createId } from "@chatbotx.io/utils"
-import { parseMentions, renderMentionsPlain } from "@chatbotx.io/utils/mentions"
+import {
+  clipText,
+  parseMentions,
+  renderMentionsPlain,
+} from "@chatbotx.io/utils/mentions"
 import { BaseService } from "../base.service"
 import { dealService } from "../deal/service"
 import { dealEventMetadata } from "../deal/shared"
@@ -37,6 +41,7 @@ import { workspaceMemberService } from "../workspace-member/service"
 
 const COMMENT_NOT_FOUND = "Comment not found"
 const EXCERPT_MAX = 500
+const WHITESPACE = /\s+/g
 
 /**
  * Comments on a deal with `@[Label](u:<id>)` mentions (s193 part 3b). A
@@ -180,15 +185,21 @@ export class DealCommentService extends BaseService {
       })
       this.assertCanEdit({ comment: current, actorId, viewer })
       const deal = await dealService.findOrFail({ workspaceId, id: dealId, tx })
-      await this.assertMentionable({ workspaceId, deal, mentions, tx })
       const known = new Set(current.mentions.map((m) => m.userId))
       const added = mentions.filter((m) => !known.has(m.userId))
+      // Only NEW mentions are validated: an earlier one whose user has since
+      // left stays (its row may be read) and must not block a typo fix.
+      await this.assertMentionable({ workspaceId, deal, mentions: added, tx })
+      const byUser = new Map(mentions.map((m) => [m.userId, m]))
       const [row] = await tx
         .update(dealCommentModel)
         .set({
           body,
-          // keep every earlier mention (its row may already be read)
-          mentions: [...current.mentions, ...added],
+          // keep every earlier mention, with its label refreshed from the body
+          mentions: [
+            ...current.mentions.map((m) => byUser.get(m.userId) ?? m),
+            ...added,
+          ],
           editedAt: new Date(),
         })
         .where(eq(dealCommentModel.id, commentId))
@@ -277,10 +288,10 @@ export class DealCommentService extends BaseService {
   }
 
   private excerpt(body: string): string {
-    const plain = renderMentionsPlain(body).replace(/\s+/g, " ").trim()
-    return plain.length > EXCERPT_MAX
-      ? `${plain.slice(0, EXCERPT_MAX - 1)}…`
-      : plain
+    return clipText(
+      renderMentionsPlain(body).replace(WHITESPACE, " ").trim(),
+      EXCERPT_MAX,
+    )
   }
 
   /**
@@ -340,7 +351,8 @@ export class DealCommentService extends BaseService {
     if (viewer && isUnrestrictedViewer(viewer)) {
       return
     }
-    // No viewer (public API / worker) = the workspace itself: allowed.
+    // No viewer = a workspace token (or a worker) = the workspace itself:
+    // it may edit or delete ANY comment (documented on the public routes).
     if (!viewer) {
       return
     }

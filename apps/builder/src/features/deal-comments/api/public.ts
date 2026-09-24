@@ -68,7 +68,7 @@ export const dealCommentsPublicRouter = {
       path: "/v1/deals/{id}/comments/{commentId}",
       summary: "Edit deal comment",
       description:
-        "Replaces the body of a comment. Mentions added by the edit are recorded and emitted; earlier mentions are kept even when their token is gone.",
+        "Replaces the body of a comment. A workspace token acts as the workspace and may edit any user's comment. Mentions added by the edit are recorded and emitted; earlier mentions are kept even when their token is gone.",
       tags: ["Deals"],
     })
     .input(updateDealCommentRequest.and(dealCommentIdParams))
@@ -90,7 +90,7 @@ export const dealCommentsPublicRouter = {
       path: "/v1/deals/{id}/comments/{commentId}",
       summary: "Delete deal comment",
       description:
-        "Deletes a comment and its mention records. The `commented` activity line of the deal stays as history.",
+        "Deletes a comment and its mention records; a workspace token acts as the workspace and may delete any user's comment. The `commented` activity line of the deal stays as history.",
       successStatus: 204,
       tags: ["Deals"],
     })

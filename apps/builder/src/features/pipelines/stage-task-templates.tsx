@@ -22,11 +22,11 @@ import { ListChecksIcon, Loader2Icon, PlusIcon, TrashIcon } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { useState } from "react"
+import { onActionError } from "@/features/common/lib/on-action-error"
 import {
   removeTaskTemplateAction,
   upsertTaskTemplateAction,
 } from "@/features/deal-tasks/actions/task-template-actions"
-import { onActionError } from "@/features/deal-tasks/lib/on-action-error"
 import { usePipelineTaskTemplates } from "@/features/deal-tasks/provider/deal-task-hook"
 import { NONE } from "@/features/deals/deal-field-input"
 import { useOwnerOptions } from "@/features/deals/provider/deal-hook"
