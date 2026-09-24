@@ -128,3 +128,28 @@ describe("deal events", () => {
     expect(emitter.queued).not.toHaveBeenCalled()
   })
 })
+
+describe("dealMentioned (s193)", () => {
+  test("emits dealMentioned with sourceId = pipelineId and the comment projection", async () => {
+    expect(EMITTED_EVENT_TYPES).toContain("dealMentioned")
+    const emitter = new RecordingEmitter()
+    await emitter.dealMentioned("ws-1", "contact-1", {
+      ...DEAL,
+      commentId: "c1",
+      authorId: "u1",
+      mentionedUserId: "u2",
+      excerpt: "@Demo look",
+    })
+    const [type, data] = emitter.queued.mock.calls[0] as [
+      string,
+      { metadata: Record<string, unknown> },
+    ]
+    expect(type).toBe("dealMentioned")
+    expect(data.metadata.sourceId).toBe("pipe-1")
+    expect(data.metadata).toMatchObject({
+      commentId: "c1",
+      mentionedUserId: "u2",
+      excerpt: "@Demo look",
+    })
+  })
+})

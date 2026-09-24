@@ -84,6 +84,7 @@ export const ConditionEditor = ({
     case triggerEventTypes.enum.taskCompleted:
     case triggerEventTypes.enum.taskOverdue:
     case triggerEventTypes.enum.taskAssigned:
+    case triggerEventTypes.enum.dealMentioned:
       return (
         <ComboboxField
           emptyText={t("deals.noPipelines")}

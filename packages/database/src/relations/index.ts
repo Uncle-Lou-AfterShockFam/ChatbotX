@@ -48,6 +48,7 @@ import { couponRelations } from "./coupon"
 import { platformCredentialRelations } from "./credential"
 import { customFieldRelations } from "./custom-field"
 import { dealRelations } from "./deal"
+import { dealCommentRelations } from "./deal-comment"
 import { dealTaskRelations } from "./deal-task"
 import { dynamicImageRelations } from "./dynamic-image"
 import { emailTopicRelations } from "./email-topic"
@@ -210,6 +211,7 @@ export const relations = {
   ...invitationRelations,
   ...companyRelations,
   ...dealRelations,
+  ...dealCommentRelations,
   ...dealTaskRelations,
   ...pipelineMemberRelations,
   ...pipelineRelations,

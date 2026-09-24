@@ -58,6 +58,13 @@ export function describeActivity(
     case "taskCreated":
     case "taskCompleted":
       return t(`deals.activity.${activity.type}`, { title: text(p.title) })
+    case "commented":
+      return t("deals.activity.commented", {
+        excerpt: text(p.excerpt),
+        count: Array.isArray(p.mentionedUserIds)
+          ? p.mentionedUserIds.length
+          : 0,
+      })
     case "assigned":
       return t("deals.activity.assigned")
     case "note":

@@ -57,6 +57,7 @@ const EVENT_NAMES = {
   [triggerEventTypes.enum.taskCompleted]: "deal_task_completed",
   [triggerEventTypes.enum.taskOverdue]: "deal_task_overdue",
   [triggerEventTypes.enum.taskAssigned]: "deal_task_assigned",
+  [triggerEventTypes.enum.dealMentioned]: "deal_mentioned",
 } satisfies Record<MatchableEventType, string>
 
 async function buildTagPayload(
@@ -291,6 +292,15 @@ const PAYLOAD_BUILDERS = {
   [triggerEventTypes.enum.taskAssigned]: (basePayload, data) => ({
     ...buildDealTaskPayload(basePayload, data),
     previous_assignee_id: (data.previousAssigneeId as string | null) ?? null,
+  }),
+  [triggerEventTypes.enum.dealMentioned]: (basePayload, data) => ({
+    ...buildDealPayload(basePayload, data),
+    mention: {
+      comment_id: data.commentId as string,
+      author_id: (data.authorId as string | null) ?? null,
+      mentioned_user_id: data.mentionedUserId as string,
+      excerpt: (data.excerpt as string) ?? "",
+    },
   }),
 } satisfies Record<MatchableEventType, PayloadBuilder>
 

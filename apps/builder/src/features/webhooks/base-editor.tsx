@@ -72,6 +72,17 @@ export const BaseEditor = ({
         return t("trigger.conditions.ticketStatusChanged")
       case triggerEventTypes.enum.ticketPriorityChanged:
         return t("trigger.conditions.ticketPriorityChanged")
+      // task* labels were missing here since s192 (existing drift), fixed s193
+      case triggerEventTypes.enum.taskCreated:
+        return t("trigger.conditions.taskCreated")
+      case triggerEventTypes.enum.taskCompleted:
+        return t("trigger.conditions.taskCompleted")
+      case triggerEventTypes.enum.taskOverdue:
+        return t("trigger.conditions.taskOverdue")
+      case triggerEventTypes.enum.taskAssigned:
+        return t("trigger.conditions.taskAssigned")
+      case triggerEventTypes.enum.dealMentioned:
+        return t("trigger.conditions.dealMentioned")
       case triggerEventTypes.enum.subscribedToSequence:
         return t("trigger.conditions.subscribedToSequence")
       case triggerEventTypes.enum.unsubscribedFromSequence:

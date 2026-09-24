@@ -5,6 +5,7 @@ import type {
   CallRecordedMetadata,
   CallTranscribedMetadata,
   DealEventMetadata,
+  DealMentionedMetadata,
   DealMovedToStageMetadata,
   DealPriorityChangedMetadata,
   DealStatusChangedMetadata,
@@ -411,3 +412,9 @@ export const emitDealTaskAssigned = async (
   metadata: DealTaskAssignedMetadata,
 ) =>
   await emitToAllEmitters("dealTaskAssigned", workspaceId, contactId, metadata)
+
+export const emitDealMentioned = async (
+  workspaceId: string,
+  contactId: string,
+  metadata: DealMentionedMetadata,
+) => await emitToAllEmitters("dealMentioned", workspaceId, contactId, metadata)

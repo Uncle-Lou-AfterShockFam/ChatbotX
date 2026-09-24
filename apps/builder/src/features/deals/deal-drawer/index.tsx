@@ -36,6 +36,7 @@ import { updateDealAction } from "../actions/update-deal-action"
 import { useDealActivities, useOwnerOptions } from "../provider/deal-hook"
 import type { DealResource } from "../schema/resource"
 import { DealActivityList } from "./activity-list"
+import { DealCommentsPanel } from "./comments-panel"
 import { DealDetailsForm } from "./details-form"
 import { DealTasksPanel } from "./tasks-panel"
 
@@ -207,6 +208,9 @@ export function DealDrawer({
             <TabsTrigger data-testid="deal-tab-tasks" value="tasks">
               {t("deals.tabs.tasks")}
             </TabsTrigger>
+            <TabsTrigger data-testid="deal-tab-comments" value="comments">
+              {t("deals.tabs.comments")}
+            </TabsTrigger>
             <TabsTrigger data-testid="deal-tab-activity" value="activity">
               {t("deals.tabs.activity")}
             </TabsTrigger>
@@ -223,6 +227,14 @@ export function DealDrawer({
           </TabsContent>
           <TabsContent className="pt-3" value="tasks">
             <DealTasksPanel
+              dealId={id}
+              onChanged={refresh}
+              ownerOptions={ownerOptions}
+              workspaceId={workspaceId}
+            />
+          </TabsContent>
+          <TabsContent className="pt-3" value="comments">
+            <DealCommentsPanel
               dealId={id}
               onChanged={refresh}
               ownerOptions={ownerOptions}

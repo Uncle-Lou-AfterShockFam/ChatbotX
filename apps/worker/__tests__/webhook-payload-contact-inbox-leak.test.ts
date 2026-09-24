@@ -158,10 +158,17 @@ const EVENT_DATA_BY_TYPE: Record<string, Record<string, unknown>> = {
     ...DEAL_TASK_EVENT_DATA,
     previousAssigneeId: null,
   },
+  [triggerEventTypes.enum.dealMentioned]: {
+    ...DEAL_EVENT_DATA,
+    commentId: "comment-1",
+    authorId: "user-1",
+    mentionedUserId: "user-2",
+    excerpt: "@Demo please review",
+  },
 }
 
 // Every MatchableEventType EXCEPT dateTimeBasedTrigger (documented exception
-// above) — the EMITTED_EVENT_TYPES from event-type-registry.ts (30 as of the deal task events).
+// above) — the EMITTED_EVENT_TYPES from event-type-registry.ts (31 as of dealMentioned, s193).
 const SELECTIVELY_PROJECTED_EVENT_TYPES = Object.keys(EVENT_DATA_BY_TYPE)
 
 describe("buildWebhookPayload — contactInboxId never leaks (selectively-projecting builders)", () => {

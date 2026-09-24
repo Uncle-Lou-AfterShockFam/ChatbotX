@@ -21,6 +21,7 @@ import { contactsPublicRouter } from "@/features/contacts/api/public"
 import { conversationsPublicRouter } from "@/features/conversations/api/public"
 import { couponsPublicRouter } from "@/features/coupons/api/public"
 import { customFieldsPublicRouter } from "@/features/custom-fields/api/public"
+import { dealCommentsPublicRouter } from "@/features/deal-comments/api/public"
 import {
   dealTasksPublicRouter,
   dealTaskTemplatesPublicRouter,
@@ -89,7 +90,11 @@ export const publicRouter = {
   conversations: conversationsPublicRouter,
   coupons: couponsPublicRouter,
   customFields: customFieldsPublicRouter,
-  deals: { ...dealsPublicRouter, ...dealTasksPublicRouter },
+  deals: {
+    ...dealsPublicRouter,
+    ...dealTasksPublicRouter,
+    ...dealCommentsPublicRouter,
+  },
   dynamicImages: dynamicImagesPublicRouter,
   emailTopics: emailTopicsPublicRouter,
   errorLogs: errorLogsPublicRouter,
