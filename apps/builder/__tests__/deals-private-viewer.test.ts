@@ -75,6 +75,11 @@ const dealTaskTemplateService = new Proxy(
   {} as Record<string, ReturnType<typeof vi.fn>>,
   { get: (t, k: string) => (t[k] ??= vi.fn(async () => [])) },
 )
+const dealCommentService = new Proxy(
+  {} as Record<string, ReturnType<typeof vi.fn>>,
+  { get: (t, k: string) => (t[k] ??= vi.fn(async () => ({ id: "c" }))) },
+)
+vi.mock("@chatbotx.io/business/deal-comment", () => ({ dealCommentService }))
 vi.mock("@chatbotx.io/business/deal-task", () => ({
   dealTaskService,
   dealTaskTemplateService,
@@ -83,6 +88,7 @@ vi.mock("@chatbotx.io/business/deal-task", () => ({
 await import("../src/features/deals/api/private")
 await import("../src/features/pipelines/api/private")
 await import("../src/features/deal-tasks/api/private")
+await import("../src/features/deal-comments/api/private")
 
 const context = {
   user: { id: "u-1" },
@@ -111,6 +117,7 @@ describe("private deal routes carry the viewer (s193)", () => {
       dealTaskService,
       dealTaskTemplateService,
       pipelineMemberService,
+      dealCommentService,
     ]
     const skipped: string[] = []
     for (const p of captured) {
@@ -132,6 +139,8 @@ describe("private deal routes carry the viewer (s193)", () => {
           text: "x",
           status: "won",
           title: "x",
+          commentId: "1",
+          body: "hi",
         },
       })
       const calls = services.flatMap((s) =>

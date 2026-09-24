@@ -2,6 +2,7 @@
 
 export type {
   DealEventMetadata,
+  DealMentionedMetadata,
   DealMovedToStageMetadata,
   DealPriorityChangedMetadata,
   DealStatusChangedMetadata,

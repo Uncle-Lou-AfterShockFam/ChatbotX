@@ -48,6 +48,8 @@ export const triggerEventTypes = z.enum([
   "taskCompleted",
   "taskOverdue",
   "taskAssigned",
+  // deal comment @mention (s193 part 3b); sourceId = pipelineId, contact = the deal's
+  "dealMentioned",
   "subscribedToSequence",
   "unsubscribedFromSequence",
   "WhatsappShoppingCartSent",

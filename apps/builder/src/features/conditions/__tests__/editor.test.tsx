@@ -270,6 +270,7 @@ describe("ConditionEditor", () => {
     triggerEventTypes.enum.ticketValueChanged,
     triggerEventTypes.enum.ticketStatusChanged,
     triggerEventTypes.enum.ticketPriorityChanged,
+    triggerEventTypes.enum.dealMentioned,
   ])("%s pins the condition to a pipeline through a combobox", (type) => {
     render(<TestConditionEditor defaultSourceId="pipe-2" type={type} />)
     const select = container.querySelector(

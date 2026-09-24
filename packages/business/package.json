@@ -21,6 +21,7 @@
     "./contact-sequence": "./src/contact-sequence/index.ts",
     "./company-stop": "./src/company/stop.ts",
     "./deal": "./src/deal/index.ts",
+    "./deal-comment": "./src/deal-comment/index.ts",
     "./deal-task": "./src/deal-task/index.ts",
     "./coexist": "./src/coexist/index.ts",
     "./coexist/history": "./src/coexist/history-window.ts",

@@ -45,6 +45,10 @@ export const taskOverdue = createDealCondition(
 export const taskAssigned = createDealCondition(
   triggerEventTypes.enum.taskAssigned,
 )
+// A teammate @mentioned in a deal comment (s193): pinned to the pipeline.
+export const dealMentioned = createDealCondition(
+  triggerEventTypes.enum.dealMentioned,
+)
 
 export const DEAL_CONDITION_TYPES = [
   triggerEventTypes.enum.ticketCreated,
@@ -56,4 +60,5 @@ export const DEAL_CONDITION_TYPES = [
   triggerEventTypes.enum.taskCompleted,
   triggerEventTypes.enum.taskOverdue,
   triggerEventTypes.enum.taskAssigned,
+  triggerEventTypes.enum.dealMentioned,
 ] as const

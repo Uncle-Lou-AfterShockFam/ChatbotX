@@ -23,7 +23,7 @@ import { workspaceModel } from "./workspace"
  * of this row inside the deal-insert transaction. Members live in
  * `PipelineMember` (`./pipeline-member`).
  *
- * Phase 2 (not created here, reserved): `DealComment` + mentions.
+ * Comments + mentions live in `./deal-comment` (s193).
  */
 export const pipelineModel = pgTable(
   "Pipeline",

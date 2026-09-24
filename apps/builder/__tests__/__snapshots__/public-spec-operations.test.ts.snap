@@ -1099,6 +1099,11 @@ exports[`public API spec — operation naming guard > operation list (operationI
   },
   {
     "method": "POST",
+    "operationId": "deals.createComment",
+    "path": "/v1/deals/{id}/comments",
+  },
+  {
+    "method": "POST",
     "operationId": "deals.createTask",
     "path": "/v1/deals/{id}/tasks",
   },
@@ -1106,6 +1111,11 @@ exports[`public API spec — operation naming guard > operation list (operationI
     "method": "DELETE",
     "operationId": "deals.delete",
     "path": "/v1/deals/{id}",
+  },
+  {
+    "method": "DELETE",
+    "operationId": "deals.deleteComment",
+    "path": "/v1/deals/{id}/comments/{commentId}",
   },
   {
     "method": "DELETE",
@@ -1126,6 +1136,11 @@ exports[`public API spec — operation naming guard > operation list (operationI
     "method": "GET",
     "operationId": "deals.listActivities",
     "path": "/v1/deals/{id}/activities",
+  },
+  {
+    "method": "GET",
+    "operationId": "deals.listComments",
+    "path": "/v1/deals/{id}/comments",
   },
   {
     "method": "GET",
@@ -1156,6 +1171,11 @@ exports[`public API spec — operation naming guard > operation list (operationI
     "method": "PATCH",
     "operationId": "deals.update",
     "path": "/v1/deals/{id}",
+  },
+  {
+    "method": "PUT",
+    "operationId": "deals.updateComment",
+    "path": "/v1/deals/{id}/comments/{commentId}",
   },
   {
     "method": "PATCH",

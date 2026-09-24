@@ -88,6 +88,7 @@ describe("deal condition schemas", () => {
     "taskCompleted",
     "taskOverdue",
     "taskAssigned",
+    "dealMentioned",
   ] as const)("%s requires a non-empty sourceId", async (type) => {
     const { allConditions } = await import("../schema")
     const schema = allConditions[type]

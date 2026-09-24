@@ -68,6 +68,14 @@ export type DealTaskCompletedMetadata = DealTaskEventMetadata & {
 export type DealTaskAssignedMetadata = DealTaskEventMetadata & {
   previousAssigneeId: string | null
 }
+/** A teammate was @mentioned in a deal comment (s193). One event per mentioned user. */
+export type DealMentionedMetadata = DealEventMetadata & {
+  commentId: string
+  authorId: string | null
+  mentionedUserId: string
+  /** The comment body with tokens rendered as `@Label`, clipped to 500 chars. */
+  excerpt: string
+}
 
 /**
  * Base event emitter class with common functionality
@@ -556,6 +564,18 @@ export abstract class BaseEventEmitter {
     metadata: DealTaskAssignedMetadata,
   ): Promise<void> {
     await this.emit(triggerEventTypes.enum.taskAssigned, {
+      workspaceId,
+      contactId,
+      metadata: { ...metadata, sourceId: metadata.pipelineId },
+    })
+  }
+
+  async dealMentioned(
+    workspaceId: string,
+    contactId: string,
+    metadata: DealMentionedMetadata,
+  ): Promise<void> {
+    await this.emit(triggerEventTypes.enum.dealMentioned, {
       workspaceId,
       contactId,
       metadata: { ...metadata, sourceId: metadata.pipelineId },

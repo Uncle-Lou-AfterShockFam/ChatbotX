@@ -29,6 +29,8 @@ export const dealActivityTypes = z.enum([
   // phase 2 part 2 (s192): tasks on the deal leave a trail too
   "taskCreated",
   "taskCompleted",
+  // phase 2 part 3b (s193): a comment (with its @mentions) leaves a trail
+  "commented",
 ])
 export type DealActivityType = z.infer<typeof dealActivityTypes>
 
@@ -68,6 +70,11 @@ export const pipelineAccess = z.enum(["workspace", "members"])
 export type PipelineAccess = z.infer<typeof pipelineAccess>
 
 export const MAX_PIPELINE_MEMBERS = 50
+
+/** Deal comments (s193 part 3b): body cap, mentions per comment, comments per deal. */
+export const MAX_DEAL_COMMENT_CHARS = 4000
+export const MAX_DEAL_COMMENT_MENTIONS = 20
+export const MAX_DEAL_COMMENTS_PER_DEAL = 1000
 
 export const DEFAULT_DEAL_CURRENCY = "USD"
 
