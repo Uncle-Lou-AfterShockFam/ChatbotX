@@ -13,7 +13,9 @@ import { PipelinePicker } from "../deal-pickers"
 const CreateTaskStepEditor = ({ parentName }: { parentName: string }) => {
   const t = useTranslations()
   const workspaceId = useWorkspaceId()
-  const assignTo = useWatch({ name: `${parentName}.assignTo` }) as string | undefined
+  const assignTo = useWatch({ name: `${parentName}.assignTo` }) as
+    | string
+    | undefined
   const ownerOptions = useOwnerOptions(workspaceId ?? "", {
     enabled: Boolean(workspaceId) && assignTo === "user",
   })
@@ -43,7 +45,10 @@ const CreateTaskStepEditor = ({ parentName }: { parentName: string }) => {
           name={`${parentName}.assignTo`}
           options={[
             { label: t("deals.tasks.assignToOptions.none"), value: "none" },
-            { label: t("deals.tasks.assignToOptions.dealOwner"), value: "dealOwner" },
+            {
+              label: t("deals.tasks.assignToOptions.dealOwner"),
+              value: "dealOwner",
+            },
             { label: t("deals.tasks.assignToOptions.user"), value: "user" },
           ]}
         />

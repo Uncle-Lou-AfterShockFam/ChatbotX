@@ -192,7 +192,9 @@ const privateListPipelineTaskTemplatesAPI = authorizedAPI
     summary: "Task templates of every stage of a pipeline",
     tags: ["Pipelines"],
   })
-  .input(withWorkspaceIdSchema.and(z.object({ pipelineId: zodBigintAsString() })))
+  .input(
+    withWorkspaceIdSchema.and(z.object({ pipelineId: zodBigintAsString() })),
+  )
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ data: z.array(dealTaskTemplateResource) }))
   .handler(async ({ input }) => ({

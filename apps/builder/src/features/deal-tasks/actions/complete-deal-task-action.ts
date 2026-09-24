@@ -32,7 +32,11 @@ export const completeDealTaskAction = workspaceActionClient
     }) => {
       const { dealId, taskId, force, reopen } = parsedInput
       if (reopen) {
-        const task = await dealTaskService.reopen({ workspaceId, dealId, taskId })
+        const task = await dealTaskService.reopen({
+          workspaceId,
+          dealId,
+          taskId,
+        })
         return { task, completed: false }
       }
       return await dealTaskService.complete({

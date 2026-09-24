@@ -20,7 +20,9 @@ const description = z
   .describe("Optional longer description of the task (max 2000 characters).")
 const assigneeId = zodBigintAsString()
   .nullish()
-  .describe("Workspace member (user id) the task is assigned to; null clears it.")
+  .describe(
+    "Workspace member (user id) the task is assigned to; null clears it.",
+  )
 const dueAt = z.coerce
   .date()
   .nullish()
@@ -64,11 +66,15 @@ export const upsertDealTaskTemplateRequest = z.object({
     .min(0)
     .max(MAX_DEAL_TASK_DUE_IN_DAYS)
     .nullish()
-    .describe("Due date offset in days from the day the deal enters the stage; null = none."),
+    .describe(
+      "Due date offset in days from the day the deal enters the stage; null = none.",
+    ),
   assignToOwner: z
     .boolean()
     .optional()
-    .describe("Assign the task to the deal owner when the deal enters the stage."),
+    .describe(
+      "Assign the task to the deal owner when the deal enters the stage.",
+    ),
   assigneeId: zodBigintAsString()
     .nullish()
     .describe("Fixed assignee (workspace member) when assignToOwner is off."),

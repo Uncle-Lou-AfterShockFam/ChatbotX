@@ -7,7 +7,10 @@ import { BaseStepViewer } from "../base/viewer"
 const CreateTaskStepViewer = () => {
   const t = useTranslations()
   return (
-    <BaseStepViewer icon={ListChecksIcon} title={t("flows.actions.createTask")} />
+    <BaseStepViewer
+      icon={ListChecksIcon}
+      title={t("flows.actions.createTask")}
+    />
   )
 }
 

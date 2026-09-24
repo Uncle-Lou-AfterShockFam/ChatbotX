@@ -12,14 +12,20 @@ const CompleteTaskStepEditor = ({ parentName }: { parentName: string }) => {
   const t = useTranslations()
   const match = useWatch({ name: `${parentName}.match` }) as string | undefined
   return (
-    <BaseStepEditor icon={CheckCheckIcon} title={t("flows.actions.completeTask")}>
+    <BaseStepEditor
+      icon={CheckCheckIcon}
+      title={t("flows.actions.completeTask")}
+    >
       <div className="mt-3 space-y-3">
         <PipelinePicker parentName={parentName} />
         <SelectField
           label={t("deals.tasks.matchBy")}
           name={`${parentName}.match`}
           options={[
-            { label: t("deals.tasks.matchOptions.template"), value: "template" },
+            {
+              label: t("deals.tasks.matchOptions.template"),
+              value: "template",
+            },
             { label: t("deals.tasks.matchOptions.title"), value: "title" },
           ]}
         />
