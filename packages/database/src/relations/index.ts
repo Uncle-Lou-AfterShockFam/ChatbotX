@@ -33,6 +33,8 @@ import { commentAutomationEventRelations } from "./comment-automation-event"
 import { commentAutomationMissRelations } from "./comment-automation-miss"
 import { commentAutomationReplyRelations } from "./comment-automation-reply"
 import { companyRelations } from "./company"
+import { companyActivityRelations } from "./company-activity"
+import { companyNoteRelations } from "./company-note"
 import { contactRelations } from "./contact"
 import { contactCustomFieldRelations } from "./contact-custom-field"
 import { contactInboxRelations } from "./contact-inbox"
@@ -211,6 +213,8 @@ export const relations = {
   ...integrationZaloRelations,
   ...invitationRelations,
   ...companyRelations,
+  ...companyActivityRelations,
+  ...companyNoteRelations,
   ...dealRelations,
   ...dealCommentRelations,
   ...dealTaskRelations,

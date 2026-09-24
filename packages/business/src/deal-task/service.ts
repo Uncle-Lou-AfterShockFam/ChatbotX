@@ -151,6 +151,51 @@ export class DealTaskService extends BaseService {
     }))
   }
 
+  /**
+   * Tasks across several deals (s195 Contact / Company 360): only the deals
+   * the viewer may read are consulted (`dealService.list` semantics), newest
+   * due first, open before done. No blocker graph: the drawer owns that.
+   */
+  async listByDealIds(props: {
+    workspaceId: string
+    dealIds: string[]
+    viewer?: DealViewer | null
+    limit?: number
+    tx?: DatabaseClient
+  }): Promise<DealTaskModel[]> {
+    const { workspaceId, viewer, tx = db } = props
+    const limit = Math.min(Math.max(Math.trunc(props.limit ?? 100), 1), 200)
+    if (props.dealIds.length === 0) {
+      return []
+    }
+    const visible = await dealService.list({
+      workspaceId,
+      viewer,
+      perPage: props.dealIds.length,
+      page: 1,
+    })
+    const allowed = new Set(visible.data.map((d) => d.id))
+    const dealIds = props.dealIds.filter((id) => allowed.has(id))
+    if (dealIds.length === 0) {
+      return []
+    }
+    return await tx
+      .select()
+      .from(dealTaskModel)
+      .where(
+        and(
+          eq(dealTaskModel.workspaceId, workspaceId),
+          inArray(dealTaskModel.dealId, dealIds),
+        ),
+      )
+      .orderBy(
+        dealTaskModel.status,
+        sql`${dealTaskModel.dueAt} asc nulls last`,
+        dealTaskModel.createdAt,
+      )
+      .limit(limit)
+  }
+
   async create(props: {
     workspaceId: string
     dealId: string

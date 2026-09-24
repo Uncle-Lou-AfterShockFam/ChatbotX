@@ -75,6 +75,12 @@ export const updateDealRequest = z.object({
     .record(z.string(), z.unknown())
     .optional()
     .describe("Extra fields merged into the deal's fields."),
+  contactId: zodBigintAsString()
+    .nullish()
+    .describe("Re-link the deal to this contact; null clears the link."),
+  companyId: zodBigintAsString()
+    .nullish()
+    .describe("Re-link the deal to this company; null clears the link."),
 })
 export type UpdateDealRequest = z.infer<typeof updateDealRequest>
 

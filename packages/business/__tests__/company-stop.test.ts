@@ -87,6 +87,9 @@ vi.mock("../src/logger", () => ({
 vi.mock("../src/company/service", () => ({
   companyService: { listContactIds: mockListContactIds },
 }))
+vi.mock("../src/company/activity", () => ({
+  companyActivityService: { record: vi.fn(async () => ({})) },
+}))
 vi.mock("../src/contact-sequence/service", () => ({
   contactSequenceService: {
     listByContactId: mockListByContactId,

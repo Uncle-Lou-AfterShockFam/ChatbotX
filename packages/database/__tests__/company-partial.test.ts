@@ -57,3 +57,22 @@ describe("company partials", () => {
     expect(normalizeCompanyDomains([1 as unknown as string])).toEqual([])
   })
 })
+
+describe("company activity types (s195)", () => {
+  test("the change-log enum is closed and stable", async () => {
+    const { companyActivityTypes } = await import("../src/partials/company")
+    expect(companyActivityTypes.options).toEqual([
+      "created",
+      "updated",
+      "stopped",
+      "noteAdded",
+      "noteDeleted",
+      "contactLinked",
+      "contactUnlinked",
+      "dealCreated",
+      "dealMoved",
+      "dealStatusChanged",
+    ])
+    expect(companyActivityTypes.safeParse("bogus").success).toBe(false)
+  })
+})

@@ -242,6 +242,7 @@ describe("companyService.assignContact", () => {
 
   test("unknown contact -> notFound", async () => {
     mockFindOrFail.mockResolvedValue({ id: "company-1" })
+    mockSelectLimit.mockResolvedValue([])
     mockUpdateReturning.mockResolvedValue([])
     await expect(
       companyService.assignContact({
@@ -252,7 +253,39 @@ describe("companyService.assignContact", () => {
     ).rejects.toMatchObject({ code: "notFound" })
   })
 
+  test("a re-link logs contactUnlinked on the old company and contactLinked on the new", async () => {
+    const { companyActivityService } = await import("../src/company/activity")
+    const record = vi
+      .spyOn(companyActivityService, "record")
+      .mockResolvedValue({} as never)
+    mockFindOrFail.mockResolvedValue({ id: "company-2" })
+    mockSelectLimit.mockResolvedValue([{ id: "c-1", companyId: "company-1" }])
+    mockUpdateReturning.mockResolvedValue([{ id: "c-1" }])
+    await companyService.assignContact({
+      workspaceId: WS,
+      contactId: "c-1",
+      companyId: "company-2",
+      actorId: "u-1",
+    })
+    expect(record.mock.calls.map((c) => [c[0].companyId, c[0].type])).toEqual([
+      ["company-1", "contactUnlinked"],
+      ["company-2", "contactLinked"],
+    ])
+    record.mockClear()
+    // same company again: nothing written, nothing logged
+    mockSelectLimit.mockResolvedValue([{ id: "c-1", companyId: "company-2" }])
+    await companyService.assignContact({
+      workspaceId: WS,
+      contactId: "c-1",
+      companyId: "company-2",
+    })
+    expect(record).not.toHaveBeenCalled()
+    expect(mockInvalidate).toHaveBeenCalledTimes(1)
+    record.mockRestore()
+  })
+
   test("null clears the company without a company lookup", async () => {
+    mockSelectLimit.mockResolvedValue([{ id: "c-1", companyId: "company-1" }])
     mockUpdateReturning.mockResolvedValue([{ id: "c-1" }])
     await companyService.assignContact({
       workspaceId: WS,

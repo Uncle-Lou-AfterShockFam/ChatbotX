@@ -3,6 +3,27 @@
  * to auto-link a contact to a company by the domain of its email address.
  */
 
+import z from "zod"
+
+/**
+ * The company change log's row types (s195 CRM 360). `dealCreated`,
+ * `dealMoved` and `dealStatusChanged` mirror the DealActivity of a deal that
+ * carries this company; the rest are company-side mutations.
+ */
+export const companyActivityTypes = z.enum([
+  "created",
+  "updated",
+  "stopped",
+  "noteAdded",
+  "noteDeleted",
+  "contactLinked",
+  "contactUnlinked",
+  "dealCreated",
+  "dealMoved",
+  "dealStatusChanged",
+])
+export type CompanyActivityType = z.infer<typeof companyActivityTypes>
+
 /** Applying this tag to a company contact stops the whole company (configurable per workspace). */
 export const DEFAULT_COMPANY_STOP_TAG_NAME = "company-stop"
 

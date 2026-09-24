@@ -46,6 +46,8 @@ import {
 import { createId } from "@chatbotx.io/utils"
 import { DEAL_POSITION_STEP } from "@chatbotx.io/utils/deal-position"
 import { BaseService } from "../base.service"
+import { companyActivityService } from "../company/activity"
+import { companyService } from "../company/service"
 import { notFoundException, validationException } from "../errors"
 import { logger } from "../logger"
 import {
@@ -95,7 +97,16 @@ export type DealData = {
 export type DealUpdateData = Partial<
   Pick<
     DealData,
-    "title" | "value" | "currency" | "priority" | "ownerId" | "dueAt" | "fields"
+    | "title"
+    | "value"
+    | "currency"
+    | "priority"
+    | "ownerId"
+    | "dueAt"
+    | "fields"
+    // s195 CRM 360: re-link after creation
+    | "contactId"
+    | "companyId"
   >
 >
 
@@ -390,6 +401,13 @@ class DealService extends BaseService {
     actorId: string | null = null,
   ): Promise<void> {
     await this.audit("deal.create", deal.id)
+    await companyActivityService.recordSafely({
+      workspaceId: deal.workspaceId,
+      companyId: deal.companyId,
+      type: "dealCreated",
+      actorId,
+      payload: { dealId: deal.id, title: deal.title, stageId: deal.stageId },
+    })
     await this.emitFor(deal, emitDealCreated, {})
     // A deal created straight into a won stage IS won: the `won` rule applies
     // here too, not only through setStatus.
@@ -621,6 +639,46 @@ class DealService extends BaseService {
           set.fields = merged
         }
       }
+      if (data.contactId !== undefined) {
+        const contactId =
+          data.contactId === null
+            ? null
+            : (
+                await this.resolveContact({
+                  workspaceId,
+                  contactId: data.contactId,
+                  tx,
+                })
+              ).id
+        if (contactId !== current.contactId) {
+          set.contactId = contactId
+          changes.push({
+            type: "contactChanged",
+            from: current.contactId,
+            to: contactId,
+          })
+        }
+      }
+      if (data.companyId !== undefined) {
+        const companyId =
+          data.companyId === null
+            ? null
+            : (
+                await companyService.findOrFail({
+                  workspaceId,
+                  id: data.companyId,
+                  tx,
+                })
+              ).id
+        if (companyId !== current.companyId) {
+          set.companyId = companyId
+          changes.push({
+            type: "companyChanged",
+            from: current.companyId,
+            to: companyId,
+          })
+        }
+      }
       if (Object.keys(set).length === 0) {
         return { deal: current, changed: false }
       }
@@ -654,6 +712,15 @@ class DealService extends BaseService {
     }
     await this.audit("deal.update", id)
     for (const change of changes) {
+      if (change.type === "companyChanged") {
+        await companyActivityService.recordSafely({
+          workspaceId,
+          companyId: change.to as string | null,
+          type: "dealCreated",
+          actorId,
+          payload: { dealId: id, title: result.deal.title, linked: true },
+        })
+      }
       if (change.type === "valueChanged") {
         await this.emitFor(result.deal, emitDealValueChanged, {
           oldValue: change.from as string | null,
@@ -741,6 +808,18 @@ class DealService extends BaseService {
       return outcome.deal
     }
     await this.audit("deal.move", id)
+    await companyActivityService.recordSafely({
+      workspaceId,
+      companyId: outcome.deal.companyId,
+      type: "dealMoved",
+      actorId,
+      payload: {
+        dealId: id,
+        title: outcome.deal.title,
+        from: outcome.fromStageId,
+        to: outcome.stage.id,
+      },
+    })
     await this.emitFor(outcome.deal, emitDealMovedToStage, {
       fromStageId: outcome.fromStageId,
     })
@@ -831,6 +910,18 @@ class DealService extends BaseService {
       return outcome.deal
     }
     await this.audit("deal.status", id)
+    await companyActivityService.recordSafely({
+      workspaceId,
+      companyId: outcome.deal.companyId,
+      type: "dealStatusChanged",
+      actorId,
+      payload: {
+        dealId: id,
+        title: outcome.deal.title,
+        from: outcome.oldStatus,
+        to: status,
+      },
+    })
     await this.emitFor(outcome.deal, emitDealStatusChanged, {
       oldStatus: outcome.oldStatus,
     })

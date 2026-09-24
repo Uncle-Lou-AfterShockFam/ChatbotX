@@ -33,6 +33,7 @@ import {
 } from "../errors"
 import type { PaginatedResult } from "../types"
 import { workspaceService } from "../workspace/service"
+import { companyActivityService } from "./activity"
 
 export type ListCompaniesInput = {
   workspaceId: string
@@ -158,9 +159,11 @@ class CompanyService extends BaseService {
   async create(props: {
     workspaceId: string
     data: CompanyData
+    actorId?: string | null
     tx?: DatabaseClient
   }): Promise<CompanyModel> {
     const { workspaceId, data, tx = db } = props
+    const actorId = props.actorId ?? null
     const name = data.name.trim()
     if (name.length === 0) {
       throw validationException("name", "Name is required.")
@@ -189,6 +192,14 @@ class CompanyService extends BaseService {
       })
       .returning()
 
+    await companyActivityService.record({
+      tx,
+      workspaceId,
+      companyId: company.id,
+      type: "created",
+      actorId,
+      payload: { name },
+    })
     await this.audit("company.create", company.id)
     return company
   }
@@ -197,11 +208,13 @@ class CompanyService extends BaseService {
     workspaceId: string
     id: string
     data: Partial<CompanyData>
+    actorId?: string | null
     tx?: DatabaseClient
   }): Promise<CompanyModel> {
     const { workspaceId, id, data, tx = db } = props
+    const actorId = props.actorId ?? null
 
-    await this.findOrFail({ workspaceId, id, tx })
+    const current = await this.findOrFail({ workspaceId, id, tx })
 
     const set: Partial<typeof companyModel.$inferInsert> = {}
     if (data.name !== undefined) {
@@ -248,6 +261,24 @@ class CompanyService extends BaseService {
 
     if (!updated) {
       throw notFoundException(COMPANY_NOT_FOUND)
+    }
+    const changed: Record<string, { from: unknown; to: unknown }> = {}
+    for (const key of Object.keys(set) as (keyof typeof set)[]) {
+      const before = current[key as keyof CompanyModel] ?? null
+      const after = updated[key as keyof CompanyModel] ?? null
+      if (JSON.stringify(before) !== JSON.stringify(after)) {
+        changed[key] = { from: before, to: after }
+      }
+    }
+    if (Object.keys(changed).length > 0) {
+      await companyActivityService.record({
+        tx,
+        workspaceId,
+        companyId: id,
+        type: "updated",
+        actorId,
+        payload: { changed },
+      })
     }
     await this.audit("company.update", id)
     return updated
@@ -305,15 +336,38 @@ class CompanyService extends BaseService {
     return row
   }
 
+  /**
+   * Set (or clear, `companyId: null`) a contact's company. The old company
+   * logs `contactUnlinked`, the new one `contactLinked` (s195); a no-op
+   * assignment logs nothing.
+   */
   async assignContact(props: {
     workspaceId: string
     contactId: string
     companyId: string | null
+    actorId?: string | null
     tx?: DatabaseClient
   }): Promise<void> {
     const { workspaceId, contactId, companyId, tx = db } = props
+    const actorId = props.actorId ?? null
     if (companyId !== null) {
       await this.findOrFail({ workspaceId, id: companyId, tx })
+    }
+    const [before] = await tx
+      .select({ id: contactModel.id, companyId: contactModel.companyId })
+      .from(contactModel)
+      .where(
+        and(
+          eq(contactModel.id, contactId),
+          eq(contactModel.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1)
+    if (!before) {
+      throw notFoundException("Contact not found")
+    }
+    if (before.companyId === companyId) {
+      return
     }
     const updated = await tx
       .update(contactModel)
@@ -327,6 +381,26 @@ class CompanyService extends BaseService {
       .returning({ id: contactModel.id })
     if (updated.length === 0) {
       throw notFoundException("Contact not found")
+    }
+    if (before.companyId) {
+      await companyActivityService.record({
+        tx,
+        workspaceId,
+        companyId: before.companyId,
+        type: "contactUnlinked",
+        actorId,
+        payload: { contactId, toCompanyId: companyId },
+      })
+    }
+    if (companyId) {
+      await companyActivityService.record({
+        tx,
+        workspaceId,
+        companyId,
+        type: "contactLinked",
+        actorId,
+        payload: { contactId, fromCompanyId: before.companyId },
+      })
     }
     await contactService.invalidate({ workspaceId, ids: [contactId] })
   }

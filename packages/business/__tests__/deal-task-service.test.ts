@@ -114,6 +114,7 @@ const m = vi.hoisted(() => {
     state,
     makeTx,
     dealFindOrFail: vi.fn(),
+    dealList: vi.fn(),
     resolveStage: vi.fn(),
     pipelineFindOrFail: vi.fn(),
     emitCreated: vi.fn(() => {
@@ -183,7 +184,10 @@ vi.mock("@chatbotx.io/events", () => ({
   emitDealTaskAssigned: (...a: unknown[]) => m.emitAssigned(...a),
 }))
 vi.mock("../src/deal/service", () => ({
-  dealService: { findOrFail: (...a: unknown[]) => m.dealFindOrFail(...a) },
+  dealService: {
+    findOrFail: (...a: unknown[]) => m.dealFindOrFail(...a),
+    list: (...a: unknown[]) => m.dealList(...a),
+  },
 }))
 vi.mock("../src/pipeline/service", () => ({
   pipelineService: {
@@ -739,5 +743,38 @@ describe("dealTaskService.claimOverdue + instantiateForStage", () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe("dealTaskService.listByDealIds (s195)", () => {
+  test("empty input = no query; only the viewer-visible deals are consulted; the page is capped", async () => {
+    const listSpy = m.dealList.mockResolvedValue({
+      data: [{ id: "d-1" }],
+      pageCount: 1,
+    })
+    expect(
+      await dealTaskService.listByDealIds({ workspaceId: "ws-1", dealIds: [] }),
+    ).toEqual([])
+    expect(listSpy).not.toHaveBeenCalled()
+
+    m.state.selects.push([{ id: "t-1", dealId: "d-1" }])
+    const rows = await dealTaskService.listByDealIds({
+      workspaceId: "ws-1",
+      dealIds: ["d-1", "d-hidden"],
+      viewer: { userId: "u-1", permissions: {} },
+      limit: 9999,
+    })
+    expect(rows).toEqual([{ id: "t-1", dealId: "d-1" }])
+    expect(listSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "ws-1", perPage: 2 }),
+    )
+    listSpy.mockResolvedValueOnce({ data: [], pageCount: 1 })
+    expect(
+      await dealTaskService.listByDealIds({
+        workspaceId: "ws-1",
+        dealIds: ["d-hidden"],
+        viewer: { userId: "u-1", permissions: {} },
+      }),
+    ).toEqual([])
   })
 })

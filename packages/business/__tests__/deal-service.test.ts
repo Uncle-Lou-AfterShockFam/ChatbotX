@@ -171,6 +171,19 @@ vi.mock("@chatbotx.io/events", () => ({
 vi.mock("../src/company/stop", () => ({
   stopCompany: (...a: unknown[]) => m.stopCompany(...a),
 }))
+// s195: the company change log rides BESIDE the deal write (recordSafely
+// after commit); it is its own service with its own tests.
+vi.mock("../src/company/activity", () => ({
+  companyActivityService: {
+    record: vi.fn(async () => ({})),
+    recordSafely: vi.fn(async () => undefined),
+  },
+}))
+vi.mock("../src/company/service", () => ({
+  companyService: {
+    findOrFail: vi.fn(async (p: { id: string }) => ({ id: p.id })),
+  },
+}))
 vi.mock("../src/pipeline/service", () => ({
   pipelineService: {
     findOrFail: (...a: unknown[]) => m.pipelineFindOrFail(...a),
@@ -1036,5 +1049,92 @@ describe("dealService viewer scope (s193)", () => {
         viewer: FULL,
       } as never),
     ).resolves.toEqual({ data: [], pageCount: 1 })
+  })
+})
+
+describe("dealService.update re-link (s195)", () => {
+  beforeEach(() => {
+    m.calls.length = 0
+    m.state.deal = {
+      id: "deal-1",
+      workspaceId: WS,
+      title: "Roof",
+      pipelineId: "pipe-1",
+      stageId: "stage-1",
+      status: "open",
+      contactId: "contact-1",
+      companyId: "co-1",
+      ownerId: null,
+      value: null,
+      currency: "USD",
+      priority: "medium",
+      fields: {},
+    }
+    m.findOrFail.mockResolvedValue(m.state.deal)
+  })
+
+  test("a contact outside the workspace is a 404 and nothing is written", async () => {
+    m.state.contact = null
+    await expect(
+      dealService.update({
+        workspaceId: WS,
+        id: "deal-1",
+        data: { contactId: "contact-x" },
+      }),
+    ).rejects.toMatchObject({ code: "notFound" })
+    expect(m.calls.filter((c) => c.startsWith("update:"))).toEqual([])
+  })
+
+  test("re-linking the contact writes contactChanged; the same contact is a no-op", async () => {
+    m.state.contact = { id: "contact-2", companyId: null }
+    m.state.updateReturning = [{ ...m.state.deal, contactId: "contact-2" }]
+    await dealService.update({
+      workspaceId: WS,
+      id: "deal-1",
+      data: { contactId: "contact-2" },
+    })
+    expect(m.calls).toEqual(["update:contactId", "activity:contactChanged"])
+    m.calls.length = 0
+    m.state.contact = { id: "contact-1", companyId: "co-1" }
+    await dealService.update({
+      workspaceId: WS,
+      id: "deal-1",
+      data: { contactId: "contact-1" },
+    })
+    expect(m.calls).toEqual([])
+  })
+
+  test("re-linking the company writes companyChanged and logs on the NEW company after commit", async () => {
+    const { companyActivityService } = await import("../src/company/activity")
+    m.state.updateReturning = [{ ...m.state.deal, companyId: "co-2" }]
+    await dealService.update({
+      workspaceId: WS,
+      id: "deal-1",
+      data: { companyId: "co-2" },
+    })
+    expect(m.calls).toEqual(["update:companyId", "activity:companyChanged"])
+    expect(companyActivityService.recordSafely).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: "co-2",
+        type: "dealCreated",
+        payload: expect.objectContaining({ dealId: "deal-1", linked: true }),
+      }),
+    )
+  })
+
+  test("clearing both links (null) is allowed and recorded", async () => {
+    m.state.updateReturning = [
+      { ...m.state.deal, contactId: null, companyId: null },
+    ]
+    await dealService.update({
+      workspaceId: WS,
+      id: "deal-1",
+      data: { contactId: null, companyId: null },
+    })
+    expect(m.calls).toEqual([
+      "update:contactId,companyId",
+      "activity:contactChanged",
+      "activity:companyChanged",
+    ])
   })
 })
