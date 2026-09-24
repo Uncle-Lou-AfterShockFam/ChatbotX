@@ -1153,6 +1153,11 @@ exports[`public API spec — operation naming guard > operation list (operationI
     "path": "/v1/deals/{id}/move",
   },
   {
+    "method": "POST",
+    "operationId": "deals.movePipeline",
+    "path": "/v1/deals/{id}/move-pipeline",
+  },
+  {
     "method": "DELETE",
     "operationId": "deals.removeDependency",
     "path": "/v1/deals/{id}/tasks/{taskId}/dependencies/{dependsOnTaskId}",
