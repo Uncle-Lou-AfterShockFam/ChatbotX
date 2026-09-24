@@ -4036,14 +4036,18 @@
       "label": "סוג התראה",
       "notifyAdmin": "יידוע מנהל מערכת",
       "newMessageToHuman": "הודעה חדשה לנציג אנושי",
-      "newOrder": "הזמנה חדשה"
+      "newOrder": "הזמנה חדשה",
+      "taskAssigned": "Task assigned to me",
+      "dealMentioned": "Mentioned on a deal"
     },
     "notificationChannel": {
       "label": "ערוץ התראות",
       "messenger": "Messenger",
       "email": "דוא\"ל",
       "telegram": "Telegram",
-      "browser": "דפדפן"
+      "browser": "דפדפן",
+      "push": "Mobile push",
+      "inApp": "In-app"
     },
     "accessToken": {
       "label": "אסימון גישה"
@@ -6899,5 +6903,13 @@
       "edited": "(edited)",
       "someone": "Someone"
     }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "Nothing yet",
+    "markAllRead": "Mark all read",
+    "taskAssigned": "Task assigned: {task}",
+    "dealMentioned": "You were mentioned on a deal",
+    "loading": "Loading..."
   }
 }

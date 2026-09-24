@@ -39,11 +39,15 @@ export function buildSupportMembership(props: {
       email: false,
       telegram: false,
       browser: false,
+      push: false,
+      inApp: false,
     },
     notificationTypes: {
       notifyAdmin: false,
       newMessageToHuman: false,
       newOrder: false,
+      taskAssigned: false,
+      dealMentioned: false,
     },
     permissions: FULL_WORKSPACE_MEMBER_PERMISSIONS,
     // No real row exists to update, so this stamp stays null; live online

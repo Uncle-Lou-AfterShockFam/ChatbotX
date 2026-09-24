@@ -34,6 +34,7 @@ import { dealService } from "../deal/service"
 import { dealEventMetadata } from "../deal/shared"
 import { notFoundException, validationException } from "../errors"
 import { logger } from "../logger"
+import { notificationService } from "../notification/service"
 import { type DealViewer, isUnrestrictedViewer } from "../pipeline/access"
 import { pipelineMemberService } from "../pipeline/members"
 import { pipelineService } from "../pipeline/service"
@@ -159,6 +160,7 @@ export class DealCommentService extends BaseService {
     })
     await this.audit("deal.comment.create", comment.id)
     await this.emitMentions(deal, comment, mentions)
+    await this.notifyMentions(deal, comment, mentions)
     return comment
   }
 
@@ -209,6 +211,7 @@ export class DealCommentService extends BaseService {
     })
     await this.audit("deal.comment.update", commentId)
     await this.emitMentions(deal, comment, added)
+    await this.notifyMentions(deal, comment, added)
     return comment
   }
 
@@ -256,6 +259,14 @@ export class DealCommentService extends BaseService {
         ),
       )
       .returning({ id: dealCommentMentionModel.id })
+    if (rows.length > 0) {
+      await notificationService.markReadByComment({
+        workspaceId,
+        userId,
+        commentId,
+        tx,
+      })
+    }
     return { marked: rows.length > 0 }
   }
 
@@ -386,6 +397,44 @@ export class DealCommentService extends BaseService {
         })),
       )
       .onConflictDoNothing()
+  }
+
+  /**
+   * Each mentioned user's own notification (s194), beside `emitMentions` so
+   * a contact-less deal still notifies. The author mentioning themselves is
+   * silent. Never throws.
+   */
+  private async notifyMentions(
+    deal: DealModel,
+    comment: DealCommentModel,
+    mentions: DealCommentMentionRef[],
+  ): Promise<void> {
+    const excerpt = this.excerpt(comment.body)
+    for (const mention of mentions) {
+      if (mention.userId === comment.authorId) {
+        continue
+      }
+      try {
+        await notificationService.notify({
+          workspaceId: deal.workspaceId,
+          userId: mention.userId,
+          type: "dealMentioned",
+          dealId: deal.id,
+          commentId: comment.id,
+          payload: {
+            pipelineId: deal.pipelineId,
+            dealTitle: deal.title,
+            actorId: comment.authorId,
+            excerpt,
+          },
+        })
+      } catch (error) {
+        logger.warn(
+          { error, commentId: comment.id, userId: mention.userId },
+          "deal-comment: notify failed",
+        )
+      }
+    }
   }
 
   private async emitMentions(

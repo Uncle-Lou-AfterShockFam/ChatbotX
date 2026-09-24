@@ -495,12 +495,16 @@ class WorkspaceService extends BaseService {
           notifyAdmin: true,
           newMessageToHuman: true,
           newOrder: true,
+          taskAssigned: true,
+          dealMentioned: true,
         },
         notificationChannels: {
           messenger: true,
           email: true,
           telegram: true,
           browser: true,
+          push: true,
+          inApp: true,
         },
       },
     })

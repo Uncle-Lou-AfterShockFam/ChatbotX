@@ -80,6 +80,11 @@ export const router = {
       default: m.dealCommentsAPI,
     })),
   ),
+  notificationsAPI: lazy(() =>
+    import("@/features/notifications/api").then((m) => ({
+      default: m.notificationsAPI,
+    })),
+  ),
   pipelinesAPI: lazy(() =>
     import("@/features/pipelines/api").then((m) => ({
       default: m.pipelinesAPI,

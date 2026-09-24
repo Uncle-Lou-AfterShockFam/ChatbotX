@@ -44,10 +44,17 @@ export type WorkspaceMemberPermissions = z.infer<
   typeof workspaceMemberPermissionsSchema
 >
 
+/**
+ * Stored shape. The deal keys (s194) are optional so the legacy `{}` rows
+ * still parse; `resolveMemberNotificationPrefs` (business) fills them in,
+ * defaulting the NEW keys to true and the old ones to false.
+ */
 export const workspaceMemberNotificationTypesSchema = z.object({
   notifyAdmin: z.boolean(),
   newMessageToHuman: z.boolean(),
   newOrder: z.boolean(),
+  taskAssigned: z.boolean().optional(),
+  dealMentioned: z.boolean().optional(),
 })
 export type WorkspaceMemberNotificationTypes = z.infer<
   typeof workspaceMemberNotificationTypesSchema
@@ -58,6 +65,8 @@ export const workspaceMemberNotificationChannelsSchema = z.object({
   email: z.boolean(),
   telegram: z.boolean(),
   browser: z.boolean(),
+  push: z.boolean().optional(),
+  inApp: z.boolean().optional(),
 })
 export type WorkspaceMemberNotificationChannels = z.infer<
   typeof workspaceMemberNotificationChannelsSchema

@@ -45,8 +45,13 @@ export function DealsBoard({
   pipelines: PipelineWithStagesResource[]
 }) {
   const t = useTranslations()
-  const [{ pipelineId: queryPipelineId, status }, setQuery] = useQueryStates({
+  const [
+    { pipelineId: queryPipelineId, status, dealId: queryDealId },
+    setQuery,
+  ] = useQueryStates({
     pipelineId: parseAsString,
+    // s194: a notification deep-links to `?pipelineId=&dealId=`
+    dealId: parseAsString,
     status: parseAsStringEnum<BoardStatusFilter>([
       "open",
       "won",
@@ -76,9 +81,16 @@ export function DealsBoard({
     }
   }, [board.data])
 
-  const [openDealId, setOpenDealId] = useState<string | null>(null)
+  const [openDealId, setOpenDealId] = useState<string | null>(queryDealId)
   const openDeal =
     columns.flatMap((c) => c.deals).find((d) => d.id === openDealId) ?? null
+  // the query param opens the drawer once, then the local state owns it
+  useEffect(() => {
+    if (queryDealId) {
+      setOpenDealId(queryDealId)
+      setQuery({ dealId: null })
+    }
+  }, [queryDealId, setQuery])
 
   const { execute: move } = useAction(moveDealAction.bind(null, workspaceId), {
     onSuccess: () => invalidate(),

@@ -1,4 +1,8 @@
-import { workspaceMemberPermissionsSchema } from "@chatbotx.io/database/partials"
+import {
+  workspaceMemberNotificationChannelsSchema,
+  workspaceMemberNotificationTypesSchema,
+  workspaceMemberPermissionsSchema,
+} from "@chatbotx.io/database/partials"
 import {
   createSelectSchema,
   workspaceMemberModel,
@@ -14,7 +18,9 @@ export const workspaceMemberResource = createSelectSchema(
   },
 ).extend({
   permissions: workspaceMemberPermissionsSchema,
-  // notificationTypes: workspaceMemberNotificationTypesSchema.partial(),
-  // notificationChannels: workspaceMemberNotificationChannelsSchema.partial(),
+  // stored shape: legacy rows hold `{}`; readers normalise with
+  // resolveMemberNotificationPrefs (s194)
+  notificationTypes: workspaceMemberNotificationTypesSchema.partial(),
+  notificationChannels: workspaceMemberNotificationChannelsSchema.partial(),
 })
 export type WorkspaceMemberResource = z.infer<typeof workspaceMemberResource>

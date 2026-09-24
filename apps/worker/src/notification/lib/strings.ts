@@ -6,6 +6,8 @@ const strings = {
     sentAttachment: "Sent an attachment",
     sentAttachments: (count: number) => `Sent ${count} attachments`,
     assignedConversation: "You were assigned a conversation",
+    assignedTask: "You were assigned a task",
+    mentionedInDeal: "You were mentioned on a deal",
   },
   vi: {
     newMessage: "Tin nhắn mới",
@@ -14,6 +16,8 @@ const strings = {
     sentAttachment: "Đã gửi một tệp đính kèm",
     sentAttachments: (count: number) => `Đã gửi ${count} tệp đính kèm`,
     assignedConversation: "Bạn đã được gán một cuộc trò chuyện",
+    assignedTask: "Bạn đã được giao một công việc",
+    mentionedInDeal: "Bạn đã được nhắc đến trong một giao dịch",
   },
   ar: {
     newMessage: "رسالة جديدة",
@@ -22,6 +26,8 @@ const strings = {
     sentAttachment: "أرسل مرفقًا",
     sentAttachments: (count: number) => `أرسل ${count} مرفقات`,
     assignedConversation: "تم تعيين محادثة لك",
+    assignedTask: "تم تعيين مهمة لك",
+    mentionedInDeal: "تم ذكرك في صفقة",
   },
   da: {
     newMessage: "Ny besked",
@@ -30,6 +36,8 @@ const strings = {
     sentAttachment: "Sendte en vedhæftet fil",
     sentAttachments: (count: number) => `Sendte ${count} vedhæftede filer`,
     assignedConversation: "Du blev tildelt en samtale",
+    assignedTask: "Du blev tildelt en opgave",
+    mentionedInDeal: "Du blev nævnt på en aftale",
   },
   de: {
     newMessage: "Neue Nachricht",
@@ -38,6 +46,8 @@ const strings = {
     sentAttachment: "Hat einen Anhang gesendet",
     sentAttachments: (count: number) => `Hat ${count} Anhänge gesendet`,
     assignedConversation: "Dir wurde eine Unterhaltung zugewiesen",
+    assignedTask: "Dir wurde eine Aufgabe zugewiesen",
+    mentionedInDeal: "Du wurdest bei einem Deal erwähnt",
   },
   es: {
     newMessage: "Nuevo mensaje",
@@ -46,6 +56,8 @@ const strings = {
     sentAttachment: "Envió un archivo adjunto",
     sentAttachments: (count: number) => `Envió ${count} archivos adjuntos`,
     assignedConversation: "Se te asignó una conversación",
+    assignedTask: "Se te asignó una tarea",
+    mentionedInDeal: "Te mencionaron en una oportunidad",
   },
   fi: {
     newMessage: "Uusi viesti",
@@ -54,6 +66,8 @@ const strings = {
     sentAttachment: "Lähetti liitteen",
     sentAttachments: (count: number) => `Lähetti ${count} liitettä`,
     assignedConversation: "Sinulle osoitettiin keskustelu",
+    assignedTask: "Sinulle osoitettiin tehtävä",
+    mentionedInDeal: "Sinut mainittiin kaupassa",
   },
   fr: {
     newMessage: "Nouveau message",
@@ -62,6 +76,8 @@ const strings = {
     sentAttachment: "A envoyé une pièce jointe",
     sentAttachments: (count: number) => `A envoyé ${count} pièces jointes`,
     assignedConversation: "Une conversation vous a été assignée",
+    assignedTask: "Une tâche vous a été assignée",
+    mentionedInDeal: "Vous avez été mentionné sur une affaire",
   },
   he: {
     newMessage: "הודעה חדשה",
@@ -70,6 +86,8 @@ const strings = {
     sentAttachment: "שלח קובץ מצורף",
     sentAttachments: (count: number) => `שלח ${count} קבצים מצורפים`,
     assignedConversation: "הוקצתה לך שיחה",
+    assignedTask: "הוקצתה לך משימה",
+    mentionedInDeal: "הוזכרת בעסקה",
   },
   id: {
     newMessage: "Pesan baru",
@@ -78,6 +96,8 @@ const strings = {
     sentAttachment: "Mengirim lampiran",
     sentAttachments: (count: number) => `Mengirim ${count} lampiran`,
     assignedConversation: "Anda ditugaskan sebuah percakapan",
+    assignedTask: "Anda ditugaskan sebuah tugas",
+    mentionedInDeal: "Anda disebut pada sebuah transaksi",
   },
   it: {
     newMessage: "Nuovo messaggio",
@@ -86,6 +106,8 @@ const strings = {
     sentAttachment: "Ha inviato un allegato",
     sentAttachments: (count: number) => `Ha inviato ${count} allegati`,
     assignedConversation: "Ti è stata assegnata una conversazione",
+    assignedTask: "Ti è stata assegnata un'attività",
+    mentionedInDeal: "Sei stato menzionato in una trattativa",
   },
   ja: {
     newMessage: "新しいメッセージ",
@@ -95,6 +117,8 @@ const strings = {
     sentAttachments: (count: number) =>
       `${count}件の添付ファイルを送信しました`,
     assignedConversation: "会話が割り当てられました",
+    assignedTask: "タスクが割り当てられました",
+    mentionedInDeal: "取引でメンションされました",
   },
   nl: {
     newMessage: "Nieuw bericht",
@@ -103,6 +127,8 @@ const strings = {
     sentAttachment: "Heeft een bijlage verzonden",
     sentAttachments: (count: number) => `Heeft ${count} bijlagen verzonden`,
     assignedConversation: "Er is een gesprek aan je toegewezen",
+    assignedTask: "Er is een taak aan je toegewezen",
+    mentionedInDeal: "Je bent genoemd bij een deal",
   },
   "pt-BR": {
     newMessage: "Nova mensagem",
@@ -111,6 +137,8 @@ const strings = {
     sentAttachment: "Enviou um anexo",
     sentAttachments: (count: number) => `Enviou ${count} anexos`,
     assignedConversation: "Uma conversa foi atribuída a você",
+    assignedTask: "Uma tarefa foi atribuída a você",
+    mentionedInDeal: "Você foi mencionado em um negócio",
   },
   "pt-PT": {
     newMessage: "Nova mensagem",
@@ -119,6 +147,8 @@ const strings = {
     sentAttachment: "Enviou um anexo",
     sentAttachments: (count: number) => `Enviou ${count} anexos`,
     assignedConversation: "Foi-lhe atribuída uma conversa",
+    assignedTask: "Foi-lhe atribuída uma tarefa",
+    mentionedInDeal: "Foi mencionado num negócio",
   },
   ro: {
     newMessage: "Mesaj nou",
@@ -127,6 +157,8 @@ const strings = {
     sentAttachment: "A trimis un atașament",
     sentAttachments: (count: number) => `A trimis ${count} atașamente`,
     assignedConversation: "Ți-a fost atribuită o conversație",
+    assignedTask: "Ți-a fost atribuită o sarcină",
+    mentionedInDeal: "Ai fost menționat într-o oportunitate",
   },
   sv: {
     newMessage: "Nytt meddelande",
@@ -135,6 +167,8 @@ const strings = {
     sentAttachment: "Skickade en bilaga",
     sentAttachments: (count: number) => `Skickade ${count} bilagor`,
     assignedConversation: "Du tilldelades en konversation",
+    assignedTask: "Du tilldelades en uppgift",
+    mentionedInDeal: "Du nämndes i en affär",
   },
   tr: {
     newMessage: "Yeni mesaj",
@@ -143,6 +177,8 @@ const strings = {
     sentAttachment: "Bir ek gönderdi",
     sentAttachments: (count: number) => `${count} ek gönderdi`,
     assignedConversation: "Size bir görüşme atandı",
+    assignedTask: "Size bir görev atandı",
+    mentionedInDeal: "Bir fırsatta sizden bahsedildi",
   },
   "zh-CN": {
     newMessage: "新消息",
@@ -151,6 +187,8 @@ const strings = {
     sentAttachment: "发送了一个附件",
     sentAttachments: (count: number) => `发送了 ${count} 个附件`,
     assignedConversation: "已为您分配一个对话",
+    assignedTask: "已为您分配一个任务",
+    mentionedInDeal: "您在一个商机中被提及",
   },
   "zh-TW": {
     newMessage: "新訊息",
@@ -159,6 +197,8 @@ const strings = {
     sentAttachment: "傳送了一個附件",
     sentAttachments: (count: number) => `傳送了 ${count} 個附件`,
     assignedConversation: "已為您指派一個對話",
+    assignedTask: "已為您指派一個任務",
+    mentionedInDeal: "您在一個商機中被提及",
   },
 } as const
 

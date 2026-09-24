@@ -35,6 +35,7 @@ import { NavMain } from "@/components/nav-main"
 import { NavUsage, type QuotaSummary } from "@/components/nav-usage"
 import { NavUser } from "@/components/nav-user"
 import { WorkspaceSwitcher } from "@/components/workspace-switcher"
+import { NotificationBell } from "@/features/notifications/components/notification-bell"
 import type { WorkspaceResource } from "@/features/workspaces/schema/resource"
 import { authClient } from "@/lib/auth/auth-client"
 import {
@@ -215,8 +216,11 @@ export function AppSidebar({
         >
           <BrandIcon alt="Brand" />
         </Link>
-        <div className="border-b px-1">
-          <WorkspaceSwitcher workspaces={allWorkspaces} />
+        <div className="flex items-center border-b px-1">
+          <div className="min-w-0 flex-1">
+            <WorkspaceSwitcher workspaces={allWorkspaces} />
+          </div>
+          <NotificationBell workspaceId={workspaceId} />
         </div>
       </SidebarHeader>
       <SidebarContent>

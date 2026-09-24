@@ -41,6 +41,7 @@ import {
 } from "../deal/shared"
 import { notFoundException, validationException } from "../errors"
 import { logger } from "../logger"
+import { notificationService } from "../notification/service"
 import type { DealViewer } from "../pipeline/access"
 
 const TASK_NOT_FOUND = "Task not found"
@@ -202,6 +203,7 @@ export class DealTaskService extends BaseService {
       await this.emitFor(deal, task, emitDealTaskAssigned, {
         previousAssigneeId: null,
       })
+      await this.notifyAssignee(deal, task, actorId)
     }
     return task
   }
@@ -265,13 +267,34 @@ export class DealTaskService extends BaseService {
       if (Object.keys(set).length === 0) {
         return { task: current, changed: false, previousAssigneeId }
       }
+      // An assignee change is pinned to the assignee this call read: two
+      // concurrent identical reassignments touch one row between them, so
+      // the assignee is notified once (skeptic MEDIUM, s194).
       const [updated] = await tx
         .update(dealTaskModel)
         .set(set)
-        .where(eq(dealTaskModel.id, taskId))
+        .where(
+          previousAssigneeId === undefined
+            ? eq(dealTaskModel.id, taskId)
+            : and(
+                eq(dealTaskModel.id, taskId),
+                sql`${dealTaskModel.assigneeId} is not distinct from ${previousAssigneeId}`,
+              ),
+        )
         .returning()
       if (!updated) {
-        throw notFoundException(TASK_NOT_FOUND)
+        if (previousAssigneeId === undefined) {
+          throw notFoundException(TASK_NOT_FOUND)
+        }
+        // lost the race (or the task is gone: findOrFail says which)
+        const again = await this.findOrFail({
+          workspaceId,
+          dealId,
+          taskId,
+          viewer,
+          tx,
+        })
+        return { task: again, changed: false, previousAssigneeId: undefined }
       }
       const deal = await dealService.findOrFail({ workspaceId, id: dealId, tx })
       return { task: updated, changed: true, previousAssigneeId, deal }
@@ -288,6 +311,7 @@ export class DealTaskService extends BaseService {
       await this.emitFor(result.deal, result.task, emitDealTaskAssigned, {
         previousAssigneeId: result.previousAssigneeId,
       })
+      await this.notifyAssignee(result.deal, result.task, props.actorId ?? null)
     }
     return result.task
   }
@@ -698,6 +722,7 @@ export class DealTaskService extends BaseService {
         await this.emitFor(deal, row, emitDealTaskAssigned, {
           previousAssigneeId: null,
         })
+        await this.notifyAssignee(deal, row, actorId)
       }
     }
     return { created }
@@ -814,6 +839,39 @@ export class DealTaskService extends BaseService {
       })
     } catch (error) {
       logger.warn({ error, taskId: task.id }, "deal-task: event emit failed")
+    }
+  }
+
+  /**
+   * The assignee's own notification (s194): beside `emitFor`, never inside
+   * it, so a contact-less deal still notifies (events route by contact,
+   * notifications by user). Self-assignment is silent, like a conversation
+   * you assign to yourself. Never throws: a delivery failure is logged.
+   */
+  private async notifyAssignee(
+    deal: DealModel,
+    task: DealTaskModel,
+    actorId: string | null,
+  ): Promise<void> {
+    if (!task.assigneeId || task.assigneeId === actorId) {
+      return
+    }
+    try {
+      await notificationService.notify({
+        workspaceId: deal.workspaceId,
+        userId: task.assigneeId,
+        type: "taskAssigned",
+        dealId: deal.id,
+        taskId: task.id,
+        payload: {
+          pipelineId: deal.pipelineId,
+          dealTitle: deal.title,
+          taskTitle: task.title,
+          actorId,
+        },
+      })
+    } catch (error) {
+      logger.warn({ error, taskId: task.id }, "deal-task: notify failed")
     }
   }
 

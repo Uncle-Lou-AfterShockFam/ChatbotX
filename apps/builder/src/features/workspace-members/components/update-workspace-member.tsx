@@ -1,5 +1,6 @@
 "use client"
 
+import { resolveMemberNotificationPrefs } from "@chatbotx.io/business/workspace-member/notification-prefs"
 import { SwitchField } from "@chatbotx.io/ui/components/form/switch-field"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
 import {
@@ -119,12 +120,16 @@ export function UpdateWorkspaceMemberForm({
               notifyAdmin: false,
               newMessageToHuman: false,
               newOrder: false,
+              taskAssigned: true,
+              dealMentioned: true,
             },
             notificationChannels: {
               messenger: false,
               email: false,
               browser: false,
               telegram: false,
+              push: true,
+              inApp: true,
             },
           },
         },
@@ -137,10 +142,13 @@ export function UpdateWorkspaceMemberForm({
 
   useEffect(() => {
     if (workspaceMember) {
+      // s194: the saved values were never loaded before (every switch opened
+      // off and a save wrote those offs back)
+      const prefs = resolveMemberNotificationPrefs(workspaceMember)
       reset({
         permissions: workspaceMember.permissions,
-        // notificationTypes: workspaceMember.notificationTypes,
-        // notificationChannels: workspaceMember.notificationChannels,
+        notificationTypes: prefs.types,
+        notificationChannels: prefs.channels,
       })
     }
   }, [workspaceMember, reset])
@@ -233,6 +241,18 @@ export function UpdateWorkspaceMemberForm({
               name="notificationTypes.newOrder"
               required
             />
+            <SwitchField
+              formItemClassName="flex flex-row-reverse items-center justify-end gap-2"
+              label={t("fields.notificationType.taskAssigned")}
+              name="notificationTypes.taskAssigned"
+              required
+            />
+            <SwitchField
+              formItemClassName="flex flex-row-reverse items-center justify-end gap-2"
+              label={t("fields.notificationType.dealMentioned")}
+              name="notificationTypes.dealMentioned"
+              required
+            />
           </div>
         </div>
 
@@ -261,6 +281,18 @@ export function UpdateWorkspaceMemberForm({
               formItemClassName="flex flex-row-reverse items-center justify-end gap-2"
               label={t("fields.notificationChannel.browser")}
               name="notificationChannels.browser"
+              required
+            />
+            <SwitchField
+              formItemClassName="flex flex-row-reverse items-center justify-end gap-2"
+              label={t("fields.notificationChannel.push")}
+              name="notificationChannels.push"
+              required
+            />
+            <SwitchField
+              formItemClassName="flex flex-row-reverse items-center justify-end gap-2"
+              label={t("fields.notificationChannel.inApp")}
+              name="notificationChannels.inApp"
               required
             />
           </div>

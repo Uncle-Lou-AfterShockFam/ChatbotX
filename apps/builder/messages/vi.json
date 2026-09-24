@@ -975,14 +975,18 @@
       "label": "Loại thông báo",
       "notifyAdmin": "Thông báo quản trị viên",
       "newMessageToHuman": "Tin nhắn mới cho người",
-      "newOrder": "Đơn hàng mới"
+      "newOrder": "Đơn hàng mới",
+      "taskAssigned": "Task assigned to me",
+      "dealMentioned": "Mentioned on a deal"
     },
     "notificationChannel": {
       "label": "Kênh thông báo",
       "messenger": "Messenger",
       "email": "Email",
       "telegram": "Telegram",
-      "browser": "Trình duyệt"
+      "browser": "Trình duyệt",
+      "push": "Mobile push",
+      "inApp": "In-app"
     },
     "accessToken": {
       "label": "Token truy cập"
@@ -6899,5 +6903,13 @@
       "edited": "(edited)",
       "someone": "Someone"
     }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "Nothing yet",
+    "markAllRead": "Mark all read",
+    "taskAssigned": "Task assigned: {task}",
+    "dealMentioned": "You were mentioned on a deal",
+    "loading": "Loading..."
   }
 }

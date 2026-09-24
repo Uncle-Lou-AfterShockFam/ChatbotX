@@ -193,6 +193,12 @@ vi.mock("../src/pipeline/service", () => ({
 }))
 vi.mock("../src/audit/dispatcher", () => ({ dispatchAuditRecord: vi.fn() }))
 vi.mock("../src/logger", () => ({ logger: { warn: m.logWarn, info: vi.fn() } }))
+// s194: the assignee's own notification, recorded apart from `calls` so the
+// tx-order assertions above stay exact
+const notify = vi.fn(async () => ({ notification: null, pushEnqueued: false }))
+vi.mock("../src/notification/service", () => ({
+  notificationService: { notify: (...a: unknown[]) => notify(...a) },
+}))
 
 const { dealTaskService, DEPENDENCY_WALK_STEP_CAP } = await import(
   "../src/deal-task/service"
@@ -324,6 +330,78 @@ describe("dealTaskService.create", () => {
     })
     expect(m.state.inserted).toHaveLength(1)
     expect(m.emitCreated).not.toHaveBeenCalled()
+  })
+
+  test("s194: the assignee is notified after the emit, even on a contact-less deal", async () => {
+    m.dealFindOrFail.mockResolvedValue({ ...DEAL, contactId: null })
+    m.state.selects.push([{ count: 0 }], MEMBER)
+    await dealTaskService.create({
+      workspaceId: WS,
+      dealId: "deal-1",
+      data: { title: "Call back", assigneeId: "user-9" },
+      actorId: "actor-1",
+    })
+    expect(m.emitAssigned).not.toHaveBeenCalled()
+    expect(notify).toHaveBeenCalledWith({
+      workspaceId: WS,
+      userId: "user-9",
+      type: "taskAssigned",
+      dealId: "deal-1",
+      taskId: expect.any(String),
+      payload: {
+        pipelineId: "pipe-1",
+        dealTitle: "Roof",
+        taskTitle: "Call back",
+        actorId: "actor-1",
+      },
+    })
+  })
+
+  test("s194: a concurrent identical reassignment touches 0 rows = no second event, no second notification", async () => {
+    // update(): current row -> resolveAssignee member select -> UPDATE pinned
+    // to the old assignee returns 0 rows -> re-read the task
+    m.state.selects.push([TASK({ assigneeId: null })], MEMBER, [
+      TASK({ assigneeId: "user-9" }),
+    ])
+    m.state.updates.push([])
+    const task = await dealTaskService.update({
+      workspaceId: WS,
+      dealId: "deal-1",
+      taskId: "task-1",
+      data: { assigneeId: "user-9" },
+      actorId: "actor-1",
+    })
+    expect(task.assigneeId).toBe("user-9")
+    expect(m.emitAssigned).not.toHaveBeenCalled()
+    expect(notify).not.toHaveBeenCalled()
+    expect(m.state.calls.some((c) => c.startsWith("update:assigneeId"))).toBe(
+      true,
+    )
+  })
+
+  test("s194: assigning yourself is silent; a notify failure never fails the create", async () => {
+    m.state.selects.push([{ count: 0 }], MEMBER)
+    await dealTaskService.create({
+      workspaceId: WS,
+      dealId: "deal-1",
+      data: { title: "x", assigneeId: "user-9" },
+      actorId: "user-9",
+    })
+    expect(notify).not.toHaveBeenCalled()
+
+    notify.mockRejectedValueOnce(new Error("redis down"))
+    m.state.selects.push([{ count: 0 }], MEMBER)
+    const task = await dealTaskService.create({
+      workspaceId: WS,
+      dealId: "deal-1",
+      data: { title: "x", assigneeId: "user-9" },
+      actorId: "actor-1",
+    })
+    expect(task.assigneeId).toBe("user-9")
+    expect(m.logWarn).toHaveBeenCalledWith(
+      expect.objectContaining({ taskId: task.id }),
+      "deal-task: notify failed",
+    )
   })
 })
 
