@@ -877,6 +877,18 @@ class DealService extends BaseService {
     }
 
     const outcome = await db.transaction(async (tx) => {
+      // Row lock FIRST (codex probe s196): every decision below (contact ->
+      // lock key, status, owner, fields) reads the committed row, and a
+      // concurrent write to this deal waits for the move instead of
+      // interleaving. Order = row lock, then the advisory lock: no cycle with
+      // createUnlessOpen, which never locks an existing deal row.
+      await tx
+        .select({ id: dealModel.id })
+        .from(dealModel)
+        .where(
+          and(eq(dealModel.id, id), eq(dealModel.workspaceId, workspaceId)),
+        )
+        .for("update")
       const current = await this.findOrFail({ workspaceId, id, viewer, tx })
       if (current.pipelineId === props.pipelineId) {
         throw validationException(
@@ -937,8 +949,9 @@ class DealService extends BaseService {
       }
 
       const position = await this.nextPosition({ stageId: stage.id, tx })
-      // Pinned to the pipeline AND stage this transaction read: a concurrent
-      // move makes this UPDATE touch 0 rows (same rule as `moveStage`).
+      // Belt to the row lock: pinned to the pipeline, stage and status this
+      // transaction read, so it can never record a transition that did not
+      // happen in that order (same rule as `moveStage`).
       const [moved] = await tx
         .update(dealModel)
         .set({
@@ -962,6 +975,7 @@ class DealService extends BaseService {
             eq(dealModel.workspaceId, workspaceId),
             eq(dealModel.pipelineId, current.pipelineId),
             eq(dealModel.stageId, current.stageId),
+            eq(dealModel.status, current.status),
           ),
         )
         .returning()

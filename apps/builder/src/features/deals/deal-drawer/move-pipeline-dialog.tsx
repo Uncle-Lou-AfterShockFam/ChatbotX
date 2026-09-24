@@ -162,7 +162,9 @@ export function MovePipelineDialog({
                 placeholder={t("actions.pleaseSelect")}
                 required
                 triggerValueChange={() => {
+                  // everything picked for the previous target goes (skeptic s196)
                   form.setValue("stageId", "")
+                  form.setValue("ownerId", deal.ownerId ?? "")
                   setFields({})
                 }}
               />

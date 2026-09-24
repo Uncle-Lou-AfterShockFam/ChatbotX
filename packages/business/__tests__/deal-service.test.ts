@@ -22,6 +22,7 @@ const m = vi.hoisted(() => {
     openDeal: null as Record<string, unknown> | null,
     updateEmpty: false,
     lastListWhere: null as unknown,
+    rowLocks: [] as string[],
   }
   const calls: string[] = []
   const makeTx = () => {
@@ -29,7 +30,10 @@ const m = vi.hoisted(() => {
     selectChain.from = () => selectChain
     selectChain.where = () => selectChain
     selectChain.innerJoin = () => selectChain
-    selectChain.for = () => selectChain
+    selectChain.for = (mode: string) => {
+      state.rowLocks.push(mode)
+      return selectChain
+    }
     selectChain.orderBy = () => Promise.resolve([])
     // the max() aggregate is awaited without .limit()
     // biome-ignore lint/suspicious/noThenProperty: awaited query-builder stub
@@ -276,6 +280,7 @@ beforeEach(() => {
   m.state.activities.length = 0
   m.state.updateReturning = []
   m.state.executeArgs.length = 0
+  m.state.rowLocks.length = 0
   m.state.openDeal = null
   m.state.updateEmpty = false
   m.state.contact = null
@@ -1256,6 +1261,8 @@ describe("dealService.movePipeline (s196)", () => {
         }),
       )
       expect(seen).toEqual(["pipe-2:t-stage-1"])
+      // the deal row is locked before it is read (codex probe s196)
+      expect(m.state.rowLocks[0]).toBe("update")
       // the lock key is the TARGET pipeline's one-open-deal key
       expect(JSON.stringify(m.state.executeArgs)).toContain(
         "deal:ws-1:contact-1:pipe-2",
