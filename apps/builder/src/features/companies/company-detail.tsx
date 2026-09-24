@@ -56,6 +56,7 @@ import {
   usePipelines,
 } from "@/features/crm/provider/crm-hooks"
 import type { TimelineKind } from "@/features/crm/schema/resource"
+import { formatDealValue } from "@/features/deals/deal-card"
 import {
   useContactSearchOptions,
   useOwnerOptions,
@@ -129,11 +130,13 @@ export function CompanyDetail({
         })
       : "-"
   }
-  const money = (value: string) =>
-    format.number(Number(value), {
-      style: "currency",
-      currency: (pipelines.data ?? [])[0]?.settings.defaultCurrency ?? "USD",
-    })
+  /** one exact figure per currency, never folded together (a EUR deal is not USD) */
+  const money = (byCurrency: Record<string, string>) => {
+    const parts = Object.entries(byCurrency).map(
+      ([currency, value]) => formatDealValue(value, currency, format) ?? "",
+    )
+    return parts.length > 0 ? parts.join(" · ") : "-"
+  }
 
   return (
     <div className="space-y-4" data-testid="company-360">
