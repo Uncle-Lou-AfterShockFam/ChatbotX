@@ -7,7 +7,10 @@ import {
   type WorkspaceIdRequestParams,
   workspaceIdrequestParams,
 } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import {
+  requireContactsSectionAccess,
+  workspaceActionClient,
+} from "@/lib/safe-action"
 import { upsertDealTaskTemplateRequest } from "../schema/action"
 
 const upsertInput = upsertDealTaskTemplateRequest.extend({
@@ -17,6 +20,7 @@ const upsertInput = upsertDealTaskTemplateRequest.extend({
 })
 
 export const upsertTaskTemplateAction = workspaceActionClient
+  .use(requireContactsSectionAccess)
   .inputSchema(upsertInput)
   .bindArgsSchemas(workspaceIdrequestParams)
   .action(
@@ -45,6 +49,7 @@ const removeInput = z.object({
 })
 
 export const removeTaskTemplateAction = workspaceActionClient
+  .use(requireContactsSectionAccess)
   .inputSchema(removeInput)
   .bindArgsSchemas(workspaceIdrequestParams)
   .action(

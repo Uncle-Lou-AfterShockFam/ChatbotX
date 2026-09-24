@@ -4,6 +4,7 @@ import {
 } from "@chatbotx.io/business/deal-task"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import z from "zod"
+import { viewerFromContext } from "@/features/deals/lib/viewer"
 import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
 import { contactsAccessAuthorizedMiddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
@@ -38,10 +39,11 @@ const privateListDealTasksAPI = authorizedAPI
   .input(withDealId)
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ data: z.array(dealTaskWithBlockersResource) }))
-  .handler(async ({ input }) => ({
+  .handler(async ({ input, context }) => ({
     data: await dealTaskService.list({
       workspaceId: input.workspaceId,
       dealId: input.id,
+      viewer: viewerFromContext(context),
     }),
   }))
 
@@ -62,6 +64,7 @@ const privateCreateDealTaskAPI = authorizedAPI
       dealId: id,
       data,
       actorId: context.user.id,
+      viewer: viewerFromContext(context),
     })
   })
 
@@ -83,6 +86,7 @@ const privateUpdateDealTaskAPI = authorizedAPI
       taskId,
       data,
       actorId: context.user.id,
+      viewer: viewerFromContext(context),
     })
   })
 
@@ -104,6 +108,7 @@ const privateCompleteDealTaskAPI = authorizedAPI
       taskId,
       force,
       actorId: context.user.id,
+      viewer: viewerFromContext(context),
     })
   })
 
@@ -118,11 +123,12 @@ const privateReopenDealTaskAPI = authorizedAPI
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(dealTaskResource)
   .handler(
-    async ({ input }) =>
+    async ({ input, context }) =>
       await dealTaskService.reopen({
         workspaceId: input.workspaceId,
         dealId: input.id,
         taskId: input.taskId,
+        viewer: viewerFromContext(context),
       }),
   )
 
@@ -136,11 +142,12 @@ const privateDeleteDealTaskAPI = authorizedAPI
   .input(withTaskId)
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ deleted: z.literal(true) }))
-  .handler(async ({ input }) => {
+  .handler(async ({ input, context }) => {
     await dealTaskService.remove({
       workspaceId: input.workspaceId,
       dealId: input.id,
       taskId: input.taskId,
+      viewer: viewerFromContext(context),
     })
     return { deleted: true as const }
   })
@@ -155,12 +162,13 @@ const privateAddDealDependencyAPI = authorizedAPI
   .input(addDealDependencyRequest.and(withTaskId))
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ taskId: z.string(), dependsOnTaskId: z.string() }))
-  .handler(async ({ input }) => {
+  .handler(async ({ input, context }) => {
     const row = await dealTaskService.addDependency({
       workspaceId: input.workspaceId,
       dealId: input.id,
       taskId: input.taskId,
       dependsOnTaskId: input.dependsOnTaskId,
+      viewer: viewerFromContext(context),
     })
     return { taskId: row.taskId, dependsOnTaskId: row.dependsOnTaskId }
   })
@@ -176,12 +184,13 @@ const privateRemoveDealDependencyAPI = authorizedAPI
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ removed: z.boolean() }))
   .handler(
-    async ({ input }) =>
+    async ({ input, context }) =>
       await dealTaskService.removeDependency({
         workspaceId: input.workspaceId,
         dealId: input.id,
         taskId: input.taskId,
         dependsOnTaskId: input.dependsOnTaskId,
+        viewer: viewerFromContext(context),
       }),
   )
 

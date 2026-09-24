@@ -3,6 +3,9 @@ import {
   dealFieldTypes,
   MAX_DEAL_FIELD_DEFS,
   MAX_DEAL_FIELD_OPTIONS,
+  MAX_PIPELINE_MEMBERS,
+  pipelineAccess,
+  pipelineAssignOwner,
   pipelineStopCompanyOn,
 } from "@chatbotx.io/database/partials"
 import { zodBigintAsString } from "@chatbotx.io/utils"
@@ -73,6 +76,16 @@ export const pipelineSettingsInput = z
       .describe(
         "Custom deal fields every deal in this pipeline can carry (max 30); replaces the whole list.",
       ),
+    assignOwner: pipelineAssignOwner
+      .optional()
+      .describe(
+        "Owner of a deal created without one: none (default) or roundRobin over the pipeline members in rotation.",
+      ),
+    access: pipelineAccess
+      .optional()
+      .describe(
+        "Who sees the pipeline: workspace (default, every member with contacts access) or members (only the pipeline members; super admins always).",
+      ),
   })
   .strict()
 
@@ -110,7 +123,7 @@ export type PipelineStageInput = z.infer<typeof pipelineStageInput>
 const settingsField = pipelineSettingsInput
   .optional()
   .describe(
-    "Pipeline settings: stopCompanyOn (none | created | won), defaultCurrency (3-letter ISO code) and fieldDefs (custom deal fields).",
+    "Pipeline settings: stopCompanyOn (none | created | won), defaultCurrency (3-letter ISO code), fieldDefs (custom deal fields), assignOwner (none | roundRobin) and access (workspace | members).",
   )
 
 export const createPipelineRequest = z.object({
@@ -159,3 +172,29 @@ export const removeStageRequest = z.object({
 export const deletePipelineRequest = z.object({
   force: z.boolean().optional(),
 })
+
+export const pipelineMemberInput = z
+  .object({
+    userId: zodBigintAsString().describe(
+      "Workspace member's user id; get it from `workspace-members.list`.",
+    ),
+    inRotation: z
+      .boolean()
+      .optional()
+      .describe(
+        "Whether round-robin assignment may pick this member (default true).",
+      ),
+  })
+  .strict()
+
+export const setPipelineMembersRequest = z.object({
+  members: z
+    .array(pipelineMemberInput)
+    .max(MAX_PIPELINE_MEMBERS)
+    .describe(
+      "The full member list in rotation order (max 50); replaces the current list, an empty list removes everyone.",
+    ),
+})
+export type SetPipelineMembersRequest = z.infer<
+  typeof setPipelineMembersRequest
+>

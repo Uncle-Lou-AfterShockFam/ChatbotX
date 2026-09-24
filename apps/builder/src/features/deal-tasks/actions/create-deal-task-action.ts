@@ -1,18 +1,24 @@
 "use server"
 
 import { dealTaskService } from "@chatbotx.io/business/deal-task"
+import type { PermissionsInput } from "@chatbotx.io/business/workspace-member/permissions"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import type z from "zod"
 import {
   type WorkspaceIdRequestParams,
   workspaceIdrequestParams,
 } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { viewerFromActionCtx } from "@/features/deals/lib/viewer"
+import {
+  requireContactsSectionAccess,
+  workspaceActionClient,
+} from "@/lib/safe-action"
 import { createDealTaskRequest } from "../schema/action"
 
 const input = createDealTaskRequest.extend({ dealId: zodBigintAsString() })
 
 export const createDealTaskAction = workspaceActionClient
+  .use(requireContactsSectionAccess)
   .inputSchema(input)
   .bindArgsSchemas(workspaceIdrequestParams)
   .action(
@@ -23,7 +29,10 @@ export const createDealTaskAction = workspaceActionClient
     }: {
       parsedInput: z.infer<typeof input>
       bindArgsParsedInputs: WorkspaceIdRequestParams
-      ctx: { user: { id: string } }
+      ctx: {
+        user: { id: string }
+        workspaceMemberPermissions: PermissionsInput
+      }
     }) => {
       const { dealId, ...data } = parsedInput
       return dealTaskService.create({
@@ -31,6 +40,7 @@ export const createDealTaskAction = workspaceActionClient
         dealId,
         data,
         actorId: ctx.user.id,
+        viewer: viewerFromActionCtx(ctx),
       })
     },
   )

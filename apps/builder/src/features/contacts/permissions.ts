@@ -1,4 +1,5 @@
 import { ChatbotXException } from "@chatbotx.io/business/errors"
+import { assignedOnlyUserId } from "@chatbotx.io/business/workspace-member/permissions"
 import type { WorkspaceMemberPermissions } from "@chatbotx.io/database/partials"
 import {
   hasContactsAccess,
@@ -24,17 +25,12 @@ export function canAccessContactsSection(permissions: Permissions): boolean {
   return hasContactsAccess(permissions)
 }
 
+/** The ONE assigned-only rule, shared with the deal scope (s193): `assignedOnlyUserId` in business. */
 export function getAssignedContactsUserId(input: {
   permissions: Permissions
   userId: string
 }): string | undefined {
-  if (hasWorkspacePermission(input.permissions, "superAdmin")) {
-    return
-  }
-
-  return hasWorkspacePermission(input.permissions, "onlyAssignedContacts")
-    ? input.userId
-    : undefined
+  return assignedOnlyUserId(input)
 }
 
 export async function resolveContactPermissionScope(

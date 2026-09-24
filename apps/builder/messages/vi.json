@@ -6799,6 +6799,26 @@
       "won": "When a deal is won"
     },
     "defaultCurrency": "Default currency",
+    "assignOwner": "Auto-assign owner",
+    "assignOwnerHint": "Owner of a deal created without one. Round-robin walks the members in rotation below.",
+    "assignOwnerOptions": {
+      "none": "Leave unassigned",
+      "roundRobin": "Round-robin over members"
+    },
+    "access": "Visibility",
+    "accessHint": "Members-only hides the pipeline and its deals from everyone but its members (super admins always see it).",
+    "accessOptions": {
+      "workspace": "Whole workspace",
+      "members": "Pipeline members only"
+    },
+    "members": {
+      "title": "Members",
+      "hint": "Who a members-only pipeline is visible to and who round-robin may assign. Order = rotation order.",
+      "none": "No members yet.",
+      "inRotation": "In rotation",
+      "add": "Add member",
+      "remove": "Remove member"
+    },
     "newStagePlaceholder": "New stage name",
     "addStage": "Add stage",
     "newPipelinePlaceholder": "New pipeline name",

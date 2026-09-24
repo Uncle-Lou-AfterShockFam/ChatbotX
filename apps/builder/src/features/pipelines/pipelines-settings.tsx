@@ -44,6 +44,7 @@ import {
   upsertStageAction,
 } from "./actions/pipeline-actions"
 import { FieldDefsEditor } from "./field-defs-editor"
+import { PipelineMembersEditor } from "./pipeline-members-editor"
 import { useInvalidatePipelines } from "./provider/pipeline-hook"
 import type {
   PipelineStageResource,
@@ -366,6 +367,72 @@ function PipelineCard({
             />
           </div>
         </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1 text-sm">
+            <span className="text-muted-foreground text-xs">
+              {t("deals.assignOwner")}
+            </span>
+            <Select
+              onValueChange={(v) =>
+                v &&
+                update.execute({
+                  id: pipeline.id,
+                  settings: { assignOwner: v as "none" | "roundRobin" },
+                })
+              }
+              value={pipeline.settings.assignOwner}
+            >
+              <SelectTrigger data-testid={`pipeline-assign-${pipeline.id}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(["none", "roundRobin"] as const).map((v) => (
+                  <SelectItem key={v} value={v}>
+                    {t(`deals.assignOwnerOptions.${v}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="block text-muted-foreground text-xs">
+              {t("deals.assignOwnerHint")}
+            </span>
+          </div>
+          <div className="space-y-1 text-sm">
+            <span className="text-muted-foreground text-xs">
+              {t("deals.access")}
+            </span>
+            <Select
+              onValueChange={(v) =>
+                v &&
+                update.execute({
+                  id: pipeline.id,
+                  settings: { access: v as "workspace" | "members" },
+                })
+              }
+              value={pipeline.settings.access}
+            >
+              <SelectTrigger data-testid={`pipeline-access-${pipeline.id}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(["workspace", "members"] as const).map((v) => (
+                  <SelectItem key={v} value={v}>
+                    {t(`deals.accessOptions.${v}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="block text-muted-foreground text-xs">
+              {t("deals.accessHint")}
+            </span>
+          </div>
+        </div>
+
+        <PipelineMembersEditor
+          pipelineId={pipeline.id}
+          workspaceId={workspaceId}
+        />
 
         <FieldDefsEditor
           fieldDefs={pipeline.settings.fieldDefs}

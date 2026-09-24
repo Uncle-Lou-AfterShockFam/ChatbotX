@@ -30,6 +30,12 @@ import {
   notFoundException,
   validationException,
 } from "../errors"
+import {
+  canViewPipeline,
+  type DealViewer,
+  isUnrestrictedViewer,
+} from "./access"
+import { pipelineMemberService } from "./members"
 
 export type PipelineStageData = {
   name: string
@@ -60,9 +66,15 @@ export const STAGE_ORDER_STEP = 1000
  * because they reach the company stop cascade.
  */
 class PipelineService extends BaseService {
+  /**
+   * With a `viewer` (s193) a `members`-only pipeline the viewer is not a
+   * member of is a 404, never a 403: it must not leak that the pipeline
+   * exists. Callers without a viewer (workers, the public API) are unscoped.
+   */
   async findOrFail(props: {
     workspaceId: string
     id: string
+    viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<PipelineModel> {
     const { workspaceId, id, tx = db } = props
@@ -72,7 +84,14 @@ class PipelineService extends BaseService {
       where: { id, workspaceId },
       message: PIPELINE_NOT_FOUND,
     })
-    return this.normalize(row)
+    const pipeline = this.normalize(row)
+    if (
+      props.viewer &&
+      !(await canViewPipeline({ viewer: props.viewer, pipeline, tx }))
+    ) {
+      throw notFoundException(PIPELINE_NOT_FOUND)
+    }
+    return pipeline
   }
 
   /**
@@ -82,7 +101,7 @@ class PipelineService extends BaseService {
    * settings no longer parse keeps its raw values under the defaults (never
    * throws on read).
    */
-  private normalize<T extends PipelineModel>(row: T): T {
+  private normalize<T extends Pick<PipelineModel, "settings">>(row: T): T {
     const parsed = pipelineSettingsSchema.safeParse(row.settings ?? {})
     const settings = parsed.success
       ? parsed.data
@@ -93,24 +112,31 @@ class PipelineService extends BaseService {
   async find(props: {
     workspaceId: string
     id: string
+    viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<PipelineWithStages> {
-    const { workspaceId, id, tx = db } = props
-    const pipeline = await this.findOrFail({ workspaceId, id, tx })
+    const { workspaceId, id, viewer, tx = db } = props
+    const pipeline = await this.findOrFail({ workspaceId, id, viewer, tx })
     const stages = await this.listStages({ pipelineId: id, tx })
     return { ...pipeline, stages }
   }
 
-  /** Every pipeline of the workspace with its stages, in `order`. */
+  /**
+   * Every pipeline of the workspace with its stages, in `order`. With a
+   * `viewer` (s193) the `members`-only pipelines the viewer is not a member
+   * of are left out (an empty list, never an error).
+   */
   async list(props: {
     workspaceId: string
+    viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<PipelineWithStages[]> {
-    const { workspaceId, tx = db } = props
-    const pipelines = await tx.query.pipelineModel.findMany({
+    const { workspaceId, viewer, tx = db } = props
+    const all = await tx.query.pipelineModel.findMany({
       where: { workspaceId },
       orderBy: { order: "asc", createdAt: "asc" },
     })
+    const pipelines = await this.visibleTo({ pipelines: all, viewer, tx })
     if (pipelines.length === 0) {
       return []
     }
@@ -128,6 +154,55 @@ class PipelineService extends BaseService {
       ...this.normalize(p),
       stages: byPipeline.get(p.id) ?? [],
     }))
+  }
+
+  /**
+   * Ids of the pipelines the viewer may read, or `null` when unrestricted
+   * (no viewer, or a super admin): the deal list filters on it.
+   */
+  async visibleIds(props: {
+    workspaceId: string
+    viewer?: DealViewer | null
+    tx?: DatabaseClient
+  }): Promise<string[] | null> {
+    const { workspaceId, viewer, tx = db } = props
+    if (!viewer || isUnrestrictedViewer(viewer)) {
+      return null
+    }
+    const all = await tx.query.pipelineModel.findMany({
+      columns: { id: true, workspaceId: true, settings: true },
+      where: { workspaceId },
+    })
+    const visible = await this.visibleTo({ pipelines: all, viewer, tx })
+    return visible.map((p) => p.id)
+  }
+
+  private async visibleTo<
+    T extends Pick<PipelineModel, "id" | "workspaceId" | "settings">,
+  >(props: {
+    pipelines: T[]
+    viewer?: DealViewer | null
+    tx: DatabaseClient
+  }): Promise<T[]> {
+    const { pipelines, viewer, tx } = props
+    if (!viewer || isUnrestrictedViewer(viewer) || pipelines.length === 0) {
+      return pipelines
+    }
+    const restricted = pipelines.filter(
+      (p) => this.normalize(p).settings.access === "members",
+    )
+    if (restricted.length === 0) {
+      return pipelines
+    }
+    const memberOf = await pipelineMemberService.listPipelineIdsForUser({
+      workspaceId: props.pipelines[0].workspaceId,
+      userId: viewer.userId,
+      tx,
+    })
+    return pipelines.filter(
+      (p) =>
+        this.normalize(p).settings.access !== "members" || memberOf.has(p.id),
+    )
   }
 
   async listStages(props: {

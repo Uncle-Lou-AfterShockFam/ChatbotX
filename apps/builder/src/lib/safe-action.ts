@@ -247,6 +247,24 @@ export const requireContactsAccess = createMiddleware<{
 })
 
 /**
+ * The deals / pipelines actions (s193): the contacts-section permission that
+ * the oRPC `contactsAccessAuthorizedMiddleware` and the RSC page already
+ * apply, so a member without it cannot write deals through an action either.
+ */
+export const requireContactsSectionAccess = createMiddleware<{
+  ctx: { workspaceMemberPermissions: PermissionsInput }
+}>().define(async ({ ctx, next }) => {
+  if (!hasContactsAccess(ctx.workspaceMemberPermissions)) {
+    throw new ChatbotXException(
+      "Contacts access required",
+      "contactsAccessRequired",
+      403,
+    )
+  }
+  return await next({ ctx })
+})
+
+/**
  * Every calling action that starts or joins a call (initiate/mode/permission-
  * request/answer/resume/TURN). Not used by hangup-voip-call/heartbeat-active-
  * voip-call (unchanged workspaceActionClient — ending or keeping alive a call a

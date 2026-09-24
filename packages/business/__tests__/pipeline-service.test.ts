@@ -116,6 +116,8 @@ describe("pipelineService.create", () => {
       stopCompanyOn: "created",
       defaultCurrency: "USD",
       fieldDefs: [],
+      assignOwner: "none",
+      access: "workspace",
     })
     expect(pipeline.stages.map((s) => s.name)).toEqual([
       "New",
@@ -143,6 +145,8 @@ describe("pipelineService.create", () => {
       stopCompanyOn: "won",
       defaultCurrency: "EUR",
       fieldDefs: [],
+      assignOwner: "none",
+      access: "workspace",
     })
     expect(pipeline.stages).toHaveLength(2)
   })
@@ -281,7 +285,12 @@ describe("legacy settings rows (s192 hotfix: fieldDefs missing in the stored jso
       { id: "p1", workspaceId: WS, name: "Old", order: 0, settings: legacy },
     ]
     const [listed] = await pipelineService.list({ workspaceId: WS })
-    expect(listed.settings).toEqual({ ...legacy, fieldDefs: [] })
+    expect(listed.settings).toEqual({
+      ...legacy,
+      fieldDefs: [],
+      assignOwner: "none",
+      access: "workspace",
+    })
     m.findOrFail.mockResolvedValueOnce({
       id: "p1",
       workspaceId: WS,
@@ -292,7 +301,12 @@ describe("legacy settings rows (s192 hotfix: fieldDefs missing in the stored jso
       workspaceId: WS,
       id: "p1",
     })
-    expect(found.settings).toEqual({ ...legacy, fieldDefs: [] })
+    expect(found.settings).toEqual({
+      ...legacy,
+      fieldDefs: [],
+      assignOwner: "none",
+      access: "workspace",
+    })
   })
 
   test("a settings blob that no longer parses is read under the defaults instead of throwing", async () => {
@@ -309,6 +323,8 @@ describe("legacy settings rows (s192 hotfix: fieldDefs missing in the stored jso
     expect(found.settings).toMatchObject({
       defaultCurrency: "USD",
       fieldDefs: [],
+      assignOwner: "none",
+      access: "workspace",
       stopCompanyOn: "always",
     })
   })

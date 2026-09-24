@@ -1,4 +1,4 @@
-import { pipelineService } from "@chatbotx.io/business"
+import { pipelineMemberService, pipelineService } from "@chatbotx.io/business"
 import { z } from "zod"
 import {
   possibleErrorsOnCreatingEmailTopic,
@@ -12,10 +12,12 @@ import { workspaceTokenAuthAPIForScope } from "@/orpc"
 import {
   createPipelinePublicRequest,
   pipelineIdInput,
+  pipelineMemberPublicResource,
   pipelinePublicResource,
   pipelineStagePublicResource,
   removeStagePublicRequest,
   reorderStagesPublicRequest,
+  setPipelineMembersPublicRequest,
   updatePipelinePublicRequest,
   upsertStagePublicRequest,
 } from "../schema/public"
@@ -85,7 +87,7 @@ export const pipelinesPublicRouter = {
       path: "/v1/pipelines/{id}",
       summary: "Update pipeline",
       description:
-        "Merges the given fields into a pipeline: its name or its settings (stopCompanyOn, defaultCurrency). Omitted fields are left unchanged.",
+        "Merges the given fields into a pipeline: its name or its settings (stopCompanyOn, defaultCurrency, fieldDefs, assignOwner, access). Omitted fields are left unchanged.",
       tags: ["Pipelines"],
     })
     .input(updatePipelinePublicRequest)
@@ -210,4 +212,55 @@ export const pipelinesPublicRouter = {
           moveDealsTo: input.moveDealsTo,
         }),
     ),
+
+  listMembers: workspaceTokenAuthAPI
+    .route({
+      method: "GET",
+      path: "/v1/pipelines/{id}/members",
+      summary: "List pipeline members",
+      description:
+        "Returns the members of a pipeline in rotation order: the users a `members`-only pipeline is visible to and the round-robin rotation (`inRotation`) for deals created without an owner.",
+      tags: ["Pipelines"],
+    })
+    .input(pipelineIdInput)
+    .output(z.object({ data: z.array(pipelineMemberPublicResource) }))
+    .errors(possibleErrorsOnFindingResource)
+    .handler(async ({ context, input }) => {
+      await pipelineService.findOrFail({
+        workspaceId: context.workspace.id,
+        id: input.id,
+      })
+      return {
+        data: await pipelineMemberService.list({
+          workspaceId: context.workspace.id,
+          pipelineId: input.id,
+        }),
+      }
+    }),
+
+  setMembers: workspaceTokenAuthAPI
+    .route({
+      method: "PUT",
+      path: "/v1/pipelines/{id}/members",
+      summary: "Replace pipeline members",
+      description:
+        "Replaces the whole member list of a pipeline in the given rotation order. Every user must be a workspace member (422 otherwise); an empty list removes everyone.",
+      tags: ["Pipelines"],
+    })
+    .input(setPipelineMembersPublicRequest)
+    .output(z.object({ data: z.array(pipelineMemberPublicResource) }))
+    .errors(possibleErrorsOnMutatingResource)
+    .handler(async ({ context, input }) => {
+      await pipelineService.findOrFail({
+        workspaceId: context.workspace.id,
+        id: input.id,
+      })
+      return {
+        data: await pipelineMemberService.set({
+          workspaceId: context.workspace.id,
+          pipelineId: input.id,
+          members: input.members,
+        }),
+      }
+    }),
 }

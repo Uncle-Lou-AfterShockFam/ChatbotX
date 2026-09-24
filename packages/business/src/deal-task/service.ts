@@ -41,6 +41,7 @@ import {
 } from "../deal/shared"
 import { notFoundException, validationException } from "../errors"
 import { logger } from "../logger"
+import type { DealViewer } from "../pipeline/access"
 
 const TASK_NOT_FOUND = "Task not found"
 /** Hard stop for the cycle walk, above any reachable graph under the caps. */
@@ -71,13 +72,18 @@ export type DealTaskWithBlockers = DealTaskModel & {
  * completes cannot race an "unblock" write.
  */
 export class DealTaskService extends BaseService {
+  /** With a `viewer` (s193) the DEAL must be readable by them first (404 otherwise). */
   async findOrFail(props: {
     workspaceId: string
     dealId: string
     taskId: string
+    viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<DealTaskModel> {
-    const { workspaceId, dealId, taskId, tx = db } = props
+    const { workspaceId, dealId, taskId, viewer, tx = db } = props
+    if (viewer) {
+      await dealService.findOrFail({ workspaceId, id: dealId, viewer, tx })
+    }
     const [task] = await tx
       .select()
       .from(dealTaskModel)
@@ -99,10 +105,11 @@ export class DealTaskService extends BaseService {
   async list(props: {
     workspaceId: string
     dealId: string
+    viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<DealTaskWithBlockers[]> {
-    const { workspaceId, dealId, tx = db } = props
-    await dealService.findOrFail({ workspaceId, id: dealId, tx })
+    const { workspaceId, dealId, viewer, tx = db } = props
+    await dealService.findOrFail({ workspaceId, id: dealId, viewer, tx })
     const tasks = await tx
       .select()
       .from(dealTaskModel)
@@ -148,14 +155,16 @@ export class DealTaskService extends BaseService {
     dealId: string
     data: DealTaskData
     actorId?: string | null
+    viewer?: DealViewer | null
   }): Promise<DealTaskModel> {
-    const { workspaceId, dealId } = props
+    const { workspaceId, dealId, viewer } = props
     const actorId = props.actorId ?? null
     const parsed = this.parseData(props.data)
     const { task, deal } = await db.transaction(async (tx) => {
       const current = await dealService.findOrFail({
         workspaceId,
         id: dealId,
+        viewer,
         tx,
       })
       const [{ count }] = await tx
@@ -208,11 +217,18 @@ export class DealTaskService extends BaseService {
     taskId: string
     data: DealTaskUpdateData
     actorId?: string | null
+    viewer?: DealViewer | null
   }): Promise<DealTaskModel> {
-    const { workspaceId, dealId, taskId, data } = props
+    const { workspaceId, dealId, taskId, data, viewer } = props
     const set: Partial<typeof dealTaskModel.$inferInsert> = {}
     const result = await db.transaction(async (tx) => {
-      const current = await this.findOrFail({ workspaceId, dealId, taskId, tx })
+      const current = await this.findOrFail({
+        workspaceId,
+        dealId,
+        taskId,
+        viewer,
+        tx,
+      })
       if (data.title !== undefined) {
         const title = this.parseTitle(data.title)
         if (title !== current.title) {
@@ -288,11 +304,18 @@ export class DealTaskService extends BaseService {
     taskId: string
     actorId?: string | null
     force?: boolean
+    viewer?: DealViewer | null
   }): Promise<{ task: DealTaskModel; completed: boolean }> {
-    const { workspaceId, dealId, taskId } = props
+    const { workspaceId, dealId, taskId, viewer } = props
     const actorId = props.actorId ?? null
     const outcome = await db.transaction(async (tx) => {
-      const current = await this.findOrFail({ workspaceId, dealId, taskId, tx })
+      const current = await this.findOrFail({
+        workspaceId,
+        dealId,
+        taskId,
+        viewer,
+        tx,
+      })
       if (current.status === "done") {
         return { task: current, completed: false as const }
       }
@@ -346,10 +369,17 @@ export class DealTaskService extends BaseService {
     workspaceId: string
     dealId: string
     taskId: string
+    viewer?: DealViewer | null
   }): Promise<DealTaskModel> {
-    const { workspaceId, dealId, taskId } = props
+    const { workspaceId, dealId, taskId, viewer } = props
     const task = await db.transaction(async (tx) => {
-      const current = await this.findOrFail({ workspaceId, dealId, taskId, tx })
+      const current = await this.findOrFail({
+        workspaceId,
+        dealId,
+        taskId,
+        viewer,
+        tx,
+      })
       if (current.status === "open") {
         return current
       }
@@ -375,9 +405,10 @@ export class DealTaskService extends BaseService {
     workspaceId: string
     dealId: string
     taskId: string
+    viewer?: DealViewer | null
   }): Promise<void> {
-    const { workspaceId, dealId, taskId } = props
-    await this.findOrFail({ workspaceId, dealId, taskId })
+    const { workspaceId, dealId, taskId, viewer } = props
+    await this.findOrFail({ workspaceId, dealId, taskId, viewer })
     // DealDependency rows cascade on both columns.
     await db.delete(dealTaskModel).where(eq(dealTaskModel.id, taskId))
     await this.audit("deal.task.delete", taskId)
@@ -394,8 +425,9 @@ export class DealTaskService extends BaseService {
     dealId: string
     taskId: string
     dependsOnTaskId: string
+    viewer?: DealViewer | null
   }): Promise<DealDependencyModel> {
-    const { workspaceId, dealId, taskId, dependsOnTaskId } = props
+    const { workspaceId, dealId, taskId, dependsOnTaskId, viewer } = props
     if (taskId === dependsOnTaskId) {
       throw validationException(
         "dependsOnTaskId",
@@ -407,7 +439,7 @@ export class DealTaskService extends BaseService {
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtext(${`deal-deps:${dealId}`}))`,
       )
-      await this.findOrFail({ workspaceId, dealId, taskId, tx })
+      await this.findOrFail({ workspaceId, dealId, taskId, viewer, tx })
       await this.findOrFail({
         workspaceId,
         dealId,
@@ -471,9 +503,10 @@ export class DealTaskService extends BaseService {
     dealId: string
     taskId: string
     dependsOnTaskId: string
+    viewer?: DealViewer | null
   }): Promise<{ removed: boolean }> {
-    const { workspaceId, dealId, taskId, dependsOnTaskId } = props
-    await this.findOrFail({ workspaceId, dealId, taskId })
+    const { workspaceId, dealId, taskId, dependsOnTaskId, viewer } = props
+    await this.findOrFail({ workspaceId, dealId, taskId, viewer })
     const deleted = await db
       .delete(dealDependencyModel)
       .where(
