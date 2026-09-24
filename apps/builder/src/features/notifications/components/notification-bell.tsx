@@ -90,8 +90,8 @@ export function NotificationBell({ workspaceId }: { workspaceId: string }) {
           </Badge>
         ) : null}
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 p-0">
-        <div className="flex items-center justify-between border-b px-3 py-2">
+      <PopoverContent align="start" className="w-96 p-0">
+        <div className="flex items-center justify-between border-b px-4 py-3">
           <span className="font-medium text-sm">
             {t("notifications.title")}
           </span>
@@ -106,7 +106,7 @@ export function NotificationBell({ workspaceId }: { workspaceId: string }) {
         </div>
         <ScrollArea className="max-h-96">
           {rows.length === 0 ? (
-            <p className="p-4 text-muted-foreground text-sm">
+            <p className="px-4 py-6 text-muted-foreground text-sm">
               {list.isPending
                 ? t("notifications.loading")
                 : t("notifications.empty")}
@@ -117,7 +117,7 @@ export function NotificationBell({ workspaceId }: { workspaceId: string }) {
                 <li key={n.id}>
                   <button
                     className={cn(
-                      "flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-accent",
+                      "flex w-full items-start gap-3 px-4 py-3 text-left text-sm hover:bg-accent",
                       !n.readAt && "bg-accent/40",
                     )}
                     data-testid="notification-row"
@@ -130,7 +130,7 @@ export function NotificationBell({ workspaceId }: { workspaceId: string }) {
                     ) : (
                       <AtSignIcon className="mt-0.5 size-4 shrink-0" />
                     )}
-                    <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="flex min-w-0 flex-1 flex-col gap-1">
                       <span className="truncate font-medium">
                         {n.type === "taskAssigned"
                           ? t("notifications.taskAssigned", {
