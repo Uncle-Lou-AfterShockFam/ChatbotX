@@ -112,6 +112,10 @@ export function DealTasksPanel({
           value={dueAt}
         />
         <Select
+          items={[
+            { value: NONE, label: t("deals.tasks.unassigned") },
+            ...ownerOptions,
+          ]}
           onValueChange={(v) => setAssigneeId(String(v ?? NONE))}
           value={assigneeId}
         >
@@ -252,6 +256,10 @@ function TaskRow({
       <div className="ml-auto flex items-center gap-1">
         {others.length > 0 ? (
           <Select
+            items={[
+              { value: NONE, label: t("deals.tasks.waitOn") },
+              ...others.map((o) => ({ value: o.id, label: o.title })),
+            ]}
             onValueChange={(v) => {
               const id = String(v ?? "")
               if (id && id !== NONE) {

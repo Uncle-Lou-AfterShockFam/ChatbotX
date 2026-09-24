@@ -123,11 +123,14 @@ export function DealDrawer({
   return (
     <Sheet onOpenChange={onOpenChange} open={open}>
       <SheetContent
-        className="flex w-full flex-col gap-4 overflow-y-auto sm:max-w-lg"
+        // the sheet body has no padding of its own: 16 px gutters here, the
+        // header keeps only its top padding, the title row leaves room for
+        // the absolute close button (Lou's layout audit, s194)
+        className="flex w-full flex-col gap-4 overflow-y-auto px-4 pb-6 sm:max-w-lg"
         data-testid="deal-drawer"
       >
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
+        <SheetHeader className="px-0">
+          <SheetTitle className="flex items-center gap-2 pe-8">
             <Input
               aria-label={t("deals.fields.title")}
               className="font-semibold"

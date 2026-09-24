@@ -21,6 +21,9 @@ export function PipelineSwitcher({
   const t = useTranslations()
   return (
     <Select
+      // base-ui renders the raw VALUE in the trigger unless the root knows
+      // every item's label (Lou's live review, s194)
+      items={pipelines.map((p) => ({ value: p.id, label: p.name }))}
       onValueChange={(next) => {
         const id = String(next ?? "")
         if (id) {

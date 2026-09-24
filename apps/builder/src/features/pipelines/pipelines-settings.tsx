@@ -191,6 +191,7 @@ function StageRow({
             />
             {others.length > 0 ? (
               <Select
+                items={others.map((s) => ({ value: s.id, label: s.name }))}
                 onValueChange={(v) => setMoveTo(String(v ?? ""))}
                 value={moveTo}
               >
@@ -323,6 +324,10 @@ function PipelineCard({
               {t("deals.stopCompanyOn")}
             </span>
             <Select
+              items={(["none", "created", "won"] as const).map((v) => ({
+                value: v,
+                label: t(`deals.stopCompanyOnOptions.${v}`),
+              }))}
               onValueChange={(v) =>
                 v &&
                 update.execute({
@@ -374,6 +379,10 @@ function PipelineCard({
               {t("deals.assignOwner")}
             </span>
             <Select
+              items={(["none", "roundRobin"] as const).map((v) => ({
+                value: v,
+                label: t(`deals.assignOwnerOptions.${v}`),
+              }))}
               onValueChange={(v) =>
                 v &&
                 update.execute({
@@ -403,6 +412,10 @@ function PipelineCard({
               {t("deals.access")}
             </span>
             <Select
+              items={(["workspace", "members"] as const).map((v) => ({
+                value: v,
+                label: t(`deals.accessOptions.${v}`),
+              }))}
               onValueChange={(v) =>
                 v &&
                 update.execute({

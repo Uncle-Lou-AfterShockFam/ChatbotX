@@ -89,6 +89,13 @@ export function DealFieldInput({
     case "select":
       return (
         <Select
+          items={[
+            { value: NONE, label: t("actions.pleaseSelect") },
+            ...(def.options ?? []).map((option) => ({
+              value: option,
+              label: option,
+            })),
+          ]}
           onValueChange={(next) =>
             onCommit(next === NONE || !next ? null : String(next))
           }

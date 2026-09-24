@@ -170,6 +170,10 @@ export function StageTaskTemplates({
           </div>
           {assignToOwner ? null : (
             <Select
+              items={[
+                { value: NONE, label: t("deals.tasks.unassigned") },
+                ...ownerOptions,
+              ]}
               onValueChange={(v) => setAssigneeId(String(v ?? NONE))}
               value={assigneeId}
             >
