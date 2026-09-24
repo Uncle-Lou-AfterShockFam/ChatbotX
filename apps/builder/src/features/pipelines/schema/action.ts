@@ -51,6 +51,12 @@ export const pipelineStageInput = z.object({
 })
 export type PipelineStageInput = z.infer<typeof pipelineStageInput>
 
+const settingsField = pipelineSettingsInput
+  .optional()
+  .describe(
+    "Pipeline settings: stopCompanyOn (none | created | won) and defaultCurrency (3-letter ISO code).",
+  )
+
 export const createPipelineRequest = z.object({
   name: z
     .string()
@@ -58,7 +64,7 @@ export const createPipelineRequest = z.object({
     .min(1)
     .max(120)
     .describe("Pipeline name, unique per workspace."),
-  settings: pipelineSettingsInput.optional(),
+  settings: settingsField,
   stages: z
     .array(pipelineStageInput)
     .min(1)
@@ -76,7 +82,7 @@ export const updatePipelineRequest = z.object({
     .max(120)
     .optional()
     .describe("New pipeline name, unique per workspace."),
-  settings: pipelineSettingsInput.optional(),
+  settings: settingsField,
 })
 export type UpdatePipelineRequest = z.infer<typeof updatePipelineRequest>
 

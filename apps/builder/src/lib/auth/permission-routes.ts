@@ -20,6 +20,7 @@ export const PERMISSION_NAV = {
   dashboard: "analytics",
   flows: "flows",
   contacts: "contacts",
+  deals: "contacts",
   broadcasts: "broadcast",
   sequences: "broadcast",
   products: "ecommerce",
@@ -34,6 +35,7 @@ const WORKSPACE_LANDING_SEGMENTS = [
   "inbox",
   "flows",
   "contacts",
+  "deals",
   "broadcasts",
   "sequences",
   "products",
@@ -43,9 +45,9 @@ function canAccessLandingSegment(
   segment: (typeof WORKSPACE_LANDING_SEGMENTS)[number],
   permissions: PermissionsInput,
 ): boolean {
-  // `inbox` and `contacts` use the shared contacts-access rule, so members
-  // with only `onlyAssignedContacts` still land there.
-  if (segment === "inbox" || segment === "contacts") {
+  // `inbox`, `contacts` and `deals` use the shared contacts-access rule, so
+  // members with only `onlyAssignedContacts` still land there.
+  if (segment === "inbox" || segment === "contacts" || segment === "deals") {
     return hasContactsAccess(permissions)
   }
   return hasWorkspacePermission(permissions, PERMISSION_NAV[segment])

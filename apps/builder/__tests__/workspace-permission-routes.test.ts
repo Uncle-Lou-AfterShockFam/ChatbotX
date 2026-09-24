@@ -14,6 +14,7 @@ describe("workspace permission routes", () => {
       dashboard: "analytics",
       flows: "flows",
       contacts: "contacts",
+      deals: "contacts",
       broadcasts: "broadcast",
       sequences: "broadcast",
       products: "ecommerce",

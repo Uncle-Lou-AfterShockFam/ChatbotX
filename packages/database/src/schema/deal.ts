@@ -10,6 +10,9 @@ import {
   varchar,
 } from "drizzle-orm/pg-core"
 import {
+  type DealActivityType,
+  type DealPriority,
+  type DealStatus,
   dealActivityTypes,
   dealPriorities,
   dealStatuses,
@@ -27,17 +30,17 @@ import { workspaceModel } from "./workspace"
 
 export const dealStatus = pgEnum(
   "dealStatus",
-  dealStatuses.options as [string, ...string[]],
+  dealStatuses.options as [DealStatus, ...DealStatus[]],
 )
 
 export const dealPriority = pgEnum(
   "dealPriority",
-  dealPriorities.options as [string, ...string[]],
+  dealPriorities.options as [DealPriority, ...DealPriority[]],
 )
 
 export const dealActivityType = pgEnum(
   "dealActivityType",
-  dealActivityTypes.options as [string, ...string[]],
+  dealActivityTypes.options as [DealActivityType, ...DealActivityType[]],
 )
 
 /**

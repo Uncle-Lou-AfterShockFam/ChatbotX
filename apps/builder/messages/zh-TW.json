@@ -6734,6 +6734,55 @@
       "open": "Open",
       "won": "Won",
       "lost": "Lost"
-    }
+    },
+    "managePipelines": "Manage pipelines",
+    "allStatuses": "All statuses",
+    "moveFailed": "The deal could not be moved.",
+    "searchContacts": "Search contacts by name, email or phone",
+    "noContact": "No contact",
+    "noOwner": "No owner",
+    "openContact": "Open contact",
+    "openCompany": "Open company",
+    "markWon": "Mark won",
+    "markLost": "Mark lost",
+    "reopen": "Reopen",
+    "deleteConfirm": "Delete this deal? Its activity log is deleted with it.",
+    "activityTitle": "Activity",
+    "notePlaceholder": "Add a note...",
+    "addNote": "Add note",
+    "activity": {
+      "created": "Created in {stage}",
+      "stageMoved": "Moved from {from} to {to}",
+      "valueChanged": "Value changed from {from} to {to}",
+      "statusChanged": "Status changed from {from} to {to}",
+      "priorityChanged": "Priority changed from {from} to {to}",
+      "assigned": "Owner changed",
+      "types": {
+        "created": "Created",
+        "stageMoved": "Stage",
+        "valueChanged": "Value",
+        "statusChanged": "Status",
+        "priorityChanged": "Priority",
+        "assigned": "Owner",
+        "note": "Note"
+      }
+    },
+    "reorder": "Reorder",
+    "moveDealsTo": "Move deals to...",
+    "stageRemovedMoved": "Stage removed; {count, plural, one {1 deal} other {# deals}} moved.",
+    "stageCount": "{count, plural, one {1 stage} other {# stages}}",
+    "deletePipelineConfirm": "Delete this pipeline and every deal in it? This cannot be undone.",
+    "stopCompanyOn": "Stop the contact's company",
+    "stopCompanyOnHint": "Runs the company stop cascade (sequences removed, waits canceled, contacts tagged company-stopped) for the deal contact's company.",
+    "stopCompanyOnOptions": {
+      "none": "Never",
+      "created": "When a deal is created",
+      "won": "When a deal is won"
+    },
+    "defaultCurrency": "Default currency",
+    "newStagePlaceholder": "New stage name",
+    "addStage": "Add stage",
+    "newPipelinePlaceholder": "New pipeline name",
+    "noPipelinesSettings": "No pipelines yet. Create one above; it starts with New, Qualified, Won and Lost."
   }
 }
