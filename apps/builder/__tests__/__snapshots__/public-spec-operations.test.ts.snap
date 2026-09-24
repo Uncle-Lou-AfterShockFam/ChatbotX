@@ -799,6 +799,11 @@ exports[`public API spec — operation naming guard > operation list (operationI
   },
   {
     "method": "GET",
+    "operationId": "contacts.listDeals",
+    "path": "/v1/contacts/{identifier}/deals",
+  },
+  {
+    "method": "GET",
     "operationId": "contacts.listFilterFields",
     "path": "/v1/contacts/filter-fields",
   },
@@ -1071,6 +1076,51 @@ exports[`public API spec — operation naming guard > operation list (operationI
     "method": "PUT",
     "operationId": "customFields.update",
     "path": "/v1/custom-fields/{id}",
+  },
+  {
+    "method": "POST",
+    "operationId": "deals.addNote",
+    "path": "/v1/deals/{id}/notes",
+  },
+  {
+    "method": "POST",
+    "operationId": "deals.create",
+    "path": "/v1/deals",
+  },
+  {
+    "method": "DELETE",
+    "operationId": "deals.delete",
+    "path": "/v1/deals/{id}",
+  },
+  {
+    "method": "GET",
+    "operationId": "deals.get",
+    "path": "/v1/deals/{id}",
+  },
+  {
+    "method": "GET",
+    "operationId": "deals.list",
+    "path": "/v1/deals",
+  },
+  {
+    "method": "GET",
+    "operationId": "deals.listActivities",
+    "path": "/v1/deals/{id}/activities",
+  },
+  {
+    "method": "POST",
+    "operationId": "deals.move",
+    "path": "/v1/deals/{id}/move",
+  },
+  {
+    "method": "POST",
+    "operationId": "deals.setStatus",
+    "path": "/v1/deals/{id}/status",
+  },
+  {
+    "method": "PATCH",
+    "operationId": "deals.update",
+    "path": "/v1/deals/{id}",
   },
   {
     "method": "POST",
@@ -1601,6 +1651,46 @@ exports[`public API spec — operation naming guard > operation list (operationI
     "method": "PATCH",
     "operationId": "minigames.updatePartial",
     "path": "/v1/minigames/{id}",
+  },
+  {
+    "method": "POST",
+    "operationId": "pipelines.create",
+    "path": "/v1/pipelines",
+  },
+  {
+    "method": "DELETE",
+    "operationId": "pipelines.delete",
+    "path": "/v1/pipelines/{id}",
+  },
+  {
+    "method": "GET",
+    "operationId": "pipelines.get",
+    "path": "/v1/pipelines/{id}",
+  },
+  {
+    "method": "GET",
+    "operationId": "pipelines.list",
+    "path": "/v1/pipelines",
+  },
+  {
+    "method": "DELETE",
+    "operationId": "pipelines.removeStage",
+    "path": "/v1/pipelines/{id}/stages/{stageId}",
+  },
+  {
+    "method": "PUT",
+    "operationId": "pipelines.reorderStages",
+    "path": "/v1/pipelines/{id}/stages/order",
+  },
+  {
+    "method": "PATCH",
+    "operationId": "pipelines.update",
+    "path": "/v1/pipelines/{id}",
+  },
+  {
+    "method": "PUT",
+    "operationId": "pipelines.upsertStage",
+    "path": "/v1/pipelines/{id}/stages",
   },
   {
     "method": "POST",
