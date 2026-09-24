@@ -96,6 +96,32 @@ export const moveDealRequest = z.object({
 })
 export type MoveDealRequest = z.infer<typeof moveDealRequest>
 
+/** s196: closed on purpose, an unknown key is a caller bug, never ignored. */
+export const moveDealPipelineRequest = z
+  .object({
+    pipelineId: zodBigintAsString().describe(
+      "Destination pipeline; must differ from the deal's current pipeline.",
+    ),
+    stageId: zodBigintAsString()
+      .nullish()
+      .describe(
+        "Stage of the destination pipeline; omitted = its first stage.",
+      ),
+    fields: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .describe(
+        "Merged into the deal's fields; must supply every required field of the destination pipeline the deal lacks.",
+      ),
+    ownerId: zodBigintAsString()
+      .nullish()
+      .describe(
+        "New owner (user id); null clears it. Required when the current owner cannot see a members-only destination.",
+      ),
+  })
+  .strict()
+export type MoveDealPipelineRequest = z.infer<typeof moveDealPipelineRequest>
+
 export const setDealStatusRequest = z.object({
   status: dealStatuses.describe(
     "open (reopen), won or lost; a closed deal must be reopened before switching between won and lost.",

@@ -22,6 +22,7 @@ const m = vi.hoisted(() => {
     openDeal: null as Record<string, unknown> | null,
     updateEmpty: false,
     lastListWhere: null as unknown,
+    rowLocks: [] as string[],
   }
   const calls: string[] = []
   const makeTx = () => {
@@ -29,7 +30,10 @@ const m = vi.hoisted(() => {
     selectChain.from = () => selectChain
     selectChain.where = () => selectChain
     selectChain.innerJoin = () => selectChain
-    selectChain.for = () => selectChain
+    selectChain.for = (mode: string) => {
+      state.rowLocks.push(mode)
+      return selectChain
+    }
     selectChain.orderBy = () => Promise.resolve([])
     // the max() aggregate is awaited without .limit()
     // biome-ignore lint/suspicious/noThenProperty: awaited query-builder stub
@@ -133,6 +137,7 @@ const m = vi.hoisted(() => {
       return Promise.resolve({ status: "stopped" })
     }),
     loggerWarn: vi.fn(),
+    findMember: vi.fn(),
   }
 })
 
@@ -197,6 +202,12 @@ vi.mock("../src/pipeline/members", () => ({
   pipelineMemberService: {
     pickRoundRobin: (...a: unknown[]) => m.pickRoundRobin(...a),
     isMember: (...a: unknown[]) => m.isMember(...a),
+  },
+}))
+// s196: movePipeline checks that the owner can still see a members-only target
+vi.mock("../src/workspace-member/service", () => ({
+  workspaceMemberService: {
+    findByWorkspaceIdAndUserId: (...a: unknown[]) => m.findMember(...a),
   },
 }))
 vi.mock("../src/audit/dispatcher", () => ({
@@ -269,6 +280,7 @@ beforeEach(() => {
   m.state.activities.length = 0
   m.state.updateReturning = []
   m.state.executeArgs.length = 0
+  m.state.rowLocks.length = 0
   m.state.openDeal = null
   m.state.updateEmpty = false
   m.state.contact = null
@@ -1136,5 +1148,496 @@ describe("dealService.update re-link (s195)", () => {
       "activity:contactChanged",
       "activity:companyChanged",
     ])
+  })
+})
+
+describe("dealService.movePipeline (s196)", () => {
+  const TARGET = (
+    over: Partial<{
+      access: "workspace" | "members"
+      fieldDefs: typeof ROOF_DEFS | []
+      stopCompanyOn: "none" | "created" | "won"
+    }> = {},
+  ) => ({
+    id: "pipe-2",
+    workspaceId: WS,
+    settings: {
+      stopCompanyOn: over.stopCompanyOn ?? "none",
+      defaultCurrency: "USD",
+      fieldDefs: over.fieldDefs ?? [],
+      assignOwner: "none",
+      access: over.access ?? "workspace",
+    },
+  })
+  const T_STAGE = {
+    id: "t-stage-1",
+    pipelineId: "pipe-2",
+    isWon: false,
+    isLost: false,
+  }
+  const T_WON = {
+    id: "t-won",
+    pipelineId: "pipe-2",
+    isWon: true,
+    isLost: false,
+  }
+  const FULL = {
+    userId: "user-1",
+    permissions: {
+      superAdmin: false,
+      contacts: true,
+      onlyAssignedContacts: false,
+    },
+  }
+  const pipelines = (target: ReturnType<typeof TARGET>) =>
+    m.pipelineFindOrFail.mockImplementation(async (p: { id: string }) =>
+      p.id === "pipe-2" ? target : PIPE("none"),
+    )
+  const moved = (over: Record<string, unknown> = {}) => {
+    m.state.updateReturning = [
+      {
+        ...OPEN_DEAL,
+        pipelineId: "pipe-2",
+        stageId: "t-stage-1",
+        ...over,
+      },
+    ]
+  }
+
+  beforeEach(() => {
+    pipelines(TARGET())
+    m.firstStage.mockResolvedValue(T_STAGE)
+    m.resolveStage.mockResolvedValue(T_STAGE)
+  })
+
+  test("moves into the target's first stage: CAS update, pipelineMoved activity, then emit with fromPipelineId, then the stage hook", async () => {
+    const { onStageEntered, _resetStageEnteredHandlers } = await import(
+      "../src/deal/stage-hooks"
+    )
+    _resetStageEnteredHandlers()
+    const seen: string[] = []
+    const off = onStageEntered((ctx) => {
+      seen.push(`${ctx.deal.pipelineId}:${ctx.stageId}`)
+      m.calls.push("hook:stage")
+      return Promise.resolve()
+    })
+    try {
+      moved()
+      const deal = await dealService.movePipeline({
+        workspaceId: WS,
+        id: "deal-1",
+        pipelineId: "pipe-2",
+        actorId: "actor-1",
+      })
+      expect(deal.pipelineId).toBe("pipe-2")
+      expect(m.firstStage).toHaveBeenCalledWith(
+        expect.objectContaining({ pipelineId: "pipe-2" }),
+      )
+      expect(m.calls).toEqual([
+        "advisory-lock",
+        "update:pipelineId,stageId,position,fields,ownerId,status,closedAt",
+        "activity:pipelineMoved",
+        "emit:moved",
+        "hook:stage",
+      ])
+      expect(m.state.activities[0]).toMatchObject({
+        type: "pipelineMoved",
+        actorId: "actor-1",
+        payload: {
+          fromPipelineId: "pipe-1",
+          toPipelineId: "pipe-2",
+          from: "stage-new",
+          to: "t-stage-1",
+        },
+      })
+      expect(m.emitMoved).toHaveBeenCalledWith(
+        WS,
+        "contact-1",
+        expect.objectContaining({
+          fromPipelineId: "pipe-1",
+          fromStageId: "stage-new",
+          pipelineId: "pipe-2",
+          stageId: "t-stage-1",
+        }),
+      )
+      expect(seen).toEqual(["pipe-2:t-stage-1"])
+      // the deal row is locked before it is read (codex probe s196)
+      expect(m.state.rowLocks[0]).toBe("update")
+      // the lock key is the TARGET pipeline's one-open-deal key
+      expect(JSON.stringify(m.state.executeArgs)).toContain(
+        "deal:ws-1:contact-1:pipe-2",
+      )
+    } finally {
+      off()
+      _resetStageEnteredHandlers()
+    }
+  })
+
+  test("an explicit stage is resolved against the TARGET pipeline; a foreign one is refused before any write", async () => {
+    m.resolveStage.mockRejectedValueOnce(
+      new Error("Stage is not in this pipeline."),
+    )
+    await expect(
+      dealService.movePipeline({
+        workspaceId: WS,
+        id: "deal-1",
+        pipelineId: "pipe-2",
+        stageId: "stage-new",
+      }),
+    ).rejects.toThrow("Stage is not in this pipeline.")
+    expect(m.resolveStage).toHaveBeenCalledWith(
+      expect.objectContaining({ pipelineId: "pipe-2", stageId: "stage-new" }),
+    )
+    expect(m.calls).toEqual([])
+  })
+
+  test("the same pipeline is a 422 (that is moveStage)", async () => {
+    await expect(
+      dealService.movePipeline({
+        workspaceId: WS,
+        id: "deal-1",
+        pipelineId: "pipe-1",
+      }),
+    ).rejects.toMatchObject({ httpStatusCode: 422, field: "pipelineId" })
+    expect(m.calls).toEqual([])
+  })
+
+  test("a target the viewer cannot see is a 404 and nothing is written", async () => {
+    m.pipelineFindOrFail.mockImplementation(
+      (p: { id: string; viewer?: unknown }) => {
+        if (p.id === "pipe-2" && p.viewer) {
+          return Promise.reject(
+            Object.assign(new Error("Pipeline not found"), {
+              httpStatusCode: 404,
+            }),
+          )
+        }
+        return Promise.resolve(p.id === "pipe-2" ? TARGET() : PIPE("none"))
+      },
+    )
+    await expect(
+      dealService.movePipeline({
+        workspaceId: WS,
+        id: "deal-1",
+        pipelineId: "pipe-2",
+        viewer: FULL,
+      }),
+    ).rejects.toMatchObject({ httpStatusCode: 404 })
+    expect(m.pipelineFindOrFail).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "pipe-2", viewer: FULL }),
+    )
+    expect(m.calls).toEqual([])
+  })
+
+  test("a deal the viewer cannot see is a 404 before the target is read", async () => {
+    m.findOrFail.mockImplementation(async () => ({
+      ...OPEN_DEAL,
+      ownerId: "user-2",
+    }))
+    await expect(
+      dealService.movePipeline({
+        workspaceId: WS,
+        id: "deal-1",
+        pipelineId: "pipe-2",
+        viewer: {
+          userId: "user-1",
+          permissions: {
+            superAdmin: false,
+            contacts: false,
+            onlyAssignedContacts: true,
+          },
+        },
+      }),
+    ).rejects.toMatchObject({ httpStatusCode: 404, message: "Deal not found" })
+    expect(m.calls).toEqual([])
+  })
+
+  test("a required target field the deal lacks is a 422 naming it; the patch supplies it", async () => {
+    pipelines(TARGET({ fieldDefs: ROOF_DEFS }))
+    await expect(
+      dealService.movePipeline({
+        workspaceId: WS,
+        id: "deal-1",
+        pipelineId: "pipe-2",
+      }),
+    ).rejects.toMatchObject({ httpStatusCode: 422, field: "fields.sqft" })
+    expect(m.calls).toEqual([])
+
+    moved({ fields: { sqft: 1200 } })
+    await dealService.movePipeline({
+      workspaceId: WS,
+      id: "deal-1",
+      pipelineId: "pipe-2",
+      fields: { sqft: 1200 },
+    })
+    expect(m.calls[1]).toBe(
+      "update:pipelineId,stageId,position,fields,ownerId,status,closedAt",
+    )
+  })
+
+  test("a patch value of the wrong type for the target is a 422", async () => {
+    pipelines(TARGET({ fieldDefs: ROOF_DEFS }))
+    await expect(
+      dealService.movePipeline({
+        workspaceId: WS,
+        id: "deal-1",
+        pipelineId: "pipe-2",
+        fields: { sqft: "a lot" },
+      }),
+    ).rejects.toMatchObject({ httpStatusCode: 422, field: "fields.sqft" })
+  })
+
+  test("fields that are not an object, or blow the size caps, are refused", async () => {
+    await expect(
+      dealService.movePipeline({
+        workspaceId: WS,
+        id: "deal-1",
+        pipelineId: "pipe-2",
+        fields: ["x"] as unknown as Record<string, unknown>,
+      }),
+    ).rejects.toMatchObject({ httpStatusCode: 422, field: "fields" })
+    const tooMany = Object.fromEntries(
+      Array.from({ length: 51 }, (_, i) => [`k${i}`, i]),
+    )
+    await expect(
+      dealService.movePipeline({
+        workspaceId: WS,
+        id: "deal-1",
+        pipelineId: "pipe-2",
+        fields: tooMany,
+      }),
+    ).rejects.toMatchObject({ httpStatusCode: 422, field: "fields" })
+    expect(m.calls).toEqual([])
+  })
+
+  test("an owner who cannot see a members-only target is a 422; reassigning or clearing moves it", async () => {
+    pipelines(TARGET({ access: "members" }))
+    m.findOrFail.mockImplementation(async () => ({
+      ...OPEN_DEAL,
+      ownerId: "owner-1",
+    }))
+    m.findMember.mockResolvedValue({
+      userId: "owner-1",
+      permissions: { superAdmin: false, contacts: true },
+    })
+    m.isMember.mockResolvedValue(false)
+    await expect(
+      dealService.movePipeline({
+        workspaceId: WS,
+        id: "deal-1",
+        pipelineId: "pipe-2",
+      }),
+    ).rejects.toMatchObject({
+      httpStatusCode: 422,
+      field: "ownerId",
+      data: { code: "ownerNotMember" },
+    })
+    expect(m.calls).toEqual([])
+
+    // reassign to a member of the target
+    m.state.member = { userId: "member-2" }
+    m.findMember.mockResolvedValue({
+      userId: "member-2",
+      permissions: { superAdmin: false, contacts: true },
+    })
+    m.isMember.mockResolvedValue(true)
+    moved({ ownerId: "member-2" })
+    await dealService.movePipeline({
+      workspaceId: WS,
+      id: "deal-1",
+      pipelineId: "pipe-2",
+      ownerId: "member-2",
+    })
+    expect(m.state.activities.map((a) => a.type)).toEqual([
+      "pipelineMoved",
+      "assigned",
+    ])
+    expect(m.state.activities[1]).toMatchObject({
+      payload: { from: "owner-1", to: "member-2" },
+    })
+
+    // clearing the owner needs no membership at all
+    m.state.activities.length = 0
+    m.state.member = null
+    m.findMember.mockClear()
+    moved({ ownerId: null })
+    await dealService.movePipeline({
+      workspaceId: WS,
+      id: "deal-1",
+      pipelineId: "pipe-2",
+      ownerId: null,
+    })
+    expect(m.findMember).not.toHaveBeenCalled()
+    expect(m.state.activities.map((a) => a.type)).toEqual([
+      "pipelineMoved",
+      "assigned",
+    ])
+  })
+
+  test("a super-admin owner may stay on a members-only target without membership", async () => {
+    pipelines(TARGET({ access: "members" }))
+    m.findOrFail.mockImplementation(async () => ({
+      ...OPEN_DEAL,
+      ownerId: "owner-1",
+    }))
+    m.findMember.mockResolvedValue({
+      userId: "owner-1",
+      permissions: { superAdmin: true },
+    })
+    m.isMember.mockResolvedValue(false)
+    moved({ ownerId: "owner-1" })
+    await dealService.movePipeline({
+      workspaceId: WS,
+      id: "deal-1",
+      pipelineId: "pipe-2",
+    })
+    expect(m.state.activities.map((a) => a.type)).toEqual(["pipelineMoved"])
+  })
+
+  test("an owner who left the workspace cannot stay on a members-only target", async () => {
+    pipelines(TARGET({ access: "members" }))
+    m.findOrFail.mockImplementation(async () => ({
+      ...OPEN_DEAL,
+      ownerId: "gone-1",
+    }))
+    m.findMember.mockResolvedValue(undefined)
+    await expect(
+      dealService.movePipeline({
+        workspaceId: WS,
+        id: "deal-1",
+        pipelineId: "pipe-2",
+      }),
+    ).rejects.toMatchObject({ field: "ownerId" })
+  })
+
+  test("landing open where the contact already has an open deal is refused under the lock", async () => {
+    m.state.openDeal = { ...OPEN_DEAL, id: "deal-other", pipelineId: "pipe-2" }
+    await expect(
+      dealService.movePipeline({
+        workspaceId: WS,
+        id: "deal-1",
+        pipelineId: "pipe-2",
+      }),
+    ).rejects.toMatchObject({
+      httpStatusCode: 422,
+      field: "pipelineId",
+      data: { conflict: "openDeal", dealId: "deal-other" },
+    })
+    expect(m.calls).toEqual(["advisory-lock"])
+  })
+
+  test("landing on a won stage closes the deal IN the move's transaction (no second setStatus), skips the open-deal check, then emits + stops", async () => {
+    pipelines(TARGET({ stopCompanyOn: "won" }))
+    m.resolveStage.mockResolvedValue(T_WON)
+    m.state.openDeal = { ...OPEN_DEAL, id: "deal-other", pipelineId: "pipe-2" }
+    moved({ stageId: "t-won", status: "won" })
+    await dealService.movePipeline({
+      workspaceId: WS,
+      id: "deal-1",
+      pipelineId: "pipe-2",
+      stageId: "t-won",
+    })
+    expect(m.calls).toEqual([
+      "update:pipelineId,stageId,position,fields,ownerId,status,closedAt",
+      "activity:pipelineMoved",
+      "activity:statusChanged",
+      "emit:moved",
+      "emit:status",
+      "stop:company",
+    ])
+    // one deal read only: setStatus (which re-reads the deal) never ran
+    expect(m.findOrFail).toHaveBeenCalledTimes(1)
+  })
+
+  test("a WON deal moved onto an open stage reopens under the lock: an open deal already there refuses it (skeptic s196)", async () => {
+    m.findOrFail.mockImplementation(async () => ({
+      ...OPEN_DEAL,
+      status: "won",
+    }))
+    m.state.openDeal = { ...OPEN_DEAL, id: "deal-other", pipelineId: "pipe-2" }
+    await expect(
+      dealService.movePipeline({
+        workspaceId: WS,
+        id: "deal-1",
+        pipelineId: "pipe-2",
+      }),
+    ).rejects.toMatchObject({ data: { conflict: "openDeal" } })
+    expect(m.calls).toEqual(["advisory-lock"])
+
+    m.state.openDeal = null
+    moved({ status: "open" })
+    await dealService.movePipeline({
+      workspaceId: WS,
+      id: "deal-1",
+      pipelineId: "pipe-2",
+    })
+    expect(m.calls.slice(1, 5)).toEqual([
+      "advisory-lock",
+      "update:pipelineId,stageId,position,fields,ownerId,status,closedAt",
+      "activity:pipelineMoved",
+      "activity:statusChanged",
+    ])
+    expect(m.state.activities.at(-1)).toMatchObject({
+      type: "statusChanged",
+      payload: { from: "won", to: "open" },
+    })
+  })
+
+  test("a WON deal moved onto a LOST stage goes won -> lost directly (setStatus would refuse it after the move)", async () => {
+    m.findOrFail.mockImplementation(async () => ({
+      ...OPEN_DEAL,
+      status: "won",
+    }))
+    m.resolveStage.mockResolvedValue({
+      ...T_WON,
+      id: "t-lost",
+      isWon: false,
+      isLost: true,
+    })
+    moved({ stageId: "t-lost", status: "lost" })
+    await dealService.movePipeline({
+      workspaceId: WS,
+      id: "deal-1",
+      pipelineId: "pipe-2",
+      stageId: "t-lost",
+    })
+    expect(m.state.activities.map((a) => a.type)).toEqual([
+      "pipelineMoved",
+      "statusChanged",
+    ])
+    expect(m.emitStatus).toHaveBeenCalledWith(
+      WS,
+      "contact-1",
+      expect.objectContaining({ oldStatus: "won" }),
+    )
+    expect(m.stopCompany).not.toHaveBeenCalled()
+  })
+
+  test("a deal without a contact takes no lock and emits nothing", async () => {
+    m.findOrFail.mockImplementation(async () => ({
+      ...OPEN_DEAL,
+      contactId: null,
+    }))
+    moved({ contactId: null })
+    await dealService.movePipeline({
+      workspaceId: WS,
+      id: "deal-1",
+      pipelineId: "pipe-2",
+    })
+    expect(m.calls).not.toContain("advisory-lock")
+    expect(m.emitMoved).not.toHaveBeenCalled()
+  })
+
+  test("a concurrent move (0 rows) is a stale conflict and records nothing", async () => {
+    m.state.updateEmpty = true
+    await expect(
+      dealService.movePipeline({
+        workspaceId: WS,
+        id: "deal-1",
+        pipelineId: "pipe-2",
+      }),
+    ).rejects.toMatchObject({ data: { conflict: "stale" } })
+    expect(m.state.activities).toEqual([])
+    expect(m.emitMoved).not.toHaveBeenCalled()
   })
 })

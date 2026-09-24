@@ -11,7 +11,10 @@ type Translate = ReturnType<typeof useTranslations>
 const text = (value: unknown, fallback = "") =>
   value === null || value === undefined ? fallback : String(value)
 
-/** One human line per activity row; unknown types fall back to the type name. */
+/**
+ * One human line per activity row; unknown types fall back to the type name.
+ * `stageNames` is `namesById`: stage AND pipeline names (s196 pipelineMoved).
+ */
 export function describeActivity(
   activity: DealActivityResource,
   stageNames: Map<string, string>,
@@ -26,6 +29,15 @@ export function describeActivity(
     case "stageMoved":
       return t("deals.activity.stageMoved", {
         from: stageNames.get(String(p.from)) ?? text(p.from),
+        to: stageNames.get(String(p.to)) ?? text(p.to),
+      })
+    // s196: `stageNames` is `namesById`, so the pipeline ids resolve too
+    case "pipelineMoved":
+      return t("deals.activity.pipelineMoved", {
+        fromPipeline:
+          stageNames.get(String(p.fromPipelineId)) ?? text(p.fromPipelineId),
+        toPipeline:
+          stageNames.get(String(p.toPipelineId)) ?? text(p.toPipelineId),
         to: stageNames.get(String(p.to)) ?? text(p.to),
       })
     case "valueChanged":

@@ -33,11 +33,13 @@ import { deleteDealsAction } from "../actions/delete-deals-action"
 import { moveDealAction } from "../actions/move-deal-action"
 import { setDealStatusAction } from "../actions/set-deal-status-action"
 import { updateDealAction } from "../actions/update-deal-action"
+import { namesById } from "../lib/names-by-id"
 import { useDealActivities, useOwnerOptions } from "../provider/deal-hook"
 import type { DealResource } from "../schema/resource"
 import { DealActivityList } from "./activity-list"
 import { DealCommentsPanel } from "./comments-panel"
 import { DealDetailsForm } from "./details-form"
+import { MovePipelineDialog } from "./move-pipeline-dialog"
 import { DealTasksPanel } from "./tasks-panel"
 
 export { describeActivity } from "./activity-list"
@@ -53,22 +55,29 @@ export function DealDrawer({
   workspaceId,
   deal,
   pipeline,
+  stageNames: allStageNames,
   onOpenChange,
   onChanged,
+  onPipelineMoved,
 }: {
   workspaceId: string
   deal: DealResource | null
   pipeline: PipelineWithStagesResource | null
+  /** `namesById` over EVERY pipeline, so a cross-pipeline move's old stages still read as names (s196). */
+  stageNames?: ReadonlyMap<string, string>
   onOpenChange: (open: boolean) => void
   onChanged: () => void
+  /** The deal left for another pipeline (s196); the caller follows it. */
+  onPipelineMoved?: (pipelineId: string) => void
 }) {
   const t = useTranslations()
   const open = deal !== null
   const ownerOptions = useOwnerOptions(workspaceId, { enabled: open })
   const activities = useDealActivities(workspaceId, deal?.id)
-  const stageNames = new Map(
-    (pipeline?.stages ?? []).map((s) => [s.id, s.name] as const),
-  )
+  const stageNames = new Map([
+    ...(allStageNames ?? []),
+    ...namesById(pipeline ? [pipeline] : []),
+  ])
 
   const [title, setTitle] = useState("")
   const [note, setNote] = useState("")
@@ -188,6 +197,16 @@ export function DealDrawer({
               {t("deals.reopen")}
             </Button>
           )}
+          <MovePipelineDialog
+            deal={deal}
+            disabled={busy}
+            onMoved={(pipelineId) => {
+              refresh()
+              onPipelineMoved?.(pipelineId)
+            }}
+            ownerOptions={ownerOptions}
+            workspaceId={workspaceId}
+          />
           <ConfirmButton
             className="ml-auto"
             data-testid="deal-delete"

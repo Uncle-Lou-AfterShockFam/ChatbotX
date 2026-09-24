@@ -112,7 +112,13 @@ export async function moveDealStage({
   step,
 }: ExecuteStepProps<MoveDealStageStepSchema>) {
   const { workspaceId, contactId } = conversation
-  if (!(step.pipelineId && step.stageId)) {
+  const { stageId } = step
+  // s196: a target pipeline other than the source = a cross-pipeline move
+  const target =
+    step.targetPipelineId && step.targetPipelineId !== step.pipelineId
+      ? step.targetPipelineId
+      : null
+  if (!(step.pipelineId && (stageId || target))) {
     logger.warn(
       { workspaceId, stepId: step.id },
       "moveDealStage: pipeline or stage not set",
@@ -132,11 +138,18 @@ export async function moveDealStage({
       )
       return
     }
-    await dealService.moveStage({
-      workspaceId,
-      id: open.id,
-      stageId: step.stageId,
-    })
+    if (target) {
+      // a missing required target field, an owner who cannot see a
+      // members-only target, or an open deal already there is a 422 -> logged
+      await dealService.movePipeline({
+        workspaceId,
+        id: open.id,
+        pipelineId: target,
+        stageId: stageId || null,
+      })
+    } else if (stageId) {
+      await dealService.moveStage({ workspaceId, id: open.id, stageId })
+    }
   } catch (error) {
     logger.error(
       { err: error, workspaceId, contactId, stepId: step.id },

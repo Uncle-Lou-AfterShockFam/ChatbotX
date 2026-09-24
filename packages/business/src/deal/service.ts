@@ -28,6 +28,7 @@ import {
 import type {
   DealActivityModel,
   DealModel,
+  PipelineModel,
   PipelineStageModel,
 } from "@chatbotx.io/database/types"
 import {
@@ -58,6 +59,7 @@ import {
 import { pipelineMemberService } from "../pipeline/members"
 import { pipelineService } from "../pipeline/service"
 import type { PaginatedResult } from "../types"
+import { workspaceMemberService } from "../workspace-member/service"
 import { stopCompanyForDeal } from "./company-stop"
 import {
   dealEventMetadata,
@@ -122,6 +124,23 @@ const dealChangedConcurrently = () =>
     "Deal was changed by someone else; reload and retry.",
     { conflict: "stale" },
   )
+/** A deal landing on a stage takes its status: won / lost stages close it, any other opens it. */
+const landingStatus = (stage: PipelineStageModel): DealStatus => {
+  if (stage.isWon) {
+    return "won"
+  }
+  return stage.isLost ? "lost" : "open"
+}
+/** Open clears `closedAt`; staying closed keeps it; closing now stamps it. */
+const landingClosedAt = (
+  status: DealStatus,
+  current: Pick<DealModel, "status" | "closedAt">,
+): Date | null => {
+  if (status === "open") {
+    return null
+  }
+  return status === current.status ? current.closedAt : new Date()
+}
 /** Below this gap two neighbouring positions are renormalised to `DEAL_POSITION_STEP * i`. */
 export const MIN_POSITION_GAP = 1e-6
 
@@ -489,12 +508,7 @@ class DealService extends BaseService {
         fields: data.fields ?? {},
         requireAll: true,
       })
-      const status: DealStatus = stage.isWon
-        ? "won"
-        : // biome-ignore lint/style/noNestedTernary: three-way landing status
-          stage.isLost
-          ? "lost"
-          : "open"
+      const status = landingStatus(stage)
 
       const [row] = await tx
         .insert(dealModel)
@@ -831,16 +845,261 @@ class DealService extends BaseService {
       actorId,
     })
 
-    const target: DealStatus = outcome.stage.isWon
-      ? "won"
-      : // biome-ignore lint/style/noNestedTernary: three-way landing status
-        outcome.stage.isLost
-        ? "lost"
-        : "open"
+    const target = landingStatus(outcome.stage)
     if (target !== outcome.deal.status) {
       return await this.setStatus({ workspaceId, id, status: target, actorId })
     }
     return outcome.deal
+  }
+
+  /**
+   * Move a deal to ANOTHER pipeline (s196): the target stage (default: its
+   * first), the deal's fields re-validated against the TARGET `fieldDefs`
+   * with every required key present (`fields` patches what is missing), and
+   * an owner who can still see the target pipeline (`ownerId` reassigns,
+   * null clears). Tasks, comments and notifications stay with the deal; the
+   * target stage's task templates run, the landing status follows the stage
+   * (written in the move's own transaction; the target's `stopCompanyOn`
+   * applies), and `ticketMovedToStage` fires
+   * for the destination stage with `fromPipelineId`. The same pipeline is a
+   * 422 (that is `moveStage`). Landing OPEN in a pipeline where the contact already
+   * has an open deal is refused (one open deal per contact per pipeline,
+   * under `createUnlessOpen`'s lock).
+   */
+  async movePipeline(props: {
+    workspaceId: string
+    id: string
+    pipelineId: string
+    stageId?: string | null
+    fields?: Record<string, unknown> | null
+    ownerId?: string | null
+    actorId?: string | null
+    viewer?: DealViewer | null
+  }): Promise<DealModel> {
+    const { workspaceId, id, viewer } = props
+    const actorId = props.actorId ?? null
+    if (
+      props.fields !== undefined &&
+      props.fields !== null &&
+      (typeof props.fields !== "object" || Array.isArray(props.fields))
+    ) {
+      throw validationException("fields", "Fields must be an object.")
+    }
+
+    const outcome = await db.transaction(async (tx) => {
+      // Row lock FIRST (codex probe s196): every decision below (contact ->
+      // lock key, status, owner, fields) reads the committed row, and a
+      // concurrent write to this deal waits for the move instead of
+      // interleaving. Order = row lock, then the advisory lock: no cycle with
+      // createUnlessOpen, which never locks an existing deal row.
+      await tx
+        .select({ id: dealModel.id })
+        .from(dealModel)
+        .where(
+          and(eq(dealModel.id, id), eq(dealModel.workspaceId, workspaceId)),
+        )
+        .for("update")
+      const current = await this.findOrFail({ workspaceId, id, viewer, tx })
+      if (current.pipelineId === props.pipelineId) {
+        throw validationException(
+          "pipelineId",
+          "The deal is already in that pipeline; move it to a stage instead.",
+        )
+      }
+      const target = await pipelineService.findOrFail({
+        workspaceId,
+        id: props.pipelineId,
+        viewer,
+        tx,
+      })
+      const stage = props.stageId
+        ? await pipelineService.resolveStage({
+            workspaceId,
+            pipelineId: target.id,
+            stageId: props.stageId,
+            tx,
+          })
+        : await pipelineService.firstStage({
+            workspaceId,
+            pipelineId: target.id,
+            tx,
+          })
+      const fields = this.parseFields({
+        defs: target.settings.fieldDefs,
+        fields: { ...current.fields, ...(props.fields ?? {}) },
+        requireAll: true,
+      })
+      const ownerId =
+        props.ownerId === undefined
+          ? current.ownerId
+          : await this.resolveOwner({ workspaceId, ownerId: props.ownerId, tx })
+      await this.assertOwnerCanView({ workspaceId, ownerId, target, tx })
+
+      // The landing status is written in THIS transaction, under the lock:
+      // a deferred setStatus would reopen a closed deal after the lock is
+      // gone (skeptic s196), and would refuse won -> lost after the move.
+      const status = landingStatus(stage)
+      if (status === "open" && current.contactId) {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${`deal:${workspaceId}:${current.contactId}:${target.id}`}))`,
+        )
+        const existing = await this.findOpenForContactInPipeline({
+          workspaceId,
+          contactId: current.contactId,
+          pipelineId: target.id,
+          tx,
+        })
+        if (existing) {
+          throw validationException(
+            "pipelineId",
+            "The contact already has an open deal in that pipeline.",
+            { conflict: "openDeal", dealId: existing.id },
+          )
+        }
+      }
+
+      const position = await this.nextPosition({ stageId: stage.id, tx })
+      // Belt to the row lock: pinned to the pipeline, stage and status this
+      // transaction read, so it can never record a transition that did not
+      // happen in that order (same rule as `moveStage`).
+      const [moved] = await tx
+        .update(dealModel)
+        .set({
+          pipelineId: target.id,
+          stageId: stage.id,
+          position,
+          fields,
+          ownerId,
+          status,
+          closedAt: landingClosedAt(status, current),
+        })
+        .where(
+          and(
+            eq(dealModel.id, id),
+            eq(dealModel.workspaceId, workspaceId),
+            eq(dealModel.pipelineId, current.pipelineId),
+            eq(dealModel.stageId, current.stageId),
+            eq(dealModel.status, current.status),
+          ),
+        )
+        .returning()
+      if (!moved) {
+        throw dealChangedConcurrently()
+      }
+      await this.recordActivity({
+        tx,
+        dealId: id,
+        type: "pipelineMoved",
+        actorId,
+        payload: {
+          fromPipelineId: current.pipelineId,
+          toPipelineId: target.id,
+          from: current.stageId,
+          to: stage.id,
+        },
+      })
+      if (ownerId !== current.ownerId) {
+        await this.recordActivity({
+          tx,
+          dealId: id,
+          type: "assigned",
+          actorId,
+          payload: { from: current.ownerId, to: ownerId },
+        })
+      }
+      if (status !== current.status) {
+        await this.recordActivity({
+          tx,
+          dealId: id,
+          type: "statusChanged",
+          actorId,
+          payload: { from: current.status, to: status },
+        })
+      }
+      return {
+        deal: moved,
+        oldStatus: current.status,
+        status,
+        settings: target.settings,
+        stage,
+        fromPipelineId: current.pipelineId,
+        fromStageId: current.stageId,
+      }
+    })
+
+    await this.audit("deal.move-pipeline", id)
+    await companyActivityService.recordSafely({
+      workspaceId,
+      companyId: outcome.deal.companyId,
+      type: "dealMoved",
+      actorId,
+      payload: {
+        dealId: id,
+        title: outcome.deal.title,
+        from: outcome.fromStageId,
+        to: outcome.stage.id,
+        fromPipelineId: outcome.fromPipelineId,
+        toPipelineId: outcome.deal.pipelineId,
+      },
+    })
+    await this.emitFor(outcome.deal, emitDealMovedToStage, {
+      fromStageId: outcome.fromStageId,
+      fromPipelineId: outcome.fromPipelineId,
+    })
+    await this.maybeRenormalize({ stageId: outcome.stage.id })
+    await runStageEntered({
+      workspaceId,
+      deal: outcome.deal,
+      stageId: outcome.stage.id,
+      actorId,
+    })
+
+    if (outcome.status !== outcome.oldStatus) {
+      await this.afterStatusChange({
+        deal: outcome.deal,
+        oldStatus: outcome.oldStatus,
+        status: outcome.status,
+        settings: outcome.settings,
+        actorId,
+      })
+    }
+    return outcome.deal
+  }
+
+  /**
+   * The owner must still be able to see the pipeline the deal moves into (a
+   * members-only target hides it from non-members, super admins excepted):
+   * a 422 the caller answers by reassigning (`ownerId`) or clearing it.
+   */
+  private async assertOwnerCanView(props: {
+    workspaceId: string
+    ownerId: string | null
+    target: PipelineModel
+    tx: DatabaseClient
+  }): Promise<void> {
+    const { workspaceId, ownerId, target, tx } = props
+    if (!ownerId || target.settings.access !== "members") {
+      return
+    }
+    const member = await workspaceMemberService.findByWorkspaceIdAndUserId({
+      workspaceId,
+      userId: ownerId,
+      tx,
+    })
+    const visible =
+      member !== undefined &&
+      (await canViewPipeline({
+        viewer: { userId: ownerId, permissions: member.permissions },
+        pipeline: target,
+        tx,
+      }))
+    if (!visible) {
+      throw validationException(
+        "ownerId",
+        "The owner is not a member of the target pipeline; pick another owner.",
+        { code: "ownerNotMember" },
+      )
+    }
   }
 
   /**
@@ -909,35 +1168,51 @@ class DealService extends BaseService {
     if (!outcome.changed) {
       return outcome.deal
     }
-    await this.audit("deal.status", id)
+    await this.afterStatusChange({
+      deal: outcome.deal,
+      oldStatus: outcome.oldStatus,
+      status,
+      settings: outcome.settings,
+      actorId,
+    })
+    return outcome.deal
+  }
+
+  /** Audit, company log, `ticketStatusChanged`, then the `won` company stop, AFTER the status committed. */
+  private async afterStatusChange(props: {
+    deal: DealModel
+    oldStatus: DealStatus
+    status: DealStatus
+    settings: PipelineSettings
+    actorId: string | null
+  }): Promise<void> {
+    const { deal, oldStatus, status, settings, actorId } = props
+    await this.audit("deal.status", deal.id)
     await companyActivityService.recordSafely({
-      workspaceId,
-      companyId: outcome.deal.companyId,
+      workspaceId: deal.workspaceId,
+      companyId: deal.companyId,
       type: "dealStatusChanged",
       actorId,
       payload: {
-        dealId: id,
-        title: outcome.deal.title,
-        from: outcome.oldStatus,
+        dealId: deal.id,
+        title: deal.title,
+        from: oldStatus,
         to: status,
       },
     })
-    await this.emitFor(outcome.deal, emitDealStatusChanged, {
-      oldStatus: outcome.oldStatus,
-    })
+    await this.emitFor(deal, emitDealStatusChanged, { oldStatus })
     if (
       status === "won" &&
-      outcome.settings.stopCompanyOn === "won" &&
-      outcome.deal.companyId
+      settings.stopCompanyOn === "won" &&
+      deal.companyId
     ) {
       await stopCompanyForDeal({
-        workspaceId,
-        companyId: outcome.deal.companyId,
-        dealId: id,
-        contactId: outcome.deal.contactId,
+        workspaceId: deal.workspaceId,
+        companyId: deal.companyId,
+        dealId: deal.id,
+        contactId: deal.contactId,
       })
     }
-    return outcome.deal
   }
 
   async addNote(props: {

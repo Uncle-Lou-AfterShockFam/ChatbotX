@@ -53,6 +53,7 @@ const dealService = {
   create: vi.fn(),
   update: vi.fn(),
   moveStage: vi.fn(),
+  movePipeline: vi.fn(),
   setStatus: vi.fn(),
   addNote: vi.fn(),
   remove: vi.fn(),
@@ -158,6 +159,48 @@ describe("deals + pipelines public API", () => {
       workspaceId: "ws-1",
       ids: ["9"],
     })
+  })
+
+  test("POST /v1/deals/{id}/move-pipeline passes pipeline, stage, fields and owner through, unscoped", async () => {
+    dealService.movePipeline.mockResolvedValueOnce({ id: "d1" })
+    await findProcedure("POST", "/v1/deals/{id}/move-pipeline").handler?.({
+      context,
+      input: {
+        id: "d1",
+        pipelineId: "p2",
+        stageId: "s9",
+        fields: { sqft: 1200 },
+        ownerId: null,
+      },
+    })
+    expect(dealService.movePipeline).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      id: "d1",
+      pipelineId: "p2",
+      stageId: "s9",
+      fields: { sqft: 1200 },
+      ownerId: null,
+    })
+  })
+
+  test("the move-pipeline request is closed: an unknown key is refused, not ignored", async () => {
+    const { moveDealPipelinePublicRequest } = await import(
+      "../src/features/deals/schema/public"
+    )
+    expect(
+      moveDealPipelinePublicRequest.safeParse({ id: "1", pipelineId: "2" })
+        .success,
+    ).toBe(true)
+    expect(
+      moveDealPipelinePublicRequest.safeParse({
+        id: "1",
+        pipelineId: "2",
+        stage: "3",
+      }).success,
+    ).toBe(false)
+    expect(moveDealPipelinePublicRequest.safeParse({ id: "1" }).success).toBe(
+      false,
+    )
   })
 
   test("POST /v1/deals/{id}/move passes stage + position through", async () => {

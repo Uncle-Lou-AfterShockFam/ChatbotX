@@ -12,6 +12,7 @@ import { describe, expect, test, vi } from "vitest"
 type Captured = {
   route: { method: string; path: string }
   uses: unknown[]
+  input?: { safeParse: (v: unknown) => { success: boolean } }
   handler?: (args: unknown) => unknown
 }
 const { captured } = vi.hoisted(() => {
@@ -26,7 +27,11 @@ vi.mock("@/orpc", () => {
       entry.route = r
       return chain
     }
-    for (const k of ["input", "output", "errors"]) {
+    chain.input = (schema: Captured["input"]) => {
+      entry.input = schema
+      return chain
+    }
+    for (const k of ["output", "errors"]) {
       chain[k] = () => chain
     }
     chain.use = (mw: unknown) => {
@@ -101,6 +106,19 @@ const VIEWER = {
   userId: "u-1",
   permissions: { superAdmin: false, onlyAssignedContacts: true },
 }
+
+describe("private move-pipeline route input (s196)", () => {
+  test("the strict request still accepts the path keys and refuses an unknown one", () => {
+    const route = captured.find(
+      (p) =>
+        p.route.path === "/workspaces/{workspaceId}/deals/{id}/move-pipeline",
+    )
+    expect(route?.input).toBeDefined()
+    const base = { workspaceId: "1", id: "2", pipelineId: "3" }
+    expect(route?.input?.safeParse(base).success).toBe(true)
+    expect(route?.input?.safeParse({ ...base, stage: "4" }).success).toBe(false)
+  })
+})
 
 describe("private deal routes carry the viewer (s193)", () => {
   test("every route uses the contacts-access middleware", () => {

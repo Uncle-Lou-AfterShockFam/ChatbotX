@@ -17,6 +17,7 @@ import {
   dealPublicResource,
   listDealsPublicRequest,
   listDealsPublicResponse,
+  moveDealPipelinePublicRequest,
   moveDealPublicRequest,
   setDealStatusPublicRequest,
   updateDealPublicRequest,
@@ -141,6 +142,30 @@ export const dealsPublicRouter = {
           id: input.id,
           stageId: input.stageId,
           position: input.position,
+        }),
+    ),
+
+  movePipeline: workspaceTokenAuthAPI
+    .route({
+      method: "POST",
+      path: "/v1/deals/{id}/move-pipeline",
+      summary: "Move deal to another pipeline",
+      description:
+        "Moves a deal to a stage of ANOTHER pipeline (default: its first stage) and emits `ticketMovedToStage` with `fromPipelineId`. The deal's fields must satisfy the destination's required fields (`fields` supplies missing ones); an owner who cannot see a members-only destination must be replaced (`ownerId`). A contact with an open deal already in the destination is refused. Tasks, comments and activity stay with the deal; the destination stage's task templates run.",
+      tags: ["Deals"],
+    })
+    .input(moveDealPipelinePublicRequest)
+    .output(dealPublicResource)
+    .errors(possibleErrorsOnMutatingResource)
+    .handler(
+      async ({ context, input }) =>
+        await dealService.movePipeline({
+          workspaceId: context.workspace.id,
+          id: input.id,
+          pipelineId: input.pipelineId,
+          stageId: input.stageId,
+          fields: input.fields,
+          ownerId: input.ownerId,
         }),
     ),
 

@@ -270,6 +270,9 @@ const PAYLOAD_BUILDERS = {
   [triggerEventTypes.enum.ticketMovedToStage]: (basePayload, data) => ({
     ...buildDealPayload(basePayload, data),
     from_stage_id: (data.fromStageId as string) ?? null,
+    // s196: a cross-pipeline move names the pipeline it left; a stage move stays in one
+    from_pipeline_id:
+      (data.fromPipelineId as string) ?? (data.pipelineId as string) ?? null,
   }),
   [triggerEventTypes.enum.ticketValueChanged]: (basePayload, data) => ({
     ...buildDealPayload(basePayload, data),

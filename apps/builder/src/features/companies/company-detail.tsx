@@ -57,6 +57,7 @@ import {
 } from "@/features/crm/provider/crm-hooks"
 import type { TimelineKind } from "@/features/crm/schema/resource"
 import { formatDealValue } from "@/features/deals/deal-card"
+import { namesById } from "@/features/deals/lib/names-by-id"
 import {
   useContactSearchOptions,
   useOwnerOptions,
@@ -114,12 +115,7 @@ export function CompanyDetail({
     [ownerOptions],
   )
   const stageNames = useMemo(
-    () =>
-      new Map(
-        (pipelines.data ?? []).flatMap((p) =>
-          p.stages.map((s) => [s.id, s.name] as const),
-        ),
-      ),
+    () => namesById(pipelines.data ?? []),
     [pipelines.data],
   )
   let lastActivityLabel: string | null = null

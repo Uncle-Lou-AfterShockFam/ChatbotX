@@ -6785,7 +6785,8 @@
         "taskCompleted": "Task done",
         "commented": "Comment",
         "contactChanged": "Contact",
-        "companyChanged": "Company"
+        "companyChanged": "Company",
+        "pipelineMoved": "Pipeline"
       },
       "titleChanged": "Title changed from {from} to {to}",
       "currencyChanged": "Currency changed from {from} to {to}",
@@ -6795,7 +6796,8 @@
       "taskCompleted": "Task {title} completed",
       "commented": "Commented: {excerpt} ({count, plural, =0 {no mentions} one {1 mention} other {# mentions}})",
       "contactChanged": "Contact changed",
-      "companyChanged": "Company changed"
+      "companyChanged": "Company changed",
+      "pipelineMoved": "Moved from {fromPipeline} to {toPipeline} ({to})"
     },
     "reorder": "Reorder",
     "moveDealsTo": "Move deals to...",
@@ -6906,6 +6908,16 @@
       "none": "No comments yet.",
       "edited": "(edited)",
       "someone": "Someone"
+    },
+    "movePipeline": {
+      "action": "Move to pipeline",
+      "title": "Move deal to another pipeline",
+      "description": "Tasks, comments and activity stay with the deal; the task templates of the new stage run.",
+      "targetPipeline": "Move to pipeline",
+      "samePipeline": "Same pipeline",
+      "ownerMembersOnly": "This pipeline is members-only: the owner must be one of its members.",
+      "confirm": "Move",
+      "moved": "Deal moved to {pipeline}"
     }
   },
   "notifications": {

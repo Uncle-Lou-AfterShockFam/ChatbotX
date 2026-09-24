@@ -6,6 +6,7 @@ const m = vi.hoisted(() => ({
   create: vi.fn(),
   createUnlessOpen: vi.fn(),
   moveStage: vi.fn(),
+  movePipeline: vi.fn(),
   setStatus: vi.fn(),
   getAll: vi.fn(),
   replaceAll: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock("@chatbotx.io/business/deal", () => ({
     create: (...a: unknown[]) => m.create(...a),
     createUnlessOpen: (...a: unknown[]) => m.createUnlessOpen(...a),
     moveStage: (...a: unknown[]) => m.moveStage(...a),
+    movePipeline: (...a: unknown[]) => m.movePipeline(...a),
     setStatus: (...a: unknown[]) => m.setStatus(...a),
   },
 }))
@@ -185,6 +187,64 @@ describe("createDeal step", () => {
     )
     await expect(createDeal(props(step))).resolves.toBeUndefined()
     expect(m.logError).toHaveBeenCalled()
+  })
+})
+
+describe("moveDealStage step across pipelines (s196)", () => {
+  const cross = (over: Record<string, unknown> = {}) =>
+    props({
+      id: "s2",
+      stepType: "moveDealStage",
+      pipelineId: "p",
+      targetPipelineId: "p2",
+      ...over,
+    })
+
+  test("a target pipeline moves the open deal there; no stage = the target's first", async () => {
+    m.findOpen.mockResolvedValue({ id: "deal-7" })
+    await moveDealStage(cross())
+    expect(m.findOpen).toHaveBeenCalledWith(
+      expect.objectContaining({ pipelineId: "p" }),
+    )
+    expect(m.movePipeline).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      id: "deal-7",
+      pipelineId: "p2",
+      stageId: null,
+    })
+    expect(m.moveStage).not.toHaveBeenCalled()
+  })
+
+  test("a target stage rides along", async () => {
+    m.findOpen.mockResolvedValue({ id: "deal-7" })
+    await moveDealStage(cross({ stageId: "t-s" }))
+    expect(m.movePipeline).toHaveBeenCalledWith(
+      expect.objectContaining({ pipelineId: "p2", stageId: "t-s" }),
+    )
+  })
+
+  test("target = source pipeline is a plain stage move", async () => {
+    m.findOpen.mockResolvedValue({ id: "deal-7" })
+    await moveDealStage(cross({ targetPipelineId: "p", stageId: "s" }))
+    expect(m.movePipeline).not.toHaveBeenCalled()
+    expect(m.moveStage).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      id: "deal-7",
+      stageId: "s",
+    })
+  })
+
+  test("a refused move (422) is logged and the flow continues", async () => {
+    m.findOpen.mockResolvedValue({ id: "deal-7" })
+    m.movePipeline.mockRejectedValueOnce(new Error('Field "sqft" is required.'))
+    await expect(moveDealStage(cross())).resolves.toBeUndefined()
+    expect(m.logError).toHaveBeenCalled()
+  })
+
+  test("no source pipeline = warn, no read", async () => {
+    await moveDealStage(cross({ pipelineId: undefined }))
+    expect(m.findOpen).not.toHaveBeenCalled()
+    expect(m.movePipeline).not.toHaveBeenCalled()
   })
 })
 

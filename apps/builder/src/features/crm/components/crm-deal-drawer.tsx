@@ -1,7 +1,9 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
+import { useMemo } from "react"
 import { DealDrawer } from "@/features/deals/deal-drawer"
+import { namesById } from "@/features/deals/lib/names-by-id"
 import { orpc } from "@/lib/orpc/query"
 import { useInvalidateCrm, usePipelines } from "../provider/crm-hooks"
 
@@ -28,6 +30,11 @@ export function CrmDealDrawer({
   const invalidate = useInvalidateCrm()
   const pipeline =
     pipelines.data?.find((p) => p.id === deal.data?.pipelineId) ?? null
+  // s196: a cross-pipeline move's old stages still read as names
+  const stageNames = useMemo(
+    () => namesById(pipelines.data ?? []),
+    [pipelines.data],
+  )
   return (
     <DealDrawer
       deal={dealId && deal.data ? deal.data : null}
@@ -37,6 +44,7 @@ export function CrmDealDrawer({
       }}
       onOpenChange={onOpenChange}
       pipeline={pipeline}
+      stageNames={stageNames}
       workspaceId={workspaceId}
     />
   )
