@@ -1,7 +1,10 @@
 import { dealService } from "@chatbotx.io/business/deal"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import z from "zod"
-import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
+import {
+  withWorkspaceIdAndIdSchema,
+  withWorkspaceIdSchema,
+} from "@/features/workspaces/schema/resource"
 import { contactsAccessAuthorizedMiddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
 import { viewerFromContext } from "../lib/viewer"
@@ -9,6 +12,7 @@ import {
   addDealNoteRequest,
   createDealRequest,
   deleteDealsRequest,
+  moveDealPipelineRequest,
   moveDealRequest,
   setDealStatusRequest,
   updateDealRequest,
@@ -166,6 +170,31 @@ const privateMoveDealAPI = authorizedAPI
     })
   })
 
+const privateMoveDealPipelineAPI = authorizedAPI
+  .route({
+    method: "POST",
+    path: "/workspaces/{workspaceId}/deals/{id}/move-pipeline",
+    summary: "Move a deal to another pipeline",
+    tags: ["Deals"],
+  })
+  // extend, not .and(): the request is strict, an intersection would refuse the path keys
+  .input(moveDealPipelineRequest.extend(withWorkspaceIdAndIdSchema.shape))
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
+  .output(dealResource)
+  .handler(async ({ input, context }) => {
+    const { workspaceId, id, pipelineId, stageId, fields, ownerId } = input
+    return await dealService.movePipeline({
+      workspaceId,
+      id,
+      pipelineId,
+      stageId,
+      fields,
+      ownerId,
+      actorId: context.user.id,
+      viewer: viewerFromContext(context),
+    })
+  })
+
 const privateSetDealStatusAPI = authorizedAPI
   .route({
     method: "POST",
@@ -234,6 +263,7 @@ export const privateDealsAPI = {
   privateCreateDealAPI,
   privateUpdateDealAPI,
   privateMoveDealAPI,
+  privateMoveDealPipelineAPI,
   privateSetDealStatusAPI,
   privateAddDealNoteAPI,
   privateDeleteDealsAPI,

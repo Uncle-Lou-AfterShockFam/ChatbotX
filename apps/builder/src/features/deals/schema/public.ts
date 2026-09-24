@@ -5,6 +5,7 @@ import { publicListRequest, publicListResponse } from "@/lib/public-api/list"
 import {
   addDealNoteRequest,
   createDealRequest,
+  moveDealPipelineRequest,
   moveDealRequest,
   setDealStatusRequest,
   updateDealRequest,
@@ -57,6 +58,10 @@ export const updateDealPublicRequest = updateDealRequest.extend({
 })
 
 export const moveDealPublicRequest = moveDealRequest.extend({
+  id: zodBigintAsString().describe(dealIdDescription),
+})
+
+export const moveDealPipelinePublicRequest = moveDealPipelineRequest.extend({
   id: zodBigintAsString().describe(dealIdDescription),
 })
 

@@ -28,6 +28,15 @@ export function describeActivity(
         from: stageNames.get(String(p.from)) ?? text(p.from),
         to: stageNames.get(String(p.to)) ?? text(p.to),
       })
+    // s196: `stageNames` is `namesById`, so the pipeline ids resolve too
+    case "pipelineMoved":
+      return t("deals.activity.pipelineMoved", {
+        fromPipeline:
+          stageNames.get(String(p.fromPipelineId)) ?? text(p.fromPipelineId),
+        toPipeline:
+          stageNames.get(String(p.toPipelineId)) ?? text(p.toPipelineId),
+        to: stageNames.get(String(p.to)) ?? text(p.to),
+      })
     case "valueChanged":
       return t("deals.activity.valueChanged", {
         from: text(p.from, "-"),

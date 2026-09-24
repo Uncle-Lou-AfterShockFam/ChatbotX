@@ -26,20 +26,51 @@ export const PipelinePicker = ({ parentName }: { parentName: string }) => {
   )
 }
 
-/** Stage combobox filtered to the pipeline picked next to it. */
+/**
+ * Optional destination pipeline of the moveDealStage step (s196): cleared =
+ * the deal stays in its pipeline.
+ */
+export const TargetPipelinePicker = ({
+  parentName,
+}: {
+  parentName: string
+}) => {
+  const t = useTranslations()
+  const options = usePipelineOptions()
+  return (
+    <ComboboxField
+      allowClear
+      clearLabel={t("deals.movePipeline.samePipeline")}
+      emptyText={t("deals.noPipelines")}
+      label={t("deals.movePipeline.targetPipeline")}
+      name={`${parentName}.targetPipelineId`}
+      options={options}
+      placeholder={t("deals.movePipeline.samePipeline")}
+      popoverClassName="w-[var(--anchor-width)]"
+    />
+  )
+}
+
+/**
+ * Stage combobox filtered to the pipeline picked next to it, or to the
+ * destination pipeline when `followTarget` and one is picked (s196).
+ */
 export const StagePicker = ({
   parentName,
   allowClear,
   clearLabel,
+  followTarget,
 }: {
   parentName: string
   allowClear?: boolean
   clearLabel?: string
+  followTarget?: boolean
 }) => {
   const t = useTranslations()
-  const pipelineId = useWatch({ name: `${parentName}.pipelineId` }) as
-    | string
-    | undefined
+  const [sourceId, targetId] = useWatch({
+    name: [`${parentName}.pipelineId`, `${parentName}.targetPipelineId`],
+  }) as [string | undefined, string | undefined]
+  const pipelineId = (followTarget && targetId) || sourceId
   const options = useStageOptions(pipelineId)
   return (
     <ComboboxField

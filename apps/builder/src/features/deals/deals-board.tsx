@@ -28,6 +28,7 @@ import { applyMove } from "./board-helpers"
 import { CreateDealDialog } from "./create-deal-dialog"
 import { DealCardContent } from "./deal-card"
 import { DealDrawer } from "./deal-drawer"
+import { namesById } from "./lib/names-by-id"
 import { PipelineSwitcher } from "./pipeline-switcher"
 import {
   useDealBoard,
@@ -64,6 +65,7 @@ export function DealsBoard({
       ? queryPipelineId
       : pipelines[0]?.id) ?? null
   const pipeline = pipelines.find((p) => p.id === pipelineId) ?? null
+  const allStageNames = useMemo(() => namesById(pipelines), [pipelines])
 
   const board = useDealBoard(workspaceId, pipelineId, status)
   const invalidate = useInvalidateDeals()
@@ -265,7 +267,12 @@ export function DealsBoard({
         deal={openDeal}
         onChanged={invalidate}
         onOpenChange={(open) => !open && setOpenDealId(null)}
+        // s196: follow the deal to its new board (any status: it may land won)
+        onPipelineMoved={(next) =>
+          setQuery({ pipelineId: next, status: "all" })
+        }
         pipeline={pipeline}
+        stageNames={allStageNames}
         workspaceId={workspaceId}
       />
     </div>

@@ -47,6 +47,7 @@ import {
   usePipelines,
 } from "@/features/crm/provider/crm-hooks"
 import type { TimelineKind } from "@/features/crm/schema/resource"
+import { namesById } from "@/features/deals/lib/names-by-id"
 import { SequenceStoreProvider } from "@/features/sequences/provider/sequence-store-context"
 import type { TagResource } from "@/features/tags/schema/resource"
 import { client } from "@/lib/orpc/orpc"
@@ -456,12 +457,7 @@ function TimelineTab({
 }) {
   const pipelines = usePipelines(workspaceId)
   const stageNames = useMemo(
-    () =>
-      new Map(
-        (pipelines.data ?? []).flatMap((p) =>
-          p.stages.map((s) => [s.id, s.name] as const),
-        ),
-      ),
+    () => namesById(pipelines.data ?? []),
     [pipelines.data],
   )
   const [kinds, setKinds] = useState<TimelineKind[]>([])
