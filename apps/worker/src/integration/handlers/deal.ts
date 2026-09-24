@@ -43,6 +43,11 @@ export async function createDeal({
       currency: step.currency.trim().length > 0 ? step.currency : null,
       priority: step.priority,
       contactId,
+      ownerId: step.ownerId || null,
+      dueAt:
+        step.dueInDays === null || step.dueInDays === undefined
+          ? null
+          : new Date(Date.now() + step.dueInDays * 86_400_000),
     }
     if (step.skipIfOpenDealExists) {
       // The check and the insert share one advisory lock in the service, so two

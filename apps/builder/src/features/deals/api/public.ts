@@ -22,7 +22,7 @@ import {
   updateDealPublicRequest,
 } from "../schema/public"
 
-const workspaceTokenAuthAPI = workspaceTokenAuthAPIForScope("contacts")
+const workspaceTokenAuthAPI = workspaceTokenAuthAPIForScope("deals")
 
 export const dealsPublicRouter = {
   list: workspaceTokenAuthAPI

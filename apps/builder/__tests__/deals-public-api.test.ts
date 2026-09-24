@@ -98,8 +98,10 @@ beforeEach(() => {
 })
 
 describe("deals + pipelines public API", () => {
-  test("every route is on the contacts scope", () => {
-    expect(new Set(scopes)).toEqual(new Set(["contacts"]))
+  test("deals + pipelines routers are on the deals scope; only the contact sub-resource stays on contacts (s192)", () => {
+    // Three routers import the scope builder: deals, pipelines (deals scope)
+    // and contacts/deals (a read-only contact sub-resource, contacts scope).
+    expect(scopes).toEqual(["deals", "deals", "contacts"])
   })
 
   test("the expected routes exist with PATCH for the all-optional updates", () => {

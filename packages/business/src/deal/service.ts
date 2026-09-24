@@ -11,12 +11,14 @@ import {
 } from "@chatbotx.io/database/client"
 import {
   type DealActivityType,
+  type DealFieldDef,
   type DealPriority,
   type DealStatus,
   dealPriorities,
   dealStatuses,
   normalizeDealValue,
   type PipelineSettings,
+  validateDealFields,
 } from "@chatbotx.io/database/partials"
 import {
   contactModel,
@@ -43,6 +45,7 @@ import {
   emitDealValueChanged,
 } from "@chatbotx.io/events"
 import { createId } from "@chatbotx.io/utils"
+import { DEAL_POSITION_STEP } from "@chatbotx.io/utils/deal-position"
 import { BaseService } from "../base.service"
 import { notFoundException, validationException } from "../errors"
 import { logger } from "../logger"
@@ -97,7 +100,7 @@ const dealChangedConcurrently = () =>
     "Deal was changed by someone else; reload and retry.",
     { conflict: "stale" },
   )
-export const POSITION_STEP = 1000
+export const POSITION_STEP = DEAL_POSITION_STEP
 /** Below this gap two neighbouring positions are renormalised to `POSITION_STEP * i`. */
 export const MIN_POSITION_GAP = 1e-6
 
@@ -369,6 +372,11 @@ class DealService extends BaseService {
         data.currency ?? pipeline.settings.defaultCurrency,
       )
       const position = await this.nextPosition({ stageId: stage.id, tx })
+      const fields = this.parseFields({
+        defs: pipeline.settings.fieldDefs,
+        fields: data.fields ?? {},
+        requireAll: true,
+      })
       const status: DealStatus = stage.isWon
         ? "won"
         : // biome-ignore lint/style/noNestedTernary: three-way landing status
@@ -395,7 +403,7 @@ class DealService extends BaseService {
           companyId,
           ownerId,
           // jsonb: written explicitly, never by a drizzle default (AGENTS.md)
-          fields: data.fields ?? {},
+          fields,
         })
         .returning()
       await this.recordActivity({
@@ -419,7 +427,12 @@ class DealService extends BaseService {
     const { workspaceId, id, data } = props
     const actorId = props.actorId ?? null
     const set: Partial<typeof dealModel.$inferInsert> = {}
-    const changes: { type: DealActivityType; from: unknown; to: unknown }[] = []
+    const changes: {
+      type: DealActivityType
+      from: unknown
+      to: unknown
+      key?: string
+    }[] = []
 
     const result = await db.transaction(async (tx) => {
       const current = await this.findOrFail({ workspaceId, id, tx })
@@ -428,7 +441,10 @@ class DealService extends BaseService {
         if (title.length === 0) {
           throw validationException("title", "Title is required.")
         }
-        set.title = title
+        if (title !== current.title) {
+          set.title = title
+          changes.push({ type: "titleChanged", from: current.title, to: title })
+        }
       }
       if (data.value !== undefined) {
         const value = this.parseValue(data.value)
@@ -441,6 +457,11 @@ class DealService extends BaseService {
         const currency = this.parseCurrency(data.currency)
         if (currency !== current.currency) {
           set.currency = currency
+          changes.push({
+            type: "currencyChanged",
+            from: current.currency,
+            to: currency,
+          })
         }
       }
       if (data.priority !== undefined && data.priority !== null) {
@@ -466,10 +487,42 @@ class DealService extends BaseService {
         }
       }
       if (data.dueAt !== undefined) {
-        set.dueAt = data.dueAt
+        const dueAt = this.parseDueAt(data.dueAt)
+        if ((dueAt?.getTime() ?? null) !== (current.dueAt?.getTime() ?? null)) {
+          set.dueAt = dueAt
+          changes.push({
+            type: "dueAtChanged",
+            from: current.dueAt?.toISOString() ?? null,
+            to: dueAt?.toISOString() ?? null,
+          })
+        }
       }
       if (data.fields !== undefined && data.fields !== null) {
-        set.fields = { ...current.fields, ...data.fields }
+        const pipeline = await pipelineService.findOrFail({
+          workspaceId,
+          id: current.pipelineId,
+          tx,
+        })
+        // The patch itself first (an array or string would spread into keys),
+        // then the merged object for the size caps.
+        this.parseFields({
+          defs: pipeline.settings.fieldDefs,
+          fields: data.fields,
+        })
+        const merged = this.parseFields({
+          defs: pipeline.settings.fieldDefs,
+          fields: { ...current.fields, ...data.fields },
+        })
+        for (const key of Object.keys(data.fields)) {
+          const before = current.fields[key] ?? null
+          const after = merged[key] ?? null
+          if (JSON.stringify(before) !== JSON.stringify(after)) {
+            changes.push({ type: "fieldChanged", from: before, to: after, key })
+          }
+        }
+        if (changes.some((c) => c.type === "fieldChanged")) {
+          set.fields = merged
+        }
       }
       if (Object.keys(set).length === 0) {
         return { deal: current, changed: false }
@@ -490,7 +543,10 @@ class DealService extends BaseService {
           dealId: id,
           type: change.type,
           actorId,
-          payload: { from: change.from, to: change.to },
+          payload:
+            change.key === undefined
+              ? { from: change.from, to: change.to }
+              : { key: change.key, from: change.from, to: change.to },
         })
       }
       return { deal: updated, changed: true }
@@ -733,22 +789,6 @@ class DealService extends BaseService {
     return { deletedCount: deleted.length }
   }
 
-  /** `position` for a card dropped between two neighbours (either may be absent). */
-  positionBetween(
-    before: number | null | undefined,
-    after: number | null | undefined,
-  ): number {
-    if (before === null || before === undefined) {
-      return after === null || after === undefined
-        ? POSITION_STEP
-        : after - POSITION_STEP
-    }
-    if (after === null || after === undefined) {
-      return before + POSITION_STEP
-    }
-    return (before + after) / 2
-  }
-
   // ---- internals ----------------------------------------------------------
 
   private async recordActivity(props: {
@@ -914,6 +954,38 @@ class DealService extends BaseService {
       throw validationException("value", "Value is a non-negative amount.")
     }
     return normalized
+  }
+
+  /** A `null` clears the due date; anything but a valid Date/ISO string is a 422. */
+  private parseDueAt(value: unknown): Date | null {
+    if (value === null || value === undefined || value === "") {
+      return null
+    }
+    const date = value instanceof Date ? value : new Date(String(value))
+    if (Number.isNaN(date.getTime())) {
+      throw validationException("dueAt", "Due date must be a valid date.")
+    }
+    return date
+  }
+
+  /** `Deal.fields` against the pipeline's fieldDefs; the first issue is the 422. */
+  private parseFields(props: {
+    defs: readonly DealFieldDef[] | null | undefined
+    fields: unknown
+    requireAll?: boolean
+  }): Record<string, unknown> {
+    const issues = validateDealFields(props)
+    const first = issues[0]
+    if (first) {
+      throw validationException(
+        first.key === "fields" ? "fields" : `fields.${first.key}`,
+        first.key === "fields"
+          ? `Fields ${first.message}.`
+          : `Field "${first.key}" ${first.message}.`,
+        { issues: issues.map((i) => `${i.key}: ${i.message}`).join("; ") },
+      )
+    }
+    return props.fields as Record<string, unknown>
   }
 
   private parseCurrency(currency: unknown): string {

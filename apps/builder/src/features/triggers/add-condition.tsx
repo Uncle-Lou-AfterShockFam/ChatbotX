@@ -17,6 +17,7 @@ import {
 import { PlusIcon } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useMemo } from "react"
+import { dealConditionOptionGroup } from "../conditions/deal-condition-options"
 import { defaultFn as addContactInfoUpdatedCondition } from "../conditions/schema/contact-info-updated"
 import { defaultFn as addCustomFieldValueChangedCondition } from "../conditions/schema/custom-field-value-changed"
 import { defaultFn as addDateTimeBaseTriggerCondition } from "../conditions/schema/date-time-based-trigger"
@@ -158,46 +159,7 @@ export function AddCondition({
         ],
       },
 
-      {
-        label: t("fields.pipelines.label"),
-        children: [
-          {
-            label: t("trigger.conditions.ticketCreated"),
-            value: triggerEventTypes.enum.ticketCreated,
-            defaultFn: createDefaultFnWithSourceId(
-              triggerEventTypes.enum.ticketCreated,
-            ),
-          },
-          {
-            label: t("trigger.conditions.ticketMovedToStage"),
-            value: triggerEventTypes.enum.ticketMovedToStage,
-            defaultFn: createDefaultFnWithSourceId(
-              triggerEventTypes.enum.ticketMovedToStage,
-            ),
-          },
-          {
-            label: t("trigger.conditions.ticketValueChanged"),
-            value: triggerEventTypes.enum.ticketValueChanged,
-            defaultFn: createDefaultFnWithSourceId(
-              triggerEventTypes.enum.ticketValueChanged,
-            ),
-          },
-          {
-            label: t("trigger.conditions.ticketStatusChanged"),
-            value: triggerEventTypes.enum.ticketStatusChanged,
-            defaultFn: createDefaultFnWithSourceId(
-              triggerEventTypes.enum.ticketStatusChanged,
-            ),
-          },
-          {
-            label: t("trigger.conditions.ticketPriorityChanged"),
-            value: triggerEventTypes.enum.ticketPriorityChanged,
-            defaultFn: createDefaultFnWithSourceId(
-              triggerEventTypes.enum.ticketPriorityChanged,
-            ),
-          },
-        ],
-      },
+      dealConditionOptionGroup(t),
 
       {
         label: t("fields.sequences.label"),

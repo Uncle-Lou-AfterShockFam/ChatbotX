@@ -182,10 +182,23 @@ vi.mock("../src/logger", () => ({
 const { dealService } = await import("../src/deal/service")
 
 const WS = "ws-1"
-const PIPE = (stopCompanyOn: "none" | "created" | "won") => ({
+const ROOF_DEFS = [
+  {
+    key: "roofType",
+    label: "Roof type",
+    type: "select" as const,
+    options: ["metal", "shingle"],
+    required: false,
+  },
+  { key: "sqft", label: "Sq ft", type: "number" as const, required: true },
+]
+const PIPE = (
+  stopCompanyOn: "none" | "created" | "won",
+  fieldDefs: typeof ROOF_DEFS | [] = [],
+) => ({
   id: "pipe-1",
   workspaceId: WS,
-  settings: { stopCompanyOn, defaultCurrency: "USD" },
+  settings: { stopCompanyOn, defaultCurrency: "USD", fieldDefs },
 })
 const STAGE_NEW = {
   id: "stage-new",
@@ -533,14 +546,131 @@ describe("dealService.addNote", () => {
   })
 })
 
-describe("dealService.positionBetween", () => {
+describe("dealService.update phase-2 activities (s192)", () => {
+  test("title / currency / dueAt each write one activity in the tx and no event", async () => {
+    await dealService.update({
+      workspaceId: WS,
+      id: "deal-1",
+      data: {
+        title: " Roof v2 ",
+        currency: "eur",
+        dueAt: new Date("2026-10-01T00:00:00Z"),
+      },
+    })
+    expect(m.state.activities.map((a) => a.type)).toEqual([
+      "titleChanged",
+      "currencyChanged",
+      "dueAtChanged",
+    ])
+    expect(m.state.activities[0].payload).toEqual({
+      from: "Roof",
+      to: "Roof v2",
+    })
+    expect(m.state.activities[1].payload).toEqual({ from: "USD", to: "EUR" })
+    expect(m.state.activities[2].payload).toEqual({
+      from: null,
+      to: "2026-10-01T00:00:00.000Z",
+    })
+    expect(m.emitValue).not.toHaveBeenCalled()
+    expect(m.emitPriority).not.toHaveBeenCalled()
+  })
+
+  test("the same title, currency and dueAt write nothing", async () => {
+    await dealService.update({
+      workspaceId: WS,
+      id: "deal-1",
+      data: { title: "Roof", currency: "usd", dueAt: null },
+    })
+    expect(m.state.activities).toEqual([])
+    expect(m.calls).not.toContain("update:deal")
+  })
+
+  test("an invalid dueAt is a 422", async () => {
+    await expect(
+      dealService.update({
+        workspaceId: WS,
+        id: "deal-1",
+        data: { dueAt: "not a date" as unknown as Date },
+      }),
+    ).rejects.toThrow("Due date")
+  })
+
+  test("a declared field change writes one fieldChanged activity per key and merges", async () => {
+    m.pipelineFindOrFail.mockResolvedValue(PIPE("created", ROOF_DEFS))
+    m.findOrFail.mockImplementation(async () => ({
+      ...OPEN_DEAL,
+      fields: { roofType: "metal", sqft: 100, memo: "x" },
+    }))
+    await dealService.update({
+      workspaceId: WS,
+      id: "deal-1",
+      data: { fields: { roofType: "shingle", sqft: 100, extra: "free" } },
+    })
+    expect(m.state.activities.map((a) => a.payload)).toEqual([
+      { key: "roofType", from: "metal", to: "shingle" },
+      { key: "extra", from: null, to: "free" },
+    ])
+    expect(m.calls).toContain("update:fields")
+  })
+
   test.each([
-    [null, null, 1000],
-    [null, 1000, 0],
-    [1000, null, 2000],
-    [1000, 2000, 1500],
-  ])("between %s and %s -> %s", (before, after, expected) => {
-    expect(dealService.positionBetween(before, after)).toBe(expected)
+    [{ roofType: "tile" }, "must be one of metal, shingle"],
+    [{ sqft: "big" }, "finite number"],
+    [[1, 2], "must be an object"],
+    ["text", "must be an object"],
+  ])("fields %j on update -> 422 %s", async (fields, message) => {
+    m.pipelineFindOrFail.mockResolvedValue(PIPE("created", ROOF_DEFS))
+    await expect(
+      dealService.update({
+        workspaceId: WS,
+        id: "deal-1",
+        data: { fields: fields as unknown as Record<string, unknown> },
+      }),
+    ).rejects.toThrow(message)
+    expect(m.state.activities).toEqual([])
+  })
+
+  test("create requires the required declared fields and accepts a valid set", async () => {
+    m.pipelineFindOrFail.mockResolvedValue(PIPE("none", ROOF_DEFS))
+    await expect(
+      dealService.create({
+        workspaceId: WS,
+        data: {
+          title: "Roof",
+          pipelineId: "pipe-1",
+          fields: { roofType: "metal" },
+        },
+      }),
+    ).rejects.toThrow('"sqft" is required')
+    expect(m.state.inserted).toEqual([])
+    const deal = await dealService.create({
+      workspaceId: WS,
+      data: {
+        title: "Roof",
+        pipelineId: "pipe-1",
+        fields: { roofType: "metal", sqft: 1200 },
+      },
+    })
+    expect(deal.fields).toEqual({ roofType: "metal", sqft: 1200 })
+  })
+
+  test("create rejects a fields blob over the byte cap and over the key cap", async () => {
+    const big = { memo: "x".repeat(9000) }
+    await expect(
+      dealService.create({
+        workspaceId: WS,
+        data: { title: "Roof", pipelineId: "pipe-1", fields: big },
+      }),
+    ).rejects.toThrow("exceeds 8192 bytes")
+    const many = Object.fromEntries(
+      Array.from({ length: 51 }, (_, i) => [`k${i}`, i]),
+    )
+    await expect(
+      dealService.create({
+        workspaceId: WS,
+        data: { title: "Roof", pipelineId: "pipe-1", fields: many },
+      }),
+    ).rejects.toThrow("more than 50 keys")
   })
 })
 

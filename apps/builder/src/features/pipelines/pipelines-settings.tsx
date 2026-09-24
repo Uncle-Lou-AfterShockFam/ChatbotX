@@ -43,6 +43,7 @@ import {
   updatePipelineAction,
   upsertStageAction,
 } from "./actions/pipeline-actions"
+import { FieldDefsEditor } from "./field-defs-editor"
 import { useInvalidatePipelines } from "./provider/pipeline-hook"
 import type {
   PipelineStageResource,
@@ -359,6 +360,15 @@ function PipelineCard({
             />
           </div>
         </div>
+
+        <FieldDefsEditor
+          fieldDefs={pipeline.settings.fieldDefs}
+          onSave={(fieldDefs) =>
+            update.execute({ id: pipeline.id, settings: { fieldDefs } })
+          }
+          pipelineId={pipeline.id}
+          saving={update.isPending}
+        />
 
         <div className="space-y-2">
           <div className="font-medium text-sm">{t("deals.stages")}</div>

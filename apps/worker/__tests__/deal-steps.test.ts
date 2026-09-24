@@ -90,8 +90,39 @@ describe("createDeal step", () => {
         currency: null,
         priority: "high",
         contactId: "contact-1",
+        ownerId: null,
+        dueAt: null,
       },
     })
+  })
+
+  test("passes the owner and computes dueAt = now + dueInDays (s192)", async () => {
+    vi.useFakeTimers({ now: new Date("2026-09-24T00:00:00Z") })
+    try {
+      await createDeal(props({ ...step, ownerId: "user-9", dueInDays: 7 }))
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(m.createUnlessOpen).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          ownerId: "user-9",
+          dueAt: new Date("2026-10-01T00:00:00Z"),
+        }),
+      }),
+    )
+  })
+
+  test("dueInDays 0 is due today, not 'no due date'", async () => {
+    vi.useFakeTimers({ now: new Date("2026-09-24T12:00:00Z") })
+    try {
+      await createDeal(props({ ...step, dueInDays: 0 }))
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(m.createUnlessOpen.mock.calls[0][0].data.dueAt).toEqual(
+      new Date("2026-09-24T12:00:00Z"),
+    )
   })
 
   test("logs the skip when the service found an open deal (no TOCTOU: the check lives under the service lock)", async () => {

@@ -91,4 +91,27 @@ describe("deal steps", () => {
       }),
     ).toMatchObject({ pipelineId: "p", stageId: "s" })
   })
+
+  test("createDeal owner + dueInDays (s192): optional owner, 0..365 integer days or null", () => {
+    const step = createDealStepDefaultFn()
+    expect(step.ownerId).toBeUndefined()
+    expect(step.dueInDays).toBeNull()
+    expect(
+      createDealStepSchema.parse({ ...step, ownerId: "u1", dueInDays: 7 }),
+    ).toMatchObject({ ownerId: "u1", dueInDays: 7 })
+    for (const bad of [-1, 366, 1.5, "7", Number.NaN]) {
+      expect(
+        createDealStepSchema.safeParse({ ...step, dueInDays: bad }).success,
+      ).toBe(false)
+    }
+  })
+
+  test("pipelineId / stageId are registered reference fields (export warns, import remaps by kind)", async () => {
+    const { REFERENCE_FIELD_ENTITY_KIND } = await import(
+      "../src/import-export/reference-fields"
+    )
+    expect(REFERENCE_FIELD_ENTITY_KIND.pipelineId).toBe("pipeline")
+    expect(REFERENCE_FIELD_ENTITY_KIND.stageId).toBe("pipelineStage")
+    expect(REFERENCE_FIELD_ENTITY_KIND.ownerId).toBeUndefined()
+  })
 })

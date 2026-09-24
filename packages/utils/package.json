@@ -25,6 +25,7 @@
     "./crypto": "./src/crypto.ts",
     "./custom-field": "./src/custom-field.ts",
     "./datetime": "./src/datetime.ts",
+    "./deal-position": "./src/deal-position.ts",
     "./error-log": "./src/error-log.ts",
     "./graph-error": "./src/graph-error.ts",
     "./id": "./src/id.ts",

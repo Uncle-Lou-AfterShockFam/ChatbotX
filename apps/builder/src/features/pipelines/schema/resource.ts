@@ -1,4 +1,7 @@
-import { pipelineStopCompanyOn } from "@chatbotx.io/database/partials"
+import {
+  dealFieldDefSchema,
+  pipelineStopCompanyOn,
+} from "@chatbotx.io/database/partials"
 import {
   createSelectSchema,
   pipelineModel,
@@ -9,6 +12,7 @@ import z from "zod"
 export const pipelineSettingsResource = z.object({
   stopCompanyOn: pipelineStopCompanyOn,
   defaultCurrency: z.string(),
+  fieldDefs: z.array(dealFieldDefSchema),
 })
 
 export const pipelineResource = createSelectSchema(pipelineModel, {
