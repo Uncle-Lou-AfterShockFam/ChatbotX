@@ -6708,7 +6708,7 @@
     "noPipelines": "No pipelines yet. Create one under Settings > Pipelines.",
     "pickPipelineFirst": "Pick a pipeline first.",
     "firstStage": "First stage of the pipeline",
-    "titleHint": "Variables like {{contact.full_name}} are replaced per contact. Empty = \"Deal for <contact>\".",
+    "titleHint": "Contact variables like '{{contact.full_name}}' are replaced per contact. Empty = \"Deal for\" plus the contact id.",
     "valueHint": "A number, or a variable that resolves to one (e.g. a custom field). Empty = no value.",
     "skipIfOpenDealExists": "Skip if an open deal exists",
     "skipIfOpenDealExistsHint": "When on, a contact who already has an open deal in this pipeline gets no second one.",
