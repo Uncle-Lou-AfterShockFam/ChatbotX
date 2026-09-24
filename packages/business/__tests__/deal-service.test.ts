@@ -800,3 +800,45 @@ describe("dealService concurrent-change guards", () => {
     expect(m.calls).toEqual([])
   })
 })
+
+describe("stage-entered hook (s192 task templates)", () => {
+  test("create and a real move run the registered handler AFTER the event; a failing handler is logged", async () => {
+    const { onStageEntered, _resetStageEnteredHandlers } = await import(
+      "../src/deal/stage-hooks"
+    )
+    _resetStageEnteredHandlers()
+    const seen: string[] = []
+    const off = onStageEntered((ctx) => {
+      seen.push(`${ctx.deal.id}:${ctx.stageId}:${ctx.actorId}`)
+      m.calls.push("hook:stage")
+      return Promise.resolve()
+    })
+    onStageEntered(() => Promise.reject(new Error("boom")))
+    try {
+      m.state.contact = { id: "contact-1", companyId: null }
+      await dealService.create({
+        workspaceId: WS,
+        data: { title: "Roof", pipelineId: "pipe-1", contactId: "contact-1" },
+        actorId: "actor-1",
+      })
+      expect(seen).toEqual(["new-id:stage-new:actor-1"])
+      expect(m.calls.indexOf("hook:stage")).toBeGreaterThan(
+        m.calls.indexOf("emit:created"),
+      )
+      expect(m.loggerWarn).toHaveBeenCalledTimes(1)
+
+      m.state.updateReturning = [{ ...OPEN_DEAL, stageId: "stage-won" }]
+      m.resolveStage.mockResolvedValue(STAGE_WON)
+      await dealService.moveStage({
+        workspaceId: WS,
+        id: "deal-1",
+        stageId: "stage-won",
+      })
+      expect(seen).toHaveLength(2)
+      expect(seen[1]).toBe("deal-1:stage-won:null")
+    } finally {
+      off()
+      _resetStageEnteredHandlers()
+    }
+  })
+})

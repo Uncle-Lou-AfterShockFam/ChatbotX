@@ -55,6 +55,9 @@ export function describeActivity(
             : JSON.stringify(p.from),
         to: p.to === null || p.to === undefined ? "-" : JSON.stringify(p.to),
       })
+    case "taskCreated":
+    case "taskCompleted":
+      return t(`deals.activity.${activity.type}`, { title: text(p.title) })
     case "assigned":
       return t("deals.activity.assigned")
     case "note":

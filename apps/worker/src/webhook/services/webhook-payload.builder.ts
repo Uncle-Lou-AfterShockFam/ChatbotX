@@ -53,6 +53,10 @@ const EVENT_NAMES = {
   [triggerEventTypes.enum.ticketValueChanged]: "deal_value_changed",
   [triggerEventTypes.enum.ticketStatusChanged]: "deal_status_changed",
   [triggerEventTypes.enum.ticketPriorityChanged]: "deal_priority_changed",
+  [triggerEventTypes.enum.taskCreated]: "deal_task_created",
+  [triggerEventTypes.enum.taskCompleted]: "deal_task_completed",
+  [triggerEventTypes.enum.taskOverdue]: "deal_task_overdue",
+  [triggerEventTypes.enum.taskAssigned]: "deal_task_assigned",
 } satisfies Record<MatchableEventType, string>
 
 async function buildTagPayload(
@@ -164,6 +168,23 @@ function buildDealPayload(
   }
 }
 
+/** Task events: the deal projection plus the task's named fields. */
+function buildDealTaskPayload(
+  basePayload: WebhookPayloadBase,
+  data: Record<string, unknown>,
+): WebhookPayload {
+  return {
+    ...buildDealPayload(basePayload, data),
+    task: {
+      id: data.taskId as string,
+      title: data.taskTitle as string,
+      due_at: (data.taskDueAt as string | null) ?? null,
+      assignee_id: (data.assigneeId as string | null) ?? null,
+      template_id: (data.templateId as string | null) ?? null,
+    },
+  }
+}
+
 const PAYLOAD_BUILDERS = {
   [triggerEventTypes.enum.tagApplied]: buildTagPayload,
   [triggerEventTypes.enum.tagRemoved]: buildTagPayload,
@@ -260,6 +281,16 @@ const PAYLOAD_BUILDERS = {
   [triggerEventTypes.enum.ticketPriorityChanged]: (basePayload, data) => ({
     ...buildDealPayload(basePayload, data),
     old_priority: (data.oldPriority as string) ?? null,
+  }),
+  [triggerEventTypes.enum.taskCreated]: buildDealTaskPayload,
+  [triggerEventTypes.enum.taskCompleted]: (basePayload, data) => ({
+    ...buildDealTaskPayload(basePayload, data),
+    completed_by_id: (data.completedById as string | null) ?? null,
+  }),
+  [triggerEventTypes.enum.taskOverdue]: buildDealTaskPayload,
+  [triggerEventTypes.enum.taskAssigned]: (basePayload, data) => ({
+    ...buildDealTaskPayload(basePayload, data),
+    previous_assignee_id: (data.previousAssigneeId as string | null) ?? null,
   }),
 } satisfies Record<MatchableEventType, PayloadBuilder>
 

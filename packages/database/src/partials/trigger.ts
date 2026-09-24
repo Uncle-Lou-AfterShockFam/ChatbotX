@@ -43,6 +43,11 @@ export const triggerEventTypes = z.enum([
   "ticketValueChanged",
   "ticketStatusChanged",
   "ticketPriorityChanged",
+  // deal tasks (s192, fork PR part 2); sourceId = pipelineId like ticket*
+  "taskCreated",
+  "taskCompleted",
+  "taskOverdue",
+  "taskAssigned",
   "subscribedToSequence",
   "unsubscribedFromSequence",
   "WhatsappShoppingCartSent",

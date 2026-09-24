@@ -30,6 +30,10 @@ export const EMITTED_EVENT_TYPES = [
   triggerEventTypes.enum.ticketValueChanged,
   triggerEventTypes.enum.ticketStatusChanged,
   triggerEventTypes.enum.ticketPriorityChanged,
+  triggerEventTypes.enum.taskCreated,
+  triggerEventTypes.enum.taskCompleted,
+  triggerEventTypes.enum.taskOverdue,
+  triggerEventTypes.enum.taskAssigned,
 ] as const
 
 export const SCANNER_VERIFIED_EVENT_TYPES = [

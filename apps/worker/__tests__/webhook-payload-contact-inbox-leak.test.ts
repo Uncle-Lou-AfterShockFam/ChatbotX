@@ -62,6 +62,15 @@ const DEAL_EVENT_DATA = {
   companyId: null,
 }
 
+const DEAL_TASK_EVENT_DATA = {
+  ...DEAL_EVENT_DATA,
+  taskId: "task-1",
+  taskTitle: "Call back",
+  taskDueAt: null,
+  assigneeId: null,
+  templateId: null,
+}
+
 const EVENT_DATA_BY_TYPE: Record<string, Record<string, unknown>> = {
   [triggerEventTypes.enum.tagApplied]: { tagId: "tag-1" },
   [triggerEventTypes.enum.tagRemoved]: { tagId: "tag-1" },
@@ -139,10 +148,20 @@ const EVENT_DATA_BY_TYPE: Record<string, Record<string, unknown>> = {
     ...DEAL_EVENT_DATA,
     oldPriority: "low",
   },
+  [triggerEventTypes.enum.taskCreated]: DEAL_TASK_EVENT_DATA,
+  [triggerEventTypes.enum.taskCompleted]: {
+    ...DEAL_TASK_EVENT_DATA,
+    completedById: "user-1",
+  },
+  [triggerEventTypes.enum.taskOverdue]: DEAL_TASK_EVENT_DATA,
+  [triggerEventTypes.enum.taskAssigned]: {
+    ...DEAL_TASK_EVENT_DATA,
+    previousAssigneeId: null,
+  },
 }
 
 // Every MatchableEventType EXCEPT dateTimeBasedTrigger (documented exception
-// above) — the EMITTED_EVENT_TYPES from event-type-registry.ts (26 as of the deal events).
+// above) — the EMITTED_EVENT_TYPES from event-type-registry.ts (30 as of the deal task events).
 const SELECTIVELY_PROJECTED_EVENT_TYPES = Object.keys(EVENT_DATA_BY_TYPE)
 
 describe("buildWebhookPayload — contactInboxId never leaks (selectively-projecting builders)", () => {

@@ -26,8 +26,25 @@ export const dealActivityTypes = z.enum([
   "currencyChanged",
   "dueAtChanged",
   "fieldChanged",
+  // phase 2 part 2 (s192): tasks on the deal leave a trail too
+  "taskCreated",
+  "taskCompleted",
 ])
 export type DealActivityType = z.infer<typeof dealActivityTypes>
+
+export const dealTaskStatuses = z.enum(["open", "done"])
+export type DealTaskStatus = z.infer<typeof dealTaskStatuses>
+
+/** Who a task template assigns its task to when a deal enters the stage. */
+export const dealTaskAssignTo = z.enum(["none", "dealOwner", "user"])
+export type DealTaskAssignTo = z.infer<typeof dealTaskAssignTo>
+
+export const MAX_DEAL_TASKS_PER_DEAL = 200
+export const MAX_DEAL_TASK_DEPENDENCIES_PER_TASK = 20
+export const MAX_DEAL_TASK_TEMPLATES_PER_STAGE = 20
+export const MAX_DEAL_TASK_TITLE_LENGTH = 200
+export const MAX_DEAL_TASK_DESCRIPTION_LENGTH = 2000
+export const MAX_DEAL_TASK_DUE_IN_DAYS = 365
 
 /** When a deal in this pipeline stops the contact's company (`stopCompany({reason: 'deal'})`). */
 export const pipelineStopCompanyOn = z.enum(["none", "created", "won"])

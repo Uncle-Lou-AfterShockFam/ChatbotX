@@ -1079,8 +1079,18 @@ exports[`public API spec — operation naming guard > operation list (operationI
   },
   {
     "method": "POST",
+    "operationId": "deals.addDependency",
+    "path": "/v1/deals/{id}/tasks/{taskId}/dependencies",
+  },
+  {
+    "method": "POST",
     "operationId": "deals.addNote",
     "path": "/v1/deals/{id}/notes",
+  },
+  {
+    "method": "POST",
+    "operationId": "deals.completeTask",
+    "path": "/v1/deals/{id}/tasks/{taskId}/complete",
   },
   {
     "method": "POST",
@@ -1088,9 +1098,19 @@ exports[`public API spec — operation naming guard > operation list (operationI
     "path": "/v1/deals",
   },
   {
+    "method": "POST",
+    "operationId": "deals.createTask",
+    "path": "/v1/deals/{id}/tasks",
+  },
+  {
     "method": "DELETE",
     "operationId": "deals.delete",
     "path": "/v1/deals/{id}",
+  },
+  {
+    "method": "DELETE",
+    "operationId": "deals.deleteTask",
+    "path": "/v1/deals/{id}/tasks/{taskId}",
   },
   {
     "method": "GET",
@@ -1108,9 +1128,24 @@ exports[`public API spec — operation naming guard > operation list (operationI
     "path": "/v1/deals/{id}/activities",
   },
   {
+    "method": "GET",
+    "operationId": "deals.listTasks",
+    "path": "/v1/deals/{id}/tasks",
+  },
+  {
     "method": "POST",
     "operationId": "deals.move",
     "path": "/v1/deals/{id}/move",
+  },
+  {
+    "method": "DELETE",
+    "operationId": "deals.removeDependency",
+    "path": "/v1/deals/{id}/tasks/{taskId}/dependencies/{dependsOnTaskId}",
+  },
+  {
+    "method": "POST",
+    "operationId": "deals.reopenTask",
+    "path": "/v1/deals/{id}/tasks/{taskId}/reopen",
   },
   {
     "method": "POST",
@@ -1121,6 +1156,11 @@ exports[`public API spec — operation naming guard > operation list (operationI
     "method": "PATCH",
     "operationId": "deals.update",
     "path": "/v1/deals/{id}",
+  },
+  {
+    "method": "PATCH",
+    "operationId": "deals.updateTask",
+    "path": "/v1/deals/{id}/tasks/{taskId}",
   },
   {
     "method": "POST",
@@ -1658,9 +1698,19 @@ exports[`public API spec — operation naming guard > operation list (operationI
     "path": "/v1/pipelines",
   },
   {
+    "method": "POST",
+    "operationId": "pipelines.createTaskTemplate",
+    "path": "/v1/pipelines/{id}/stages/{stageId}/task-templates",
+  },
+  {
     "method": "DELETE",
     "operationId": "pipelines.delete",
     "path": "/v1/pipelines/{id}",
+  },
+  {
+    "method": "DELETE",
+    "operationId": "pipelines.deleteTaskTemplate",
+    "path": "/v1/pipelines/{id}/stages/{stageId}/task-templates/{templateId}",
   },
   {
     "method": "GET",
@@ -1671,6 +1721,11 @@ exports[`public API spec — operation naming guard > operation list (operationI
     "method": "GET",
     "operationId": "pipelines.list",
     "path": "/v1/pipelines",
+  },
+  {
+    "method": "GET",
+    "operationId": "pipelines.listTaskTemplates",
+    "path": "/v1/pipelines/{id}/stages/{stageId}/task-templates",
   },
   {
     "method": "DELETE",
@@ -1686,6 +1741,11 @@ exports[`public API spec — operation naming guard > operation list (operationI
     "method": "PATCH",
     "operationId": "pipelines.update",
     "path": "/v1/pipelines/{id}",
+  },
+  {
+    "method": "PUT",
+    "operationId": "pipelines.updateTaskTemplate",
+    "path": "/v1/pipelines/{id}/stages/{stageId}/task-templates/{templateId}",
   },
   {
     "method": "PUT",

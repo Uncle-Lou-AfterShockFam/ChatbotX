@@ -24,7 +24,6 @@ import {
   contactModel,
   dealActivityModel,
   dealModel,
-  workspaceMemberModel,
 } from "@chatbotx.io/database/schema"
 import type {
   DealActivityModel,
@@ -52,6 +51,12 @@ import { logger } from "../logger"
 import { pipelineService } from "../pipeline/service"
 import type { PaginatedResult } from "../types"
 import { stopCompanyForDeal } from "./company-stop"
+import {
+  dealEventMetadata,
+  parseDateOrNull,
+  resolveWorkspaceMember,
+} from "./shared"
+import { runStageEntered } from "./stage-hooks"
 
 export type ListDealsInput = {
   workspaceId: string
@@ -240,7 +245,7 @@ class DealService extends BaseService {
       async (tx) =>
         await this.insertInTx({ tx, workspaceId, data, parsed, actorId }),
     )
-    await this.afterCreate(deal, settings)
+    await this.afterCreate(deal, settings, actorId)
     return deal
   }
 
@@ -281,7 +286,7 @@ class DealService extends BaseService {
       return { created: true as const, ...inserted }
     })
     if (outcome.created) {
-      await this.afterCreate(outcome.deal, outcome.settings)
+      await this.afterCreate(outcome.deal, outcome.settings, actorId)
     }
     return { deal: outcome.deal, created: outcome.created }
   }
@@ -306,6 +311,7 @@ class DealService extends BaseService {
   private async afterCreate(
     deal: DealModel,
     settings: PipelineSettings,
+    actorId: string | null = null,
   ): Promise<void> {
     await this.audit("deal.create", deal.id)
     await this.emitFor(deal, emitDealCreated, {})
@@ -322,6 +328,12 @@ class DealService extends BaseService {
         contactId: deal.contactId,
       })
     }
+    await runStageEntered({
+      workspaceId: deal.workspaceId,
+      deal,
+      stageId: deal.stageId,
+      actorId,
+    })
   }
 
   private async insertInTx(props: {
@@ -648,6 +660,12 @@ class DealService extends BaseService {
       fromStageId: outcome.fromStageId,
     })
     await this.maybeRenormalize({ stageId: outcome.stage.id })
+    await runStageEntered({
+      workspaceId,
+      deal: outcome.deal,
+      stageId: outcome.stage.id,
+      actorId,
+    })
 
     const target: DealStatus = outcome.stage.isWon
       ? "won"
@@ -827,16 +845,7 @@ class DealService extends BaseService {
     }
     try {
       await emit(deal.workspaceId, deal.contactId, {
-        dealId: deal.id,
-        pipelineId: deal.pipelineId,
-        stageId: deal.stageId,
-        title: deal.title,
-        value: deal.value,
-        currency: deal.currency,
-        status: deal.status,
-        priority: deal.priority,
-        ownerId: deal.ownerId,
-        companyId: deal.companyId,
+        ...dealEventMetadata(deal),
         ...extra,
       })
     } catch (error) {
@@ -866,35 +875,18 @@ class DealService extends BaseService {
   }
 
   /** An owner must be a member of the workspace; null clears the owner. */
-  private async resolveOwner(props: {
+  private resolveOwner(props: {
     workspaceId: string
     ownerId: string | null | undefined
     tx: DatabaseClient
   }): Promise<string | null> {
-    if (
-      props.ownerId === undefined ||
-      props.ownerId === null ||
-      props.ownerId === ""
-    ) {
-      return null
-    }
-    const [member] = await props.tx
-      .select({ userId: workspaceMemberModel.userId })
-      .from(workspaceMemberModel)
-      .where(
-        and(
-          eq(workspaceMemberModel.workspaceId, props.workspaceId),
-          eq(workspaceMemberModel.userId, props.ownerId),
-        ),
-      )
-      .limit(1)
-    if (!member) {
-      throw validationException(
-        "ownerId",
-        "Owner is not a member of this workspace.",
-      )
-    }
-    return member.userId
+    return resolveWorkspaceMember({
+      workspaceId: props.workspaceId,
+      userId: props.ownerId,
+      tx: props.tx,
+      field: "ownerId",
+      role: "Owner",
+    })
   }
 
   private async nextPosition(props: {
@@ -957,16 +949,8 @@ class DealService extends BaseService {
     return normalized
   }
 
-  /** A `null` clears the due date; anything but a valid Date/ISO string is a 422. */
   private parseDueAt(value: unknown): Date | null {
-    if (value === null || value === undefined || value === "") {
-      return null
-    }
-    const date = value instanceof Date ? value : new Date(String(value))
-    if (Number.isNaN(date.getTime())) {
-      throw validationException("dueAt", "Due date must be a valid date.")
-    }
-    return date
+    return parseDateOrNull(value, "dueAt")
   }
 
   /** `Deal.fields` against the pipeline's fieldDefs; the first issue is the 422. */

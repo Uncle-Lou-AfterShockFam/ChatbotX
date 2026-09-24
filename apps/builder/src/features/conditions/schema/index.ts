@@ -3,6 +3,10 @@ import { contactInfoUpdated } from "./contact-info-updated"
 import { customFieldValueChanged } from "./custom-field-value-changed"
 import { dateTimeBasedTrigger } from "./date-time-based-trigger"
 import {
+  taskAssigned,
+  taskCompleted,
+  taskCreated,
+  taskOverdue,
   ticketCreated,
   ticketMovedToStage,
   ticketPriorityChanged,
@@ -49,6 +53,10 @@ export const allConditions = {
   ticketValueChanged,
   ticketStatusChanged,
   ticketPriorityChanged,
+  taskCreated,
+  taskCompleted,
+  taskOverdue,
+  taskAssigned,
 }
 
 export const conditionSchema = z.union(Object.values(allConditions))

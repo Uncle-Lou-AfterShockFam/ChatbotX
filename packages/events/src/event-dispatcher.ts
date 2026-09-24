@@ -8,6 +8,9 @@ import type {
   DealMovedToStageMetadata,
   DealPriorityChangedMetadata,
   DealStatusChangedMetadata,
+  DealTaskAssignedMetadata,
+  DealTaskCompletedMetadata,
+  DealTaskEventMetadata,
   DealValueChangedMetadata,
   IncomingCallMetadata,
 } from "./base-emitter"
@@ -379,3 +382,32 @@ export const emitDealPriorityChanged = async (
     contactId,
     metadata,
   )
+
+// Deal task events (s192)
+export const emitDealTaskCreated = async (
+  workspaceId: string,
+  contactId: string,
+  metadata: DealTaskEventMetadata,
+) =>
+  await emitToAllEmitters("dealTaskCreated", workspaceId, contactId, metadata)
+
+export const emitDealTaskCompleted = async (
+  workspaceId: string,
+  contactId: string,
+  metadata: DealTaskCompletedMetadata,
+) =>
+  await emitToAllEmitters("dealTaskCompleted", workspaceId, contactId, metadata)
+
+export const emitDealTaskOverdue = async (
+  workspaceId: string,
+  contactId: string,
+  metadata: DealTaskEventMetadata,
+) =>
+  await emitToAllEmitters("dealTaskOverdue", workspaceId, contactId, metadata)
+
+export const emitDealTaskAssigned = async (
+  workspaceId: string,
+  contactId: string,
+  metadata: DealTaskAssignedMetadata,
+) =>
+  await emitToAllEmitters("dealTaskAssigned", workspaceId, contactId, metadata)

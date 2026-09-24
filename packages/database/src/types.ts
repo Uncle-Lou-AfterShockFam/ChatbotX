@@ -267,3 +267,7 @@ export type PipelineModel = typeof schema.pipelineModel.$inferSelect
 export type PipelineStageModel = typeof schema.pipelineStageModel.$inferSelect
 export type DealModel = typeof schema.dealModel.$inferSelect
 export type DealActivityModel = typeof schema.dealActivityModel.$inferSelect
+export type DealTaskModel = typeof schema.dealTaskModel.$inferSelect
+export type DealTaskTemplateModel =
+  typeof schema.dealTaskTemplateModel.$inferSelect
+export type DealDependencyModel = typeof schema.dealDependencyModel.$inferSelect

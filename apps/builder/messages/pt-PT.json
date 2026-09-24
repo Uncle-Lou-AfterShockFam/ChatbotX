@@ -2397,7 +2397,9 @@
       "dealActions": "Deal Actions",
       "createDeal": "Create Deal",
       "moveDealStage": "Move Deal to Stage",
-      "setDealStatus": "Mark Deal Won / Lost"
+      "setDealStatus": "Mark Deal Won / Lost",
+      "createTask": "Create task",
+      "completeTask": "Complete task"
     },
     "splitTraffic": {
       "balanceHint": "A soma total deve ser igual a 100%.",
@@ -4408,7 +4410,11 @@
       "contactReferredANewContact": "Contacto recomendou um novo contacto",
       "contactReferredExistingContact": "Contacto recomendou um contacto existente",
       "callRecorded": "Chamada gravada",
-      "callTranscribed": "Chamada transcrita"
+      "callTranscribed": "Chamada transcrita",
+      "taskCreated": "Task created",
+      "taskCompleted": "Task completed",
+      "taskOverdue": "Task overdue",
+      "taskAssigned": "Task assigned"
     },
     "actions": {
       "addTag": "Adicionar etiqueta",
@@ -6769,12 +6775,16 @@
         "titleChanged": "Title",
         "currencyChanged": "Currency",
         "dueAtChanged": "Due date",
-        "fieldChanged": "Field"
+        "fieldChanged": "Field",
+        "taskCreated": "Task",
+        "taskCompleted": "Task done"
       },
       "titleChanged": "Title changed from {from} to {to}",
       "currencyChanged": "Currency changed from {from} to {to}",
       "dueAtChanged": "Due date changed from {from} to {to}",
-      "fieldChanged": "Field '{key}' changed from {from} to {to}"
+      "fieldChanged": "Field {key} changed from {from} to {to}",
+      "taskCreated": "Task {title} created",
+      "taskCompleted": "Task {title} completed"
     },
     "reorder": "Reorder",
     "moveDealsTo": "Move deals to...",
@@ -6819,7 +6829,43 @@
     },
     "tabs": {
       "details": "Details",
-      "activity": "Activity"
+      "activity": "Activity",
+      "tasks": "Tasks"
+    },
+    "tasks": {
+      "titlePlaceholder": "New task",
+      "add": "Add task",
+      "none": "No tasks yet.",
+      "unassigned": "Unassigned",
+      "blockedBy": "Blocked by {tasks}",
+      "blockedHint": "Complete the tasks this one waits on first.",
+      "waitOn": "Wait on...",
+      "description": "Description",
+      "assignTo": "Assign to",
+      "assignee": "Assignee",
+      "assignToOptions": {
+        "none": "Nobody",
+        "dealOwner": "The deal owner",
+        "user": "A workspace member"
+      },
+      "stepTitleHint": "Contact variables like '{{contact.full_name}}' are replaced per contact. Added to the contact's open deal in the pipeline.",
+      "matchBy": "Match tasks by",
+      "matchOptions": {
+        "template": "Stage template",
+        "title": "Exact title"
+      },
+      "matchTitleHint": "Case-insensitive exact match on the task title."
+    },
+    "taskTemplates": {
+      "one": "Task template",
+      "title": "Stage task templates",
+      "hint": "Every deal entering this stage gets one task per template, exactly once.",
+      "button": "Tasks ({count})",
+      "none": "No task templates on this pipeline yet.",
+      "add": "Add template",
+      "noDue": "No due date",
+      "dueIn": "Due in {count, plural, one {1 day} other {# days}}",
+      "toOwner": "Assign to deal owner"
     }
   }
 }
