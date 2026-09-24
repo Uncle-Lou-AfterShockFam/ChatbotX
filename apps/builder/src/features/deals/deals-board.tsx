@@ -174,6 +174,7 @@ export function DealsBoard({
           {pipeline ? (
             <CreateDealDialog
               defaultCurrency={pipeline.settings.defaultCurrency}
+              fieldDefs={pipeline.settings.fieldDefs}
               onCreated={invalidate}
               pipelineId={pipeline.id}
               stages={pipeline.stages}

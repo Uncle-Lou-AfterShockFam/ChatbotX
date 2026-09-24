@@ -24,6 +24,14 @@ export function formatDealValue(
   }
 }
 
+/** Open and past its due date (a closed deal is never overdue). */
+export function isOverdue(
+  deal: Pick<DealResource, "status" | "dueAt">,
+  now: Date = new Date(),
+): boolean {
+  return deal.status === "open" && deal.dueAt !== null && deal.dueAt < now
+}
+
 const PRIORITY_VARIANT = {
   low: "secondary",
   medium: "outline",
@@ -59,7 +67,15 @@ export function DealCardContent({
           {t(`deals.priorities.${deal.priority}`)}
         </Badge>
         {deal.dueAt ? (
-          <span className="inline-flex items-center gap-1">
+          <span
+            className={
+              isOverdue(deal)
+                ? "inline-flex items-center gap-1 font-medium text-destructive"
+                : "inline-flex items-center gap-1"
+            }
+            data-testid={isOverdue(deal) ? "deal-overdue" : "deal-due"}
+            title={isOverdue(deal) ? t("deals.overdue") : undefined}
+          >
             <CalendarIcon className="size-3" />
             {format.dateTime(deal.dueAt, { dateStyle: "medium" })}
           </span>

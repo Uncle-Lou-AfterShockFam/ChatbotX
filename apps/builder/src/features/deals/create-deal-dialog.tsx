@@ -1,5 +1,6 @@
 "use client"
 
+import type { DealFieldDef } from "@chatbotx.io/database/partials"
 import { ComboboxField } from "@chatbotx.io/ui/components/form/combobox-field"
 import { InputField } from "@chatbotx.io/ui/components/form/input-field"
 import { SelectField } from "@chatbotx.io/ui/components/form/select-field"
@@ -25,6 +26,7 @@ import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import z from "zod"
 import { createDealAction } from "./actions/create-deal-action"
+import { DealCustomFieldsGrid } from "./deal-field-input"
 import { useContactSearchOptions, useOwnerOptions } from "./provider/deal-hook"
 
 const formSchema = z.object({
@@ -35,6 +37,8 @@ const formSchema = z.object({
   stageId: z.string(),
   contactId: z.string(),
   ownerId: z.string(),
+  /** yyyy-mm-dd or empty. */
+  dueAt: z.string(),
 })
 type FormValues = z.infer<typeof formSchema>
 
@@ -43,6 +47,7 @@ export function CreateDealDialog({
   pipelineId,
   stages,
   defaultCurrency,
+  fieldDefs = [],
   onCreated,
   defaultStageId,
 }: {
@@ -50,12 +55,14 @@ export function CreateDealDialog({
   pipelineId: string
   stages: { id: string; name: string }[]
   defaultCurrency: string
+  fieldDefs?: DealFieldDef[]
   onCreated: () => void
   defaultStageId?: string
 }) {
   const t = useTranslations()
   const [open, setOpen] = useState(false)
   const [contactKeyword, setContactKeyword] = useState("")
+  const [fields, setFields] = useState<Record<string, unknown>>({})
   const defaults = useMemo<FormValues>(
     () => ({
       title: "",
@@ -65,6 +72,7 @@ export function CreateDealDialog({
       stageId: defaultStageId ?? stages[0]?.id ?? "",
       contactId: "",
       ownerId: "",
+      dueAt: "",
     }),
     [defaultCurrency, defaultStageId, stages],
   )
@@ -85,6 +93,7 @@ export function CreateDealDialog({
         toast.success(t("messages.createdSuccess", { feature: t("deals.one") }))
         setOpen(false)
         form.reset(defaults)
+        setFields({})
         onCreated()
       },
       onError: ({ error }) => {
@@ -101,6 +110,7 @@ export function CreateDealDialog({
       if (!isOpen) {
         form.reset(defaults)
         setContactKeyword("")
+        setFields({})
       }
     },
     [form, defaults],
@@ -136,6 +146,10 @@ export function CreateDealDialog({
                 priority: values.priority,
                 contactId: values.contactId || null,
                 ownerId: values.ownerId || null,
+                dueAt: values.dueAt
+                  ? new Date(`${values.dueAt}T00:00:00Z`)
+                  : null,
+                fields,
               }),
             )}
           >
@@ -185,14 +199,29 @@ export function CreateDealDialog({
                 portal
               />
             </div>
-            <ComboboxField
-              allowClear
-              clearLabel={t("deals.noOwner")}
-              emptyText={t("actions.noRecordFound")}
-              label={t("deals.fields.owner")}
-              name="ownerId"
-              options={ownerOptions}
-              portal
+            <div className="grid grid-cols-2 gap-3">
+              <ComboboxField
+                allowClear
+                clearLabel={t("deals.noOwner")}
+                emptyText={t("actions.noRecordFound")}
+                label={t("deals.fields.owner")}
+                name="ownerId"
+                options={ownerOptions}
+                portal
+              />
+              <InputField
+                label={t("deals.fields.dueAt")}
+                name="dueAt"
+                type="date"
+              />
+            </div>
+            <DealCustomFieldsGrid
+              fieldDefs={fieldDefs}
+              onCommit={(key, next) =>
+                setFields((prev) => ({ ...prev, [key]: next }))
+              }
+              testIdPrefix="create-deal-field"
+              values={fields}
             />
             <DialogFooter>
               <DialogClose

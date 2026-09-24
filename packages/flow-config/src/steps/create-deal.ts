@@ -27,6 +27,10 @@ export const createDealStepSchema = z.object({
   currency: z.string().trim().max(3).default(""),
   priority: createDealPriorities.default("medium"),
   skipIfOpenDealExists: z.boolean().default(true),
+  /** Workspace member id; empty = no owner. Never remapped on import (users are not exportable). */
+  ownerId: z.string().optional(),
+  /** Due date = now + N days at run time; null = no due date. */
+  dueInDays: z.number().int().min(0).max(365).nullable().default(null),
 })
 
 export type CreateDealStepSchema = z.infer<typeof createDealStepSchema>
@@ -41,4 +45,6 @@ export const createDealStepDefaultFn = (): CreateDealStepSchema => ({
   currency: "",
   priority: "medium",
   skipIfOpenDealExists: true,
+  ownerId: undefined,
+  dueInDays: null,
 })

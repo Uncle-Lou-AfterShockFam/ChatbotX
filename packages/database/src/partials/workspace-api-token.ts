@@ -13,6 +13,7 @@ export type WorkspaceApiTokenPermission = z.infer<
 // semantics that keep existing/future tokens frozen at least privilege.
 export const workspaceApiTokenScopes = z.enum([
   "contacts",
+  "deals",
   "inbox",
   "automation",
   "broadcasts",

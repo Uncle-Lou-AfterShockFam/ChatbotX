@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { applyMove, positionBetween } from "@/features/deals/board-helpers"
+import { applyMove } from "@/features/deals/board-helpers"
 import type { BoardColumnResource } from "@/features/deals/schema/resource"
 
 const deal = (id: string, stageId: string, position: number) =>
@@ -28,17 +28,6 @@ const board = (): BoardColumnResource[] => [
   },
   { stage: stage("won"), deals: [deal("c", "won", 1000)] },
 ]
-
-describe("positionBetween (client) mirrors the server helper", () => {
-  test.each([
-    [null, null, 1000],
-    [null, 1000, 0],
-    [1000, null, 2000],
-    [1000, 2000, 1500],
-  ])("between %s and %s -> %s", (before, after, expected) => {
-    expect(positionBetween(before, after)).toBe(expected)
-  })
-})
 
 describe("applyMove", () => {
   test("moves a card to another column at the end with position after the last card", () => {

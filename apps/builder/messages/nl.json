@@ -2039,7 +2039,8 @@
       "minigames": "Minigames",
       "appointments": "Afspraken",
       "media": "Media",
-      "ads": "Advertenties"
+      "ads": "Advertenties",
+      "deals": "Deals"
     },
     "adReferral": {
       "label": "Ads",
@@ -6721,7 +6722,9 @@
       "owner": "Owner",
       "contact": "Contact",
       "probability": "Probability (%)",
-      "color": "Color"
+      "color": "Color",
+      "dueAt": "Due date",
+      "customFields": "Custom fields"
     },
     "priorities": {
       "low": "Low",
@@ -6762,8 +6765,16 @@
         "statusChanged": "Status",
         "priorityChanged": "Priority",
         "assigned": "Owner",
-        "note": "Note"
-      }
+        "note": "Note",
+        "titleChanged": "Title",
+        "currencyChanged": "Currency",
+        "dueAtChanged": "Due date",
+        "fieldChanged": "Field"
+      },
+      "titleChanged": "Title changed from {from} to {to}",
+      "currencyChanged": "Currency changed from {from} to {to}",
+      "dueAtChanged": "Due date changed from {from} to {to}",
+      "fieldChanged": "Field '{key}' changed from {from} to {to}"
     },
     "reorder": "Reorder",
     "moveDealsTo": "Move deals to...",
@@ -6781,6 +6792,34 @@
     "newStagePlaceholder": "New stage name",
     "addStage": "Add stage",
     "newPipelinePlaceholder": "New pipeline name",
-    "noPipelinesSettings": "No pipelines yet. Create one above; it starts with New, Qualified, Won and Lost."
+    "noPipelinesSettings": "No pipelines yet. Create one above; it starts with New, Qualified, Won and Lost.",
+    "dueInDays": "Due in (days)",
+    "dueInDaysHint": "Due date = the day the deal is created plus this many days. Empty = no due date.",
+    "overdue": "Overdue",
+    "fieldDefs": {
+      "title": "Custom fields",
+      "hint": "Fields every deal in this pipeline can carry. The key is what the API and flows use; the label is what people see.",
+      "key": "Key",
+      "label": "Label",
+      "type": "Type",
+      "options": "Options (one per line)",
+      "required": "Required",
+      "add": "Add field",
+      "remove": "Remove field",
+      "none": "No custom fields yet.",
+      "keyHint": "camelCase, letters/digits/underscore, max 40.",
+      "types": {
+        "shortText": "Short text",
+        "longText": "Long text",
+        "number": "Number",
+        "date": "Date",
+        "boolean": "Yes / no",
+        "select": "Select"
+      }
+    },
+    "tabs": {
+      "details": "Details",
+      "activity": "Activity"
+    }
   }
 }

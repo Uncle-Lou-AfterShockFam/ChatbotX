@@ -44,6 +44,13 @@ The `analytics` scope covers both `/v1/error-logs`
 analytics router, every `/v1/analytics/*` route
 (`apps/builder/src/features/analytics/api/public.ts`).
 
+The `deals` scope (s192) covers `/v1/pipelines` and `/v1/deals`
+(`apps/builder/src/features/pipelines/api/public.ts`,
+`apps/builder/src/features/deals/api/public.ts`). Both shipped on `contacts`
+in phase 1 and moved wholesale; a `["contacts"]` token is denied them
+(`deals-public-scope.test.ts`). Only the read-only contact sub-resource
+`GET /v1/contacts/{identifier}/deals` stays on `contacts`.
+
 The `appointments` scope existed in the enum and UI registry for some time
 before any endpoint used it — see "Appointments scope — endpoint-to-scope
 table" below for the full surface now behind it.

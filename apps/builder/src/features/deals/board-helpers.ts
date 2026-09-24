@@ -1,19 +1,7 @@
+import { positionBetween } from "@chatbotx.io/utils/deal-position"
 import type { BoardColumnResource, DealResource } from "./schema/resource"
 
-/** Midpoint between two neighbours; mirrors dealService.positionBetween on the server. */
-export function positionBetween(
-  before: number | null | undefined,
-  after: number | null | undefined,
-  step = 1000,
-): number {
-  if (before === null || before === undefined) {
-    return after === null || after === undefined ? step : after - step
-  }
-  if (after === null || after === undefined) {
-    return before + step
-  }
-  return (before + after) / 2
-}
+export { positionBetween } from "@chatbotx.io/utils/deal-position"
 
 /**
  * Apply a drop to the column list optimistically: the card leaves its column,

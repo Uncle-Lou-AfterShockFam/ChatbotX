@@ -5,11 +5,17 @@ import { SelectField } from "@chatbotx.io/ui/components/form/select-field"
 import { SwitchField } from "@chatbotx.io/ui/components/form/switch-field"
 import { HandshakeIcon } from "lucide-react"
 import { useTranslations } from "next-intl"
+import { useOwnerOptions } from "@/features/deals/provider/deal-hook"
+import { useWorkspaceId } from "@/hooks/routing"
 import { BaseStepEditor } from "../base/editor"
 import { PipelinePicker, StagePicker } from "../deal-pickers"
 
 const CreateDealStepEditor = ({ parentName }: { parentName: string }) => {
   const t = useTranslations()
+  const workspaceId = useWorkspaceId()
+  const ownerOptions = useOwnerOptions(workspaceId ?? "", {
+    enabled: Boolean(workspaceId),
+  })
   const priorityOptions = [
     { label: t("deals.priorities.low"), value: "low" },
     { label: t("deals.priorities.medium"), value: "medium" },
@@ -46,6 +52,20 @@ const CreateDealStepEditor = ({ parentName }: { parentName: string }) => {
           label={t("deals.fields.priority")}
           name={`${parentName}.priority`}
           options={priorityOptions}
+        />
+        <SelectField
+          allowClear
+          clearLabel={t("deals.noOwner")}
+          label={t("deals.fields.owner")}
+          name={`${parentName}.ownerId`}
+          options={ownerOptions}
+        />
+        <InputField
+          description={t("deals.dueInDaysHint")}
+          label={t("deals.dueInDays")}
+          name={`${parentName}.dueInDays`}
+          placeholder="7"
+          type="number"
         />
         <SwitchField
           description={t("deals.skipIfOpenDealExistsHint")}

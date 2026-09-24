@@ -21,6 +21,11 @@ export const dealActivityTypes = z.enum([
   "priorityChanged",
   "assigned",
   "note",
+  // phase 2 (s192): every other edit leaves a trail too
+  "titleChanged",
+  "currencyChanged",
+  "dueAtChanged",
+  "fieldChanged",
 ])
 export type DealActivityType = z.infer<typeof dealActivityTypes>
 
@@ -30,6 +35,83 @@ export type PipelineStopCompanyOn = z.infer<typeof pipelineStopCompanyOn>
 
 export const DEFAULT_DEAL_CURRENCY = "USD"
 
+/** Value types a custom deal field can declare (mirrors the contact custom-field kinds we need). */
+export const dealFieldTypes = z.enum([
+  "shortText",
+  "longText",
+  "number",
+  "date",
+  "boolean",
+  "select",
+])
+export type DealFieldType = z.infer<typeof dealFieldTypes>
+
+export const DEAL_FIELD_KEY = /^[a-z][a-zA-Z0-9_]{0,39}$/
+export const MAX_DEAL_FIELD_DEFS = 30
+export const MAX_DEAL_FIELD_OPTIONS = 50
+/** Caps on the free-form `Deal.fields` jsonb: keys and serialised bytes. */
+export const MAX_DEAL_FIELD_KEYS = 50
+export const MAX_DEAL_FIELDS_BYTES = 8 * 1024
+
+/**
+ * One custom deal field, declared per pipeline in `Pipeline.settings.fieldDefs`.
+ * Closed: an unknown key here is a caller bug, not a forward-compat feature.
+ */
+export const dealFieldDefSchema = z
+  .object({
+    key: z.string().regex(DEAL_FIELD_KEY, "camelCase key, max 40 chars"),
+    label: z.string().trim().min(1).max(60),
+    type: dealFieldTypes,
+    options: z
+      .array(z.string().trim().min(1).max(60))
+      .max(MAX_DEAL_FIELD_OPTIONS)
+      .optional(),
+    required: z.boolean().default(false),
+  })
+  .strict()
+  .superRefine((def, ctx) => {
+    if (def.type === "select") {
+      if (!def.options || def.options.length === 0) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["options"],
+          message: "A select field needs at least one option.",
+        })
+      } else if (new Set(def.options).size !== def.options.length) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["options"],
+          message: "Options must be unique.",
+        })
+      }
+    } else if (def.options !== undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["options"],
+        message: "Only a select field takes options.",
+      })
+    }
+  })
+export type DealFieldDef = z.infer<typeof dealFieldDefSchema>
+export type DealFieldDefInput = z.input<typeof dealFieldDefSchema>
+
+export const dealFieldDefsSchema = z
+  .array(dealFieldDefSchema)
+  .max(MAX_DEAL_FIELD_DEFS)
+  .superRefine((defs, ctx) => {
+    const seen = new Set<string>()
+    for (const [index, def] of defs.entries()) {
+      if (seen.has(def.key)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [index, "key"],
+          message: `Duplicate field key "${def.key}".`,
+        })
+      }
+      seen.add(def.key)
+    }
+  })
+
 export const pipelineSettingsSchema = z.object({
   stopCompanyOn: pipelineStopCompanyOn.default("created"),
   defaultCurrency: z
@@ -38,6 +120,8 @@ export const pipelineSettingsSchema = z.object({
     .length(3)
     .toUpperCase()
     .default(DEFAULT_DEAL_CURRENCY),
+  // Rows written before s192 have no key: the default makes them parse.
+  fieldDefs: dealFieldDefsSchema.default([]),
 })
 export type PipelineSettings = z.infer<typeof pipelineSettingsSchema>
 export type PipelineSettingsInput = z.input<typeof pipelineSettingsSchema>
@@ -45,6 +129,98 @@ export type PipelineSettingsInput = z.input<typeof pipelineSettingsSchema>
 export const DEFAULT_PIPELINE_SETTINGS: PipelineSettings = {
   stopCompanyOn: "created",
   defaultCurrency: DEFAULT_DEAL_CURRENCY,
+  fieldDefs: [],
+}
+
+export type DealFieldIssue = { key: string; message: string }
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}(T[\d:.]+(Z|[+-]\d{2}:?\d{2})?)?$/
+
+function checkFieldValue(def: DealFieldDef, value: unknown): string | null {
+  if (value === null) {
+    return def.required ? "is required" : null
+  }
+  switch (def.type) {
+    case "shortText":
+      return typeof value === "string" && value.length <= 255
+        ? null
+        : "must be text of at most 255 characters"
+    case "longText":
+      return typeof value === "string" && value.length <= 4000
+        ? null
+        : "must be text of at most 4000 characters"
+    case "number":
+      return typeof value === "number" && Number.isFinite(value)
+        ? null
+        : "must be a finite number"
+    case "boolean":
+      return typeof value === "boolean" ? null : "must be true or false"
+    case "date":
+      return typeof value === "string" && ISO_DATE.test(value)
+        ? null
+        : "must be an ISO date"
+    case "select":
+      return typeof value === "string" && (def.options ?? []).includes(value)
+        ? null
+        : `must be one of ${(def.options ?? []).join(", ")}`
+    default:
+      return "has an unknown type"
+  }
+}
+
+/**
+ * Validate a `Deal.fields` object against a pipeline's `fieldDefs`. Declared
+ * keys are type-checked (a select value must be an option, `null` clears);
+ * undeclared keys stay free-form (the public API documents them so) but the
+ * whole object is capped at MAX_DEAL_FIELD_KEYS keys / MAX_DEAL_FIELDS_BYTES.
+ * `requireAll` (create) also flags a missing required key. Returns the issue
+ * list; empty = valid. A non-object input is one issue on key "fields".
+ */
+export function validateDealFields(props: {
+  defs: readonly DealFieldDef[] | null | undefined
+  fields: unknown
+  requireAll?: boolean
+}): DealFieldIssue[] {
+  const { fields, requireAll = false } = props
+  const defs = props.defs ?? []
+  if (fields === null || typeof fields !== "object" || Array.isArray(fields)) {
+    return [{ key: "fields", message: "must be an object" }]
+  }
+  const record = fields as Record<string, unknown>
+  const keys = Object.keys(record)
+  const issues: DealFieldIssue[] = []
+  if (keys.length > MAX_DEAL_FIELD_KEYS) {
+    issues.push({
+      key: "fields",
+      message: `has more than ${MAX_DEAL_FIELD_KEYS} keys`,
+    })
+  }
+  let bytes = 0
+  try {
+    bytes = new TextEncoder().encode(JSON.stringify(record)).length
+  } catch {
+    return [{ key: "fields", message: "is not JSON-serialisable" }]
+  }
+  if (bytes > MAX_DEAL_FIELDS_BYTES) {
+    issues.push({
+      key: "fields",
+      message: `exceeds ${MAX_DEAL_FIELDS_BYTES} bytes`,
+    })
+  }
+  for (const def of defs) {
+    const present = Object.hasOwn(record, def.key)
+    if (!present) {
+      if (requireAll && def.required) {
+        issues.push({ key: def.key, message: "is required" })
+      }
+      continue
+    }
+    const message = checkFieldValue(def, record[def.key])
+    if (message) {
+      issues.push({ key: def.key, message })
+    }
+  }
+  return issues
 }
 
 /** The stages `pipelineService.create` seeds when none are given. */

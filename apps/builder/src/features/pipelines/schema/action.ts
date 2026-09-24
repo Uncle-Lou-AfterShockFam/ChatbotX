@@ -1,6 +1,55 @@
-import { pipelineStopCompanyOn } from "@chatbotx.io/database/partials"
+import {
+  DEAL_FIELD_KEY,
+  dealFieldTypes,
+  MAX_DEAL_FIELD_DEFS,
+  MAX_DEAL_FIELD_OPTIONS,
+  pipelineStopCompanyOn,
+} from "@chatbotx.io/database/partials"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import z from "zod"
+
+/**
+ * API shape of one custom deal field; the closed partial schema
+ * (`dealFieldDefsSchema`) re-validates the whole list server-side, so the
+ * select/options and duplicate-key rules live there, not here.
+ */
+export const dealFieldDefInput = z
+  .object({
+    key: z
+      .string()
+      .regex(DEAL_FIELD_KEY)
+      .describe(
+        "Stable camelCase key the API and flows use for this field (letters, digits, underscore; max 40).",
+      ),
+    label: z
+      .string()
+      .trim()
+      .min(1)
+      .max(60)
+      .describe(
+        "Label people see for this field in the deal drawer and the create dialog.",
+      ),
+    type: dealFieldTypes.describe(
+      "Value type: shortText, longText, number, date (ISO yyyy-mm-dd), boolean or select.",
+    ),
+    options: z
+      .array(z.string().trim().min(1).max(60))
+      .max(MAX_DEAL_FIELD_OPTIONS)
+      .optional()
+      .describe(
+        "Allowed values for a select field (required for select, forbidden otherwise).",
+      ),
+    required: z
+      .boolean()
+      .optional()
+      .describe(
+        "When true a new deal must carry a value for this field (default false).",
+      ),
+  })
+  .strict()
+  .describe(
+    "One custom deal field definition: key, label, type, select options and whether it is required.",
+  )
 
 export const pipelineSettingsInput = z
   .object({
@@ -16,6 +65,13 @@ export const pipelineSettingsInput = z
       .optional()
       .describe(
         "3-letter ISO currency code a new deal gets when none is given (default USD).",
+      ),
+    fieldDefs: z
+      .array(dealFieldDefInput)
+      .max(MAX_DEAL_FIELD_DEFS)
+      .optional()
+      .describe(
+        "Custom deal fields every deal in this pipeline can carry (max 30); replaces the whole list.",
       ),
   })
   .strict()
@@ -54,7 +110,7 @@ export type PipelineStageInput = z.infer<typeof pipelineStageInput>
 const settingsField = pipelineSettingsInput
   .optional()
   .describe(
-    "Pipeline settings: stopCompanyOn (none | created | won) and defaultCurrency (3-letter ISO code).",
+    "Pipeline settings: stopCompanyOn (none | created | won), defaultCurrency (3-letter ISO code) and fieldDefs (custom deal fields).",
   )
 
 export const createPipelineRequest = z.object({
