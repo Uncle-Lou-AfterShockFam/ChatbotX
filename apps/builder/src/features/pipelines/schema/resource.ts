@@ -12,7 +12,8 @@ import z from "zod"
 export const pipelineSettingsResource = z.object({
   stopCompanyOn: pipelineStopCompanyOn,
   defaultCurrency: z.string(),
-  fieldDefs: z.array(dealFieldDefSchema),
+  // Legacy rows: the service normalises, the boundary defaults as a second guard.
+  fieldDefs: z.array(dealFieldDefSchema).default([]),
 })
 
 export const pipelineResource = createSelectSchema(pipelineModel, {
