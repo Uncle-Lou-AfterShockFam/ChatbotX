@@ -15,6 +15,13 @@ import type { ExecuteStepProps } from "./flow-utils"
  * flow continues.
  */
 
+const OWNER_NOT_MEMBER = /owner is not a member/i
+
+/** The service's 422 for an `ownerId` that is not a workspace member. */
+function isOwnerNotMember(error: unknown): boolean {
+  return error instanceof Error && OWNER_NOT_MEMBER.test(error.message)
+}
+
 export async function createDeal({
   conversation,
   contactInbox,
@@ -49,25 +56,40 @@ export async function createDeal({
           ? null
           : new Date(Date.now() + step.dueInDays * 86_400_000),
     }
-    if (step.skipIfOpenDealExists) {
-      // The check and the insert share one advisory lock in the service, so two
-      // flow runs for the same contact cannot both create a deal.
-      const { deal, created } = await dealService.createUnlessOpen({
-        workspaceId,
-        data,
-      })
-      logger.info(
-        { workspaceId, contactId, dealId: deal.id, stepId: step.id, created },
-        created
-          ? "createDeal: deal created"
-          : "createDeal: contact already has an open deal in this pipeline; skipped",
+    const write = (input: typeof data) =>
+      step.skipIfOpenDealExists
+        ? // The check and the insert share one advisory lock in the service,
+          // so two flow runs for the same contact cannot both create a deal.
+          dealService.createUnlessOpen({ workspaceId, data: input })
+        : dealService
+            .create({ workspaceId, data: input })
+            .then((deal) => ({ deal, created: true }))
+    let result: Awaited<ReturnType<typeof write>>
+    try {
+      result = await write(data)
+    } catch (error) {
+      // A configured owner who has since left the workspace must not turn
+      // every run of this step into a silent no-deal: retry ownerless.
+      if (!(data.ownerId && isOwnerNotMember(error))) {
+        throw error
+      }
+      logger.warn(
+        { workspaceId, contactId, stepId: step.id, ownerId: data.ownerId },
+        "createDeal: configured owner is no longer a workspace member; creating the deal without an owner",
       )
-      return
+      result = await write({ ...data, ownerId: null })
     }
-    const deal = await dealService.create({ workspaceId, data })
     logger.info(
-      { workspaceId, contactId, dealId: deal.id, stepId: step.id },
-      "createDeal: deal created",
+      {
+        workspaceId,
+        contactId,
+        dealId: result.deal.id,
+        stepId: step.id,
+        created: result.created,
+      },
+      result.created
+        ? "createDeal: deal created"
+        : "createDeal: contact already has an open deal in this pipeline; skipped",
     )
   } catch (error) {
     logger.error(

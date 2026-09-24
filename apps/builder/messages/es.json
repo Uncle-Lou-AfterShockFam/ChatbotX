@@ -6796,7 +6796,6 @@
     "dueInDays": "Due in (days)",
     "dueInDaysHint": "Due date = the day the deal is created plus this many days. Empty = no due date.",
     "overdue": "Overdue",
-    "noDueDate": "No due date",
     "fieldDefs": {
       "title": "Custom fields",
       "hint": "Fields every deal in this pipeline can carry. The key is what the API and flows use; the label is what people see.",

@@ -113,6 +113,27 @@ describe("createDeal step", () => {
     )
   })
 
+  test("a configured owner who left the workspace: retries ownerless with a warning instead of dropping the deal (skeptic MEDIUM, s192)", async () => {
+    m.createUnlessOpen
+      .mockRejectedValueOnce(
+        new Error("Owner is not a member of this workspace."),
+      )
+      .mockResolvedValueOnce({ deal: { id: "deal-2" }, created: true })
+    await createDeal(props({ ...step, ownerId: "gone-user" }))
+    expect(m.createUnlessOpen).toHaveBeenCalledTimes(2)
+    expect(m.createUnlessOpen.mock.calls[0][0].data.ownerId).toBe("gone-user")
+    expect(m.createUnlessOpen.mock.calls[1][0].data.ownerId).toBeNull()
+    expect(m.logWarn).toHaveBeenCalledTimes(1)
+    expect(m.logError).not.toHaveBeenCalled()
+  })
+
+  test("any other create failure is logged once and NOT retried", async () => {
+    m.createUnlessOpen.mockRejectedValueOnce(new Error("Pipeline not found"))
+    await createDeal(props({ ...step, ownerId: "user-9" }))
+    expect(m.createUnlessOpen).toHaveBeenCalledTimes(1)
+    expect(m.logError).toHaveBeenCalledTimes(1)
+  })
+
   test("dueInDays 0 is due today, not 'no due date'", async () => {
     vi.useFakeTimers({ now: new Date("2026-09-24T12:00:00Z") })
     try {

@@ -100,8 +100,7 @@ const dealChangedConcurrently = () =>
     "Deal was changed by someone else; reload and retry.",
     { conflict: "stale" },
   )
-export const POSITION_STEP = DEAL_POSITION_STEP
-/** Below this gap two neighbouring positions are renormalised to `POSITION_STEP * i`. */
+/** Below this gap two neighbouring positions are renormalised to `DEAL_POSITION_STEP * i`. */
 export const MIN_POSITION_GAP = 1e-6
 
 /**
@@ -503,14 +502,16 @@ class DealService extends BaseService {
           id: current.pipelineId,
           tx,
         })
-        // The patch itself first (an array or string would spread into keys),
-        // then the merged object for the size caps.
+        // Type-check ONLY the keys in the patch (an array or string would
+        // spread into keys, so the patch is checked as an object first). The
+        // merged object gets the size caps alone: a stored value that no
+        // longer matches an edited fieldDef must not block an unrelated edit.
         this.parseFields({
           defs: pipeline.settings.fieldDefs,
           fields: data.fields,
         })
         const merged = this.parseFields({
-          defs: pipeline.settings.fieldDefs,
+          defs: [],
           fields: { ...current.fields, ...data.fields },
         })
         for (const key of Object.keys(data.fields)) {
@@ -904,12 +905,12 @@ class DealService extends BaseService {
       .select({ maxPosition: sql<number | null>`max(${dealModel.position})` })
       .from(dealModel)
       .where(eq(dealModel.stageId, props.stageId))
-    return (Number(maxPosition) || 0) + POSITION_STEP
+    return (Number(maxPosition) || 0) + DEAL_POSITION_STEP
   }
 
-  /** Rewrite positions to `POSITION_STEP * i` when any neighbouring gap collapsed. */
+  /** Rewrite positions to `DEAL_POSITION_STEP * i` when any neighbouring gap collapsed. */
   /**
-   * Rewrite positions to `POSITION_STEP * i` when any neighbouring gap
+   * Rewrite positions to `DEAL_POSITION_STEP * i` when any neighbouring gap
    * collapsed. Read and write happen in ONE transaction with the rows locked,
    * and the UPDATE is pinned to the stage, so a card that left the stage
    * between read and write is never given a position from its old column.
@@ -937,7 +938,7 @@ class DealService extends BaseService {
       for (const [index, row] of rows.entries()) {
         await tx
           .update(dealModel)
-          .set({ position: (index + 1) * POSITION_STEP })
+          .set({ position: (index + 1) * DEAL_POSITION_STEP })
           .where(
             and(eq(dealModel.id, row.id), eq(dealModel.stageId, props.stageId)),
           )

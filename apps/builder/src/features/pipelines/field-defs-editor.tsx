@@ -97,15 +97,15 @@ export function FieldDefsEditor({
         </p>
       ) : null}
       <div className="flex flex-col gap-2">
-        {rows.map(({ rowId, def: row }, index) => (
+        {rows.map(({ rowId, def: row }) => (
           <div
             className="grid grid-cols-[1fr_1fr_auto_auto_auto] items-start gap-2 rounded-md border p-2"
-            data-testid={`field-def-row-${index}`}
+            data-testid={`field-def-row-${rowId}`}
             key={rowId}
           >
             <Input
               aria-label={t("deals.fieldDefs.key")}
-              data-testid={`field-def-key-${index}`}
+              data-testid={`field-def-key-${rowId}`}
               maxLength={40}
               onChange={(e) => patch(rowId, { key: e.target.value })}
               placeholder="roofType"
@@ -114,7 +114,7 @@ export function FieldDefsEditor({
             />
             <Input
               aria-label={t("deals.fieldDefs.label")}
-              data-testid={`field-def-label-${index}`}
+              data-testid={`field-def-label-${rowId}`}
               maxLength={60}
               onChange={(e) => patch(rowId, { label: e.target.value })}
               placeholder={t("deals.fieldDefs.label")}
@@ -128,7 +128,7 @@ export function FieldDefsEditor({
             >
               <SelectTrigger
                 className="w-32"
-                data-testid={`field-def-type-${index}`}
+                data-testid={`field-def-type-${rowId}`}
               >
                 <SelectValue />
               </SelectTrigger>
@@ -144,7 +144,7 @@ export function FieldDefsEditor({
               <Switch
                 aria-label={t("deals.fieldDefs.required")}
                 checked={row.required}
-                data-testid={`field-def-required-${index}`}
+                data-testid={`field-def-required-${rowId}`}
                 onCheckedChange={(required) => patch(rowId, { required })}
                 size="sm"
               />
@@ -152,9 +152,9 @@ export function FieldDefsEditor({
             </div>
             <Button
               aria-label={t("deals.fieldDefs.remove")}
-              data-testid={`field-def-remove-${index}`}
+              data-testid={`field-def-remove-${rowId}`}
               onClick={() =>
-                setRows((prev) => prev.filter((_, i) => i !== index))
+                setRows((prev) => prev.filter((r) => r.rowId !== rowId))
               }
               size="icon"
               type="button"
@@ -166,7 +166,7 @@ export function FieldDefsEditor({
               <Textarea
                 aria-label={t("deals.fieldDefs.options")}
                 className="col-span-5"
-                data-testid={`field-def-options-${index}`}
+                data-testid={`field-def-options-${rowId}`}
                 onChange={(e) =>
                   patch(rowId, { options: optionsFromText(e.target.value) })
                 }

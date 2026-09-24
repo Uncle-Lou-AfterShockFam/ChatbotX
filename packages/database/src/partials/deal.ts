@@ -197,7 +197,7 @@ export function validateDealFields(props: {
   }
   let bytes = 0
   try {
-    bytes = JSON.stringify(record).length
+    bytes = new TextEncoder().encode(JSON.stringify(record)).length
   } catch {
     return [{ key: "fields", message: "is not JSON-serialisable" }]
   }

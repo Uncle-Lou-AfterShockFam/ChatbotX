@@ -229,6 +229,17 @@ describe("validateDealFields", () => {
     )
   })
 
+  test("the byte cap counts UTF-8 bytes, not UTF-16 code units", () => {
+    // 3,000 CJK chars = 3,000 code units but 9,000 UTF-8 bytes.
+    const cjk = { memo: "\u5b57".repeat(3000) }
+    expect(validateDealFields({ defs: [], fields: cjk })[0]?.message).toContain(
+      "exceeds 8192",
+    )
+    expect(
+      validateDealFields({ defs: [], fields: { memo: "x".repeat(8000) } }),
+    ).toEqual([])
+  })
+
   test("missing defs behave as an empty list", () => {
     expect(validateDealFields({ defs: undefined, fields: { a: 1 } })).toEqual(
       [],

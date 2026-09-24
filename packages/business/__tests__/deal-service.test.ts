@@ -674,6 +674,36 @@ describe("dealService.update phase-2 activities (s192)", () => {
   })
 })
 
+describe("dealService.update: stale stored values vs edited fieldDefs (skeptic HIGH, s192)", () => {
+  test("a stored select value no longer in the options does NOT block an unrelated field edit", async () => {
+    m.pipelineFindOrFail.mockResolvedValue(PIPE("created", ROOF_DEFS))
+    m.findOrFail.mockImplementation(async () => ({
+      ...OPEN_DEAL,
+      fields: { roofType: "tile", sqft: 100 },
+    }))
+    await dealService.update({
+      workspaceId: WS,
+      id: "deal-1",
+      data: { fields: { sqft: 200 } },
+    })
+    expect(m.calls).toContain("update:fields")
+    expect(m.state.activities.map((a) => a.payload)).toEqual([
+      { key: "sqft", from: 100, to: 200 },
+    ])
+  })
+
+  test("but writing the stale key itself is still type-checked", async () => {
+    m.pipelineFindOrFail.mockResolvedValue(PIPE("created", ROOF_DEFS))
+    await expect(
+      dealService.update({
+        workspaceId: WS,
+        id: "deal-1",
+        data: { fields: { roofType: "tile" } },
+      }),
+    ).rejects.toThrow("must be one of metal, shingle")
+  })
+})
+
 describe("dealService.createUnlessOpen (flow step skipIfOpenDealExists)", () => {
   const data = { title: "Roof", pipelineId: "pipe-1", contactId: "contact-1" }
 

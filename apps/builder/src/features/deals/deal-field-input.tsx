@@ -14,7 +14,8 @@ import { Textarea } from "@chatbotx.io/ui/components/ui/textarea"
 import { useTranslations } from "next-intl"
 import { useEffect, useState } from "react"
 
-const NONE = "__none"
+/** Select sentinel for "no value" (base-ui Select cannot hold an empty string). */
+export const NONE = "__none"
 
 /** `value` as the string an <input> shows; the reverse is `parseFieldInput`. */
 function toInputString(value: unknown): string {
@@ -144,4 +145,50 @@ export function DealFieldInput({
         />
       )
   }
+}
+
+/**
+ * The custom-fields grid shared by the drawer's Details tab and the create
+ * dialog: one labelled DealFieldInput per def. `values` is whatever the host
+ * holds (the deal's `fields` or the dialog's draft); `onCommit` gets the key
+ * and the typed value.
+ */
+export function DealCustomFieldsGrid({
+  fieldDefs,
+  values,
+  onCommit,
+  testIdPrefix,
+}: {
+  fieldDefs: DealFieldDef[]
+  values: Record<string, unknown>
+  onCommit: (key: string, value: unknown) => void
+  testIdPrefix: string
+}) {
+  const t = useTranslations()
+  if (fieldDefs.length === 0) {
+    return null
+  }
+  return (
+    <div className="space-y-2" data-testid={`${testIdPrefix}s`}>
+      <div className="font-medium text-sm">
+        {t("deals.fields.customFields")}
+      </div>
+      <div className="grid grid-cols-2 gap-3 text-sm">
+        {fieldDefs.map((def) => (
+          <div className="space-y-1" key={def.key}>
+            <span className="text-muted-foreground text-xs">
+              {def.label}
+              {def.required ? " *" : ""}
+            </span>
+            <DealFieldInput
+              def={def}
+              onCommit={(next) => onCommit(def.key, next)}
+              testId={`${testIdPrefix}-${def.key}`}
+              value={values[def.key]}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }

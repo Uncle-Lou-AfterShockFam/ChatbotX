@@ -26,7 +26,7 @@ import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import z from "zod"
 import { createDealAction } from "./actions/create-deal-action"
-import { DealFieldInput } from "./deal-field-input"
+import { DealCustomFieldsGrid } from "./deal-field-input"
 import { useContactSearchOptions, useOwnerOptions } from "./provider/deal-hook"
 
 const formSchema = z.object({
@@ -215,31 +215,14 @@ export function CreateDealDialog({
                 type="date"
               />
             </div>
-            {fieldDefs.length > 0 ? (
-              <div className="space-y-2" data-testid="create-deal-fields">
-                <div className="font-medium text-sm">
-                  {t("deals.fields.customFields")}
-                </div>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  {fieldDefs.map((def) => (
-                    <div className="space-y-1" key={def.key}>
-                      <span className="text-muted-foreground text-xs">
-                        {def.label}
-                        {def.required ? " *" : ""}
-                      </span>
-                      <DealFieldInput
-                        def={def}
-                        onCommit={(next) =>
-                          setFields((prev) => ({ ...prev, [def.key]: next }))
-                        }
-                        testId={`create-deal-field-${def.key}`}
-                        value={fields[def.key]}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
+            <DealCustomFieldsGrid
+              fieldDefs={fieldDefs}
+              onCommit={(key, next) =>
+                setFields((prev) => ({ ...prev, [key]: next }))
+              }
+              testIdPrefix="create-deal-field"
+              values={fields}
+            />
             <DialogFooter>
               <DialogClose
                 render={

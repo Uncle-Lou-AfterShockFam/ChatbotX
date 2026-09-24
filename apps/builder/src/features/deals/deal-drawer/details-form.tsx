@@ -14,10 +14,8 @@ import { useFormatter, useTranslations } from "next-intl"
 import { useEffect, useState } from "react"
 import type { PipelineWithStagesResource } from "@/features/pipelines/schema/resource"
 import { formatDealValue } from "../deal-card"
-import { DealFieldInput } from "../deal-field-input"
+import { DealCustomFieldsGrid, NONE } from "../deal-field-input"
 import type { DealResource } from "../schema/resource"
-
-const NONE = "__none"
 
 /** `Date | null` -> the yyyy-mm-dd an <input type="date"> shows. */
 export const toDateInput = (value: Date | null | undefined): string =>
@@ -171,29 +169,12 @@ export function DealDetailsForm({
         </div>
       </div>
 
-      {fieldDefs.length > 0 ? (
-        <div className="space-y-2" data-testid="deal-custom-fields">
-          <div className="font-medium text-sm">
-            {t("deals.fields.customFields")}
-          </div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            {fieldDefs.map((def) => (
-              <div className="space-y-1" key={def.key}>
-                <span className="text-muted-foreground text-xs">
-                  {def.label}
-                  {def.required ? " *" : ""}
-                </span>
-                <DealFieldInput
-                  def={def}
-                  onCommit={(next) => onUpdate({ fields: { [def.key]: next } })}
-                  testId={`deal-field-${def.key}`}
-                  value={deal.fields[def.key]}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      <DealCustomFieldsGrid
+        fieldDefs={fieldDefs}
+        onCommit={(key, next) => onUpdate({ fields: { [key]: next } })}
+        testIdPrefix="deal-field"
+        values={deal.fields}
+      />
 
       <div className="space-y-1 text-sm">
         <div className="text-muted-foreground text-xs">
