@@ -6719,9 +6719,7 @@
       "priority": "Priority",
       "status": "Status",
       "owner": "Owner",
-      "dueAt": "Due date",
       "contact": "Contact",
-      "company": "Company",
       "probability": "Probability (%)",
       "color": "Color"
     },

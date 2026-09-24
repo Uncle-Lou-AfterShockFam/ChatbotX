@@ -26,20 +26,6 @@ export async function createDeal({
     return
   }
   try {
-    if (step.skipIfOpenDealExists) {
-      const open = await dealService.findOpenForContactInPipeline({
-        workspaceId,
-        contactId,
-        pipelineId: step.pipelineId,
-      })
-      if (open) {
-        logger.info(
-          { workspaceId, contactId, dealId: open.id, stepId: step.id },
-          "createDeal: contact already has an open deal in this pipeline; skipped",
-        )
-        return
-      }
-    }
     const variables = await contactVariableService.getAll({
       contactId,
       contactInbox,
@@ -49,18 +35,31 @@ export async function createDeal({
       contactVariableService.replaceAll({ text: step.title, variables }),
       contactVariableService.replaceAll({ text: step.value, variables }),
     ])
-    const deal = await dealService.create({
-      workspaceId,
-      data: {
-        pipelineId: step.pipelineId,
-        stageId: step.stageId || null,
-        title: title.trim().length > 0 ? title : `Deal for ${contactId}`,
-        value: value.trim().length > 0 ? value : null,
-        currency: step.currency.trim().length > 0 ? step.currency : null,
-        priority: step.priority,
-        contactId,
-      },
-    })
+    const data = {
+      pipelineId: step.pipelineId,
+      stageId: step.stageId || null,
+      title: title.trim().length > 0 ? title : `Deal for ${contactId}`,
+      value: value.trim().length > 0 ? value : null,
+      currency: step.currency.trim().length > 0 ? step.currency : null,
+      priority: step.priority,
+      contactId,
+    }
+    if (step.skipIfOpenDealExists) {
+      // The check and the insert share one advisory lock in the service, so two
+      // flow runs for the same contact cannot both create a deal.
+      const { deal, created } = await dealService.createUnlessOpen({
+        workspaceId,
+        data,
+      })
+      logger.info(
+        { workspaceId, contactId, dealId: deal.id, stepId: step.id, created },
+        created
+          ? "createDeal: deal created"
+          : "createDeal: contact already has an open deal in this pipeline; skipped",
+      )
+      return
+    }
+    const deal = await dealService.create({ workspaceId, data })
     logger.info(
       { workspaceId, contactId, dealId: deal.id, stepId: step.id },
       "createDeal: deal created",

@@ -4,6 +4,7 @@ import {
   workspaceMemberService,
 } from "@chatbotx.io/business"
 import { withAuditContext } from "@chatbotx.io/business/audit"
+import { hasContactsAccess } from "@chatbotx.io/business/workspace-member/permissions"
 import { ORPCError } from "@orpc/server"
 import { auth } from "@/lib/auth/auth"
 import { getGuestClientIp } from "@/lib/rate-limit/guest-rate-limit"
@@ -44,8 +45,16 @@ export const authMiddleware = base.middleware(async ({ context, next }) => {
   })
 })
 
-export const workspaceAuthorizedMidddleware = base.middleware(
-  async ({ context, next, procedure }, workspaceId: string) => {
+/**
+ * Workspace membership gate for private oRPC routes. `requireContactsAccess`
+ * adds the contacts-section rule (`contacts` or `onlyAssignedContacts`) that
+ * the sidebar already applies, so a member without it cannot reach the data
+ * through the API either.
+ */
+const createWorkspaceAuthorizedMiddleware = (options: {
+  requireContactsAccess: boolean
+}) =>
+  base.middleware(async ({ context, next, procedure }, workspaceId: string) => {
     if (!context.user) {
       throw new ORPCError("UNAUTHORIZED")
     }
@@ -65,7 +74,14 @@ export const workspaceAuthorizedMidddleware = base.middleware(
       throw new ORPCError("UNAUTHORIZED")
     }
 
-    const { workspace } = access
+    const { workspace, member } = access
+
+    if (
+      options.requireContactsAccess &&
+      !hasContactsAccess(member.permissions)
+    ) {
+      throw new ORPCError("FORBIDDEN", { message: "Contacts access required" })
+    }
 
     if (isWorkspaceScheduledForDeletion(workspace)) {
       throw new ORPCError("FORBIDDEN", {
@@ -98,5 +114,11 @@ export const workspaceAuthorizedMidddleware = base.middleware(
           },
         }),
     )
-  },
-)
+  })
+
+export const workspaceAuthorizedMidddleware =
+  createWorkspaceAuthorizedMiddleware({ requireContactsAccess: false })
+
+/** Deals, pipelines: the contacts-section permission gates the API as well as the nav. */
+export const contactsAccessAuthorizedMiddleware =
+  createWorkspaceAuthorizedMiddleware({ requireContactsAccess: true })

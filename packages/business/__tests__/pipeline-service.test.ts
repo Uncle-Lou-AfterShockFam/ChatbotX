@@ -26,7 +26,8 @@ const m = vi.hoisted(() => {
   // biome-ignore lint/suspicious/noThenProperty: awaited query-builder stub
   selectChain.then = (resolve: (v: unknown) => unknown) =>
     resolve([{ maxOrder: 2000 }])
-  const db = {
+  const db: Record<string, unknown> = {
+    transaction: (cb: (tx: unknown) => unknown) => cb(db),
     query: {
       pipelineModel: {
         findFirst: vi.fn(async () => state.findFirst),
@@ -185,8 +186,9 @@ describe("pipelineService.remove", () => {
     expect(m.deleted).toHaveLength(0)
     await expect(
       pipelineService.remove({ workspaceId: WS, id: "pipe-1", force: true }),
-    ).resolves.toEqual({ deletedDeals: 3 })
-    expect(m.deleted).toHaveLength(1)
+    ).resolves.toEqual({ deletedDeals: 1 })
+    // deals are deleted explicitly BEFORE the pipeline row (RESTRICT on stageId)
+    expect(m.deleted).toHaveLength(2)
   })
 })
 

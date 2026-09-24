@@ -2,7 +2,7 @@ import { pipelineService } from "@chatbotx.io/business"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import z from "zod"
 import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
-import { workspaceAuthorizedMidddleware } from "@/middlewares/auth"
+import { contactsAccessAuthorizedMiddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
 import {
   createPipelineRequest,
@@ -29,7 +29,7 @@ const privateListWorkspacePipelinesAPI = authorizedAPI
     tags: ["Pipelines"],
   })
   .input(withWorkspaceIdSchema)
-  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ data: z.array(pipelineWithStagesResource) }))
   .handler(async ({ input }) => ({
     data: await pipelineService.list(input),
@@ -43,7 +43,7 @@ const privateGetPipelineAPI = authorizedAPI
     tags: ["Pipelines"],
   })
   .input(withPipelineId)
-  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(pipelineWithStagesResource)
   .handler(async ({ input }) => await pipelineService.find(input))
 
@@ -55,7 +55,7 @@ const privateCreatePipelineAPI = authorizedAPI
     tags: ["Pipelines"],
   })
   .input(createPipelineRequest.and(withWorkspaceIdSchema))
-  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(pipelineWithStagesResource)
   .handler(async ({ input }) => {
     const { workspaceId, ...data } = input
@@ -70,7 +70,7 @@ const privateUpdatePipelineAPI = authorizedAPI
     tags: ["Pipelines"],
   })
   .input(updatePipelineRequest.and(withPipelineId))
-  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(pipelineWithStagesResource)
   .handler(async ({ input }) => {
     const { workspaceId, id, ...data } = input
@@ -85,7 +85,7 @@ const privateDeletePipelineAPI = authorizedAPI
     tags: ["Pipelines"],
   })
   .input(deletePipelineRequest.and(withPipelineId))
-  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ deletedDeals: z.number().int() }))
   .handler(async ({ input }) => await pipelineService.remove(input))
 
@@ -97,7 +97,7 @@ const privateUpsertPipelineStageAPI = authorizedAPI
     tags: ["Pipelines"],
   })
   .input(upsertStageRequest.and(withPipelineId))
-  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(pipelineStageResource)
   .handler(async ({ input }) => {
     const { workspaceId, id, stageId, ...data } = input
@@ -117,7 +117,7 @@ const privateReorderPipelineStagesAPI = authorizedAPI
     tags: ["Pipelines"],
   })
   .input(reorderStagesRequest.and(withPipelineId))
-  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.array(pipelineStageResource))
   .handler(async ({ input }) => {
     const { workspaceId, id, stageIds } = input
@@ -136,7 +136,7 @@ const privateRemovePipelineStageAPI = authorizedAPI
     tags: ["Pipelines"],
   })
   .input(removeStageRequest.and(withPipelineId))
-  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ movedDeals: z.number().int() }))
   .handler(async ({ input }) => {
     const { workspaceId, id, stageId, moveDealsTo } = input

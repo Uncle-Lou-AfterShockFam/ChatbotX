@@ -18,6 +18,9 @@ const m = vi.hoisted(() => {
     updateReturning: [] as Record<string, unknown>[],
     activities: [] as Record<string, unknown>[],
     inserted: [] as Record<string, unknown>[],
+    executeArgs: [] as unknown[][],
+    openDeal: null as Record<string, unknown> | null,
+    updateEmpty: false,
   }
   const calls: string[] = []
   const makeTx = () => {
@@ -25,6 +28,7 @@ const m = vi.hoisted(() => {
     selectChain.from = () => selectChain
     selectChain.where = () => selectChain
     selectChain.innerJoin = () => selectChain
+    selectChain.for = () => selectChain
     selectChain.orderBy = () => Promise.resolve([])
     // the max() aggregate is awaited without .limit()
     // biome-ignore lint/suspicious/noThenProperty: awaited query-builder stub
@@ -58,22 +62,31 @@ const m = vi.hoisted(() => {
         return updateChain
       },
       where: () => updateChain,
-      returning: () =>
-        Promise.resolve(
+      returning: () => {
+        if (state.updateEmpty) {
+          return Promise.resolve([])
+        }
+        return Promise.resolve(
           state.updateReturning.length > 0
             ? state.updateReturning
             : [{ ...(state.deal ?? {}) }],
-        ),
+        )
+      },
     }
     return {
       select: () => selectChain,
       insert: () => insertChain,
       update: () => updateChain,
       transaction: (cb: (tx: unknown) => unknown) => cb(makeTx()),
+      execute: (...args: unknown[]) => {
+        calls.push("advisory-lock")
+        state.executeArgs.push(args)
+        return Promise.resolve(undefined)
+      },
       query: {
         dealModel: {
-          findFirst: vi.fn(async () => undefined),
-          findMany: vi.fn(async () => []),
+          findFirst: () => Promise.resolve(state.openDeal ?? undefined),
+          findMany: () => Promise.resolve([]),
         },
       },
       $count: vi.fn(async () => 0),
@@ -209,6 +222,9 @@ beforeEach(() => {
   m.state.inserted.length = 0
   m.state.activities.length = 0
   m.state.updateReturning = []
+  m.state.executeArgs.length = 0
+  m.state.openDeal = null
+  m.state.updateEmpty = false
   m.state.contact = null
   m.state.member = null
   m.state.deal = { ...OPEN_DEAL }
@@ -525,5 +541,102 @@ describe("dealService.positionBetween", () => {
     [1000, 2000, 1500],
   ])("between %s and %s -> %s", (before, after, expected) => {
     expect(dealService.positionBetween(before, after)).toBe(expected)
+  })
+})
+
+describe("dealService.createUnlessOpen (flow step skipIfOpenDealExists)", () => {
+  const data = { title: "Roof", pipelineId: "pipe-1", contactId: "contact-1" }
+
+  test("takes the advisory lock BEFORE the open-deal check, then inserts when none exists", async () => {
+    m.state.contact = { id: "contact-1", companyId: null }
+    const result = await dealService.createUnlessOpen({ workspaceId: WS, data })
+    expect(result.created).toBe(true)
+    expect(m.calls.slice(0, 3)).toEqual([
+      "advisory-lock",
+      "insert:deal",
+      "activity:created",
+    ])
+    expect(m.emitCreated).toHaveBeenCalledTimes(1)
+  })
+
+  test("returns the existing open deal without inserting or emitting", async () => {
+    m.state.openDeal = { ...OPEN_DEAL, id: "deal-existing" }
+    const result = await dealService.createUnlessOpen({ workspaceId: WS, data })
+    expect(result).toEqual({ created: false, deal: m.state.openDeal })
+    expect(m.calls).toEqual(["advisory-lock"])
+    expect(m.emitCreated).not.toHaveBeenCalled()
+    expect(m.stopCompany).not.toHaveBeenCalled()
+  })
+
+  test("still validates input before touching the database", async () => {
+    await expect(
+      dealService.createUnlessOpen({
+        workspaceId: WS,
+        data: { ...data, title: "" },
+      }),
+    ).rejects.toThrow("Title is required.")
+    expect(m.calls).toEqual([])
+  })
+})
+
+describe("dealService.create into a won stage", () => {
+  test("stopCompanyOn=won stops the company at create when the landing stage isWon", async () => {
+    m.pipelineFindOrFail.mockResolvedValue(PIPE("won"))
+    m.resolveStage.mockResolvedValue(STAGE_WON)
+    m.state.contact = { id: "contact-1", companyId: "co-1" }
+    const deal = await dealService.create({
+      workspaceId: WS,
+      data: {
+        title: "Roof",
+        pipelineId: "pipe-1",
+        stageId: "stage-won",
+        contactId: "contact-1",
+      },
+    })
+    expect(deal.status).toBe("won")
+    expect(m.stopCompany).toHaveBeenCalledTimes(1)
+  })
+
+  test("stopCompanyOn=won does NOT stop at create when the landing stage is open", async () => {
+    m.pipelineFindOrFail.mockResolvedValue(PIPE("won"))
+    m.state.contact = { id: "contact-1", companyId: "co-1" }
+    await dealService.create({
+      workspaceId: WS,
+      data: { title: "Roof", pipelineId: "pipe-1", contactId: "contact-1" },
+    })
+    expect(m.stopCompany).not.toHaveBeenCalled()
+  })
+})
+
+describe("dealService concurrent-change guards", () => {
+  test("moveStage whose UPDATE matches no row (stage changed under us) throws a conflict, records nothing", async () => {
+    m.resolveStage.mockResolvedValue(STAGE_WON)
+    m.state.updateEmpty = true
+    await expect(
+      dealService.moveStage({
+        workspaceId: WS,
+        id: "deal-1",
+        stageId: "stage-won",
+      }),
+    ).rejects.toThrow("changed by someone else")
+    expect(m.calls).toEqual(["update:stageId,position"])
+    expect(m.emitMoved).not.toHaveBeenCalled()
+  })
+
+  test("setStatus whose UPDATE matches no row (status changed under us) throws a conflict", async () => {
+    m.state.updateEmpty = true
+    await expect(
+      dealService.setStatus({ workspaceId: WS, id: "deal-1", status: "won" }),
+    ).rejects.toThrow("changed by someone else")
+    expect(m.emitStatus).not.toHaveBeenCalled()
+  })
+
+  test("update with the same currency writes nothing", async () => {
+    await dealService.update({
+      workspaceId: WS,
+      id: "deal-1",
+      data: { currency: "usd" },
+    })
+    expect(m.calls).toEqual([])
   })
 })

@@ -2,7 +2,7 @@ import { dealService } from "@chatbotx.io/business/deal"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import z from "zod"
 import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
-import { workspaceAuthorizedMidddleware } from "@/middlewares/auth"
+import { contactsAccessAuthorizedMiddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
 import {
   addDealNoteRequest,
@@ -35,7 +35,7 @@ const privateListWorkspaceDealsAPI = authorizedAPI
     tags: ["Deals"],
   })
   .input(listDealsRequest.and(withWorkspaceIdSchema))
-  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(listDealsResponse)
   .handler(async ({ input }) => await dealService.list(input))
 
@@ -54,7 +54,7 @@ const privateGetDealBoardAPI = authorizedAPI
       }),
     ),
   )
-  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ data: z.array(boardColumnResource) }))
   .handler(async ({ input }) => ({
     data: await dealService.listBoard(input),
@@ -68,7 +68,7 @@ const privateGetDealAPI = authorizedAPI
     tags: ["Deals"],
   })
   .input(withDealId)
-  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(dealResource)
   .handler(async ({ input }) => await dealService.findOrFail(input))
 
@@ -80,7 +80,7 @@ const privateListDealActivitiesAPI = authorizedAPI
     tags: ["Deals"],
   })
   .input(withDealId)
-  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ data: z.array(dealActivityResource) }))
   .handler(async ({ input }) => ({
     data: await dealService.listActivities({
@@ -97,7 +97,7 @@ const privateCreateDealAPI = authorizedAPI
     tags: ["Deals"],
   })
   .input(createDealRequest.and(withWorkspaceIdSchema))
-  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(dealResource)
   .handler(async ({ input, context }) => {
     const { workspaceId, ...data } = input
@@ -116,7 +116,7 @@ const privateUpdateDealAPI = authorizedAPI
     tags: ["Deals"],
   })
   .input(updateDealRequest.and(withDealId))
-  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(dealResource)
   .handler(async ({ input, context }) => {
     const { workspaceId, id, ...data } = input
@@ -136,7 +136,7 @@ const privateMoveDealAPI = authorizedAPI
     tags: ["Deals"],
   })
   .input(moveDealRequest.and(withDealId))
-  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(dealResource)
   .handler(async ({ input, context }) => {
     const { workspaceId, id, stageId, position } = input
@@ -157,7 +157,7 @@ const privateSetDealStatusAPI = authorizedAPI
     tags: ["Deals"],
   })
   .input(setDealStatusRequest.and(withDealId))
-  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(dealResource)
   .handler(async ({ input, context }) => {
     const { workspaceId, id, status } = input
@@ -177,7 +177,7 @@ const privateAddDealNoteAPI = authorizedAPI
     tags: ["Deals"],
   })
   .input(addDealNoteRequest.and(withDealId))
-  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(dealActivityResource)
   .handler(async ({ input, context }) => {
     const { workspaceId, id, text } = input
@@ -197,7 +197,7 @@ const privateDeleteDealsAPI = authorizedAPI
     tags: ["Deals"],
   })
   .input(deleteDealsRequest.and(withWorkspaceIdSchema))
-  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ deletedCount: z.number().int() }))
   .handler(async ({ input }) => await dealService.remove(input))
 

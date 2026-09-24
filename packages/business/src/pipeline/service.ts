@@ -282,37 +282,51 @@ class PipelineService extends BaseService {
     force?: boolean
     tx?: DatabaseClient
   }): Promise<{ deletedDeals: number }> {
-    const { workspaceId, id, tx = db } = props
-    await this.findOrFail({ workspaceId, id, tx })
-    const openDeals = await tx.$count(
-      dealModel,
-      and(
-        eq(dealModel.pipelineId, id),
-        eq(dealModel.workspaceId, workspaceId),
-        eq(dealModel.status, "open"),
-      ),
-    )
-    if (openDeals > 0 && !props.force) {
-      throw validationException(
-        "id",
-        `${openDeals} open deal(s) are still in this pipeline; close or move them first.`,
-        { openDeals },
-      )
-    }
-    const totalDeals = await tx.$count(
-      dealModel,
-      and(eq(dealModel.pipelineId, id), eq(dealModel.workspaceId, workspaceId)),
-    )
-    await tx
-      .delete(pipelineModel)
-      .where(
+    const { workspaceId, id } = props
+    const run = async (tx: DatabaseClient) => {
+      await this.findOrFail({ workspaceId, id, tx })
+      const openDeals = await tx.$count(
+        dealModel,
         and(
-          eq(pipelineModel.id, id),
-          eq(pipelineModel.workspaceId, workspaceId),
+          eq(dealModel.pipelineId, id),
+          eq(dealModel.workspaceId, workspaceId),
+          eq(dealModel.status, "open"),
         ),
       )
+      if (openDeals > 0 && !props.force) {
+        throw validationException(
+          "id",
+          `${openDeals} open deal(s) are still in this pipeline; close or move them first.`,
+          { openDeals },
+        )
+      }
+      // Deals go first, explicitly: `Deal.stageId` is RESTRICT, so the stage
+      // cascade must never race the deal cascade (Postgres does not promise an
+      // order between two FK cascades on the same parent).
+      const deleted = await tx
+        .delete(dealModel)
+        .where(
+          and(
+            eq(dealModel.pipelineId, id),
+            eq(dealModel.workspaceId, workspaceId),
+          ),
+        )
+        .returning({ id: dealModel.id })
+      await tx
+        .delete(pipelineModel)
+        .where(
+          and(
+            eq(pipelineModel.id, id),
+            eq(pipelineModel.workspaceId, workspaceId),
+          ),
+        )
+      return { deletedDeals: deleted.length }
+    }
+    const result = props.tx
+      ? await run(props.tx)
+      : await db.transaction(async (tx) => await run(tx))
     await this.audit("pipeline.delete", id)
-    return { deletedDeals: totalDeals }
+    return result
   }
 
   /** The stage, guaranteed to belong to `pipelineId` of `workspaceId`. */

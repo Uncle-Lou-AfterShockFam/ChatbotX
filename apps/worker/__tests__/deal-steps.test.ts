@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 const m = vi.hoisted(() => ({
   findOpen: vi.fn(),
   create: vi.fn(),
+  createUnlessOpen: vi.fn(),
   moveStage: vi.fn(),
   setStatus: vi.fn(),
   getAll: vi.fn(),
@@ -17,6 +18,7 @@ vi.mock("@chatbotx.io/business/deal", () => ({
   dealService: {
     findOpenForContactInPipeline: (...a: unknown[]) => m.findOpen(...a),
     create: (...a: unknown[]) => m.create(...a),
+    createUnlessOpen: (...a: unknown[]) => m.createUnlessOpen(...a),
     moveStage: (...a: unknown[]) => m.moveStage(...a),
     setStatus: (...a: unknown[]) => m.setStatus(...a),
   },
@@ -47,6 +49,10 @@ beforeEach(() => {
     Promise.resolve(text.replace("{{contact.full_name}}", "Lou")),
   )
   m.create.mockResolvedValue({ id: "deal-1" })
+  m.createUnlessOpen.mockResolvedValue({
+    deal: { id: "deal-1" },
+    created: true,
+  })
 })
 
 describe("worker registration", () => {
@@ -71,9 +77,10 @@ describe("createDeal step", () => {
     skipIfOpenDealExists: true,
   }
 
-  test("resolves variables and creates for the conversation contact", async () => {
+  test("resolves variables and creates for the conversation contact (locked path when skipIfOpenDealExists)", async () => {
     await createDeal(props(step))
-    expect(m.create).toHaveBeenCalledWith({
+    expect(m.create).not.toHaveBeenCalled()
+    expect(m.createUnlessOpen).toHaveBeenCalledWith({
       workspaceId: "ws-1",
       data: {
         pipelineId: "pipe-1",
@@ -87,17 +94,19 @@ describe("createDeal step", () => {
     })
   })
 
-  test("skips when an open deal exists (skipIfOpenDealExists)", async () => {
-    m.findOpen.mockResolvedValue({ id: "deal-0" })
+  test("logs the skip when the service found an open deal (no TOCTOU: the check lives under the service lock)", async () => {
+    m.createUnlessOpen.mockResolvedValue({
+      deal: { id: "deal-0" },
+      created: false,
+    })
     await createDeal(props(step))
     expect(m.create).not.toHaveBeenCalled()
-    expect(m.logInfo).toHaveBeenCalled()
+    expect(m.logInfo.mock.calls[0][1]).toContain("skipped")
   })
 
-  test("creates a second deal when skipIfOpenDealExists is off", async () => {
-    m.findOpen.mockResolvedValue({ id: "deal-0" })
+  test("creates unconditionally when skipIfOpenDealExists is off", async () => {
     await createDeal(props({ ...step, skipIfOpenDealExists: false }))
-    expect(m.findOpen).not.toHaveBeenCalled()
+    expect(m.createUnlessOpen).not.toHaveBeenCalled()
     expect(m.create).toHaveBeenCalledTimes(1)
   })
 
@@ -108,7 +117,9 @@ describe("createDeal step", () => {
   })
 
   test("an empty resolved title falls back; an empty value becomes null", async () => {
-    await createDeal(props({ ...step, title: "", value: "" }))
+    await createDeal(
+      props({ ...step, title: "", value: "", skipIfOpenDealExists: false }),
+    )
     expect(m.create.mock.calls[0][0].data).toMatchObject({
       title: "Deal for contact-1",
       value: null,
@@ -116,7 +127,9 @@ describe("createDeal step", () => {
   })
 
   test("a service error is logged, never thrown", async () => {
-    m.create.mockRejectedValue(new Error("Stage is not in this pipeline."))
+    m.createUnlessOpen.mockRejectedValue(
+      new Error("Stage is not in this pipeline."),
+    )
     await expect(createDeal(props(step))).resolves.toBeUndefined()
     expect(m.logError).toHaveBeenCalled()
   })
