@@ -55,7 +55,10 @@ export async function createDeal({
       contactId,
       // No owner configured = `undefined`, so the pipeline's round-robin
       // (s193) may pick one; `null` would mean "ownerless on purpose".
-      ownerId: step.ownerId ? step.ownerId : undefined,
+      ownerId: (step.ownerId ? step.ownerId : undefined) as
+        | string
+        | null
+        | undefined,
       dueAt:
         step.dueInDays === null || step.dueInDays === undefined
           ? null
