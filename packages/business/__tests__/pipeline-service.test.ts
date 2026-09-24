@@ -115,6 +115,7 @@ describe("pipelineService.create", () => {
     expect(pipeline.settings).toEqual({
       stopCompanyOn: "created",
       defaultCurrency: "USD",
+      fieldDefs: [],
     })
     expect(pipeline.stages.map((s) => s.name)).toEqual([
       "New",
@@ -141,6 +142,7 @@ describe("pipelineService.create", () => {
     expect(pipeline.settings).toEqual({
       stopCompanyOn: "won",
       defaultCurrency: "EUR",
+      fieldDefs: [],
     })
     expect(pipeline.stages).toHaveLength(2)
   })
