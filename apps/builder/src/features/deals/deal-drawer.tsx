@@ -298,11 +298,14 @@ export function DealDrawer({
             {t("deals.fields.contact")}
           </div>
           {deal.contactId ? (
+            // The hub has no per-contact route (contacts open inside the list
+            // panel), so the link lands on the contacts list; the id is shown
+            // so it can be searched for.
             <Link
               className="hover:underline"
-              href={`/space/${workspaceId}/contacts/${deal.contactId}`}
+              href={`/space/${workspaceId}/contacts`}
             >
-              {t("deals.openContact")}
+              {t("deals.openContact")} ({deal.contactId})
             </Link>
           ) : (
             <span className="text-muted-foreground">
