@@ -6,6 +6,8 @@ import { describe, expect, test } from "vitest"
  * LITERAL text "{key}" (seen live on the deal activity log, s192). Every deal
  * message that carries a placeholder must not wrap it in single quotes.
  */
+const SINGLE_QUOTED_PLACEHOLDER = /'\{[a-zA-Z]+\}'/
+
 const en = JSON.parse(readFileSync("messages/en.json", "utf8")) as {
   deals: { activity: Record<string, unknown>; tasks: Record<string, unknown> }
 }
@@ -24,7 +26,7 @@ describe("deal i18n messages never single-quote an ICU placeholder", () => {
     ...flat(en.deals.activity, "deals.activity."),
     ...flat(en.deals.tasks, "deals.tasks."),
   ])("%s", (_key, message) => {
-    expect(message).not.toMatch(/'\{[a-zA-Z]+\}'/)
+    expect(message).not.toMatch(SINGLE_QUOTED_PLACEHOLDER)
   })
 
   test("fieldChanged and the task activities interpolate their placeholders", () => {
