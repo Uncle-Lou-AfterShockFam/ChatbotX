@@ -53,7 +53,9 @@ export async function createDeal({
       currency: step.currency.trim().length > 0 ? step.currency : null,
       priority: step.priority,
       contactId,
-      ownerId: step.ownerId || null,
+      // No owner configured = `undefined`, so the pipeline's round-robin
+      // (s193) may pick one; `null` would mean "ownerless on purpose".
+      ownerId: step.ownerId ? step.ownerId : undefined,
       dueAt:
         step.dueInDays === null || step.dueInDays === undefined
           ? null

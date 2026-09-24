@@ -9,6 +9,7 @@ import { MAX_PIPELINE_MEMBERS } from "@chatbotx.io/database/partials"
 import {
   pipelineMemberModel,
   pipelineModel,
+  workspaceMemberModel,
 } from "@chatbotx.io/database/schema"
 import type { PipelineMemberModel } from "@chatbotx.io/database/types"
 import { createId } from "@chatbotx.io/utils"
@@ -16,10 +17,16 @@ import { BaseService } from "../base.service"
 import { notFoundException, validationException } from "../errors"
 import { logger } from "../logger"
 import { workspaceMemberService } from "../workspace-member/service"
-import type { DealViewer } from "./access"
+import { type DealViewer, isUnrestrictedViewer } from "./access"
 import { pipelineService } from "./service"
 
 const USER_ID = /^\d+$/
+
+/** The stored jsonb may predate the key: missing = the default (`workspace`). */
+const accessOf = (row: { settings: unknown }): "workspace" | "members" => {
+  const settings = row.settings as { access?: unknown } | null
+  return settings?.access === "members" ? "members" : "workspace"
+}
 
 export type PipelineMemberInput = { userId: string; inRotation?: boolean }
 
@@ -123,7 +130,7 @@ export class PipelineMemberService extends BaseService {
       // never interleave (the pick would otherwise store a cursor user the
       // replace just removed).
       const [pipeline] = await tx
-        .select({ id: pipelineModel.id })
+        .select({ id: pipelineModel.id, settings: pipelineModel.settings })
         .from(pipelineModel)
         .where(
           and(
@@ -136,6 +143,18 @@ export class PipelineMemberService extends BaseService {
         throw notFoundException("Pipeline not found")
       }
       const wanted = members.map((m) => m.userId)
+      if (
+        viewer &&
+        !isUnrestrictedViewer(viewer) &&
+        accessOf(pipeline) === "members" &&
+        !wanted.includes(viewer.userId)
+      ) {
+        throw validationException(
+          "members",
+          "You cannot remove yourself from a members-only pipeline.",
+          { reason: "wouldLockYourselfOut" },
+        )
+      }
       const existing = await workspaceMemberService.listExistingUserIds({
         workspaceId,
         userIds: wanted,
@@ -207,9 +226,18 @@ export class PipelineMemberService extends BaseService {
     if (!locked) {
       throw notFoundException("Pipeline not found")
     }
+    // Joined on WorkspaceMember: a user who left the workspace (or whose
+    // PipelineMember row outlived them) is never picked.
     const rotation = await tx
       .select({ userId: pipelineMemberModel.userId })
       .from(pipelineMemberModel)
+      .innerJoin(
+        workspaceMemberModel,
+        and(
+          eq(workspaceMemberModel.workspaceId, pipelineMemberModel.workspaceId),
+          eq(workspaceMemberModel.userId, pipelineMemberModel.userId),
+        ),
+      )
       .where(
         and(
           eq(pipelineMemberModel.pipelineId, pipelineId),

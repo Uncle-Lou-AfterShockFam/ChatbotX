@@ -18,6 +18,8 @@ const pipelineIdDescription = "Pipeline id. Get it from `pipelines.list`."
 
 export const pipelinePublicResource = pipelineWithStagesResource.omit({
   workspaceId: true,
+  // The round-robin cursor is an implementation detail, not API contract.
+  roundRobinLastUserId: true,
 })
 export const pipelineStagePublicResource = pipelineStageResource
 

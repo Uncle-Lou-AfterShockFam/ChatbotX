@@ -882,7 +882,11 @@ describe("dealService round-robin owner (s193)", () => {
     expect(deal.ownerId).toBe("user-2")
     expect(m.calls.slice(0, 2)).toEqual(["pick", "insert:deal"])
     expect(m.pickRoundRobin).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceId: WS, pipelineId: "pipe-1" }),
+      expect.objectContaining({
+        workspaceId: WS,
+        pipelineId: "pipe-1",
+        tx: expect.objectContaining({ transaction: expect.any(Function) }),
+      }),
     )
   })
 

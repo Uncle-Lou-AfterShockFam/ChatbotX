@@ -15,12 +15,27 @@ const m = vi.hoisted(() => {
     inserted: [] as Record<string, unknown>[],
     updates: [] as Record<string, unknown>[],
     calls: [] as string[],
+    wheres: [] as unknown[],
     existingUserIds: [] as string[],
   }
   const chain = (kind: "select" | "update" | "delete") => {
     const self: Record<string, unknown> = {}
-    for (const k of ["from", "where", "orderBy", "limit", "set", "for"]) {
+    for (const k of [
+      "from",
+      "where",
+      "orderBy",
+      "limit",
+      "set",
+      "for",
+      "innerJoin",
+    ]) {
       self[k] = (v: unknown) => {
+        if (k === "innerJoin") {
+          state.calls.push("join")
+        }
+        if (k === "where") {
+          state.wheres.push(v)
+        }
         if (k === "set") {
           state.updates.push(v as Record<string, unknown>)
           state.calls.push(`update:${Object.keys(v as object).join(",")}`)
@@ -69,9 +84,33 @@ const m = vi.hoisted(() => {
 
 vi.mock("@chatbotx.io/database/client", () => ({
   db: m.makeTx(),
-  and: vi.fn((...c: unknown[]) => ({ c })),
-  eq: vi.fn((f: unknown, v: unknown) => ({ f, v })),
+  and: vi.fn((...c: unknown[]) => ({ and: c })),
+  eq: vi.fn((f: unknown, v: unknown) => ({ eq: [f, v] })),
   asc: vi.fn((f: unknown) => f),
+}))
+vi.mock("@chatbotx.io/database/schema", () => ({
+  pipelineMemberModel: {
+    _name: "PipelineMember",
+    userId: "pm.userId",
+    pipelineId: "pm.pipelineId",
+    workspaceId: "pm.workspaceId",
+    inRotation: "pm.inRotation",
+    order: "pm.order",
+    createdAt: "pm.createdAt",
+    id: "pm.id",
+  },
+  pipelineModel: {
+    _name: "Pipeline",
+    id: "p.id",
+    workspaceId: "p.workspaceId",
+    settings: "p.settings",
+    roundRobinLastUserId: "p.cursor",
+  },
+  workspaceMemberModel: {
+    _name: "WorkspaceMember",
+    userId: "wm.userId",
+    workspaceId: "wm.workspaceId",
+  },
 }))
 vi.mock("@chatbotx.io/utils", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -106,12 +145,13 @@ beforeEach(() => {
   m.state.inserted.length = 0
   m.state.updates.length = 0
   m.state.calls.length = 0
+  m.state.wheres.length = 0
   m.state.existingUserIds = ["1", "2", "3"]
 })
 
 describe("pipelineMemberService.set", () => {
   test("replaces the list in order under the pipeline row lock: delete then insert, order = position, inRotation defaults true", async () => {
-    m.state.selects = [[{ id: PIPE }]]
+    m.state.selects = [[{ id: PIPE, settings: {} }]]
     const rows = await pipelineMemberService.set({
       workspaceId: WS,
       pipelineId: PIPE,
@@ -130,8 +170,35 @@ describe("pipelineMemberService.set", () => {
     ])
   })
 
+  test("a restricted viewer cannot drop themselves from a members-only pipeline (422 wouldLockYourselfOut); a super admin can", async () => {
+    pipelineFindOrFail.mockResolvedValue({ id: PIPE })
+    m.state.selects = [[{ id: PIPE, settings: { access: "members" } }]]
+    await expect(
+      pipelineMemberService.set({
+        workspaceId: WS,
+        pipelineId: PIPE,
+        members: [{ userId: "2" }],
+        viewer: { userId: "1", permissions: { superAdmin: false } },
+      }),
+    ).rejects.toMatchObject({
+      httpStatusCode: 422,
+      data: { reason: "wouldLockYourselfOut" },
+    })
+    expect(m.state.calls).toEqual(["for:update", "select"])
+    m.state.calls.length = 0
+    m.state.selects = [[{ id: PIPE, settings: { access: "members" } }]]
+    await expect(
+      pipelineMemberService.set({
+        workspaceId: WS,
+        pipelineId: PIPE,
+        members: [{ userId: "2" }],
+        viewer: { userId: "1", permissions: { superAdmin: true } },
+      }),
+    ).resolves.toHaveLength(1)
+  })
+
   test("an empty list removes everyone and inserts nothing", async () => {
-    m.state.selects = [[{ id: PIPE }]]
+    m.state.selects = [[{ id: PIPE, settings: {} }]]
     await expect(
       pipelineMemberService.set({
         workspaceId: WS,
@@ -161,7 +228,7 @@ describe("pipelineMemberService.set", () => {
   })
 
   test("a user outside the workspace is a 422 naming the ids, before any write", async () => {
-    m.state.selects = [[{ id: PIPE }]]
+    m.state.selects = [[{ id: PIPE, settings: {} }]]
     await expect(
       pipelineMemberService.set({
         workspaceId: WS,
@@ -228,7 +295,7 @@ describe("pipelineMemberService.set", () => {
 describe("pipelineMemberService.pickRoundRobin", () => {
   const rotation = [{ userId: "1" }, { userId: "2" }, { userId: "3" }]
 
-  test("locks the pipeline row FOR UPDATE and picks the member after the cursor, writing the new cursor", async () => {
+  test("locks the pipeline row FOR UPDATE, reads the rotation joined on WorkspaceMember filtered to inRotation, picks the member after the cursor, writes the new cursor", async () => {
     m.state.selects = [[{ id: PIPE, cursor: "1" }], rotation]
     await expect(
       pipelineMemberService.pickRoundRobin({
@@ -240,10 +307,15 @@ describe("pipelineMemberService.pickRoundRobin", () => {
     expect(m.state.calls).toEqual([
       "for:update",
       "select",
+      "join",
       "select",
       "update:roundRobinLastUserId",
       "update",
     ])
+    // the rotation WHERE carries the inRotation = true predicate
+    expect(JSON.stringify(m.state.wheres[1])).toContain(
+      JSON.stringify({ eq: ["pm.inRotation", true] }),
+    )
     expect(m.state.updates).toEqual([{ roundRobinLastUserId: "2" }])
   })
 

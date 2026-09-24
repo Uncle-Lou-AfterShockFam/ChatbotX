@@ -331,10 +331,31 @@ class PipelineService extends BaseService {
       set.name = name
     }
     if (data.settings !== undefined && data.settings !== null) {
-      set.settings = this.parseSettings({
+      const settings = this.parseSettings({
         ...current.settings,
         ...data.settings,
       })
+      // s193: a restricted viewer flipping the pipeline to members-only must
+      // be on the list, or the next read is their own 404 (self-lockout).
+      if (
+        viewer &&
+        !isUnrestrictedViewer(viewer) &&
+        settings.access === "members" &&
+        current.settings.access !== "members" &&
+        !(await pipelineMemberService.isMember({
+          workspaceId,
+          pipelineId: id,
+          userId: viewer.userId,
+          tx,
+        }))
+      ) {
+        throw validationException(
+          "settings.access",
+          "Add yourself to the pipeline members before making it members-only.",
+          { reason: "wouldLockYourselfOut" },
+        )
+      }
+      set.settings = settings
     }
     if (Object.keys(set).length > 0) {
       await tx

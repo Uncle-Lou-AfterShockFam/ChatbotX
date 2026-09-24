@@ -42,6 +42,10 @@ vi.mock("@chatbotx.io/database/schema", () => ({
     id: "workspaceMember.id",
     workspaceId: "workspaceMember.workspaceId",
   },
+  pipelineMemberModel: {
+    workspaceId: "pipelineMember.workspaceId",
+    userId: "pipelineMember.userId",
+  },
 }))
 
 vi.mock("@chatbotx.io/database/repositories", () => ({
