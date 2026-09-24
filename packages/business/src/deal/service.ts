@@ -24,7 +24,6 @@ import {
   contactModel,
   dealActivityModel,
   dealModel,
-  workspaceMemberModel,
 } from "@chatbotx.io/database/schema"
 import type {
   DealActivityModel,
@@ -52,6 +51,11 @@ import { logger } from "../logger"
 import { pipelineService } from "../pipeline/service"
 import type { PaginatedResult } from "../types"
 import { stopCompanyForDeal } from "./company-stop"
+import {
+  dealEventMetadata,
+  parseDateOrNull,
+  resolveWorkspaceMember,
+} from "./shared"
 import { runStageEntered } from "./stage-hooks"
 
 export type ListDealsInput = {
@@ -841,16 +845,7 @@ class DealService extends BaseService {
     }
     try {
       await emit(deal.workspaceId, deal.contactId, {
-        dealId: deal.id,
-        pipelineId: deal.pipelineId,
-        stageId: deal.stageId,
-        title: deal.title,
-        value: deal.value,
-        currency: deal.currency,
-        status: deal.status,
-        priority: deal.priority,
-        ownerId: deal.ownerId,
-        companyId: deal.companyId,
+        ...dealEventMetadata(deal),
         ...extra,
       })
     } catch (error) {
@@ -880,35 +875,18 @@ class DealService extends BaseService {
   }
 
   /** An owner must be a member of the workspace; null clears the owner. */
-  private async resolveOwner(props: {
+  private resolveOwner(props: {
     workspaceId: string
     ownerId: string | null | undefined
     tx: DatabaseClient
   }): Promise<string | null> {
-    if (
-      props.ownerId === undefined ||
-      props.ownerId === null ||
-      props.ownerId === ""
-    ) {
-      return null
-    }
-    const [member] = await props.tx
-      .select({ userId: workspaceMemberModel.userId })
-      .from(workspaceMemberModel)
-      .where(
-        and(
-          eq(workspaceMemberModel.workspaceId, props.workspaceId),
-          eq(workspaceMemberModel.userId, props.ownerId),
-        ),
-      )
-      .limit(1)
-    if (!member) {
-      throw validationException(
-        "ownerId",
-        "Owner is not a member of this workspace.",
-      )
-    }
-    return member.userId
+    return resolveWorkspaceMember({
+      workspaceId: props.workspaceId,
+      userId: props.ownerId,
+      tx: props.tx,
+      field: "ownerId",
+      role: "Owner",
+    })
   }
 
   private async nextPosition(props: {
@@ -971,16 +949,8 @@ class DealService extends BaseService {
     return normalized
   }
 
-  /** A `null` clears the due date; anything but a valid Date/ISO string is a 422. */
   private parseDueAt(value: unknown): Date | null {
-    if (value === null || value === undefined || value === "") {
-      return null
-    }
-    const date = value instanceof Date ? value : new Date(String(value))
-    if (Number.isNaN(date.getTime())) {
-      throw validationException("dueAt", "Due date must be a valid date.")
-    }
-    return date
+    return parseDateOrNull(value, "dueAt")
   }
 
   /** `Deal.fields` against the pipeline's fieldDefs; the first issue is the 422. */

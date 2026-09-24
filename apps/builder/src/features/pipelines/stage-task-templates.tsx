@@ -22,21 +22,14 @@ import { ListChecksIcon, Loader2Icon, PlusIcon, TrashIcon } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { useState } from "react"
-import { toast } from "sonner"
 import {
   removeTaskTemplateAction,
   upsertTaskTemplateAction,
 } from "@/features/deal-tasks/actions/task-template-actions"
+import { onActionError } from "@/features/deal-tasks/lib/on-action-error"
 import { usePipelineTaskTemplates } from "@/features/deal-tasks/provider/deal-task-hook"
+import { NONE } from "@/features/deals/deal-field-input"
 import { useOwnerOptions } from "@/features/deals/provider/deal-hook"
-
-const NONE = "__none"
-
-const onActionError = ({ error }: { error: { serverError?: string } }) => {
-  if (error.serverError) {
-    toast.error(error.serverError)
-  }
-}
 
 /** "Tasks (n)" button on a stage row -> dialog listing the stage's task templates. */
 export function StageTaskTemplates({

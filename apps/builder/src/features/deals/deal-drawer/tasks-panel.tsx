@@ -15,21 +15,15 @@ import { LinkIcon, Loader2Icon, PlusIcon, TrashIcon } from "lucide-react"
 import { useFormatter, useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { useState } from "react"
-import { toast } from "sonner"
 import { completeDealTaskAction } from "@/features/deal-tasks/actions/complete-deal-task-action"
 import { createDealTaskAction } from "@/features/deal-tasks/actions/create-deal-task-action"
 import { dealDependencyAction } from "@/features/deal-tasks/actions/deal-dependency-action"
 import { deleteDealTaskAction } from "@/features/deal-tasks/actions/delete-deal-task-action"
+import { onActionError } from "@/features/deal-tasks/lib/on-action-error"
 import { useDealTasks } from "@/features/deal-tasks/provider/deal-task-hook"
 import type { DealTaskWithBlockersResource } from "@/features/deal-tasks/schema/resource"
 import { isOverdue } from "../deal-card"
 import { NONE } from "../deal-field-input"
-
-const onActionError = ({ error }: { error: { serverError?: string } }) => {
-  if (error.serverError) {
-    toast.error(error.serverError)
-  }
-}
 
 /** Tasks of the deal: complete / reopen, add, wait-on, delete. */
 export function DealTasksPanel({
@@ -258,7 +252,8 @@ function TaskRow({
             onValueChange={(v) => {
               const id = String(v ?? "")
               if (id && id !== NONE) {
-                onDependency(id, task.blockedBy.includes(id))
+                // Toggle on the STORED edge, not on "currently blocking".
+                onDependency(id, task.dependsOn.includes(id))
                 setPick(NONE)
               }
             }}
@@ -276,7 +271,7 @@ function TaskRow({
               <SelectItem value={NONE}>{t("deals.tasks.waitOn")}</SelectItem>
               {others.map((o) => (
                 <SelectItem key={o.id} value={o.id}>
-                  {task.blockedBy.includes(o.id) ? "✓ " : ""}
+                  {task.dependsOn.includes(o.id) ? "✓ " : ""}
                   {o.title}
                 </SelectItem>
               ))}

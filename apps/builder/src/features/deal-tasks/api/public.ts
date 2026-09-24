@@ -38,7 +38,7 @@ export const dealTasksPublicRouter = {
       path: "/v1/deals/{id}/tasks",
       summary: "List deal tasks",
       description:
-        "Returns every task of a deal, oldest first, each with `blockedBy`: the ids of the still-open tasks it waits on.",
+        "Returns every task of a deal, oldest first, each with `dependsOn` (every task it waits on) and `blockedBy` (the still-open ones).",
       tags: ["Deals"],
     })
     .input(dealIdParam)

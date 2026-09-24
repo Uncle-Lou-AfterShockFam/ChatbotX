@@ -20,7 +20,10 @@ export type DealTaskResource = z.infer<typeof dealTaskResource>
 
 /** A task plus the ids of the OPEN tasks it waits on (derived server-side). */
 export const dealTaskWithBlockersResource = dealTaskResource.extend({
+  /** OPEN tasks it waits on (the "blocked" badge). */
   blockedBy: z.array(z.string()),
+  /** Every stored dependency edge, open or done (drives add/remove). */
+  dependsOn: z.array(z.string()),
 })
 export type DealTaskWithBlockersResource = z.infer<
   typeof dealTaskWithBlockersResource

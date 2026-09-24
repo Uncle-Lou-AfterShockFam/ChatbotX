@@ -1,17 +1,25 @@
-import { and, type DatabaseClient, db, eq, sql } from "@chatbotx.io/database/client"
+import {
+  and,
+  type DatabaseClient,
+  db,
+  eq,
+  sql,
+} from "@chatbotx.io/database/client"
 import {
   MAX_DEAL_TASK_DESCRIPTION_LENGTH,
   MAX_DEAL_TASK_DUE_IN_DAYS,
   MAX_DEAL_TASK_TEMPLATES_PER_STAGE,
   MAX_DEAL_TASK_TITLE_LENGTH,
 } from "@chatbotx.io/database/partials"
-import {
-  dealTaskTemplateModel,
-  workspaceMemberModel,
-} from "@chatbotx.io/database/schema"
+import { dealTaskTemplateModel } from "@chatbotx.io/database/schema"
 import type { DealTaskTemplateModel } from "@chatbotx.io/database/types"
 import { createId } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
+import {
+  parseOptionalText,
+  parseRequiredText,
+  resolveWorkspaceMember,
+} from "../deal/shared"
 import { notFoundException, validationException } from "../errors"
 import { pipelineService } from "../pipeline/service"
 
@@ -164,20 +172,16 @@ export class DealTaskTemplateService extends BaseService {
     if (data === null || typeof data !== "object") {
       throw validationException("title", "Template data is required.")
     }
-    const title = typeof data.title === "string" ? data.title.trim() : ""
-    if (title.length === 0 || title.length > MAX_DEAL_TASK_TITLE_LENGTH) {
-      throw validationException(
-        "title",
-        `Title is required and at most ${MAX_DEAL_TASK_TITLE_LENGTH} characters.`,
-      )
-    }
-    const description =
-      data.description === null || data.description === undefined || data.description === ""
-        ? null
-        : String(data.description)
-    if (description !== null && description.length > MAX_DEAL_TASK_DESCRIPTION_LENGTH) {
-      throw validationException("description", "Description is too long.")
-    }
+    const title = parseRequiredText({
+      value: data.title,
+      field: "title",
+      max: MAX_DEAL_TASK_TITLE_LENGTH,
+    })
+    const description = parseOptionalText({
+      value: data.description,
+      field: "description",
+      max: MAX_DEAL_TASK_DESCRIPTION_LENGTH,
+    })
     let dueInDays: number | null = null
     if (data.dueInDays !== null && data.dueInDays !== undefined) {
       if (
@@ -194,26 +198,15 @@ export class DealTaskTemplateService extends BaseService {
       dueInDays = data.dueInDays
     }
     const assignToOwner = data.assignToOwner === true
-    let assigneeId: string | null = null
-    if (!assignToOwner && data.assigneeId) {
-      const [member] = await tx
-        .select({ userId: workspaceMemberModel.userId })
-        .from(workspaceMemberModel)
-        .where(
-          and(
-            eq(workspaceMemberModel.workspaceId, workspaceId),
-            eq(workspaceMemberModel.userId, data.assigneeId),
-          ),
-        )
-        .limit(1)
-      if (!member) {
-        throw validationException(
-          "assigneeId",
-          "Assignee is not a member of this workspace.",
-        )
-      }
-      assigneeId = member.userId
-    }
+    const assigneeId = assignToOwner
+      ? null
+      : await resolveWorkspaceMember({
+          workspaceId,
+          userId: data.assigneeId,
+          tx,
+          field: "assigneeId",
+          role: "Assignee",
+        })
     return { title, description, dueInDays, assignToOwner, assigneeId }
   }
 }

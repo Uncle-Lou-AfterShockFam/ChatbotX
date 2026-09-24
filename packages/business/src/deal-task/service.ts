@@ -7,7 +7,6 @@ import {
   sql,
 } from "@chatbotx.io/database/client"
 import {
-  type DealTaskStatus,
   MAX_DEAL_TASK_DEPENDENCIES_PER_TASK,
   MAX_DEAL_TASK_DESCRIPTION_LENGTH,
   MAX_DEAL_TASK_TITLE_LENGTH,
@@ -17,7 +16,6 @@ import {
   dealActivityModel,
   dealDependencyModel,
   dealTaskModel,
-  workspaceMemberModel,
 } from "@chatbotx.io/database/schema"
 import type {
   DealDependencyModel,
@@ -34,6 +32,13 @@ import {
 import { createId } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
 import { dealService } from "../deal/service"
+import {
+  dealEventMetadata,
+  parseDateOrNull,
+  parseOptionalText,
+  parseRequiredText,
+  resolveWorkspaceMember,
+} from "../deal/shared"
 import { notFoundException, validationException } from "../errors"
 import { logger } from "../logger"
 
@@ -54,6 +59,8 @@ export type DealTaskUpdateData = Partial<
 export type DealTaskWithBlockers = DealTaskModel & {
   /** Ids of OPEN tasks this one waits on (derived, never stored). */
   blockedBy: string[]
+  /** Every task this one waits on, open or done (the stored edges). */
+  dependsOn: string[]
 }
 
 /**
@@ -117,7 +124,11 @@ export class DealTaskService extends BaseService {
       tasks.filter((t) => t.status === "open").map((t) => t.id),
     )
     const blockersByTask = new Map<string, string[]>()
+    const edgesByTask = new Map<string, string[]>()
     for (const dep of deps) {
+      const edges = edgesByTask.get(dep.taskId) ?? []
+      edges.push(dep.dependsOnTaskId)
+      edgesByTask.set(dep.taskId, edges)
       if (!openIds.has(dep.dependsOnTaskId)) {
         continue
       }
@@ -125,32 +136,11 @@ export class DealTaskService extends BaseService {
       list.push(dep.dependsOnTaskId)
       blockersByTask.set(dep.taskId, list)
     }
-    return tasks.map((t) => ({ ...t, blockedBy: blockersByTask.get(t.id) ?? [] }))
-  }
-
-  /** Tasks assigned to a user across the workspace (the "my tasks" list), open first. */
-  async listForAssignee(props: {
-    workspaceId: string
-    assigneeId: string
-    status?: DealTaskStatus | null
-    limit?: number
-    tx?: DatabaseClient
-  }): Promise<DealTaskModel[]> {
-    const { workspaceId, assigneeId, tx = db } = props
-    const limit = Math.min(Math.max(props.limit ?? 100, 1), 500)
-    const conditions = [
-      eq(dealTaskModel.workspaceId, workspaceId),
-      eq(dealTaskModel.assigneeId, assigneeId),
-    ]
-    if (props.status) {
-      conditions.push(eq(dealTaskModel.status, props.status))
-    }
-    return await tx
-      .select()
-      .from(dealTaskModel)
-      .where(and(...conditions))
-      .orderBy(dealTaskModel.status, dealTaskModel.dueAt, dealTaskModel.id)
-      .limit(limit)
+    return tasks.map((t) => ({
+      ...t,
+      blockedBy: blockersByTask.get(t.id) ?? [],
+      dependsOn: edgesByTask.get(t.id) ?? [],
+    }))
   }
 
   async create(props: {
@@ -188,7 +178,11 @@ export class DealTaskService extends BaseService {
         tx,
         workspaceId,
         dealId,
-        values: { ...parsed, assigneeId, templateId: props.data.templateId ?? null },
+        values: {
+          ...parsed,
+          assigneeId,
+          templateId: props.data.templateId ?? null,
+        },
         actorId,
       })
       return { task: row, deal: current }
@@ -414,7 +408,12 @@ export class DealTaskService extends BaseService {
         sql`select pg_advisory_xact_lock(hashtext(${`deal-deps:${dealId}`}))`,
       )
       await this.findOrFail({ workspaceId, dealId, taskId, tx })
-      await this.findOrFail({ workspaceId, dealId, taskId: dependsOnTaskId, tx })
+      await this.findOrFail({
+        workspaceId,
+        dealId,
+        taskId: dependsOnTaskId,
+        tx,
+      })
       const edges = await tx
         .select({
           taskId: dealDependencyModel.taskId,
@@ -439,7 +438,11 @@ export class DealTaskService extends BaseService {
           { reason: "tooManyDependencies" },
         )
       }
-      if (edges.some((e) => e.taskId === taskId && e.dependsOnTaskId === dependsOnTaskId)) {
+      if (
+        edges.some(
+          (e) => e.taskId === taskId && e.dependsOnTaskId === dependsOnTaskId,
+        )
+      ) {
         throw validationException(
           "dependsOnTaskId",
           "That dependency already exists.",
@@ -493,19 +496,20 @@ export class DealTaskService extends BaseService {
    * same row), stamp `overdueNotifiedAt`, then emit `taskOverdue` per row. A
    * failed emit is logged, never retried: the stamp is the truth.
    */
-  async claimOverdue(props: {
-    now?: Date
-    limit?: number
-  } = {}): Promise<{ scanned: number; emitted: number }> {
+  async claimOverdue(
+    props: { now?: Date; limit?: number } = {},
+  ): Promise<{ scanned: number; emitted: number }> {
     const now = props.now ?? new Date()
     const limit = Math.min(Math.max(props.limit ?? 200, 1), 1000)
     const claimed = await db.transaction(async (tx) => {
+      // Only tasks of OPEN deals: a won/lost deal's leftover tasks never ping.
       const candidates = await tx.execute<{ id: string }>(sql`
-        select "id" from "DealTask"
-        where "status" = 'open' and "overdueNotifiedAt" is null and "dueAt" < ${now}
-        order by "dueAt" asc
+        select t."id" from "DealTask" t
+        join "Deal" d on d."id" = t."dealId" and d."status" = 'open'
+        where t."status" = 'open' and t."overdueNotifiedAt" is null and t."dueAt" < ${now}
+        order by t."dueAt" asc
         limit ${limit}
-        for update skip locked
+        for update of t skip locked
       `)
       const ids = candidates.rows.map((r) => String(r.id))
       if (ids.length === 0) {
@@ -598,7 +602,13 @@ export class DealTaskService extends BaseService {
       assigneeId: string | null
     }[]
   }): Promise<{ created: DealTaskModel[] }> {
-    const { workspaceId, deal, actorId } = props
+    const { workspaceId, actorId } = props
+    // The caller's `deal` is the row its own transaction returned; the owner
+    // may have changed since (skeptic MEDIUM). Re-read once, here.
+    const deal = await dealService.findOrFail({
+      workspaceId,
+      id: props.deal.id,
+    })
     const created: DealTaskModel[] = []
     for (const template of props.templates) {
       const assigneeId = template.assignToOwner
@@ -636,7 +646,11 @@ export class DealTaskService extends BaseService {
           dealId: deal.id,
           type: "taskCreated",
           actorId,
-          payload: { taskId: inserted.id, title: inserted.title, templateId: template.id },
+          payload: {
+            taskId: inserted.id,
+            title: inserted.title,
+            templateId: template.id,
+          },
         })
         return inserted
       })
@@ -654,6 +668,12 @@ export class DealTaskService extends BaseService {
     return { created }
   }
 
+  /**
+   * Open blockers of a task, read `FOR SHARE` inside the completing
+   * transaction: a concurrent `reopen()` of a blocker (an UPDATE on that row)
+   * waits until this transaction ends, so the check and the status-pinned
+   * UPDATE see one consistent graph (skeptic HIGH, s192).
+   */
   private async openBlockers(props: {
     taskId: string
     tx: DatabaseClient
@@ -671,6 +691,7 @@ export class DealTaskService extends BaseService {
           eq(dealTaskModel.status, "open"),
         ),
       )
+      .for("share", { of: dealTaskModel })
     return rows.map((r) => r.id)
   }
 
@@ -748,16 +769,7 @@ export class DealTaskService extends BaseService {
     }
     try {
       await emit(deal.workspaceId, deal.contactId, {
-        dealId: deal.id,
-        pipelineId: deal.pipelineId,
-        stageId: deal.stageId,
-        title: deal.title,
-        value: deal.value,
-        currency: deal.currency,
-        status: deal.status,
-        priority: deal.priority,
-        ownerId: deal.ownerId,
-        companyId: deal.companyId,
+        ...dealEventMetadata(deal),
         taskId: task.id,
         taskTitle: task.title,
         taskDueAt: task.dueAt?.toISOString() ?? null,
@@ -770,33 +782,18 @@ export class DealTaskService extends BaseService {
     }
   }
 
-  /** An assignee must be a workspace member; null / "" clears it. */
-  private async resolveAssignee(props: {
+  private resolveAssignee(props: {
     workspaceId: string
     assigneeId: string | null | undefined
     tx: DatabaseClient
   }): Promise<string | null> {
-    const { assigneeId } = props
-    if (assigneeId === undefined || assigneeId === null || assigneeId === "") {
-      return null
-    }
-    const [member] = await props.tx
-      .select({ userId: workspaceMemberModel.userId })
-      .from(workspaceMemberModel)
-      .where(
-        and(
-          eq(workspaceMemberModel.workspaceId, props.workspaceId),
-          eq(workspaceMemberModel.userId, assigneeId),
-        ),
-      )
-      .limit(1)
-    if (!member) {
-      throw validationException(
-        "assigneeId",
-        "Assignee is not a member of this workspace.",
-      )
-    }
-    return member.userId
+    return resolveWorkspaceMember({
+      workspaceId: props.workspaceId,
+      userId: props.assigneeId,
+      tx: props.tx,
+      field: "assigneeId",
+      role: "Assignee",
+    })
   }
 
   private parseData(data: DealTaskData): {
@@ -815,44 +812,23 @@ export class DealTaskService extends BaseService {
   }
 
   private parseTitle(value: unknown): string {
-    const title = typeof value === "string" ? value.trim() : ""
-    if (title.length === 0) {
-      throw validationException("title", "Title is required.")
-    }
-    if (title.length > MAX_DEAL_TASK_TITLE_LENGTH) {
-      throw validationException(
-        "title",
-        `Title is at most ${MAX_DEAL_TASK_TITLE_LENGTH} characters.`,
-      )
-    }
-    return title
+    return parseRequiredText({
+      value,
+      field: "title",
+      max: MAX_DEAL_TASK_TITLE_LENGTH,
+    })
   }
 
   private parseDescription(value: unknown): string | null {
-    if (value === null || value === undefined || value === "") {
-      return null
-    }
-    if (typeof value !== "string") {
-      throw validationException("description", "Description must be text.")
-    }
-    if (value.length > MAX_DEAL_TASK_DESCRIPTION_LENGTH) {
-      throw validationException(
-        "description",
-        `Description is at most ${MAX_DEAL_TASK_DESCRIPTION_LENGTH} characters.`,
-      )
-    }
-    return value
+    return parseOptionalText({
+      value,
+      field: "description",
+      max: MAX_DEAL_TASK_DESCRIPTION_LENGTH,
+    })
   }
 
   private parseDueAt(value: unknown): Date | null {
-    if (value === null || value === undefined || value === "") {
-      return null
-    }
-    const date = value instanceof Date ? value : new Date(String(value))
-    if (Number.isNaN(date.getTime())) {
-      throw validationException("dueAt", "Due date must be a valid date.")
-    }
-    return date
+    return parseDateOrNull(value, "dueAt")
   }
 }
 

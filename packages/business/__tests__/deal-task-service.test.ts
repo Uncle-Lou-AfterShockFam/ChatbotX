@@ -42,10 +42,14 @@ const m = vi.hoisted(() => {
       "innerJoin",
       "set",
       "returning",
+      "for",
     ]) {
       self[k] = (v: unknown) => {
         if (k === "set") {
           state.calls.push(`update:${Object.keys(v as object).join(",")}`)
+        }
+        if (k === "for") {
+          state.calls.push(`for:${String(v)}`)
         }
         return self
       }
@@ -324,7 +328,7 @@ describe("dealTaskService.create", () => {
 })
 
 describe("dealTaskService.complete", () => {
-  test("open + unblocked: status-pinned UPDATE, activity in tx, event after", async () => {
+  test("open + unblocked: blockers read FOR SHARE, status-pinned UPDATE, activity in tx, event after", async () => {
     m.state.selects.push([TASK()], [])
     m.state.updates.push([TASK({ status: "done" })])
     const result = await dealTaskService.complete({
@@ -335,6 +339,7 @@ describe("dealTaskService.complete", () => {
     })
     expect(result.completed).toBe(true)
     expect(m.state.calls.filter((c) => !c.startsWith("select"))).toEqual([
+      "for:share",
       "update",
       "update:status,completedAt,completedById",
       "activity:taskCompleted",
@@ -516,6 +521,25 @@ describe("dealTaskService.addDependency", () => {
   })
 })
 
+describe("dealTaskService.list", () => {
+  test("dependsOn carries every edge, blockedBy only the OPEN blockers (a done blocker's edge stays removable)", async () => {
+    m.state.selects.push(
+      [TASK({ id: "a" }), TASK({ id: "b", status: "done" }), TASK({ id: "c" })],
+      [
+        { taskId: "a", dependsOnTaskId: "b" },
+        { taskId: "a", dependsOnTaskId: "c" },
+      ],
+    )
+    const rows = await dealTaskService.list({
+      workspaceId: WS,
+      dealId: "deal-1",
+    })
+    const a = rows.find((r) => r.id === "a")
+    expect(a?.dependsOn).toEqual(["b", "c"])
+    expect(a?.blockedBy).toEqual(["c"])
+  })
+})
+
 describe("dealTaskService.update", () => {
   test("an assignee change emits taskAssigned with the previous assignee", async () => {
     m.state.selects.push([TASK({ assigneeId: "old" })], MEMBER)
@@ -588,7 +612,8 @@ describe("dealTaskService.claimOverdue + instantiateForStage", () => {
     expect(m.state.calls).not.toContain("update")
   })
 
-  test("templates: assignToOwner takes the deal owner, dueInDays sets dueAt, a conflict row is skipped silently", async () => {
+  test("templates: assignToOwner takes the deal's CURRENT owner (re-read, not the caller's snapshot), dueInDays sets dueAt, a conflict row is skipped silently", async () => {
+    m.dealFindOrFail.mockResolvedValue({ ...DEAL, ownerId: "owner-1" })
     vi.useFakeTimers({ now: new Date("2026-09-24T00:00:00Z") })
     try {
       const templates = [
@@ -611,7 +636,7 @@ describe("dealTaskService.claimOverdue + instantiateForStage", () => {
       ]
       const { created } = await dealTaskService.instantiateForStage({
         workspaceId: WS,
-        deal: DEAL as never,
+        deal: { ...DEAL, ownerId: "stale-owner" } as never,
         stageId: "stage-1",
         actorId: null,
         templates,
