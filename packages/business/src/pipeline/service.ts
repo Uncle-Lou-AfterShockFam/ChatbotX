@@ -8,6 +8,7 @@ import {
   sql,
 } from "@chatbotx.io/database/client"
 import {
+  DEFAULT_PIPELINE_SETTINGS,
   DEFAULT_PIPELINE_STAGES,
   type PipelineSettings,
   type PipelineSettingsInput,
@@ -65,12 +66,28 @@ class PipelineService extends BaseService {
     tx?: DatabaseClient
   }): Promise<PipelineModel> {
     const { workspaceId, id, tx = db } = props
-    return await findOrFail({
+    const row = await findOrFail({
       client: tx,
       table: pipelineModel,
       where: { id, workspaceId },
       message: PIPELINE_NOT_FOUND,
     })
+    return this.normalize(row)
+  }
+
+  /**
+   * Rows written before a settings key existed (s192: `fieldDefs`) lack it in
+   * the jsonb; every read runs the stored object through the schema defaults
+   * so callers and output schemas always see the full shape. A row whose
+   * settings no longer parse keeps its raw values under the defaults (never
+   * throws on read).
+   */
+  private normalize<T extends PipelineModel>(row: T): T {
+    const parsed = pipelineSettingsSchema.safeParse(row.settings ?? {})
+    const settings = parsed.success
+      ? parsed.data
+      : { ...DEFAULT_PIPELINE_SETTINGS, ...(row.settings ?? {}) }
+    return { ...row, settings }
   }
 
   async find(props: {
@@ -107,7 +124,10 @@ class PipelineService extends BaseService {
       list.push(stage)
       byPipeline.set(stage.pipelineId, list)
     }
-    return pipelines.map((p) => ({ ...p, stages: byPipeline.get(p.id) ?? [] }))
+    return pipelines.map((p) => ({
+      ...this.normalize(p),
+      stages: byPipeline.get(p.id) ?? [],
+    }))
   }
 
   async listStages(props: {

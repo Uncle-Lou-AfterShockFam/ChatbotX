@@ -273,3 +273,43 @@ describe("pipelineService.reorderStages", () => {
     ).rejects.toThrow("Every stage must belong")
   })
 })
+
+describe("legacy settings rows (s192 hotfix: fieldDefs missing in the stored jsonb)", () => {
+  test("list and findOrFail fill fieldDefs: [] so output schemas never see a partial settings object", async () => {
+    const legacy = { stopCompanyOn: "won", defaultCurrency: "EUR" }
+    m.state.pipelines = [
+      { id: "p1", workspaceId: WS, name: "Old", order: 0, settings: legacy },
+    ]
+    const [listed] = await pipelineService.list({ workspaceId: WS })
+    expect(listed.settings).toEqual({ ...legacy, fieldDefs: [] })
+    m.findOrFail.mockResolvedValueOnce({
+      id: "p1",
+      workspaceId: WS,
+      name: "Old",
+      settings: legacy,
+    })
+    const found = await pipelineService.findOrFail({
+      workspaceId: WS,
+      id: "p1",
+    })
+    expect(found.settings).toEqual({ ...legacy, fieldDefs: [] })
+  })
+
+  test("a settings blob that no longer parses is read under the defaults instead of throwing", async () => {
+    m.findOrFail.mockResolvedValueOnce({
+      id: "p1",
+      workspaceId: WS,
+      name: "Odd",
+      settings: { stopCompanyOn: "always" },
+    })
+    const found = await pipelineService.findOrFail({
+      workspaceId: WS,
+      id: "p1",
+    })
+    expect(found.settings).toMatchObject({
+      defaultCurrency: "USD",
+      fieldDefs: [],
+      stopCompanyOn: "always",
+    })
+  })
+})
