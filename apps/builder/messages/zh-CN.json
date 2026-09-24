@@ -6909,6 +6909,7 @@
     "empty": "Nothing yet",
     "markAllRead": "Mark all read",
     "taskAssigned": "Task assigned: {task}",
-    "dealMentioned": "You were mentioned on a deal"
+    "dealMentioned": "You were mentioned on a deal",
+    "loading": "Loading..."
   }
 }

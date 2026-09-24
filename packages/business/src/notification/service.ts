@@ -32,8 +32,13 @@ import { sendToWorkspaceMember } from "../platform/realtime-broadcast"
 import { resolveMemberNotificationPrefs } from "../workspace-member/notification-prefs"
 import { workspaceMemberService } from "../workspace-member/service"
 
-/** Unread rows sort first; the rank rides in the cursor so a mark-read between pages cannot flip it. */
-const unreadRankExpr = sql<number>`case when ${notificationModel.readAt} is null then 1 else 0 end`
+/**
+ * Unread rows sort first; the rank rides in the cursor so a mark-read between
+ * pages cannot flip it. A function, not a module constant: the business
+ * barrel is imported by tests that mock the database client without `sql`.
+ */
+const unreadRankExpr = () =>
+  sql<number>`case when ${notificationModel.readAt} is null then 1 else 0 end`
 const CURSOR = /^([01]):(\d{1,30})$/
 
 export type NotifyInput = {
@@ -232,7 +237,7 @@ export class NotificationService extends BaseService {
         return { data: [], nextCursor: null }
       }
       conditions.push(
-        sql`(${unreadRankExpr}, ${notificationModel.createdAt}, ${notificationModel.id}) < (${Number(rank)}, ${anchor.createdAt}, ${anchorId})`,
+        sql`(${unreadRankExpr()}, ${notificationModel.createdAt}, ${notificationModel.id}) < (${Number(rank)}, ${anchor.createdAt}, ${anchorId})`,
       )
     }
     const rows = await db
@@ -240,9 +245,7 @@ export class NotificationService extends BaseService {
       .from(notificationModel)
       .where(and(...conditions))
       .orderBy(
-        desc(
-          sql`case when ${notificationModel.readAt} is null then 1 else 0 end`,
-        ),
+        desc(unreadRankExpr()),
         desc(notificationModel.createdAt),
         desc(notificationModel.id),
       )

@@ -104,7 +104,9 @@ export function NotificationBell({ workspaceId }: { workspaceId: string }) {
         <ScrollArea className="max-h-96">
           {rows.length === 0 ? (
             <p className="p-4 text-muted-foreground text-sm">
-              {list.isPending ? t("common.loading") : t("notifications.empty")}
+              {list.isPending
+                ? t("notifications.loading")
+                : t("notifications.empty")}
             </p>
           ) : (
             <ul className="divide-y" data-testid="notification-list">

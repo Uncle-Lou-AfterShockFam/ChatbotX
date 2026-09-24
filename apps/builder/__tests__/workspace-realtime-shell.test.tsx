@@ -45,6 +45,11 @@ vi.mock(
   }),
 )
 
+// s194: the notification sync needs a QueryClient the shell test does not mount
+vi.mock(
+  "@/features/notifications/components/notification-realtime-sync",
+  () => ({ NotificationRealtimeSync: () => null }),
+)
 vi.mock("@/features/messages/components/whatsapp-call-info-sheet", () => ({
   WhatsappCallInfoSheet: () => <div data-testid="call-info-sheet" />,
 }))
