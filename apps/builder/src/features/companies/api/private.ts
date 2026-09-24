@@ -46,9 +46,13 @@ const privateCreateWorkspaceCompanyAPI = authorizedAPI
   .input(createCompanyRequest.and(withWorkspaceIdSchema))
   .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
   .output(z.object({ id: zodBigintAsString() }))
-  .handler(async ({ input }) => {
+  .handler(async ({ input, context }) => {
     const { workspaceId, ...data } = input
-    const company = await companyService.create({ workspaceId, data })
+    const company = await companyService.create({
+      workspaceId,
+      data,
+      actorId: context.user.id,
+    })
     return { id: company.id }
   })
 
@@ -65,9 +69,14 @@ const privateUpdateCompanyAPI = authorizedAPI
       .and(z.object({ id: zodBigintAsString() })),
   )
   .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
-  .handler(async ({ input }) => {
+  .handler(async ({ input, context }) => {
     const { workspaceId, id, ...data } = input
-    return await companyService.update({ workspaceId, id, data })
+    return await companyService.update({
+      workspaceId,
+      id,
+      data,
+      actorId: context.user.id,
+    })
   })
 
 const privateDeleteCompanyAPI = authorizedAPI
@@ -95,8 +104,8 @@ const privateSetContactCompanyAPI = authorizedAPI
   })
   .input(setContactCompanyRequest.and(withWorkspaceIdSchema))
   .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
-  .handler(async ({ input }) => {
-    await companyService.assignContact(input)
+  .handler(async ({ input, context }) => {
+    await companyService.assignContact({ ...input, actorId: context.user.id })
   })
 
 export const privateCompaniesAPI = {

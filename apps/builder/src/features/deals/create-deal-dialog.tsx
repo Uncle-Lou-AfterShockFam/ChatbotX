@@ -50,6 +50,8 @@ export function CreateDealDialog({
   fieldDefs = [],
   onCreated,
   defaultStageId,
+  presetContact,
+  presetCompanyId,
 }: {
   workspaceId: string
   pipelineId: string
@@ -58,6 +60,10 @@ export function CreateDealDialog({
   fieldDefs?: DealFieldDef[]
   onCreated: () => void
   defaultStageId?: string
+  /** s195: opened from a contact page, the contact is fixed (no search shown). */
+  presetContact?: { id: string; label: string } | null
+  /** s195: opened from a company page, the deal lands on that company. */
+  presetCompanyId?: string | null
 }) {
   const t = useTranslations()
   const [open, setOpen] = useState(false)
@@ -70,11 +76,11 @@ export function CreateDealDialog({
       currency: defaultCurrency,
       priority: "medium",
       stageId: defaultStageId ?? stages[0]?.id ?? "",
-      contactId: "",
+      contactId: presetContact?.id ?? "",
       ownerId: "",
       dueAt: "",
     }),
-    [defaultCurrency, defaultStageId, stages],
+    [defaultCurrency, defaultStageId, stages, presetContact?.id],
   )
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -145,6 +151,7 @@ export function CreateDealDialog({
                 currency: values.currency || null,
                 priority: values.priority,
                 contactId: values.contactId || null,
+                companyId: presetCompanyId ?? undefined,
                 ownerId: values.ownerId || null,
                 dueAt: values.dueAt
                   ? new Date(`${values.dueAt}T00:00:00Z`)
@@ -182,23 +189,34 @@ export function CreateDealDialog({
                 ]}
               />
             </div>
-            <div className="space-y-2">
-              <Input
-                aria-label={t("deals.searchContacts")}
-                onChange={(event) => setContactKeyword(event.target.value)}
-                placeholder={t("deals.searchContacts")}
-                value={contactKeyword}
-              />
-              <ComboboxField
-                allowClear
-                clearLabel={t("deals.noContact")}
-                emptyText={t("actions.noRecordFound")}
-                label={t("deals.fields.contact")}
-                name="contactId"
-                options={contactOptions}
-                portal
-              />
-            </div>
+            {presetContact ? (
+              <div className="space-y-1 text-sm">
+                <div className="text-muted-foreground text-xs">
+                  {t("deals.fields.contact")}
+                </div>
+                <div data-testid="create-deal-preset-contact">
+                  {presetContact.label}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Input
+                  aria-label={t("deals.searchContacts")}
+                  onChange={(event) => setContactKeyword(event.target.value)}
+                  placeholder={t("deals.searchContacts")}
+                  value={contactKeyword}
+                />
+                <ComboboxField
+                  allowClear
+                  clearLabel={t("deals.noContact")}
+                  emptyText={t("actions.noRecordFound")}
+                  label={t("deals.fields.contact")}
+                  name="contactId"
+                  options={contactOptions}
+                  portal
+                />
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <ComboboxField
                 allowClear

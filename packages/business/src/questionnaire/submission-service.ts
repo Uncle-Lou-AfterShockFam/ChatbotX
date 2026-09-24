@@ -19,6 +19,7 @@ import type {
 import {
   contactModel,
   questionnaireAnswerModel,
+  questionnaireModel,
   type questionnaireQuestionModel,
   questionnaireSubmissionModel,
 } from "@chatbotx.io/database/schema"
@@ -170,6 +171,42 @@ class QuestionnaireSubmissionService extends BaseService {
           ? 0
           : Math.round((completed / totalApplicants) * 100),
     }
+  }
+
+  /** Submissions of a set of contacts, newest first (s195 Contact / Company 360). */
+  async listByContactIds(input: {
+    workspaceId: string
+    contactIds: string[]
+    limit?: number
+  }) {
+    const limit = Math.min(Math.max(Math.trunc(input.limit ?? 50), 1), 200)
+    if (input.contactIds.length === 0) {
+      return []
+    }
+    return await db
+      .select({
+        id: questionnaireSubmissionModel.id,
+        questionnaireId: questionnaireSubmissionModel.questionnaireId,
+        questionnaireName: questionnaireModel.name,
+        contactId: questionnaireSubmissionModel.contactId,
+        status: questionnaireSubmissionModel.status,
+        totalPoints: questionnaireSubmissionModel.totalPoints,
+        completedAt: questionnaireSubmissionModel.completedAt,
+        createdAt: questionnaireSubmissionModel.createdAt,
+      })
+      .from(questionnaireSubmissionModel)
+      .innerJoin(
+        questionnaireModel,
+        eq(questionnaireSubmissionModel.questionnaireId, questionnaireModel.id),
+      )
+      .where(
+        and(
+          eq(questionnaireSubmissionModel.workspaceId, input.workspaceId),
+          inArray(questionnaireSubmissionModel.contactId, input.contactIds),
+        ),
+      )
+      .orderBy(desc(questionnaireSubmissionModel.createdAt))
+      .limit(limit)
   }
 
   async detail(input: {

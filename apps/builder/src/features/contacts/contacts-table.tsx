@@ -63,7 +63,11 @@ function ContactCard({
         onCheckedChange={(value) => row.toggleSelected(Boolean(value))}
       />
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <ContactNameCell contact={contact} workspaceId={workspaceId} />
+        <ContactNameCell
+          contact={contact}
+          linkTo="contact"
+          workspaceId={workspaceId}
+        />
         <dl className="flex flex-col gap-1 text-muted-foreground text-xs">
           <div className="flex items-baseline justify-between gap-3">
             <dt>{t("fields.assignee.label")}</dt>
@@ -246,6 +250,7 @@ export function ContactsTable({
             }
             contact={row.original}
             conversationId={row.original.conversation?.id}
+            linkTo="contact"
             workspaceId={workspaceId}
           />
         ),

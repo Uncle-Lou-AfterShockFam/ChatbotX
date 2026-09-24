@@ -16,6 +16,7 @@ import { InboxIcon } from "@/features/inboxes/components/inbox-icon"
 import { useAvatarUrl } from "../utils"
 
 type ContactNameCellContact = {
+  id?: string | null
   avatar?: string | null
   fullName?: string | null
 }
@@ -28,9 +29,12 @@ export function ContactNameCell({
   channel,
   avatarClassName = "size-8",
   maxWidthClassName = "max-w-56",
+  linkTo = "inbox",
 }: {
   contact: ContactNameCellContact
   conversationId?: string | null
+  /** s195: `contact` opens the contact page (needs `contact.id`); `inbox` the conversation. */
+  linkTo?: "inbox" | "contact"
   workspaceId: string
   unknownContactLabel?: string
   channel?: ChannelType
@@ -39,9 +43,12 @@ export function ContactNameCell({
 }) {
   const avatarUrl = useAvatarUrl(contact as Parameters<typeof useAvatarUrl>[0])
   const name = contact.fullName ?? unknownContactLabel
-  const inboxHref = conversationId
-    ? `/space/${workspaceId}/inbox?conversationId=${conversationId}`
-    : null
+  let inboxHref: string | null = null
+  if (linkTo === "contact" && contact.id) {
+    inboxHref = `/space/${workspaceId}/contacts/${contact.id}`
+  } else if (conversationId) {
+    inboxHref = `/space/${workspaceId}/inbox?conversationId=${conversationId}`
+  }
 
   const content = (
     <div className={`flex items-center gap-3 ${maxWidthClassName}`}>
@@ -68,7 +75,11 @@ export function ContactNameCell({
   )
 
   const trigger = inboxHref ? (
-    <Link href={inboxHref} prefetch={false} target="_blank">
+    <Link
+      href={inboxHref}
+      prefetch={false}
+      target={linkTo === "contact" ? undefined : "_blank"}
+    >
       {content}
     </Link>
   ) : (

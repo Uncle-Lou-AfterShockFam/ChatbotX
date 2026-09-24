@@ -20,9 +20,12 @@ type ContactNoteMode = z.infer<typeof contactNoteModes>
 export function ContactNotesManage({
   contactNotes,
   onNotesChange,
+  contact: contactProp = null,
 }: {
   contactNotes: ContactNoteResource[]
   onNotesChange?: (notes: ContactNoteResource[]) => void
+  /** s195: outside the inbox there is no active conversation; the caller names the contact. */
+  contact?: ContactResource | null
 }) {
   const t = useTranslations()
   const workspaceId = useWorkspaceId()
@@ -43,6 +46,10 @@ export function ContactNotesManage({
   }, [contactNotes])
 
   useEffect(() => {
+    if (contactProp) {
+      setContact(contactProp)
+      return
+    }
     if (activeConversationId) {
       const conversation = conversations.find(
         (item) => item.id === activeConversationId,
@@ -56,7 +63,7 @@ export function ContactNotesManage({
     } else {
       setContact(null)
     }
-  }, [activeConversationId, conversations])
+  }, [activeConversationId, conversations, contactProp])
 
   const updateNotes = (notes: ContactNoteResource[]) => {
     setAllContactNotes(notes)

@@ -31,6 +31,9 @@ export const dealActivityTypes = z.enum([
   "taskCompleted",
   // phase 2 part 3b (s193): a comment (with its @mentions) leaves a trail
   "commented",
+  // s195 CRM 360: the deal's contact / company can be re-linked after creation
+  "contactChanged",
+  "companyChanged",
 ])
 export type DealActivityType = z.infer<typeof dealActivityTypes>
 

@@ -4,10 +4,12 @@ import {
   db,
   desc,
   eq,
+  exists,
   findOrFail,
   inArray,
   isNull,
   relationsFilterToSQL,
+  type SQL,
   sql,
 } from "@chatbotx.io/database/client"
 import {
@@ -16,7 +18,11 @@ import {
   isFreeMailDomain,
   normalizeCompanyDomains,
 } from "@chatbotx.io/database/partials"
-import { companyModel, contactModel } from "@chatbotx.io/database/schema"
+import {
+  companyModel,
+  contactModel,
+  conversationModel,
+} from "@chatbotx.io/database/schema"
 import type { CompanyModel } from "@chatbotx.io/database/types"
 import {
   likeContains,
@@ -25,7 +31,7 @@ import {
 } from "@chatbotx.io/database/utils"
 import { createId } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
-import { contactService } from "../contact/service"
+import { type ContactAccessScope, contactService } from "../contact/service"
 import {
   ChatbotXException,
   notFoundException,
@@ -33,6 +39,7 @@ import {
 } from "../errors"
 import type { PaginatedResult } from "../types"
 import { workspaceService } from "../workspace/service"
+import { companyActivityService } from "./activity"
 
 export type ListCompaniesInput = {
   workspaceId: string
@@ -56,6 +63,38 @@ export type CompanyData = {
 export type CompanyWithContactCount = CompanyModel & { contactCount: number }
 
 const COMPANY_NOT_FOUND = "Company not found"
+
+/** 409-class: the contact's company moved under us; the caller reloads and retries. */
+const companyChangedConcurrently = () =>
+  validationException(
+    "companyId",
+    "The contact's company was changed by someone else; reload and retry.",
+    { conflict: "stale" },
+  )
+
+/**
+ * The assigned-only rule for a raw contact select (s195): the same
+ * `conversation.assignedUserId` predicate `withContactAccessScope` applies to
+ * relational reads, so a company rollup never lists a contact the caller
+ * could not open. Undefined = unrestricted.
+ */
+function contactScopeSQL(accessScope?: ContactAccessScope): SQL | undefined {
+  const userId = accessScope?.restrictToAssignedUserId
+  if (!userId) {
+    return
+  }
+  return exists(
+    db
+      .select({ one: sql`1` })
+      .from(conversationModel)
+      .where(
+        and(
+          eq(conversationModel.contactId, contactModel.id),
+          eq(conversationModel.assignedUserId, userId),
+        ),
+      ),
+  )
+}
 
 /**
  * Companies group contacts (`Contact.companyId`). This service is edge-safe
@@ -127,6 +166,7 @@ class CompanyService extends BaseService {
   async countContacts(props: {
     workspaceId: string
     companyIds: string[]
+    accessScope?: ContactAccessScope
     tx?: DatabaseClient
   }): Promise<Map<string, number>> {
     const { workspaceId, companyIds, tx = db } = props
@@ -144,6 +184,7 @@ class CompanyService extends BaseService {
         and(
           eq(contactModel.workspaceId, workspaceId),
           inArray(contactModel.companyId, companyIds),
+          contactScopeSQL(props.accessScope),
         ),
       )
       .groupBy(contactModel.companyId)
@@ -158,9 +199,11 @@ class CompanyService extends BaseService {
   async create(props: {
     workspaceId: string
     data: CompanyData
+    actorId?: string | null
     tx?: DatabaseClient
   }): Promise<CompanyModel> {
     const { workspaceId, data, tx = db } = props
+    const actorId = props.actorId ?? null
     const name = data.name.trim()
     if (name.length === 0) {
       throw validationException("name", "Name is required.")
@@ -189,6 +232,14 @@ class CompanyService extends BaseService {
       })
       .returning()
 
+    await companyActivityService.record({
+      tx,
+      workspaceId,
+      companyId: company.id,
+      type: "created",
+      actorId,
+      payload: { name },
+    })
     await this.audit("company.create", company.id)
     return company
   }
@@ -197,11 +248,13 @@ class CompanyService extends BaseService {
     workspaceId: string
     id: string
     data: Partial<CompanyData>
+    actorId?: string | null
     tx?: DatabaseClient
   }): Promise<CompanyModel> {
     const { workspaceId, id, data, tx = db } = props
+    const actorId = props.actorId ?? null
 
-    await this.findOrFail({ workspaceId, id, tx })
+    const current = await this.findOrFail({ workspaceId, id, tx })
 
     const set: Partial<typeof companyModel.$inferInsert> = {}
     if (data.name !== undefined) {
@@ -248,6 +301,24 @@ class CompanyService extends BaseService {
 
     if (!updated) {
       throw notFoundException(COMPANY_NOT_FOUND)
+    }
+    const changed: Record<string, { from: unknown; to: unknown }> = {}
+    for (const key of Object.keys(set) as (keyof typeof set)[]) {
+      const before = current[key as keyof CompanyModel] ?? null
+      const after = updated[key as keyof CompanyModel] ?? null
+      if (JSON.stringify(before) !== JSON.stringify(after)) {
+        changed[key] = { from: before, to: after }
+      }
+    }
+    if (Object.keys(changed).length > 0) {
+      await companyActivityService.record({
+        tx,
+        workspaceId,
+        companyId: id,
+        type: "updated",
+        actorId,
+        payload: { changed },
+      })
     }
     await this.audit("company.update", id)
     return updated
@@ -305,15 +376,48 @@ class CompanyService extends BaseService {
     return row
   }
 
+  /**
+   * Set (or clear, `companyId: null`) a contact's company. The old company
+   * logs `contactUnlinked`, the new one `contactLinked` (s195); a no-op
+   * assignment logs nothing. The UPDATE is pinned to the company this call
+   * READ (and to `expectedCompanyId` when the caller names one, e.g. the
+   * company page's unlink): a concurrent re-link makes it touch 0 rows and
+   * the call is a 409, never a silent detach from a company nobody saw.
+   */
   async assignContact(props: {
     workspaceId: string
     contactId: string
     companyId: string | null
+    expectedCompanyId?: string | null
+    actorId?: string | null
     tx?: DatabaseClient
   }): Promise<void> {
     const { workspaceId, contactId, companyId, tx = db } = props
+    const actorId = props.actorId ?? null
     if (companyId !== null) {
       await this.findOrFail({ workspaceId, id: companyId, tx })
+    }
+    const [before] = await tx
+      .select({ id: contactModel.id, companyId: contactModel.companyId })
+      .from(contactModel)
+      .where(
+        and(
+          eq(contactModel.id, contactId),
+          eq(contactModel.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1)
+    if (!before) {
+      throw notFoundException("Contact not found")
+    }
+    if (
+      props.expectedCompanyId !== undefined &&
+      before.companyId !== props.expectedCompanyId
+    ) {
+      throw companyChangedConcurrently()
+    }
+    if (before.companyId === companyId) {
+      return
     }
     const updated = await tx
       .update(contactModel)
@@ -322,11 +426,34 @@ class CompanyService extends BaseService {
         and(
           eq(contactModel.id, contactId),
           eq(contactModel.workspaceId, workspaceId),
+          before.companyId === null
+            ? isNull(contactModel.companyId)
+            : eq(contactModel.companyId, before.companyId),
         ),
       )
       .returning({ id: contactModel.id })
     if (updated.length === 0) {
-      throw notFoundException("Contact not found")
+      throw companyChangedConcurrently()
+    }
+    if (before.companyId) {
+      await companyActivityService.record({
+        tx,
+        workspaceId,
+        companyId: before.companyId,
+        type: "contactUnlinked",
+        actorId,
+        payload: { contactId, toCompanyId: companyId },
+      })
+    }
+    if (companyId) {
+      await companyActivityService.record({
+        tx,
+        workspaceId,
+        companyId,
+        type: "contactLinked",
+        actorId,
+        payload: { contactId, fromCompanyId: before.companyId },
+      })
     }
     await contactService.invalidate({ workspaceId, ids: [contactId] })
   }
@@ -370,9 +497,11 @@ class CompanyService extends BaseService {
     return { linked: true, companyId: company.id }
   }
 
+  /** Contact ids on the company, inside the caller's assigned-only scope when one is given. */
   async listContactIds(props: {
     workspaceId: string
     companyId: string
+    accessScope?: ContactAccessScope
     tx?: DatabaseClient
   }): Promise<string[]> {
     const { workspaceId, companyId, tx = db } = props
@@ -383,6 +512,7 @@ class CompanyService extends BaseService {
         and(
           eq(contactModel.workspaceId, workspaceId),
           eq(contactModel.companyId, companyId),
+          contactScopeSQL(props.accessScope),
         ),
       )
     return rows.map((row) => row.id)
@@ -393,6 +523,7 @@ class CompanyService extends BaseService {
     workspaceId: string
     companyId: string
     limit?: number
+    accessScope?: ContactAccessScope
     tx?: DatabaseClient
   }): Promise<
     Pick<
@@ -424,6 +555,7 @@ class CompanyService extends BaseService {
         and(
           eq(contactModel.workspaceId, workspaceId),
           eq(contactModel.companyId, companyId),
+          contactScopeSQL(props.accessScope),
         ),
       )
       .orderBy(desc(contactModel.createdAt))

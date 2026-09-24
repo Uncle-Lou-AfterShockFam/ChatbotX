@@ -26,6 +26,7 @@ import { logger } from "../logger"
 import { runSmartDelayCancelLoop } from "../smart-delay/cancel-loop"
 import { smartDelayService } from "../smart-delay/service"
 import { tagService } from "../tag/service"
+import { companyActivityService } from "./activity"
 import { companyService } from "./service"
 
 export type CompanyStopReason =
@@ -115,6 +116,17 @@ async function claimCompanyStop(props: {
         stoppedByContactId: props.triggeredByContactId ?? null,
       })
       .where(eq(companyModel.id, props.companyId))
+    await companyActivityService.record({
+      tx,
+      workspaceId: props.workspaceId,
+      companyId: props.companyId,
+      type: "stopped",
+      actorId: null,
+      payload: {
+        reason: props.reason,
+        contactId: props.triggeredByContactId ?? null,
+      },
+    })
     return { kind: "claimed", stopOnReply: row.stopOnReply }
   })
 }

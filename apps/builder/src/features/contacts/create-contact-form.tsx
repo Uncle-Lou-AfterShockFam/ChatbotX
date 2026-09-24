@@ -51,7 +51,8 @@ export function CreateContactForm({
   onCancelled,
 }: {
   workspaceId: string
-  onSubmmited?: () => void
+  /** s195: the created contact rides along so a caller can link it (company page). */
+  onSubmmited?: (contact?: { id: string }) => void
   onCancelled?: () => void
 }) {
   const t = useTranslations()
@@ -89,14 +90,14 @@ export function CreateContactForm({
       zodResolver(createContactRequest),
       {
         actionProps: {
-          onSuccess: () => {
+          onSuccess: ({ data }) => {
             resetFormAndAction()
             toast.success(
               t("messages.createdSuccess", {
                 feature: t("fields.contact.label"),
               }),
             )
-            onSubmmited?.()
+            onSubmmited?.(data?.id ? { id: String(data.id) } : undefined)
           },
           onError: ({ error }) => {
             if (error.serverError) {

@@ -9,17 +9,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@chatbotx.io/ui/components/ui/select"
-import Link from "next/link"
 import { useFormatter, useTranslations } from "next-intl"
 import { useEffect, useState } from "react"
 import type { PipelineWithStagesResource } from "@/features/pipelines/schema/resource"
 import { formatDealValue } from "../deal-card"
 import { DealCustomFieldsGrid, NONE } from "../deal-field-input"
+import { toDateInput } from "../lib/date-input"
 import type { DealResource } from "../schema/resource"
-
-/** `Date | null` -> the yyyy-mm-dd an <input type="date"> shows. */
-export const toDateInput = (value: Date | null | undefined): string =>
-  value ? value.toISOString().slice(0, 10) : ""
+import { DealLinksSection } from "./links-section"
 
 export type DealPatch = {
   value?: string | null
@@ -27,6 +24,9 @@ export type DealPatch = {
   ownerId?: string | null
   dueAt?: Date | null
   fields?: Record<string, unknown>
+  // s195: re-link after creation
+  contactId?: string | null
+  companyId?: string | null
 }
 
 /** Value / priority / stage / owner / due date grid, the custom fields, and the contact + company links. */
@@ -188,32 +188,11 @@ export function DealDetailsForm({
         values={deal.fields}
       />
 
-      <div className="space-y-1 text-sm">
-        <div className="text-muted-foreground text-xs">
-          {t("deals.fields.contact")}
-        </div>
-        {deal.contactId ? (
-          // The hub has no per-contact route (contacts open inside the list
-          // panel), so the link lands on the contacts list; the id is shown
-          // so it can be searched for.
-          <Link
-            className="hover:underline"
-            href={`/space/${workspaceId}/contacts`}
-          >
-            {t("deals.openContact")} ({deal.contactId})
-          </Link>
-        ) : (
-          <span className="text-muted-foreground">{t("deals.noContact")}</span>
-        )}
-        {deal.companyId ? (
-          <Link
-            className="block hover:underline"
-            href={`/space/${workspaceId}/companies/${deal.companyId}`}
-          >
-            {t("deals.openCompany")}
-          </Link>
-        ) : null}
-      </div>
+      <DealLinksSection
+        deal={deal}
+        onUpdate={onUpdate}
+        workspaceId={workspaceId}
+      />
     </div>
   )
 }

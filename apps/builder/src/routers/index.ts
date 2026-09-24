@@ -65,6 +65,11 @@ export const router = {
       default: m.companiesAPI,
     })),
   ),
+  crmAPI: lazy(() =>
+    import("@/features/crm/api").then((m) => ({
+      default: m.crmAPI,
+    })),
+  ),
   dealsAPI: lazy(() =>
     import("@/features/deals/api").then((m) => ({
       default: m.dealsAPI,
