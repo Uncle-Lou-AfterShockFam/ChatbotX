@@ -228,41 +228,49 @@ export const rejectSupportSession = createMiddleware<{
 })
 
 /**
- * Refuses a member with neither contacts nor onlyAssignedContacts from any
- * calling action that starts or joins a call. Reuses hasContactsAccess, which
- * already lets superAdmin through, rather than a parallel permission check.
+ * Refuses a member with neither contacts nor onlyAssignedContacts. Reuses
+ * hasContactsAccess, which already lets superAdmin through, rather than a
+ * parallel permission check; `deny` builds the 403 so each surface keeps its
+ * own message (the calling one is translated).
  */
-export const requireContactsAccess = createMiddleware<{
-  ctx: { workspaceMemberPermissions: PermissionsInput }
-}>().define(async ({ ctx, next }) => {
-  if (!hasContactsAccess(ctx.workspaceMemberPermissions)) {
+const createContactsAccessMiddleware = (
+  deny: () => Promise<ChatbotXException>,
+) =>
+  createMiddleware<{
+    ctx: { workspaceMemberPermissions: PermissionsInput }
+  }>().define(async ({ ctx, next }) => {
+    if (!hasContactsAccess(ctx.workspaceMemberPermissions)) {
+      throw await deny()
+    }
+    return await next({ ctx })
+  })
+
+/** Every calling action that starts or joins a call. */
+export const requireContactsAccess = createContactsAccessMiddleware(
+  async () => {
     const t = await getTranslations()
-    throw new ChatbotXException(
+    return new ChatbotXException(
       t("whatsapp.calls.errors.callingAccessDenied"),
       "callingAccessDenied",
       403,
     )
-  }
-  return await next({ ctx })
-})
+  },
+)
 
 /**
  * The deals / pipelines actions (s193): the contacts-section permission that
  * the oRPC `contactsAccessAuthorizedMiddleware` and the RSC page already
  * apply, so a member without it cannot write deals through an action either.
  */
-export const requireContactsSectionAccess = createMiddleware<{
-  ctx: { workspaceMemberPermissions: PermissionsInput }
-}>().define(async ({ ctx, next }) => {
-  if (!hasContactsAccess(ctx.workspaceMemberPermissions)) {
-    throw new ChatbotXException(
+export const requireContactsSectionAccess = createContactsAccessMiddleware(() =>
+  Promise.resolve(
+    new ChatbotXException(
       "Contacts access required",
       "contactsAccessRequired",
       403,
-    )
-  }
-  return await next({ ctx })
-})
+    ),
+  ),
+)
 
 /**
  * Every calling action that starts or joins a call (initiate/mode/permission-

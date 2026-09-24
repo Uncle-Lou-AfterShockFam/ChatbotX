@@ -62,7 +62,10 @@ const dealTaskService = new Proxy(
   {} as Record<string, ReturnType<typeof vi.fn>>,
   { get: (t, k: string) => (t[k] ??= vi.fn(async () => ({ id: "t" }))) },
 )
-const pipelineMemberService = { list: vi.fn(async () => []), set: vi.fn() }
+const pipelineMemberService = new Proxy(
+  {} as Record<string, ReturnType<typeof vi.fn>>,
+  { get: (t, k: string) => (t[k] ??= vi.fn(async () => [])) },
+)
 vi.mock("@chatbotx.io/business/deal", () => ({ dealService }))
 vi.mock("@chatbotx.io/business", () => ({
   pipelineService,
@@ -85,8 +88,9 @@ const context = {
   user: { id: "u-1" },
   member: { permissions: { superAdmin: false, onlyAssignedContacts: true } },
 }
-const UNSCOPED =
-  /^(POST|PUT|DELETE) \/workspaces\/\{workspaceId\}\/pipelines(\/\{id\}|\/\{pipelineId\})?(\/stages.*)?$/
+// Creating a pipeline is the ONE unscoped write: there is no pipeline to be
+// a member of yet (the settings page is super-admin territory anyway).
+const UNSCOPED = /^POST \/workspaces\/\{workspaceId\}\/pipelines$/
 const VIEWER = {
   userId: "u-1",
   permissions: { superAdmin: false, onlyAssignedContacts: true },
@@ -106,6 +110,7 @@ describe("private deal routes carry the viewer (s193)", () => {
       pipelineService,
       dealTaskService,
       dealTaskTemplateService,
+      pipelineMemberService,
     ]
     const skipped: string[] = []
     for (const p of captured) {
@@ -139,17 +144,31 @@ describe("private deal routes carry the viewer (s193)", () => {
         skipped.push(`${p.route.method} ${p.route.path}`)
         continue
       }
-      const last = calls.at(-1) as Record<string, unknown>
       const name = `${p.route.method} ${p.route.path}`
-      // Pipeline MANAGEMENT (create / rename / delete / stages / task
-      // templates / members) is unscoped by design: a members-only pipeline
-      // is configured by the people who can already see it in Settings.
-      if (UNSCOPED.test(name) || name.includes("task-templates")) {
-        expect(last, name).not.toHaveProperty("viewer")
+      // Every service call this handler made (the mocks accumulate).
+      const mine = calls.slice(
+        -(after.reduce((a, b) => a + b, 0) - before.reduce((a, b) => a + b, 0)),
+      )
+      if (UNSCOPED.test(name)) {
+        for (const c of mine) {
+          expect(c, name).not.toHaveProperty("viewer")
+        }
         continue
       }
-      expect(last, name).toMatchObject({ viewer: VIEWER })
+      // The FIRST touch of the pipeline / deal carries the viewer (the 404
+      // gate); follow-up calls inside the same handler may be unscoped.
+      expect(
+        mine.some((c) => {
+          try {
+            expect(c).toMatchObject({ viewer: VIEWER })
+            return true
+          } catch {
+            return false
+          }
+        }),
+        `${name}: no service call carried the viewer`,
+      ).toBe(true)
     }
-    expect(skipped).toEqual([])
+    expect(skipped, "routes that called no service").toEqual([])
   })
 })

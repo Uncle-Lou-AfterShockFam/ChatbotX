@@ -27,6 +27,9 @@ type Row = { userId: string; inRotation: boolean }
  * Per-pipeline member list (s193): who a `members`-only pipeline is visible
  * to and, via `inRotation`, who round-robin assignment may pick. Every save
  * REPLACES the list in the given order; the server validates membership.
+ * Not the `MultiSelectField` the inbox-team dialog uses: this list is ORDERED
+ * (rotation order) and carries a per-row flag, which a multi-select cannot
+ * express.
  */
 export function PipelineMembersEditor({
   workspaceId,

@@ -1,12 +1,14 @@
 "use server"
 
 import { dealTaskTemplateService } from "@chatbotx.io/business/deal-task"
+import type { PermissionsInput } from "@chatbotx.io/business/workspace-member/permissions"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import z from "zod"
 import {
   type WorkspaceIdRequestParams,
   workspaceIdrequestParams,
 } from "@/features/common/schema"
+import { viewerFromActionCtx } from "@/features/deals/lib/viewer"
 import {
   requireContactsSectionAccess,
   workspaceActionClient,
@@ -27,9 +29,14 @@ export const upsertTaskTemplateAction = workspaceActionClient
     ({
       parsedInput,
       bindArgsParsedInputs: [workspaceId],
+      ctx,
     }: {
       parsedInput: z.infer<typeof upsertInput>
       bindArgsParsedInputs: WorkspaceIdRequestParams
+      ctx: {
+        user: { id: string }
+        workspaceMemberPermissions: PermissionsInput
+      }
     }) => {
       const { pipelineId, stageId, templateId, ...data } = parsedInput
       return dealTaskTemplateService.upsert({
@@ -38,6 +45,7 @@ export const upsertTaskTemplateAction = workspaceActionClient
         stageId,
         templateId,
         data,
+        viewer: viewerFromActionCtx(ctx),
       })
     },
   )
@@ -56,11 +64,20 @@ export const removeTaskTemplateAction = workspaceActionClient
     async ({
       parsedInput,
       bindArgsParsedInputs: [workspaceId],
+      ctx,
     }: {
       parsedInput: z.infer<typeof removeInput>
       bindArgsParsedInputs: WorkspaceIdRequestParams
+      ctx: {
+        user: { id: string }
+        workspaceMemberPermissions: PermissionsInput
+      }
     }) => {
-      await dealTaskTemplateService.remove({ workspaceId, ...parsedInput })
+      await dealTaskTemplateService.remove({
+        workspaceId,
+        ...parsedInput,
+        viewer: viewerFromActionCtx(ctx),
+      })
       return { deleted: true as const }
     },
   )

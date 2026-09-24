@@ -206,8 +206,11 @@ const privateListPipelineTaskTemplatesAPI = authorizedAPI
   )
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ data: z.array(dealTaskTemplateResource) }))
-  .handler(async ({ input }) => ({
-    data: await dealTaskTemplateService.listForPipeline(input),
+  .handler(async ({ input, context }) => ({
+    data: await dealTaskTemplateService.listForPipeline({
+      ...input,
+      viewer: viewerFromContext(context),
+    }),
   }))
 
 const privateUpsertTaskTemplateAPI = authorizedAPI
@@ -224,7 +227,7 @@ const privateUpsertTaskTemplateAPI = authorizedAPI
   )
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(dealTaskTemplateResource)
-  .handler(async ({ input }) => {
+  .handler(async ({ input, context }) => {
     const { workspaceId, pipelineId, stageId, templateId, ...data } = input
     return await dealTaskTemplateService.upsert({
       workspaceId,
@@ -232,6 +235,7 @@ const privateUpsertTaskTemplateAPI = authorizedAPI
       stageId,
       templateId,
       data,
+      viewer: viewerFromContext(context),
     })
   })
 
@@ -245,8 +249,11 @@ const privateRemoveTaskTemplateAPI = authorizedAPI
   .input(withStage.and(z.object({ templateId: zodBigintAsString() })))
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ deleted: z.literal(true) }))
-  .handler(async ({ input }) => {
-    await dealTaskTemplateService.remove(input)
+  .handler(async ({ input, context }) => {
+    await dealTaskTemplateService.remove({
+      ...input,
+      viewer: viewerFromContext(context),
+    })
     return { deleted: true as const }
   })
 

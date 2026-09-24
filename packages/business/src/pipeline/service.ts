@@ -136,7 +136,12 @@ class PipelineService extends BaseService {
       where: { workspaceId },
       orderBy: { order: "asc", createdAt: "asc" },
     })
-    const pipelines = await this.visibleTo({ pipelines: all, viewer, tx })
+    const pipelines = await this.visibleTo({
+      workspaceId,
+      pipelines: all,
+      viewer,
+      tx,
+    })
     if (pipelines.length === 0) {
       return []
     }
@@ -173,18 +178,24 @@ class PipelineService extends BaseService {
       columns: { id: true, workspaceId: true, settings: true },
       where: { workspaceId },
     })
-    const visible = await this.visibleTo({ pipelines: all, viewer, tx })
+    const visible = await this.visibleTo({
+      workspaceId,
+      pipelines: all,
+      viewer,
+      tx,
+    })
     return visible.map((p) => p.id)
   }
 
   private async visibleTo<
     T extends Pick<PipelineModel, "id" | "workspaceId" | "settings">,
   >(props: {
+    workspaceId: string
     pipelines: T[]
     viewer?: DealViewer | null
     tx: DatabaseClient
   }): Promise<T[]> {
-    const { pipelines, viewer, tx } = props
+    const { workspaceId, pipelines, viewer, tx } = props
     if (!viewer || isUnrestrictedViewer(viewer) || pipelines.length === 0) {
       return pipelines
     }
@@ -195,7 +206,7 @@ class PipelineService extends BaseService {
       return pipelines
     }
     const memberOf = await pipelineMemberService.listPipelineIdsForUser({
-      workspaceId: props.pipelines[0].workspaceId,
+      workspaceId,
       userId: viewer.userId,
       tx,
     })
@@ -293,14 +304,16 @@ class PipelineService extends BaseService {
     return { ...pipeline, stages }
   }
 
+  /** With a `viewer` (s193) a hidden pipeline is a 404 before any write. */
   async update(props: {
     workspaceId: string
     id: string
     data: Partial<Pick<PipelineData, "name" | "settings">>
+    viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<PipelineWithStages> {
-    const { workspaceId, id, data, tx = db } = props
-    const current = await this.findOrFail({ workspaceId, id, tx })
+    const { workspaceId, id, data, viewer, tx = db } = props
+    const current = await this.findOrFail({ workspaceId, id, viewer, tx })
 
     const set: Partial<typeof pipelineModel.$inferInsert> = {}
     if (data.name !== undefined) {
@@ -375,11 +388,12 @@ class PipelineService extends BaseService {
     workspaceId: string
     id: string
     force?: boolean
+    viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<{ deletedDeals: number }> {
-    const { workspaceId, id } = props
+    const { workspaceId, id, viewer } = props
     const run = async (tx: DatabaseClient) => {
-      await this.findOrFail({ workspaceId, id, tx })
+      await this.findOrFail({ workspaceId, id, viewer, tx })
       const openDeals = await tx.$count(
         dealModel,
         and(
@@ -429,9 +443,13 @@ class PipelineService extends BaseService {
     workspaceId: string
     pipelineId: string
     stageId: string
+    viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<PipelineStageModel> {
-    const { workspaceId, pipelineId, stageId, tx = db } = props
+    const { workspaceId, pipelineId, stageId, viewer, tx = db } = props
+    if (viewer) {
+      await this.findOrFail({ workspaceId, id: pipelineId, viewer, tx })
+    }
     const [row] = await tx
       .select({ stage: pipelineStageModel })
       .from(pipelineStageModel)
@@ -476,10 +494,11 @@ class PipelineService extends BaseService {
     pipelineId: string
     stageId?: string | null
     data: PipelineStageData
+    viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<PipelineStageModel> {
-    const { workspaceId, pipelineId, data, tx = db } = props
-    await this.findOrFail({ workspaceId, id: pipelineId, tx })
+    const { workspaceId, pipelineId, data, viewer, tx = db } = props
+    await this.findOrFail({ workspaceId, id: pipelineId, viewer, tx })
     this.assertStageData(data)
     const values = {
       name: data.name.trim(),
@@ -529,10 +548,11 @@ class PipelineService extends BaseService {
     workspaceId: string
     pipelineId: string
     stageIds: string[]
+    viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<PipelineStageModel[]> {
-    const { workspaceId, pipelineId, stageIds, tx = db } = props
-    await this.findOrFail({ workspaceId, id: pipelineId, tx })
+    const { workspaceId, pipelineId, stageIds, viewer, tx = db } = props
+    await this.findOrFail({ workspaceId, id: pipelineId, viewer, tx })
     const owned = await tx.query.pipelineStageModel.findMany({
       columns: { id: true },
       where: { pipelineId, id: { in: stageIds } },
@@ -564,10 +584,11 @@ class PipelineService extends BaseService {
     pipelineId: string
     stageId: string
     moveDealsTo?: string | null
+    viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<{ movedDeals: number }> {
-    const { workspaceId, pipelineId, stageId, tx = db } = props
-    await this.resolveStage({ workspaceId, pipelineId, stageId, tx })
+    const { workspaceId, pipelineId, stageId, viewer, tx = db } = props
+    await this.resolveStage({ workspaceId, pipelineId, stageId, viewer, tx })
     const stageCount = await tx.$count(
       pipelineStageModel,
       eq(pipelineStageModel.pipelineId, pipelineId),

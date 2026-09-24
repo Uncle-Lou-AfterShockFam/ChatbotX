@@ -21,6 +21,7 @@ import {
   resolveWorkspaceMember,
 } from "../deal/shared"
 import { notFoundException, validationException } from "../errors"
+import type { DealViewer } from "../pipeline/access"
 import { pipelineService } from "../pipeline/service"
 
 const TEMPLATE_NOT_FOUND = "Task template not found"
@@ -60,10 +61,16 @@ export class DealTaskTemplateService extends BaseService {
   async listForPipeline(props: {
     workspaceId: string
     pipelineId: string
+    viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<DealTaskTemplateModel[]> {
-    const { workspaceId, pipelineId, tx = db } = props
-    await pipelineService.findOrFail({ workspaceId, id: pipelineId, tx })
+    const { workspaceId, pipelineId, viewer, tx = db } = props
+    await pipelineService.findOrFail({
+      workspaceId,
+      id: pipelineId,
+      viewer,
+      tx,
+    })
     return await tx
       .select()
       .from(dealTaskTemplateModel)
@@ -82,10 +89,17 @@ export class DealTaskTemplateService extends BaseService {
     stageId: string
     templateId?: string | null
     data: DealTaskTemplateData
+    viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<DealTaskTemplateModel> {
-    const { workspaceId, pipelineId, stageId, tx = db } = props
-    await pipelineService.resolveStage({ workspaceId, pipelineId, stageId, tx })
+    const { workspaceId, pipelineId, stageId, viewer, tx = db } = props
+    await pipelineService.resolveStage({
+      workspaceId,
+      pipelineId,
+      stageId,
+      viewer,
+      tx,
+    })
     const values = await this.parse({ workspaceId, data: props.data, tx })
     if (props.templateId) {
       const [updated] = await tx
@@ -138,9 +152,26 @@ export class DealTaskTemplateService extends BaseService {
     pipelineId: string
     stageId: string
     templateId: string
+    viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<void> {
-    const { workspaceId, stageId, templateId, tx = db } = props
+    const {
+      workspaceId,
+      pipelineId,
+      stageId,
+      templateId,
+      viewer,
+      tx = db,
+    } = props
+    if (viewer) {
+      await pipelineService.resolveStage({
+        workspaceId,
+        pipelineId,
+        stageId,
+        viewer,
+        tx,
+      })
+    }
     const deleted = await tx
       .delete(dealTaskTemplateModel)
       .where(

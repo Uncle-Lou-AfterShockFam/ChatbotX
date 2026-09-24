@@ -86,6 +86,10 @@ vi.mock("../src/workspace-member/service", () => ({
   },
 }))
 vi.mock("../src/audit/dispatcher", () => ({ dispatchAuditRecord: vi.fn() }))
+const pipelineFindOrFail = vi.hoisted(() => vi.fn())
+vi.mock("../src/pipeline/service", () => ({
+  pipelineService: { findOrFail: pipelineFindOrFail },
+}))
 vi.mock("../src/logger", () => ({
   logger: { warn: m.logWarn, info: vi.fn() },
 }))
@@ -106,14 +110,20 @@ beforeEach(() => {
 })
 
 describe("pipelineMemberService.set", () => {
-  test("replaces the list in order: delete then insert, order = position, inRotation defaults true", async () => {
+  test("replaces the list in order under the pipeline row lock: delete then insert, order = position, inRotation defaults true", async () => {
     m.state.selects = [[{ id: PIPE }]]
     const rows = await pipelineMemberService.set({
       workspaceId: WS,
       pipelineId: PIPE,
       members: [{ userId: "2" }, { userId: "1", inRotation: false }],
     })
-    expect(m.state.calls).toEqual(["select", "delete", "insert:2"])
+    expect(m.state.calls).toEqual([
+      "for:update",
+      "select",
+      "delete",
+      "insert:2",
+    ])
+    expect(pipelineFindOrFail).not.toHaveBeenCalled()
     expect(rows.map((r) => [r.userId, r.inRotation, r.order])).toEqual([
       ["2", true, 1000],
       ["1", false, 2000],
@@ -129,7 +139,25 @@ describe("pipelineMemberService.set", () => {
         members: [],
       }),
     ).resolves.toEqual([])
-    expect(m.state.calls).toEqual(["select", "delete"])
+    expect(m.state.calls).toEqual(["for:update", "select", "delete"])
+  })
+
+  test("with a viewer the pipeline must be visible to them FIRST (404 propagates, nothing written)", async () => {
+    pipelineFindOrFail.mockRejectedValueOnce(
+      Object.assign(new Error("Pipeline not found"), { httpStatusCode: 404 }),
+    )
+    await expect(
+      pipelineMemberService.set({
+        workspaceId: WS,
+        pipelineId: PIPE,
+        members: [{ userId: "1" }],
+        viewer: { userId: "1", permissions: { superAdmin: false } },
+      }),
+    ).rejects.toMatchObject({ httpStatusCode: 404 })
+    expect(pipelineFindOrFail).toHaveBeenCalledWith(
+      expect.objectContaining({ id: PIPE, viewer: expect.anything() }),
+    )
+    expect(m.state.calls).toEqual([])
   })
 
   test("a user outside the workspace is a 422 naming the ids, before any write", async () => {
@@ -144,7 +172,7 @@ describe("pipelineMemberService.set", () => {
       httpStatusCode: 422,
       data: { reason: "notWorkspaceMember", userIds: "9" },
     })
-    expect(m.state.calls).toEqual(["select"])
+    expect(m.state.calls).toEqual(["for:update", "select"])
   })
 
   test("a duplicate user, a bad id, a non-list and the cap are 422s before any read", async () => {

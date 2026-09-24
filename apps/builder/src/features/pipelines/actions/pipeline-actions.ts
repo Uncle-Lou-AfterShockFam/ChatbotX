@@ -1,12 +1,14 @@
 "use server"
 
 import { pipelineMemberService, pipelineService } from "@chatbotx.io/business"
+import type { PermissionsInput } from "@chatbotx.io/business/workspace-member/permissions"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import z from "zod"
 import {
   type WorkspaceIdRequestParams,
   workspaceIdrequestParams,
 } from "@/features/common/schema"
+import { viewerFromActionCtx } from "@/features/deals/lib/viewer"
 import {
   requireContactsSectionAccess,
   workspaceActionClient,
@@ -20,7 +22,10 @@ import {
   upsertStageRequest,
 } from "../schema/action"
 
-type Bound = { bindArgsParsedInputs: WorkspaceIdRequestParams }
+type Bound = {
+  bindArgsParsedInputs: WorkspaceIdRequestParams
+  ctx: { user: { id: string }; workspaceMemberPermissions: PermissionsInput }
+}
 
 export const createPipelineAction = workspaceActionClient
   .use(requireContactsSectionAccess)
@@ -43,8 +48,14 @@ export const updatePipelineAction = workspaceActionClient
     async ({
       parsedInput: { id, ...data },
       bindArgsParsedInputs: [workspaceId],
+      ctx,
     }: Bound & { parsedInput: z.infer<typeof updateInput> }) =>
-      pipelineService.update({ workspaceId, id, data }),
+      pipelineService.update({
+        workspaceId,
+        id,
+        data,
+        viewer: viewerFromActionCtx(ctx),
+      }),
   )
 
 const deleteInput = z.object({
@@ -59,8 +70,13 @@ export const deletePipelineAction = workspaceActionClient
     async ({
       parsedInput,
       bindArgsParsedInputs: [workspaceId],
+      ctx,
     }: Bound & { parsedInput: z.infer<typeof deleteInput> }) =>
-      pipelineService.remove({ workspaceId, ...parsedInput }),
+      pipelineService.remove({
+        workspaceId,
+        ...parsedInput,
+        viewer: viewerFromActionCtx(ctx),
+      }),
   )
 
 const upsertStageInput = upsertStageRequest.extend({
@@ -74,8 +90,15 @@ export const upsertStageAction = workspaceActionClient
     async ({
       parsedInput: { pipelineId, stageId, ...data },
       bindArgsParsedInputs: [workspaceId],
+      ctx,
     }: Bound & { parsedInput: z.infer<typeof upsertStageInput> }) =>
-      pipelineService.upsertStage({ workspaceId, pipelineId, stageId, data }),
+      pipelineService.upsertStage({
+        workspaceId,
+        pipelineId,
+        stageId,
+        data,
+        viewer: viewerFromActionCtx(ctx),
+      }),
   )
 
 const reorderInput = reorderStagesRequest.extend({
@@ -89,8 +112,13 @@ export const reorderStagesAction = workspaceActionClient
     async ({
       parsedInput,
       bindArgsParsedInputs: [workspaceId],
+      ctx,
     }: Bound & { parsedInput: z.infer<typeof reorderInput> }) =>
-      pipelineService.reorderStages({ workspaceId, ...parsedInput }),
+      pipelineService.reorderStages({
+        workspaceId,
+        ...parsedInput,
+        viewer: viewerFromActionCtx(ctx),
+      }),
   )
 
 const removeStageInput = removeStageRequest.extend({
@@ -104,8 +132,13 @@ export const removeStageAction = workspaceActionClient
     async ({
       parsedInput,
       bindArgsParsedInputs: [workspaceId],
+      ctx,
     }: Bound & { parsedInput: z.infer<typeof removeStageInput> }) =>
-      pipelineService.removeStage({ workspaceId, ...parsedInput }),
+      pipelineService.removeStage({
+        workspaceId,
+        ...parsedInput,
+        viewer: viewerFromActionCtx(ctx),
+      }),
   )
 
 const setMembersInput = setPipelineMembersRequest.extend({
@@ -119,10 +152,12 @@ export const setPipelineMembersAction = workspaceActionClient
     async ({
       parsedInput,
       bindArgsParsedInputs: [workspaceId],
+      ctx,
     }: Bound & { parsedInput: z.infer<typeof setMembersInput> }) =>
       pipelineMemberService.set({
         workspaceId,
         pipelineId: parsedInput.pipelineId,
         members: parsedInput.members,
+        viewer: viewerFromActionCtx(ctx),
       }),
   )

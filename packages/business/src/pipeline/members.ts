@@ -16,6 +16,8 @@ import { BaseService } from "../base.service"
 import { notFoundException, validationException } from "../errors"
 import { logger } from "../logger"
 import { workspaceMemberService } from "../workspace-member/service"
+import type { DealViewer } from "./access"
+import { pipelineService } from "./service"
 
 const USER_ID = /^\d+$/
 
@@ -101,11 +103,25 @@ export class PipelineMemberService extends BaseService {
     workspaceId: string
     pipelineId: string
     members: PipelineMemberInput[]
+    viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<PipelineMemberModel[]> {
-    const { workspaceId, pipelineId } = props
+    const { workspaceId, pipelineId, viewer } = props
     const members = this.parseMembers(props.members)
     const run = async (tx: DatabaseClient) => {
+      if (viewer) {
+        // s193: a members-only pipeline the viewer cannot see is a 404 here
+        // too, or a non-member could add themselves through this write.
+        await pipelineService.findOrFail({
+          workspaceId,
+          id: pipelineId,
+          viewer,
+          tx,
+        })
+      }
+      // The same row lock `pickRoundRobin` takes: a replace-set and a pick
+      // never interleave (the pick would otherwise store a cursor user the
+      // replace just removed).
       const [pipeline] = await tx
         .select({ id: pipelineModel.id })
         .from(pipelineModel)
@@ -115,7 +131,7 @@ export class PipelineMemberService extends BaseService {
             eq(pipelineModel.workspaceId, workspaceId),
           ),
         )
-        .limit(1)
+        .for("update")
       if (!pipeline) {
         throw notFoundException("Pipeline not found")
       }

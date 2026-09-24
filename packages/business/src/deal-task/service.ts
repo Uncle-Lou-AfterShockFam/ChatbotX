@@ -381,7 +381,7 @@ export class DealTaskService extends BaseService {
         tx,
       })
       if (current.status === "open") {
-        return current
+        return { task: current, changed: false as const }
       }
       const [reopened] = await tx
         .update(dealTaskModel)
@@ -395,10 +395,12 @@ export class DealTaskService extends BaseService {
           and(eq(dealTaskModel.id, taskId), eq(dealTaskModel.status, "done")),
         )
         .returning()
-      return reopened ?? current
+      return { task: reopened ?? current, changed: true as const }
     })
-    await this.audit("deal.task.reopen", taskId)
-    return task
+    if (task.changed) {
+      await this.audit("deal.task.reopen", taskId)
+    }
+    return task.task
   }
 
   async remove(props: {
