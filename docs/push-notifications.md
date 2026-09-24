@@ -21,6 +21,22 @@ Conversation assignment (`conversationService.updateAssignment`) enqueues
 `notifyConversationAssigned` directly, guarded so the assigning user is never
 notified about their own assignment (`assignedUserId !== assignedBy`).
 
+### Per-user jobs (`notifyUser`, s194)
+
+Deal task assignment and `@mentions` on a deal comment notify a USER, not a
+conversation. `notificationService.notify` (`packages/business/src/notification/`)
+is the single entry: it reads the member's preferences through
+`resolveMemberNotificationPrefs` (the legacy `{}` rows default the new
+`taskAssigned` / `dealMentioned` types and the `push` / `inApp` channels to
+true), writes the in-app `Notification` row (`inApp`), enqueues `notifyUser`
+keyed `notify-user-<notificationId>` (`push`) and sends the realtime
+`notificationCreated` to that member. The worker branch never resolves a
+conversation; `data` carries `{ workspaceId, kind, dealId, taskId, commentId,
+notificationId }` and the builder opens `/space/{workspaceId}/deals?pipelineId=&dealId=`.
+Self-assignment and self-mention are silent; a contact-less deal (which emits
+no trigger event) still notifies. The delivery half (`lib/deliver-push.ts`)
+is shared with the conversation jobs.
+
 See `docs/request-workflow.md` for the sequence diagram.
 
 ## `UserDeviceToken` lifecycle

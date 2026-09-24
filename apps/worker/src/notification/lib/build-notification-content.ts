@@ -36,6 +36,20 @@ export const buildNotificationContent = (props: {
   const { job, contactFullName, workspaceLanguage } = props
   const strings = t(workspaceLanguage)
 
+  if (job.type === "notifyUser") {
+    const { notificationType, payload } = job.data
+    if (notificationType === "taskAssigned") {
+      return {
+        title: payload.taskTitle || payload.dealTitle || strings.assignedTask,
+        body: strings.assignedTask,
+      }
+    }
+    return {
+      title: payload.dealTitle || strings.mentionedInDeal,
+      body: payload.excerpt || strings.mentionedInDeal,
+    }
+  }
+
   if (job.type === "notifyConversationAssigned") {
     return {
       title: contactFullName ?? strings.newMessage,

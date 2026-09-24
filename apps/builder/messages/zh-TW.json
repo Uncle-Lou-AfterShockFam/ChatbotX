@@ -139,14 +139,18 @@
       "label": "通知類型",
       "notifyAdmin": "通知管理員",
       "newMessageToHuman": "人類新訊息",
-      "newOrder": "新訂單"
+      "newOrder": "新訂單",
+      "taskAssigned": "Task assigned to me",
+      "dealMentioned": "Mentioned on a deal"
     },
     "notificationChannel": {
       "label": "通知頻道",
       "messenger": "Messenger",
       "email": "電子郵件",
       "telegram": "Telegram",
-      "browser": "瀏覽器"
+      "browser": "瀏覽器",
+      "push": "Mobile push",
+      "inApp": "In-app"
     },
     "accessToken": {
       "label": "訪問權杖"
@@ -6899,5 +6903,12 @@
       "edited": "(edited)",
       "someone": "Someone"
     }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "Nothing yet",
+    "markAllRead": "Mark all read",
+    "taskAssigned": "Task assigned: {task}",
+    "dealMentioned": "You were mentioned on a deal"
   }
 }

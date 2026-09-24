@@ -1,16 +1,21 @@
 import {
   contactService,
   conversationService,
-  deviceTokenService,
   workspaceMemberService,
   workspaceService,
 } from "@chatbotx.io/business"
 import type { ConversationModel } from "@chatbotx.io/database/types"
-import type { NotificationJobData } from "@chatbotx.io/worker-config"
-import { Expo, type ExpoPushMessage, type ExpoPushToken } from "expo-server-sdk"
+import type {
+  NotificationJobData,
+  NotificationJobNotifyUser,
+} from "@chatbotx.io/worker-config"
+import type { Expo } from "expo-server-sdk"
 import { logger } from "../../lib/logger"
 import { buildNotificationContent } from "../lib/build-notification-content"
+import { deliverPushToUsers } from "../lib/deliver-push"
 import { getExpoClient } from "../lib/expo"
+
+type ConversationJob = Exclude<NotificationJobData, NotificationJobNotifyUser>
 
 /**
  * Recipients = the assigned user, else every workspace member (unassigned
@@ -18,7 +23,7 @@ import { getExpoClient } from "../lib/expo"
  * presence-aware suppression is a post-MVP concern).
  */
 const resolveRecipientUserIds = async (
-  job: NotificationJobData,
+  job: ConversationJob,
   conversation: ConversationModel,
 ): Promise<string[]> => {
   if (job.type === "notifyConversationAssigned") {
@@ -38,7 +43,7 @@ const resolveRecipientUserIds = async (
 }
 
 const resolveNotificationContent = async (
-  job: NotificationJobData,
+  job: ConversationJob,
   conversation: ConversationModel,
 ): Promise<{ title: string; body: string }> => {
   const { workspaceId } = job.data
@@ -58,11 +63,53 @@ const resolveNotificationContent = async (
   })
 }
 
+/**
+ * A per-user job (s194): no conversation, the ONE recipient is in the
+ * payload. `data` is the deep link: the builder opens
+ * `/space/{workspaceId}/deals?dealId=...`.
+ */
+const sendUserPush = async (
+  expo: Expo,
+  job: NotificationJobNotifyUser,
+): Promise<void> => {
+  const { workspaceId, userId, notificationType, dealId, taskId, commentId } =
+    job.data
+  const workspace = await workspaceService.find({ where: { id: workspaceId } })
+  const { title, body } = buildNotificationContent({
+    job,
+    contactFullName: undefined,
+    workspaceLanguage: workspace?.language,
+  })
+  const { sent } = await deliverPushToUsers({
+    expo,
+    userIds: [userId],
+    title,
+    body,
+    data: {
+      workspaceId,
+      kind: notificationType,
+      dealId,
+      taskId,
+      commentId,
+      notificationId: job.data.notificationId,
+    },
+  })
+  logger.info(
+    { workspaceId, userId, notificationType, sent },
+    "user push notification processed",
+  )
+}
+
 export const sendPushForNotificationJob = async (
   job: NotificationJobData,
 ): Promise<void> => {
   const expo = getExpoClient()
   if (!expo) {
+    return
+  }
+
+  if (job.type === "notifyUser") {
+    await sendUserPush(expo, job)
     return
   }
 
@@ -75,81 +122,15 @@ export const sendPushForNotificationJob = async (
     return
   }
 
-  const deviceTokens = await deviceTokenService.findByUserIds({
-    userIds: recipientUserIds,
-  })
-  if (deviceTokens.length === 0) {
-    return
-  }
-
-  const validTokens: ExpoPushToken[] = []
-  const invalidTokens: string[] = []
-  for (const deviceToken of deviceTokens) {
-    if (Expo.isExpoPushToken(deviceToken.token)) {
-      validTokens.push(deviceToken.token)
-    } else {
-      invalidTokens.push(deviceToken.token)
-    }
-  }
-
-  if (invalidTokens.length > 0) {
-    await deviceTokenService.deleteByTokens({ tokens: invalidTokens })
-  }
-
-  if (validTokens.length === 0) {
-    return
-  }
-
   const { workspaceId, conversationId } = job.data
   const messageId = "messageId" in job.data ? job.data.messageId : ""
   const { title, body } = await resolveNotificationContent(job, conversation)
 
-  const messages: ExpoPushMessage[] = validTokens.map((token) => ({
-    to: token,
+  await deliverPushToUsers({
+    expo,
+    userIds: recipientUserIds,
     title,
     body,
     data: { workspaceId, conversationId, messageId },
-    sound: "default",
-    channelId: "default",
-    priority: "high",
-  }))
-
-  const chunks = expo.chunkPushNotifications(messages)
-  const staleTokens: string[] = []
-  let failedChunkCount = 0
-
-  for (const chunk of chunks) {
-    try {
-      const tickets = await expo.sendPushNotificationsAsync(chunk)
-      for (const [index, ticket] of tickets.entries()) {
-        if (
-          ticket.status === "error" &&
-          ticket.details?.error === "DeviceNotRegistered"
-        ) {
-          const sentMessage = chunk[index]
-          if (typeof sentMessage.to === "string") {
-            staleTokens.push(sentMessage.to)
-          }
-        }
-      }
-    } catch (error) {
-      failedChunkCount++
-      logger.warn(error, "Expo push chunk failed")
-    }
-  }
-
-  // If every chunk threw, nothing was delivered — rethrow so BullMQ retries
-  // instead of silently dropping the notification. Partial failures stay
-  // isolated per-chunk above.
-  if (failedChunkCount === chunks.length) {
-    throw new Error(`All ${chunks.length} Expo push chunk(s) failed to send`)
-  }
-
-  if (staleTokens.length > 0) {
-    await deviceTokenService.deleteByTokens({ tokens: staleTokens })
-    logger.info(
-      { count: staleTokens.length },
-      "pruned stale device push tokens",
-    )
-  }
+  })
 }

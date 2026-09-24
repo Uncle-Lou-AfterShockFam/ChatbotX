@@ -20,6 +20,7 @@ export const RealtimeEventType = {
   whatsappCallOutboundAnswer: "whatsappCallOutboundAnswer",
   whatsappCallOutboundStatus: "whatsappCallOutboundStatus",
   whatsappCallPermissionUpdated: "whatsappCallPermissionUpdated",
+  notificationCreated: "notificationCreated",
 } as const
 
 export type RealtimeEventCreateMessage = {
@@ -288,7 +289,22 @@ export type RealtimeEventWhatsappCallPermissionUpdated = {
   data: WhatsappCallPermissionUpdatedData
 }
 
+/** A new in-app notification for ONE member (s194); sent via sendToWorkspaceMember. */
+export type RealtimeEventNotificationCreated = {
+  eventType: typeof RealtimeEventType.notificationCreated
+  data: {
+    id: string
+    type: string
+    dealId: string
+    taskId: string | null
+    commentId: string | null
+    payload: Record<string, unknown>
+    createdAt: string
+  }
+}
+
 export type RealtimeEventData =
+  | RealtimeEventNotificationCreated
   | RealtimeEventCreateMessage
   | RealtimeEventMessageDeleted
   | RealtimeEventMessageIdAssigned

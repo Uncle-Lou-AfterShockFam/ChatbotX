@@ -116,3 +116,83 @@ describe("buildNotificationContent", () => {
     expect(result.body).toBe("Shared a location")
   })
 })
+
+describe("buildNotificationContent: notifyUser (s194)", () => {
+  const userJob = (
+    notificationType: string,
+    payload: Record<string, unknown>,
+  ) =>
+    ({
+      type: "notifyUser",
+      data: {
+        workspaceId: "ws-1",
+        userId: "u-2",
+        notificationType,
+        dealId: "d-1",
+        taskId: null,
+        commentId: null,
+        notificationId: null,
+        payload,
+      },
+    }) as never
+
+  test("taskAssigned: task title + localized body", () => {
+    const result = buildNotificationContent({
+      job: userJob("taskAssigned", { taskTitle: "Call", dealTitle: "D" }),
+      contactFullName: undefined,
+      workspaceLanguage: "de",
+    })
+    expect(result.title).toBe("Call")
+    expect(result.body).toBe("Dir wurde eine Aufgabe zugewiesen")
+  })
+
+  test("dealMentioned: deal title + excerpt, generic fallbacks", () => {
+    expect(
+      buildNotificationContent({
+        job: userJob("dealMentioned", { dealTitle: "D", excerpt: "hi" }),
+        contactFullName: undefined,
+        workspaceLanguage: "en",
+      }),
+    ).toEqual({ title: "D", body: "hi" })
+    expect(
+      buildNotificationContent({
+        job: userJob("dealMentioned", { dealTitle: null }),
+        contactFullName: undefined,
+        workspaceLanguage: "en",
+      }),
+    ).toEqual({
+      title: "You were mentioned on a deal",
+      body: "You were mentioned on a deal",
+    })
+  })
+
+  test("every locale carries the two s194 keys", async () => {
+    const { t } = await import("../../src/notification/lib/strings")
+    for (const lang of [
+      "en",
+      "vi",
+      "ar",
+      "da",
+      "de",
+      "es",
+      "fi",
+      "fr",
+      "he",
+      "id",
+      "it",
+      "ja",
+      "nl",
+      "pt-BR",
+      "pt-PT",
+      "ro",
+      "sv",
+      "tr",
+      "zh-CN",
+      "zh-TW",
+    ]) {
+      const s = t(lang)
+      expect(s.assignedTask, lang).toBeTruthy()
+      expect(s.mentionedInDeal, lang).toBeTruthy()
+    }
+  })
+})

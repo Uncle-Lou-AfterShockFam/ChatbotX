@@ -2462,13 +2462,17 @@
       "email": "电子邮件",
       "label": "通知频道",
       "messenger": "Messenger",
-      "telegram": "Telegram"
+      "telegram": "Telegram",
+      "push": "Mobile push",
+      "inApp": "In-app"
     },
     "notificationType": {
       "label": "通知类型",
       "newMessageToHuman": "人类新消息",
       "newOrder": "新订单",
-      "notifyAdmin": "通知管理员"
+      "notifyAdmin": "通知管理员",
+      "taskAssigned": "Task assigned to me",
+      "dealMentioned": "Mentioned on a deal"
     },
     "number": {
       "label": "号码",
@@ -6899,5 +6903,12 @@
       "edited": "(edited)",
       "someone": "Someone"
     }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "Nothing yet",
+    "markAllRead": "Mark all read",
+    "taskAssigned": "Task assigned: {task}",
+    "dealMentioned": "You were mentioned on a deal"
   }
 }

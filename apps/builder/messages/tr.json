@@ -980,14 +980,18 @@
       "label": "Bildirim Türü",
       "notifyAdmin": "Yöneticiye Bildir",
       "newMessageToHuman": "İnsana Yeni Mesaj",
-      "newOrder": "Yeni Sipariş"
+      "newOrder": "Yeni Sipariş",
+      "taskAssigned": "Task assigned to me",
+      "dealMentioned": "Mentioned on a deal"
     },
     "notificationChannel": {
       "label": "Bildirim Kanalı",
       "messenger": "Messenger",
       "email": "E-posta",
       "telegram": "Telegram",
-      "browser": "Tarayıcı"
+      "browser": "Tarayıcı",
+      "push": "Mobile push",
+      "inApp": "In-app"
     },
     "accessToken": {
       "label": "Erişim Jetonu"
@@ -6899,5 +6903,12 @@
       "edited": "(edited)",
       "someone": "Someone"
     }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "Nothing yet",
+    "markAllRead": "Mark all read",
+    "taskAssigned": "Task assigned: {task}",
+    "dealMentioned": "You were mentioned on a deal"
   }
 }

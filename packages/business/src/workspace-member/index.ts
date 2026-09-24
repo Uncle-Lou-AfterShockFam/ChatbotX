@@ -1,3 +1,4 @@
+export * from "./notification-prefs"
 export * from "./permissions"
 export * from "./predicates"
 export * from "./service"

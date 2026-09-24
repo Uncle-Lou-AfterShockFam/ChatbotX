@@ -166,6 +166,15 @@ vi.mock("../src/audit/dispatcher", () => ({ dispatchAuditRecord: vi.fn() }))
 vi.mock("../src/logger", () => ({
   logger: { warn: m.logWarn, info: m.logInfo },
 }))
+// s194: per-user notifications, recorded apart from `calls`
+const notify = vi.fn(async () => ({ notification: null, pushEnqueued: false }))
+const markReadByComment = vi.fn(async () => undefined)
+vi.mock("../src/notification/service", () => ({
+  notificationService: {
+    notify: (...a: unknown[]) => notify(...a),
+    markReadByComment: (...a: unknown[]) => markReadByComment(...a),
+  },
+}))
 
 const { dealCommentService } = await import("../src/deal-comment/service")
 
@@ -376,6 +385,78 @@ describe("dealCommentService.create", () => {
       ).rejects.toMatchObject({ httpStatusCode: 422, field: "body" })
     }
     expect(m.state.inserted).toEqual([])
+  })
+})
+
+describe("dealCommentService s194 notifications", () => {
+  test("create notifies every mentioned user but the author, contact-less deal included", async () => {
+    m.state.selects = [[{ count: 0 }]]
+    m.dealFindOrFail.mockResolvedValue({ ...DEAL, contactId: null })
+    const comment = await dealCommentService.create({
+      workspaceId: WS,
+      dealId: "deal-1",
+      body: "me @[One](u:1) and @[Two](u:2)",
+      actorId: "1",
+    })
+    expect(m.emitMentioned).not.toHaveBeenCalled()
+    expect(notify).toHaveBeenCalledTimes(1)
+    expect(notify).toHaveBeenCalledWith({
+      workspaceId: WS,
+      userId: "2",
+      type: "dealMentioned",
+      dealId: "deal-1",
+      commentId: comment.id,
+      payload: {
+        pipelineId: "pipe-1",
+        dealTitle: "Roof",
+        actorId: "1",
+        excerpt: "me @One and @Two",
+      },
+    })
+  })
+
+  test("update notifies only the ADDED mentions; a notify failure is logged, never thrown", async () => {
+    m.state.selects = [[COMMENT]]
+    m.state.updates = [
+      [{ ...COMMENT, body: "hello @[Two](u:2) @[Three](u:3)" }],
+    ]
+    notify.mockRejectedValueOnce(new Error("boom"))
+    await dealCommentService.update({
+      workspaceId: WS,
+      dealId: "deal-1",
+      commentId: "c-1",
+      body: "hello @[Two](u:2) @[Three](u:3)",
+      actorId: "u-1",
+      viewer: AUTHOR,
+    })
+    expect(notify).toHaveBeenCalledTimes(1)
+    expect(notify.mock.calls[0][0]).toMatchObject({ userId: "3" })
+    expect(m.logWarn).toHaveBeenCalledWith(
+      expect.objectContaining({ commentId: "c-1", userId: "3" }),
+      "deal-comment: notify failed",
+    )
+  })
+
+  test("markMentionRead also marks the notification, only when a row was marked", async () => {
+    m.state.updates = [[{ id: "m-1" }], []]
+    await dealCommentService.markMentionRead({
+      workspaceId: WS,
+      commentId: "c-1",
+      userId: "2",
+    })
+    expect(markReadByComment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: WS,
+        commentId: "c-1",
+        userId: "2",
+      }),
+    )
+    await dealCommentService.markMentionRead({
+      workspaceId: WS,
+      commentId: "c-1",
+      userId: "2",
+    })
+    expect(markReadByComment).toHaveBeenCalledTimes(1)
   })
 })
 

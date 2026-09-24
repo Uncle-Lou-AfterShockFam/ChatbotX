@@ -1,3 +1,7 @@
+import {
+  workspaceMemberNotificationChannelsSchema,
+  workspaceMemberNotificationTypesSchema,
+} from "@chatbotx.io/database/partials"
 import { z } from "zod"
 
 export const inviteWorkspaceMemberRequest = z.object({
@@ -21,19 +25,12 @@ export type InviteWorkspaceMemberRequest = z.infer<
   typeof inviteWorkspaceMemberRequest
 >
 
+// The mutation is the FULL shape (every switch is on the form); the stored
+// schemas keep the s194 keys optional for legacy rows.
 export const updateWorkspaceMemberRequest = inviteWorkspaceMemberRequest.extend(
   {
-    notificationTypes: z.object({
-      notifyAdmin: z.boolean(),
-      newMessageToHuman: z.boolean(),
-      newOrder: z.boolean(),
-    }),
-    notificationChannels: z.object({
-      messenger: z.boolean(),
-      email: z.boolean(),
-      telegram: z.boolean(),
-      browser: z.boolean(),
-    }),
+    notificationTypes: workspaceMemberNotificationTypesSchema.required(),
+    notificationChannels: workspaceMemberNotificationChannelsSchema.required(),
   },
 )
 export type UpdateWorkspaceMemberRequest = z.infer<

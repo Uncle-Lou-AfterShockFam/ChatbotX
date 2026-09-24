@@ -1,4 +1,8 @@
-import type { ContentType } from "@chatbotx.io/database/partials"
+import type {
+  ContentType,
+  NotificationPayload,
+  NotificationType,
+} from "@chatbotx.io/database/partials"
 import { Queue } from "bullmq"
 import {
   defaultJobOptions,
@@ -11,6 +15,7 @@ import { queueNames } from "../../lib/types"
 export const NotificationJobAction = {
   notifyIncomingMessage: "notifyIncomingMessage",
   notifyConversationAssigned: "notifyConversationAssigned",
+  notifyUser: "notifyUser",
 } as const
 
 export type NotificationJobNotifyIncomingMessage = {
@@ -40,9 +45,30 @@ export type NotificationJobNotifyConversationAssigned = {
   }
 }
 
+/**
+ * A per-USER push (s194): task assignment / deal mention. Keyed by userId,
+ * never a conversation; `notificationId` is the in-app row (null when the
+ * member turned `inApp` off but kept `push`). `workspaceId` stays first-class
+ * because the worker's blocked-owner guard reads it.
+ */
+export type NotificationJobNotifyUser = {
+  type: typeof NotificationJobAction.notifyUser
+  data: {
+    workspaceId: string
+    userId: string
+    notificationType: NotificationType
+    dealId: string
+    taskId: string | null
+    commentId: string | null
+    notificationId: string | null
+    payload: NotificationPayload
+  }
+}
+
 export type NotificationJobData =
   | NotificationJobNotifyIncomingMessage
   | NotificationJobNotifyConversationAssigned
+  | NotificationJobNotifyUser
 
 export const notificationQueue = isNoRedisEnv()
   ? fakeQueue

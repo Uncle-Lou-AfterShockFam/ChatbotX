@@ -37,6 +37,7 @@
     "./license-startup": "./src/enterprise/license/startup.ts",
     "./javascript-execution": "./src/javascript-execution/index.ts",
     "./minigame": "./src/minigame/index.ts",
+    "./notification": "./src/notification/index.ts",
     "./pipeline": "./src/pipeline/index.ts",
     "./smart-delay": "./src/smart-delay/index.ts",
     "./errors": "./src/errors.ts",
@@ -46,6 +47,7 @@
     "./utils": "./src/utils.ts",
     "./workspace-api-token/credentials": "./src/workspace-api-token/credentials.ts",
     "./workspace-lifecycle/predicates": "./src/workspace-lifecycle/predicates.ts",
+    "./workspace-member/notification-prefs": "./src/workspace-member/notification-prefs.ts",
     "./workspace-member/predicates": "./src/workspace-member/predicates.ts",
     "./workspace-member/permissions": "./src/workspace-member/permissions.ts"
   },

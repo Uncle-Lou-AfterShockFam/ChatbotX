@@ -980,14 +980,18 @@
       "label": "Tipo de notificación",
       "notifyAdmin": "Notificar al administrador",
       "newMessageToHuman": "Nuevo mensaje para una persona",
-      "newOrder": "Nuevo pedido"
+      "newOrder": "Nuevo pedido",
+      "taskAssigned": "Task assigned to me",
+      "dealMentioned": "Mentioned on a deal"
     },
     "notificationChannel": {
       "label": "Canal de notificación",
       "messenger": "Messenger",
       "email": "Correo electrónico",
       "telegram": "Telegram",
-      "browser": "Navegador"
+      "browser": "Navegador",
+      "push": "Mobile push",
+      "inApp": "In-app"
     },
     "accessToken": {
       "label": "Token de acceso"
@@ -6899,5 +6903,12 @@
       "edited": "(edited)",
       "someone": "Someone"
     }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "Nothing yet",
+    "markAllRead": "Mark all read",
+    "taskAssigned": "Task assigned: {task}",
+    "dealMentioned": "You were mentioned on a deal"
   }
 }

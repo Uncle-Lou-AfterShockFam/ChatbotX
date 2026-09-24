@@ -1,0 +1,54 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { orpc } from "@/lib/orpc/query"
+
+/**
+ * The bell's data (s194). Realtime `notificationCreated` invalidates these
+ * keys from `NotificationRealtimeSync`; the 60 s refetch is the fallback
+ * for a workspace without realtime.
+ */
+export const NOTIFICATION_POLL_MS = 60_000
+
+export const useNotifications = (workspaceId: string, enabled = true) =>
+  useQuery(
+    orpc.notificationsAPI.privateListNotificationsAPI.queryOptions({
+      input: { workspaceId, limit: 20 },
+      enabled,
+      refetchInterval: NOTIFICATION_POLL_MS,
+    }),
+  )
+
+export const useUnreadNotificationCount = (workspaceId: string) =>
+  useQuery(
+    orpc.notificationsAPI.privateCountUnreadNotificationsAPI.queryOptions({
+      input: { workspaceId },
+      refetchInterval: NOTIFICATION_POLL_MS,
+      select: (res) => res.count,
+    }),
+  )
+
+export const useInvalidateNotifications = () => {
+  const queryClient = useQueryClient()
+  return () =>
+    queryClient.invalidateQueries({ queryKey: orpc.notificationsAPI.key() })
+}
+
+export const useMarkNotificationRead = (workspaceId: string) => {
+  const invalidate = useInvalidateNotifications()
+  return useMutation(
+    orpc.notificationsAPI.privateMarkNotificationReadAPI.mutationOptions({
+      onSuccess: () => invalidate(),
+      onSettled: () => invalidate(),
+      meta: { workspaceId },
+    }),
+  )
+}
+
+export const useMarkAllNotificationsRead = (workspaceId: string) => {
+  const invalidate = useInvalidateNotifications()
+  return useMutation(
+    orpc.notificationsAPI.privateMarkAllNotificationsReadAPI.mutationOptions({
+      onSuccess: () => invalidate(),
+      meta: { workspaceId },
+    }),
+  )
+}

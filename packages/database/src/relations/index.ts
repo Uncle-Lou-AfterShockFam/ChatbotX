@@ -118,6 +118,7 @@ import { metaCatalogRelations } from "./meta-catalog"
 import { minigameRelations } from "./minigame"
 import { minigameContactRelations } from "./minigame-contact"
 import { minigamePlayRelations } from "./minigame-play"
+import { notificationRelations } from "./notification"
 import { pipelineRelations } from "./pipeline"
 import { pipelineMemberRelations } from "./pipeline-member"
 import { productRelations } from "./product"
@@ -213,6 +214,7 @@ export const relations = {
   ...dealRelations,
   ...dealCommentRelations,
   ...dealTaskRelations,
+  ...notificationRelations,
   ...pipelineMemberRelations,
   ...pipelineRelations,
   ...emailTopicRelations,
