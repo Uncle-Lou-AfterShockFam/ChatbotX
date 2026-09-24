@@ -6783,7 +6783,9 @@
         "fieldChanged": "Field",
         "taskCreated": "Task",
         "taskCompleted": "Task done",
-        "commented": "Comment"
+        "commented": "Comment",
+        "contactChanged": "Contact",
+        "companyChanged": "Company"
       },
       "titleChanged": "Title changed from {from} to {to}",
       "currencyChanged": "Currency changed from {from} to {to}",
@@ -6791,7 +6793,9 @@
       "fieldChanged": "Field {key} changed from {from} to {to}",
       "taskCreated": "Task {title} created",
       "taskCompleted": "Task {title} completed",
-      "commented": "Commented: {excerpt} ({count, plural, =0 {no mentions} one {1 mention} other {# mentions}})"
+      "commented": "Commented: {excerpt} ({count, plural, =0 {no mentions} one {1 mention} other {# mentions}})",
+      "contactChanged": "Contact changed",
+      "companyChanged": "Company changed"
     },
     "reorder": "Reorder",
     "moveDealsTo": "Move deals to...",

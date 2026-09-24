@@ -67,6 +67,11 @@ export function describeActivity(
       })
     case "assigned":
       return t("deals.activity.assigned")
+    // s195: re-linked after creation (the names live on the drawer's links section)
+    case "contactChanged":
+      return t("deals.activity.contactChanged")
+    case "companyChanged":
+      return t("deals.activity.companyChanged")
     case "note":
       return text(p.text)
     default:
