@@ -131,6 +131,16 @@ const landingStatus = (stage: PipelineStageModel): DealStatus => {
   }
   return stage.isLost ? "lost" : "open"
 }
+/** Open clears `closedAt`; staying closed keeps it; closing now stamps it. */
+const landingClosedAt = (
+  status: DealStatus,
+  current: Pick<DealModel, "status" | "closedAt">,
+): Date | null => {
+  if (status === "open") {
+    return null
+  }
+  return status === current.status ? current.closedAt : new Date()
+}
 /** Below this gap two neighbouring positions are renormalised to `DEAL_POSITION_STEP * i`. */
 export const MIN_POSITION_GAP = 1e-6
 
@@ -961,13 +971,7 @@ class DealService extends BaseService {
           fields,
           ownerId,
           status,
-          closedAt:
-            // biome-ignore lint/style/noNestedTernary: open / unchanged / newly closed
-            status === "open"
-              ? null
-              : status === current.status
-                ? current.closedAt
-                : new Date(),
+          closedAt: landingClosedAt(status, current),
         })
         .where(
           and(
