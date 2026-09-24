@@ -121,6 +121,10 @@ export function FieldDefsEditor({
               value={row.label}
             />
             <Select
+              items={dealFieldTypes.options.map((type) => ({
+                value: type,
+                label: t(`deals.fieldDefs.types.${type}`),
+              }))}
               onValueChange={(v) =>
                 v && patch(rowId, { type: v as DealFieldType })
               }

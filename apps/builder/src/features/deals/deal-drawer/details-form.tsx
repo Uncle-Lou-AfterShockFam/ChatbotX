@@ -80,6 +80,10 @@ export function DealDetailsForm({
             {t("deals.fields.priority")}
           </span>
           <Select
+            items={(["low", "medium", "high"] as const).map((p) => ({
+              value: p,
+              label: t(`deals.priorities.${p}`),
+            }))}
             onValueChange={(next) =>
               next &&
               next !== deal.priority &&
@@ -104,6 +108,10 @@ export function DealDetailsForm({
             {t("deals.stage")}
           </span>
           <Select
+            items={(pipeline?.stages ?? []).map((s) => ({
+              value: s.id,
+              label: s.name,
+            }))}
             onValueChange={(next) => {
               const stageId = String(next ?? "")
               if (stageId && stageId !== deal.stageId) {
@@ -129,6 +137,10 @@ export function DealDetailsForm({
             {t("deals.fields.owner")}
           </span>
           <Select
+            items={[
+              { value: NONE, label: t("deals.noOwner") },
+              ...ownerOptions,
+            ]}
             onValueChange={(next) => {
               const ownerId = String(next ?? "")
               onUpdate({ ownerId: ownerId === NONE ? null : ownerId })

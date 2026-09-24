@@ -153,6 +153,13 @@ export function DealsBoard({
           value={pipelineId}
         />
         <Select
+          items={(["open", "won", "lost", "all"] as const).map((value) => ({
+            value,
+            label:
+              value === "all"
+                ? t("deals.allStatuses")
+                : t(`deals.statuses.${value}`),
+          }))}
           onValueChange={(next) => {
             const status = String(next ?? "") as BoardStatusFilter
             if (status) {
