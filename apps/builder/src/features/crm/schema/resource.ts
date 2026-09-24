@@ -85,8 +85,9 @@ export type ConversationSummaryResource = z.infer<
 export const companyMetricsResource = z.object({
   contacts: z.number().int(),
   openDeals: z.number().int(),
-  openValue: z.string(),
-  wonValue: z.string(),
+  /** one exact numeric string per currency code */
+  openValue: z.record(z.string(), z.string()),
+  wonValue: z.record(z.string(), z.string()),
   openTasks: z.number().int(),
   overdueTasks: z.number().int(),
   lastActivityAt: z.coerce.date().nullable(),

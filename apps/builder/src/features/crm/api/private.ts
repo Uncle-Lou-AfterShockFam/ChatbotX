@@ -100,21 +100,32 @@ async function conversationSummaries(input: {
     }))
 }
 
-function sumValues(values: (string | null)[]): string {
-  let cents = 0n
-  for (const value of values) {
-    if (!value) {
+/** Exact numeric(14,2) sums in BigInt cents, ONE entry per currency (a EUR deal never lands in a USD figure). */
+function sumByCurrency(
+  deals: { value: string | null; currency: string }[],
+): Record<string, string> {
+  const cents = new Map<string, bigint>()
+  for (const deal of deals) {
+    if (!deal.value) {
       continue
     }
-    const [whole = "0", frac = ""] = value.split(".")
+    const [whole = "0", frac = ""] = deal.value.split(".")
     const sign = whole.startsWith("-") ? -1n : 1n
     const w = BigInt(whole.replace("-", "") || "0")
     const f = BigInt(`${frac}00`.slice(0, 2) || "0")
-    cents += sign * (w * 100n + f)
+    cents.set(
+      deal.currency,
+      (cents.get(deal.currency) ?? 0n) + sign * (w * 100n + f),
+    )
   }
-  const sign = cents < 0n ? "-" : ""
-  const abs = cents < 0n ? -cents : cents
-  return `${sign}${abs / 100n}.${(abs % 100n).toString().padStart(2, "0")}`
+  const out: Record<string, string> = {}
+  for (const [currency, total] of cents) {
+    const sign = total < 0n ? "-" : ""
+    const abs = total < 0n ? -total : total
+    out[currency] =
+      `${sign}${abs / 100n}.${(abs % 100n).toString().padStart(2, "0")}`
+  }
+  return out
 }
 
 // ---- company ---------------------------------------------------------------
@@ -159,10 +170,8 @@ const privateGetCompanyMetricsAPI = authorizedAPI
     return {
       contacts: counts.get(input.id) ?? 0,
       openDeals: open.length,
-      openValue: sumValues(open.map((d) => d.value)),
-      wonValue: sumValues(
-        deals.filter((d) => d.status === "won").map((d) => d.value),
-      ),
+      openValue: sumByCurrency(open),
+      wonValue: sumByCurrency(deals.filter((d) => d.status === "won")),
       openTasks: openTasks.length,
       overdueTasks: openTasks.filter(
         (t) => t.dueAt !== null && t.dueAt.getTime() < now,

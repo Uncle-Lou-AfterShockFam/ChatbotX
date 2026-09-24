@@ -191,7 +191,8 @@ export function ContactView({
         </div>
 
         <Tabs defaultValue="details">
-          <TabsList className="flex-wrap">
+          {/* the list's inner flex row never wraps on its own: eight tabs overflowed the sheet (s195 layout audit) */}
+          <TabsList className="w-full px-4 [&>div]:flex-wrap [&>div]:gap-x-6 [&>div]:gap-y-1">
             {(
               [
                 "details",

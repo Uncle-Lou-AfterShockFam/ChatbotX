@@ -31,6 +31,14 @@ const stages = new Map([["s1", "New"]])
 describe("describeActivity (s192 types)", () => {
   test.each([
     [
+      activity("contactChanged", { from: null, to: "c-1" }),
+      "deals.activity.contactChanged",
+    ],
+    [
+      activity("companyChanged", { from: "co-1", to: null }),
+      "deals.activity.companyChanged",
+    ],
+    [
       activity("titleChanged", { from: "A", to: "B" }),
       'deals.activity.titleChanged|{"from":"A","to":"B"}',
     ],
