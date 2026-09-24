@@ -1,18 +1,24 @@
 "use server"
 
 import { dealService } from "@chatbotx.io/business/deal"
+import type { PermissionsInput } from "@chatbotx.io/business/workspace-member/permissions"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import type z from "zod"
 import {
   type WorkspaceIdRequestParams,
   workspaceIdrequestParams,
 } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import {
+  requireContactsSectionAccess,
+  workspaceActionClient,
+} from "@/lib/safe-action"
+import { viewerFromActionCtx } from "../lib/viewer"
 import { moveDealRequest } from "../schema/action"
 
 const input = moveDealRequest.extend({ id: zodBigintAsString() })
 
 export const moveDealAction = workspaceActionClient
+  .use(requireContactsSectionAccess)
   .inputSchema(input)
   .bindArgsSchemas(workspaceIdrequestParams)
   .action(
@@ -23,7 +29,10 @@ export const moveDealAction = workspaceActionClient
     }: {
       parsedInput: z.infer<typeof input>
       bindArgsParsedInputs: WorkspaceIdRequestParams
-      ctx: { user: { id: string } }
+      ctx: {
+        user: { id: string }
+        workspaceMemberPermissions: PermissionsInput
+      }
     }) =>
       dealService.moveStage({
         workspaceId,
@@ -31,5 +40,6 @@ export const moveDealAction = workspaceActionClient
         stageId: parsedInput.stageId,
         position: parsedInput.position,
         actorId: ctx.user.id,
+        viewer: viewerFromActionCtx(ctx),
       }),
   )

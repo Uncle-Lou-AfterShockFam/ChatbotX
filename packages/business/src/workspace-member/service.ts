@@ -10,7 +10,10 @@ import {
   type WorkspaceMemberPermissionsRow,
   workspaceMemberRepository,
 } from "@chatbotx.io/database/repositories"
-import { workspaceMemberModel } from "@chatbotx.io/database/schema"
+import {
+  pipelineMemberModel,
+  workspaceMemberModel,
+} from "@chatbotx.io/database/schema"
 import type {
   UserModel,
   WorkspaceMemberModel,
@@ -90,6 +93,18 @@ export class WorkspaceMemberService extends BaseService {
           eq(workspaceMemberModel.workspaceId, workspaceId),
         ),
       )
+    if (member) {
+      // s193: a departed member leaves every pipeline of the workspace too,
+      // or round-robin keeps assigning them deals (the FK is to User).
+      await tx
+        .delete(pipelineMemberModel)
+        .where(
+          and(
+            eq(pipelineMemberModel.workspaceId, workspaceId),
+            eq(pipelineMemberModel.userId, member.userId),
+          ),
+        )
+    }
 
     await workspaceUsageService
       .decrement(workspaceId, "teamMembers")

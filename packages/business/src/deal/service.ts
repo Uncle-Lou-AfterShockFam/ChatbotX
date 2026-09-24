@@ -48,6 +48,12 @@ import { DEAL_POSITION_STEP } from "@chatbotx.io/utils/deal-position"
 import { BaseService } from "../base.service"
 import { notFoundException, validationException } from "../errors"
 import { logger } from "../logger"
+import {
+  canViewPipeline,
+  type DealViewer,
+  viewerOwnerFilter,
+} from "../pipeline/access"
+import { pipelineMemberService } from "../pipeline/members"
 import { pipelineService } from "../pipeline/service"
 import type { PaginatedResult } from "../types"
 import { stopCompanyForDeal } from "./company-stop"
@@ -117,28 +123,76 @@ export const MIN_POSITION_GAP = 1e-6
  * stop failure never un-does the write.
  */
 class DealService extends BaseService {
+  /**
+   * With a `viewer` (s193) a deal the viewer may not read is a 404, never a
+   * 403 (no existence leak): the pipeline must be visible to them and, for an
+   * `onlyAssignedContacts` member, the deal must be theirs. Callers without a
+   * viewer (workers, the public API, internal hooks) are unscoped.
+   */
   async findOrFail(props: {
     workspaceId: string
     id: string
+    viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<DealModel> {
-    const { workspaceId, id, tx = db } = props
-    return await findOrFail({
+    const { workspaceId, id, viewer, tx = db } = props
+    const deal = await findOrFail({
       client: tx,
       table: dealModel,
       where: { id, workspaceId },
       message: DEAL_NOT_FOUND,
     })
+    if (viewer) {
+      await this.assertViewer({ deal, viewer, tx })
+    }
+    return deal
   }
 
-  async list(input: ListDealsInput): Promise<PaginatedResult<DealModel>> {
+  private async assertViewer(props: {
+    deal: DealModel
+    viewer: DealViewer
+    tx: DatabaseClient
+  }): Promise<void> {
+    const { deal, viewer, tx } = props
+    const pipeline = await pipelineService.findOrFail({
+      workspaceId: deal.workspaceId,
+      id: deal.pipelineId,
+      tx,
+    })
+    if (!(await canViewPipeline({ viewer, pipeline, tx }))) {
+      throw notFoundException(DEAL_NOT_FOUND)
+    }
+    const ownerFilter = viewerOwnerFilter(viewer)
+    if (ownerFilter !== undefined && deal.ownerId !== ownerFilter) {
+      throw notFoundException(DEAL_NOT_FOUND)
+    }
+  }
+
+  async list(
+    input: ListDealsInput & { viewer?: DealViewer | null },
+  ): Promise<PaginatedResult<DealModel>> {
+    const ownerFilter = input.viewer
+      ? viewerOwnerFilter(input.viewer)
+      : undefined
+    const visible = await pipelineService.visibleIds({
+      workspaceId: input.workspaceId,
+      viewer: input.viewer,
+    })
+    if (
+      visible !== null &&
+      ((input.pipelineId && !visible.includes(input.pipelineId)) ||
+        visible.length === 0)
+    ) {
+      return { data: [], pageCount: 1 }
+    }
     const where = {
       workspaceId: input.workspaceId,
-      pipelineId: input.pipelineId ?? undefined,
+      pipelineId:
+        input.pipelineId ?? (visible === null ? undefined : { in: visible }),
       stageId: input.stageId ?? undefined,
       contactId: input.contactId ?? undefined,
       companyId: input.companyId ?? undefined,
-      ownerId: input.ownerId ?? undefined,
+      ownerId: ownerFilter ?? input.ownerId ?? undefined,
       status: input.status ?? undefined,
       title: input.title ? { ilike: likeContains(input.title) } : undefined,
     }
@@ -163,13 +217,15 @@ class DealService extends BaseService {
     workspaceId: string
     pipelineId: string
     status?: DealStatus | "all" | null
+    viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<BoardColumn[]> {
-    const { workspaceId, pipelineId, tx = db } = props
+    const { workspaceId, pipelineId, viewer, tx = db } = props
     const status = props.status ?? "all"
     const pipeline = await pipelineService.find({
       workspaceId,
       id: pipelineId,
+      viewer,
       tx,
     })
     const deals = await tx.query.dealModel.findMany({
@@ -177,6 +233,7 @@ class DealService extends BaseService {
         workspaceId,
         pipelineId,
         status: status === "all" ? undefined : status,
+        ownerId: viewer ? viewerOwnerFilter(viewer) : undefined,
       },
       orderBy: { position: "asc", createdAt: "asc" },
     })
@@ -221,10 +278,11 @@ class DealService extends BaseService {
     workspaceId: string
     dealId: string
     limit?: number
+    viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<DealActivityModel[]> {
-    const { workspaceId, dealId, limit = 200, tx = db } = props
-    await this.findOrFail({ workspaceId, id: dealId, tx })
+    const { workspaceId, dealId, viewer, limit = 200, tx = db } = props
+    await this.findOrFail({ workspaceId, id: dealId, viewer, tx })
     return await tx
       .select()
       .from(dealActivityModel)
@@ -233,17 +291,35 @@ class DealService extends BaseService {
       .limit(limit)
   }
 
+  /**
+   * With a `viewer` (s193): the pipeline must be visible to them (else 404)
+   * and an `onlyAssignedContacts` member who names no owner becomes the owner
+   * (otherwise they could create a deal they can never see again).
+   */
   async create(props: {
     workspaceId: string
     data: DealData
     actorId?: string | null
+    viewer?: DealViewer | null
   }): Promise<DealModel> {
-    const { workspaceId, data } = props
+    const { workspaceId, viewer } = props
     const actorId = props.actorId ?? null
+    const ownerFilter = viewer ? viewerOwnerFilter(viewer) : undefined
+    const data =
+      ownerFilter !== undefined && props.data.ownerId === undefined
+        ? { ...props.data, ownerId: ownerFilter }
+        : props.data
     const parsed = this.parseCreateData(data)
     const { deal, settings } = await db.transaction(
       async (tx) =>
-        await this.insertInTx({ tx, workspaceId, data, parsed, actorId }),
+        await this.insertInTx({
+          tx,
+          workspaceId,
+          data,
+          parsed,
+          actorId,
+          viewer,
+        }),
     )
     await this.afterCreate(deal, settings, actorId)
     return deal
@@ -342,6 +418,7 @@ class DealService extends BaseService {
     data: DealData
     parsed: { title: string; value: string | null; priority: DealPriority }
     actorId: string | null
+    viewer?: DealViewer | null
   }): Promise<{ deal: DealModel; settings: PipelineSettings }> {
     const { tx, workspaceId, data, actorId } = props
     const { title, value, priority } = props.parsed
@@ -349,6 +426,7 @@ class DealService extends BaseService {
       const pipeline = await pipelineService.findOrFail({
         workspaceId,
         id: data.pipelineId,
+        viewer: props.viewer,
         tx,
       })
       const stage = data.stageId
@@ -374,9 +452,14 @@ class DealService extends BaseService {
         data.companyId !== undefined && data.companyId !== null
           ? data.companyId
           : (contact?.companyId ?? null)
-      const ownerId = await this.resolveOwner({
+      // s193: no owner named + round-robin on = the next in-rotation member
+      // (cursor advanced under the pipeline row lock, in THIS transaction).
+      // An explicit `ownerId: null` keeps the deal ownerless on purpose.
+      const ownerId = await this.resolveCreateOwner({
         workspaceId,
         ownerId: data.ownerId,
+        settings: pipeline.settings,
+        pipelineId: pipeline.id,
         tx,
       })
       const currency = this.parseCurrency(
@@ -434,8 +517,9 @@ class DealService extends BaseService {
     id: string
     data: DealUpdateData
     actorId?: string | null
+    viewer?: DealViewer | null
   }): Promise<DealModel> {
-    const { workspaceId, id, data } = props
+    const { workspaceId, id, data, viewer } = props
     const actorId = props.actorId ?? null
     const set: Partial<typeof dealModel.$inferInsert> = {}
     const changes: {
@@ -446,7 +530,7 @@ class DealService extends BaseService {
     }[] = []
 
     const result = await db.transaction(async (tx) => {
-      const current = await this.findOrFail({ workspaceId, id, tx })
+      const current = await this.findOrFail({ workspaceId, id, viewer, tx })
       if (data.title !== undefined) {
         const title = typeof data.title === "string" ? data.title.trim() : ""
         if (title.length === 0) {
@@ -594,12 +678,13 @@ class DealService extends BaseService {
     stageId: string
     position?: number | null
     actorId?: string | null
+    viewer?: DealViewer | null
   }): Promise<DealModel> {
-    const { workspaceId, id, stageId } = props
+    const { workspaceId, id, stageId, viewer } = props
     const actorId = props.actorId ?? null
 
     const outcome = await db.transaction(async (tx) => {
-      const current = await this.findOrFail({ workspaceId, id, tx })
+      const current = await this.findOrFail({ workspaceId, id, viewer, tx })
       const stage = await pipelineService.resolveStage({
         workspaceId,
         pipelineId: current.pipelineId,
@@ -690,13 +775,14 @@ class DealService extends BaseService {
     id: string
     status: DealStatus
     actorId?: string | null
+    viewer?: DealViewer | null
   }): Promise<DealModel> {
-    const { workspaceId, id } = props
+    const { workspaceId, id, viewer } = props
     const actorId = props.actorId ?? null
     const status = this.parseStatus(props.status)
 
     const outcome = await db.transaction(async (tx) => {
-      const current = await this.findOrFail({ workspaceId, id, tx })
+      const current = await this.findOrFail({ workspaceId, id, viewer, tx })
       if (current.status === status) {
         return { changed: false as const, deal: current }
       }
@@ -768,8 +854,9 @@ class DealService extends BaseService {
     id: string
     text: string
     actorId?: string | null
+    viewer?: DealViewer | null
   }): Promise<DealActivityModel> {
-    const { workspaceId, id } = props
+    const { workspaceId, id, viewer } = props
     const text = typeof props.text === "string" ? props.text.trim() : ""
     if (text.length === 0) {
       throw validationException("text", "Note text is required.")
@@ -777,7 +864,7 @@ class DealService extends BaseService {
     if (text.length > 4000) {
       throw validationException("text", "Note text is at most 4000 characters.")
     }
-    await this.findOrFail({ workspaceId, id })
+    await this.findOrFail({ workspaceId, id, viewer })
     return await this.recordActivity({
       tx: db,
       dealId: id,
@@ -787,14 +874,21 @@ class DealService extends BaseService {
     })
   }
 
+  /** With a `viewer` (s193) every id must be readable by them, else 404 and nothing is deleted. */
   async remove(props: {
     workspaceId: string
     ids: string[]
+    viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<{ deletedCount: number }> {
-    const { workspaceId, ids, tx = db } = props
+    const { workspaceId, ids, viewer, tx = db } = props
     if (ids.length === 0) {
       return { deletedCount: 0 }
+    }
+    if (viewer) {
+      for (const id of ids) {
+        await this.findOrFail({ workspaceId, id, viewer, tx })
+      }
     }
     const deleted = await tx
       .delete(dealModel)
@@ -872,6 +966,27 @@ class DealService extends BaseService {
       throw notFoundException("Contact not found")
     }
     return contact
+  }
+
+  private async resolveCreateOwner(props: {
+    workspaceId: string
+    ownerId: string | null | undefined
+    settings: PipelineSettings
+    pipelineId: string
+    tx: DatabaseClient
+  }): Promise<string | null> {
+    const { workspaceId, ownerId, tx } = props
+    if (ownerId !== undefined) {
+      return await this.resolveOwner({ workspaceId, ownerId, tx })
+    }
+    if (props.settings.assignOwner !== "roundRobin") {
+      return null
+    }
+    return await pipelineMemberService.pickRoundRobin({
+      workspaceId,
+      pipelineId: props.pipelineId,
+      tx,
+    })
   }
 
   /** An owner must be a member of the workspace; null clears the owner. */

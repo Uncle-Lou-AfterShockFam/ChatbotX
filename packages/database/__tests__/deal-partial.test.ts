@@ -25,7 +25,35 @@ describe("deal partials", () => {
       stopCompanyOn: "created",
       defaultCurrency: "EUR",
       fieldDefs: [],
+      assignOwner: "none",
+      access: "workspace",
     })
+  })
+
+  test("s193 settings: a pre-s193 row (no assignOwner / access) parses to the defaults", () => {
+    const legacy = {
+      stopCompanyOn: "won",
+      defaultCurrency: "USD",
+      fieldDefs: [],
+    }
+    expect(pipelineSettingsSchema.parse(legacy)).toMatchObject({
+      assignOwner: "none",
+      access: "workspace",
+    })
+    expect(
+      pipelineSettingsSchema.parse({
+        assignOwner: "roundRobin",
+        access: "members",
+      }),
+    ).toMatchObject({ assignOwner: "roundRobin", access: "members" })
+  })
+
+  test.each([
+    [{ assignOwner: "leastLoaded" }, "unknown assignOwner"],
+    [{ access: "private" }, "unknown access"],
+    [{ assignOwner: null }, "null assignOwner"],
+  ])("s193 settings reject %j (%s)", (input) => {
+    expect(pipelineSettingsSchema.safeParse(input).success).toBe(false)
   })
 
   test.each([

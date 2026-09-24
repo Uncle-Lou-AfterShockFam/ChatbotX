@@ -90,7 +90,8 @@ describe("createDeal step", () => {
         currency: null,
         priority: "high",
         contactId: "contact-1",
-        ownerId: null,
+        // undefined, not null: lets the pipeline's round-robin pick (s193)
+        ownerId: undefined,
         dueAt: null,
       },
     })

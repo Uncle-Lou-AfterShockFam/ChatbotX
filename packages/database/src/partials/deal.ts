@@ -50,6 +50,25 @@ export const MAX_DEAL_TASK_DUE_IN_DAYS = 365
 export const pipelineStopCompanyOn = z.enum(["none", "created", "won"])
 export type PipelineStopCompanyOn = z.infer<typeof pipelineStopCompanyOn>
 
+/**
+ * Who owns a deal created WITHOUT an explicit `ownerId` (s193): `none` leaves
+ * it ownerless, `roundRobin` walks the pipeline's in-rotation members under
+ * the pipeline row lock (`Pipeline.roundRobinLastUserId` is the cursor).
+ */
+export const pipelineAssignOwner = z.enum(["none", "roundRobin"])
+export type PipelineAssignOwner = z.infer<typeof pipelineAssignOwner>
+
+/**
+ * Who can see the pipeline and its deals (s193): `workspace` = every member
+ * with contacts access, `members` = only PipelineMember rows (a super admin
+ * always sees it). A member with `onlyAssignedContacts` additionally sees
+ * only the deals they own, whatever the access mode.
+ */
+export const pipelineAccess = z.enum(["workspace", "members"])
+export type PipelineAccess = z.infer<typeof pipelineAccess>
+
+export const MAX_PIPELINE_MEMBERS = 50
+
 export const DEFAULT_DEAL_CURRENCY = "USD"
 
 /** Value types a custom deal field can declare (mirrors the contact custom-field kinds we need). */
@@ -139,6 +158,9 @@ export const pipelineSettingsSchema = z.object({
     .default(DEFAULT_DEAL_CURRENCY),
   // Rows written before s192 have no key: the default makes them parse.
   fieldDefs: dealFieldDefsSchema.default([]),
+  // s193: both default so pre-s193 rows parse (hotfix #27 rule).
+  assignOwner: pipelineAssignOwner.default("none"),
+  access: pipelineAccess.default("workspace"),
 })
 export type PipelineSettings = z.infer<typeof pipelineSettingsSchema>
 export type PipelineSettingsInput = z.input<typeof pipelineSettingsSchema>
@@ -147,6 +169,8 @@ export const DEFAULT_PIPELINE_SETTINGS: PipelineSettings = {
   stopCompanyOn: "created",
   defaultCurrency: DEFAULT_DEAL_CURRENCY,
   fieldDefs: [],
+  assignOwner: "none",
+  access: "workspace",
 }
 
 export type DealFieldIssue = { key: string; message: string }

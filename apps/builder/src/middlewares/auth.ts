@@ -111,6 +111,10 @@ const createWorkspaceAuthorizedMiddleware = (options: {
         next({
           context: {
             workspace,
+            // s193: the member row the gate used, so deal / pipeline handlers
+            // can scope reads (`onlyAssignedContacts`, members-only pipelines)
+            // without a second lookup.
+            member,
           },
         }),
     )

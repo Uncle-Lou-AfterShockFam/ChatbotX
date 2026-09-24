@@ -111,6 +111,8 @@ export const dealModel = pgTable(
       table.workspaceId,
       table.companyId,
     ),
+    // s193: the `onlyAssignedContacts` scope filters every list by owner.
+    index("Deal_workspaceId_ownerId_idx").on(table.workspaceId, table.ownerId),
   ],
 )
 

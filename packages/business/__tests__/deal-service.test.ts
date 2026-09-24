@@ -21,6 +21,7 @@ const m = vi.hoisted(() => {
     executeArgs: [] as unknown[][],
     openDeal: null as Record<string, unknown> | null,
     updateEmpty: false,
+    lastListWhere: null as unknown,
   }
   const calls: string[] = []
   const makeTx = () => {
@@ -86,7 +87,10 @@ const m = vi.hoisted(() => {
       query: {
         dealModel: {
           findFirst: () => Promise.resolve(state.openDeal ?? undefined),
-          findMany: () => Promise.resolve([]),
+          findMany: (args: { where?: unknown }) => {
+            state.lastListWhere = args?.where ?? null
+            return Promise.resolve([])
+          },
         },
       },
       $count: vi.fn(async () => 0),
@@ -98,6 +102,9 @@ const m = vi.hoisted(() => {
     makeTx,
     findOrFail: vi.fn(),
     pipelineFindOrFail: vi.fn(),
+    visibleIds: vi.fn(async () => null),
+    pickRoundRobin: vi.fn(),
+    isMember: vi.fn(async () => false),
     resolveStage: vi.fn(),
     firstStage: vi.fn(),
     pipelineFind: vi.fn(),
@@ -170,6 +177,13 @@ vi.mock("../src/pipeline/service", () => ({
     resolveStage: (...a: unknown[]) => m.resolveStage(...a),
     firstStage: (...a: unknown[]) => m.firstStage(...a),
     find: (...a: unknown[]) => m.pipelineFind(...a),
+    visibleIds: (...a: unknown[]) => m.visibleIds(...a),
+  },
+}))
+vi.mock("../src/pipeline/members", () => ({
+  pipelineMemberService: {
+    pickRoundRobin: (...a: unknown[]) => m.pickRoundRobin(...a),
+    isMember: (...a: unknown[]) => m.isMember(...a),
   },
 }))
 vi.mock("../src/audit/dispatcher", () => ({
@@ -198,7 +212,13 @@ const PIPE = (
 ) => ({
   id: "pipe-1",
   workspaceId: WS,
-  settings: { stopCompanyOn, defaultCurrency: "USD", fieldDefs },
+  settings: {
+    stopCompanyOn,
+    defaultCurrency: "USD",
+    fieldDefs,
+    assignOwner: "none",
+    access: "workspace",
+  },
 })
 const STAGE_NEW = {
   id: "stage-new",
@@ -840,5 +860,181 @@ describe("stage-entered hook (s192 task templates)", () => {
       off()
       _resetStageEnteredHandlers()
     }
+  })
+})
+
+describe("dealService round-robin owner (s193)", () => {
+  const RR = {
+    ...PIPE("none"),
+    settings: { ...PIPE("none").settings, assignOwner: "roundRobin" },
+  }
+
+  test("no ownerId + assignOwner=roundRobin picks the next member inside the insert tx", async () => {
+    m.pipelineFindOrFail.mockResolvedValue(RR)
+    m.pickRoundRobin.mockImplementation(() => {
+      m.calls.push("pick")
+      return Promise.resolve("user-2")
+    })
+    const deal = await dealService.create({
+      workspaceId: WS,
+      data: { title: "Roof", pipelineId: "pipe-1" },
+    })
+    expect(deal.ownerId).toBe("user-2")
+    expect(m.calls.slice(0, 2)).toEqual(["pick", "insert:deal"])
+    expect(m.pickRoundRobin).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: WS,
+        pipelineId: "pipe-1",
+        tx: expect.objectContaining({ transaction: expect.any(Function) }),
+      }),
+    )
+  })
+
+  test("an explicit ownerId: null keeps the deal ownerless (no pick)", async () => {
+    m.pipelineFindOrFail.mockResolvedValue(RR)
+    const deal = await dealService.create({
+      workspaceId: WS,
+      data: { title: "Roof", pipelineId: "pipe-1", ownerId: null },
+    })
+    expect(deal.ownerId).toBeNull()
+    expect(m.pickRoundRobin).not.toHaveBeenCalled()
+  })
+
+  test("assignOwner=none never picks", async () => {
+    const deal = await dealService.create({
+      workspaceId: WS,
+      data: { title: "Roof", pipelineId: "pipe-1" },
+    })
+    expect(deal.ownerId).toBeNull()
+    expect(m.pickRoundRobin).not.toHaveBeenCalled()
+  })
+})
+
+describe("dealService viewer scope (s193)", () => {
+  const ASSIGNED = {
+    userId: "user-1",
+    permissions: {
+      superAdmin: false,
+      contacts: false,
+      onlyAssignedContacts: true,
+    },
+  }
+  const SUPER = { userId: "user-1", permissions: { superAdmin: true } }
+  const FULL = {
+    userId: "user-1",
+    permissions: {
+      superAdmin: false,
+      contacts: true,
+      onlyAssignedContacts: false,
+    },
+  }
+
+  test("an assigned-only viewer reading another owner's deal gets a 404, never a 403", async () => {
+    m.findOrFail.mockImplementation(async () => ({
+      ...OPEN_DEAL,
+      ownerId: "user-2",
+    }))
+    await expect(
+      dealService.findOrFail({
+        workspaceId: WS,
+        id: "deal-1",
+        viewer: ASSIGNED,
+      }),
+    ).rejects.toMatchObject({ httpStatusCode: 404, message: "Deal not found" })
+  })
+
+  test("an assigned-only viewer reads their own deal; a super admin reads any", async () => {
+    m.findOrFail.mockImplementation(async () => ({
+      ...OPEN_DEAL,
+      ownerId: "user-1",
+    }))
+    await expect(
+      dealService.findOrFail({
+        workspaceId: WS,
+        id: "deal-1",
+        viewer: ASSIGNED,
+      }),
+    ).resolves.toMatchObject({ ownerId: "user-1" })
+    m.findOrFail.mockImplementation(async () => ({
+      ...OPEN_DEAL,
+      ownerId: "user-2",
+    }))
+    await expect(
+      dealService.findOrFail({ workspaceId: WS, id: "deal-1", viewer: SUPER }),
+    ).resolves.toMatchObject({ ownerId: "user-2" })
+  })
+
+  test("a members-only pipeline hides its deals from a non-member (404) and shows them to a member", async () => {
+    m.pipelineFindOrFail.mockResolvedValue({
+      ...PIPE("none"),
+      settings: { ...PIPE("none").settings, access: "members" },
+    })
+    m.isMember.mockResolvedValueOnce(false)
+    await expect(
+      dealService.findOrFail({ workspaceId: WS, id: "deal-1", viewer: FULL }),
+    ).rejects.toMatchObject({ httpStatusCode: 404 })
+    m.isMember.mockResolvedValueOnce(true)
+    await expect(
+      dealService.findOrFail({ workspaceId: WS, id: "deal-1", viewer: FULL }),
+    ).resolves.toMatchObject({ id: "deal-1" })
+  })
+
+  test("an assigned-only viewer creating a deal without an owner becomes the owner", async () => {
+    m.state.member = { userId: "user-1" }
+    const deal = await dealService.create({
+      workspaceId: WS,
+      data: { title: "Roof", pipelineId: "pipe-1" },
+      viewer: ASSIGNED,
+    })
+    expect(deal.ownerId).toBe("user-1")
+  })
+
+  test("update / moveStage / setStatus / addNote / remove all refuse a hidden deal with 404 before any write", async () => {
+    m.findOrFail.mockImplementation(async () => ({
+      ...OPEN_DEAL,
+      ownerId: "user-2",
+    }))
+    const base = { workspaceId: WS, id: "deal-1", viewer: ASSIGNED }
+    await expect(
+      dealService.update({ ...base, data: { title: "x" } }),
+    ).rejects.toMatchObject({ httpStatusCode: 404 })
+    await expect(
+      dealService.moveStage({ ...base, stageId: "stage-won" }),
+    ).rejects.toMatchObject({ httpStatusCode: 404 })
+    await expect(
+      dealService.setStatus({ ...base, status: "won" }),
+    ).rejects.toMatchObject({ httpStatusCode: 404 })
+    await expect(
+      dealService.addNote({ ...base, text: "hi" }),
+    ).rejects.toMatchObject({ httpStatusCode: 404 })
+    await expect(
+      dealService.remove({
+        workspaceId: WS,
+        ids: ["deal-1"],
+        viewer: ASSIGNED,
+      }),
+    ).rejects.toMatchObject({ httpStatusCode: 404 })
+    expect(
+      m.calls.filter((c) => c.startsWith("activity") || c.startsWith("insert")),
+    ).toEqual([])
+  })
+
+  test("list narrows to the viewer's owned deals and to visible pipelines", async () => {
+    m.visibleIds.mockResolvedValueOnce(["pipe-1"])
+    await dealService.list({ workspaceId: WS, viewer: ASSIGNED } as never)
+    const where = m.state.lastListWhere as Record<string, unknown>
+    expect(where.ownerId).toBe("user-1")
+    expect(where.pipelineId).toEqual({ in: ["pipe-1"] })
+  })
+
+  test("list on a pipeline the viewer cannot see returns an empty page without a query", async () => {
+    m.visibleIds.mockResolvedValueOnce(["pipe-2"])
+    await expect(
+      dealService.list({
+        workspaceId: WS,
+        pipelineId: "pipe-1",
+        viewer: FULL,
+      } as never),
+    ).resolves.toEqual({ data: [], pageCount: 1 })
   })
 })

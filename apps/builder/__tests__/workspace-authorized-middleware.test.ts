@@ -147,12 +147,12 @@ describe("workspaceAuthorizedMidddleware", () => {
     expect(getAccessState).not.toHaveBeenCalled()
   })
 
-  test("next is called with the membership's workspace in context", async () => {
+  test("next is called with the membership's workspace AND member in context (s193)", async () => {
     await callMiddleware("GET")
 
     expect(next).toHaveBeenCalledWith(
       expect.objectContaining({
-        context: { workspace: membership.workspace },
+        context: { workspace: membership.workspace, member: membership },
       }),
     )
   })

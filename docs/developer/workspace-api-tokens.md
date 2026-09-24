@@ -51,6 +51,14 @@ in phase 1 and moved wholesale; a `["contacts"]` token is denied them
 (`deals-public-scope.test.ts`). Only the read-only contact sub-resource
 `GET /v1/contacts/{identifier}/deals` stays on `contacts`.
 
+A workspace token is never tied to a member, so the `/v1/pipelines` and
+`/v1/deals` routes are UNSCOPED by design (s193): they list every pipeline,
+including `settings.access = "members"` ones, and every deal regardless of
+`onlyAssignedContacts`. Those two scopes apply to the signed-in dashboard
+(private oRPC + server actions, which carry the viewer's member row) only.
+`GET|PUT /v1/pipelines/{id}/members` manage the member list the dashboard
+scopes on and the round-robin rotation.
+
 The `appointments` scope existed in the enum and UI registry for some time
 before any endpoint used it — see "Appointments scope — endpoint-to-scope
 table" below for the full surface now behind it.

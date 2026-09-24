@@ -4,6 +4,7 @@ import z from "zod"
 import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
 import { contactsAccessAuthorizedMiddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
+import { viewerFromContext } from "../lib/viewer"
 import {
   addDealNoteRequest,
   createDealRequest,
@@ -37,7 +38,10 @@ const privateListWorkspaceDealsAPI = authorizedAPI
   .input(listDealsRequest.and(withWorkspaceIdSchema))
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(listDealsResponse)
-  .handler(async ({ input }) => await dealService.list(input))
+  .handler(
+    async ({ input, context }) =>
+      await dealService.list({ ...input, viewer: viewerFromContext(context) }),
+  )
 
 const privateGetDealBoardAPI = authorizedAPI
   .route({
@@ -56,8 +60,11 @@ const privateGetDealBoardAPI = authorizedAPI
   )
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ data: z.array(boardColumnResource) }))
-  .handler(async ({ input }) => ({
-    data: await dealService.listBoard(input),
+  .handler(async ({ input, context }) => ({
+    data: await dealService.listBoard({
+      ...input,
+      viewer: viewerFromContext(context),
+    }),
   }))
 
 const privateGetDealAPI = authorizedAPI
@@ -70,7 +77,13 @@ const privateGetDealAPI = authorizedAPI
   .input(withDealId)
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(dealResource)
-  .handler(async ({ input }) => await dealService.findOrFail(input))
+  .handler(
+    async ({ input, context }) =>
+      await dealService.findOrFail({
+        ...input,
+        viewer: viewerFromContext(context),
+      }),
+  )
 
 const privateListDealActivitiesAPI = authorizedAPI
   .route({
@@ -82,10 +95,11 @@ const privateListDealActivitiesAPI = authorizedAPI
   .input(withDealId)
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ data: z.array(dealActivityResource) }))
-  .handler(async ({ input }) => ({
+  .handler(async ({ input, context }) => ({
     data: await dealService.listActivities({
       workspaceId: input.workspaceId,
       dealId: input.id,
+      viewer: viewerFromContext(context),
     }),
   }))
 
@@ -105,6 +119,7 @@ const privateCreateDealAPI = authorizedAPI
       workspaceId,
       data,
       actorId: context.user.id,
+      viewer: viewerFromContext(context),
     })
   })
 
@@ -125,6 +140,7 @@ const privateUpdateDealAPI = authorizedAPI
       id,
       data,
       actorId: context.user.id,
+      viewer: viewerFromContext(context),
     })
   })
 
@@ -146,6 +162,7 @@ const privateMoveDealAPI = authorizedAPI
       stageId,
       position,
       actorId: context.user.id,
+      viewer: viewerFromContext(context),
     })
   })
 
@@ -166,6 +183,7 @@ const privateSetDealStatusAPI = authorizedAPI
       id,
       status,
       actorId: context.user.id,
+      viewer: viewerFromContext(context),
     })
   })
 
@@ -186,6 +204,7 @@ const privateAddDealNoteAPI = authorizedAPI
       id,
       text,
       actorId: context.user.id,
+      viewer: viewerFromContext(context),
     })
   })
 
@@ -199,7 +218,13 @@ const privateDeleteDealsAPI = authorizedAPI
   .input(deleteDealsRequest.and(withWorkspaceIdSchema))
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ deletedCount: z.number().int() }))
-  .handler(async ({ input }) => await dealService.remove(input))
+  .handler(
+    async ({ input, context }) =>
+      await dealService.remove({
+        ...input,
+        viewer: viewerFromContext(context),
+      }),
+  )
 
 export const privateDealsAPI = {
   privateListWorkspaceDealsAPI,

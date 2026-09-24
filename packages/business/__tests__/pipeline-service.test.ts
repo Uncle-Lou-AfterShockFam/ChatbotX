@@ -83,6 +83,13 @@ vi.mock("@chatbotx.io/utils", async (importOriginal) => ({
   createId: () => "new-id",
 }))
 vi.mock("../src/audit/dispatcher", () => ({ dispatchAuditRecord: vi.fn() }))
+const isMember = vi.hoisted(() => vi.fn(async () => false))
+vi.mock("../src/pipeline/members", () => ({
+  pipelineMemberService: {
+    isMember,
+    listPipelineIdsForUser: vi.fn(async () => new Set()),
+  },
+}))
 
 const { pipelineService } = await import("../src/pipeline/service")
 
@@ -116,6 +123,8 @@ describe("pipelineService.create", () => {
       stopCompanyOn: "created",
       defaultCurrency: "USD",
       fieldDefs: [],
+      assignOwner: "none",
+      access: "workspace",
     })
     expect(pipeline.stages.map((s) => s.name)).toEqual([
       "New",
@@ -143,6 +152,8 @@ describe("pipelineService.create", () => {
       stopCompanyOn: "won",
       defaultCurrency: "EUR",
       fieldDefs: [],
+      assignOwner: "none",
+      access: "workspace",
     })
     expect(pipeline.stages).toHaveLength(2)
   })
@@ -281,7 +292,12 @@ describe("legacy settings rows (s192 hotfix: fieldDefs missing in the stored jso
       { id: "p1", workspaceId: WS, name: "Old", order: 0, settings: legacy },
     ]
     const [listed] = await pipelineService.list({ workspaceId: WS })
-    expect(listed.settings).toEqual({ ...legacy, fieldDefs: [] })
+    expect(listed.settings).toEqual({
+      ...legacy,
+      fieldDefs: [],
+      assignOwner: "none",
+      access: "workspace",
+    })
     m.findOrFail.mockResolvedValueOnce({
       id: "p1",
       workspaceId: WS,
@@ -292,7 +308,12 @@ describe("legacy settings rows (s192 hotfix: fieldDefs missing in the stored jso
       workspaceId: WS,
       id: "p1",
     })
-    expect(found.settings).toEqual({ ...legacy, fieldDefs: [] })
+    expect(found.settings).toEqual({
+      ...legacy,
+      fieldDefs: [],
+      assignOwner: "none",
+      access: "workspace",
+    })
   })
 
   test("a settings blob that no longer parses is read under the defaults instead of throwing", async () => {
@@ -309,7 +330,48 @@ describe("legacy settings rows (s192 hotfix: fieldDefs missing in the stored jso
     expect(found.settings).toMatchObject({
       defaultCurrency: "USD",
       fieldDefs: [],
+      assignOwner: "none",
+      access: "workspace",
       stopCompanyOn: "always",
     })
+  })
+})
+
+describe("pipelineService.update access=members self-lockout guard (s193)", () => {
+  const RESTRICTED = {
+    userId: "u-1",
+    permissions: { superAdmin: false, contacts: true },
+  }
+  test("a restricted viewer who is not a member gets 422 wouldLockYourselfOut; a member or a super admin passes", async () => {
+    isMember.mockResolvedValueOnce(false)
+    await expect(
+      pipelineService.update({
+        workspaceId: WS,
+        id: "pipe-1",
+        data: { settings: { access: "members" } },
+        viewer: RESTRICTED,
+      }),
+    ).rejects.toMatchObject({
+      httpStatusCode: 422,
+      data: { reason: "wouldLockYourselfOut" },
+    })
+    expect(m.updated).toEqual([])
+
+    isMember.mockResolvedValueOnce(true)
+    await pipelineService.update({
+      workspaceId: WS,
+      id: "pipe-1",
+      data: { settings: { access: "members" } },
+      viewer: RESTRICTED,
+    })
+    expect(m.updated.at(-1)).toMatchObject({ settings: { access: "members" } })
+
+    await pipelineService.update({
+      workspaceId: WS,
+      id: "pipe-1",
+      data: { settings: { access: "members" } },
+      viewer: { userId: "u-9", permissions: { superAdmin: true } },
+    })
+    expect(isMember).toHaveBeenCalledTimes(2)
   })
 })

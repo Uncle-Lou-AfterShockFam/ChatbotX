@@ -10,6 +10,7 @@ import {
 } from "drizzle-orm/pg-core"
 import type { PipelineSettings } from "../partials/deal"
 import { bigintAsString, sharedColumns } from "../partials/shared"
+import { userModel } from "./auth-user"
 import { workspaceModel } from "./workspace"
 
 /**
@@ -17,9 +18,12 @@ import { workspaceModel } from "./workspace"
  * written explicitly on every insert (no drizzle `.default()`: see AGENTS.md,
  * a jsonb default is not a database default).
  *
- * Phase 2 (not created here, reserved): `PipelineMember` (round-robin owners
- * and per-pipeline access), `DealTask`, `DealTaskTemplate`, `DealDependency`,
- * `DealComment` + mentions.
+ * `roundRobinLastUserId` is the round-robin cursor (s193): the member who got
+ * the last auto-assigned deal; read and advanced under `SELECT ... FOR UPDATE`
+ * of this row inside the deal-insert transaction. Members live in
+ * `PipelineMember` (`./pipeline-member`).
+ *
+ * Phase 2 (not created here, reserved): `DealComment` + mentions.
  */
 export const pipelineModel = pgTable(
   "Pipeline",
@@ -34,6 +38,10 @@ export const pipelineModel = pgTable(
         onDelete: "cascade",
         onUpdate: "cascade",
       }),
+    roundRobinLastUserId: bigintAsString().references(() => userModel.id, {
+      onDelete: "set null",
+      onUpdate: "cascade",
+    }),
   },
   (table) => [
     uniqueIndex("Pipeline_workspaceId_name_key").using(

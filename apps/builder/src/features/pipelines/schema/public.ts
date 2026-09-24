@@ -4,15 +4,22 @@ import {
   createPipelineRequest,
   removeStageRequest,
   reorderStagesRequest,
+  setPipelineMembersRequest,
   updatePipelineRequest,
   upsertStageRequest,
 } from "./action"
-import { pipelineStageResource, pipelineWithStagesResource } from "./resource"
+import {
+  pipelineMemberResource,
+  pipelineStageResource,
+  pipelineWithStagesResource,
+} from "./resource"
 
 const pipelineIdDescription = "Pipeline id. Get it from `pipelines.list`."
 
 export const pipelinePublicResource = pipelineWithStagesResource.omit({
   workspaceId: true,
+  // The round-robin cursor is an implementation detail, not API contract.
+  roundRobinLastUserId: true,
 })
 export const pipelineStagePublicResource = pipelineStageResource
 
@@ -57,3 +64,13 @@ export const removeStagePublicRequest = removeStageRequest.extend({
       "Stage of the same pipeline that receives the deals still in the removed stage; required when any remain.",
     ),
 })
+
+export const pipelineMemberPublicResource = pipelineMemberResource.omit({
+  workspaceId: true,
+})
+
+export const setPipelineMembersPublicRequest = setPipelineMembersRequest.extend(
+  {
+    id: zodBigintAsString().describe(pipelineIdDescription),
+  },
+)

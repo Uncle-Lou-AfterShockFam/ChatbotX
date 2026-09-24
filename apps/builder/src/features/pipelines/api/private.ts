@@ -1,6 +1,7 @@
-import { pipelineService } from "@chatbotx.io/business"
+import { pipelineMemberService, pipelineService } from "@chatbotx.io/business"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import z from "zod"
+import { viewerFromContext } from "@/features/deals/lib/viewer"
 import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
 import { contactsAccessAuthorizedMiddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
@@ -9,10 +10,12 @@ import {
   deletePipelineRequest,
   removeStageRequest,
   reorderStagesRequest,
+  setPipelineMembersRequest,
   updatePipelineRequest,
   upsertStageRequest,
 } from "../schema/action"
 import {
+  pipelineMemberResource,
   pipelineStageResource,
   pipelineWithStagesResource,
 } from "../schema/resource"
@@ -31,8 +34,11 @@ const privateListWorkspacePipelinesAPI = authorizedAPI
   .input(withWorkspaceIdSchema)
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ data: z.array(pipelineWithStagesResource) }))
-  .handler(async ({ input }) => ({
-    data: await pipelineService.list(input),
+  .handler(async ({ input, context }) => ({
+    data: await pipelineService.list({
+      ...input,
+      viewer: viewerFromContext(context),
+    }),
   }))
 
 const privateGetPipelineAPI = authorizedAPI
@@ -45,7 +51,13 @@ const privateGetPipelineAPI = authorizedAPI
   .input(withPipelineId)
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(pipelineWithStagesResource)
-  .handler(async ({ input }) => await pipelineService.find(input))
+  .handler(
+    async ({ input, context }) =>
+      await pipelineService.find({
+        ...input,
+        viewer: viewerFromContext(context),
+      }),
+  )
 
 const privateCreatePipelineAPI = authorizedAPI
   .route({
@@ -72,9 +84,14 @@ const privateUpdatePipelineAPI = authorizedAPI
   .input(updatePipelineRequest.and(withPipelineId))
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(pipelineWithStagesResource)
-  .handler(async ({ input }) => {
+  .handler(async ({ input, context }) => {
     const { workspaceId, id, ...data } = input
-    return await pipelineService.update({ workspaceId, id, data })
+    return await pipelineService.update({
+      workspaceId,
+      id,
+      data,
+      viewer: viewerFromContext(context),
+    })
   })
 
 const privateDeletePipelineAPI = authorizedAPI
@@ -87,7 +104,13 @@ const privateDeletePipelineAPI = authorizedAPI
   .input(deletePipelineRequest.and(withPipelineId))
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ deletedDeals: z.number().int() }))
-  .handler(async ({ input }) => await pipelineService.remove(input))
+  .handler(
+    async ({ input, context }) =>
+      await pipelineService.remove({
+        ...input,
+        viewer: viewerFromContext(context),
+      }),
+  )
 
 const privateUpsertPipelineStageAPI = authorizedAPI
   .route({
@@ -99,13 +122,14 @@ const privateUpsertPipelineStageAPI = authorizedAPI
   .input(upsertStageRequest.and(withPipelineId))
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(pipelineStageResource)
-  .handler(async ({ input }) => {
+  .handler(async ({ input, context }) => {
     const { workspaceId, id, stageId, ...data } = input
     return await pipelineService.upsertStage({
       workspaceId,
       pipelineId: id,
       stageId,
       data,
+      viewer: viewerFromContext(context),
     })
   })
 
@@ -119,12 +143,13 @@ const privateReorderPipelineStagesAPI = authorizedAPI
   .input(reorderStagesRequest.and(withPipelineId))
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.array(pipelineStageResource))
-  .handler(async ({ input }) => {
+  .handler(async ({ input, context }) => {
     const { workspaceId, id, stageIds } = input
     return await pipelineService.reorderStages({
       workspaceId,
       pipelineId: id,
       stageIds,
+      viewer: viewerFromContext(context),
     })
   })
 
@@ -138,17 +163,63 @@ const privateRemovePipelineStageAPI = authorizedAPI
   .input(removeStageRequest.and(withPipelineId))
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ movedDeals: z.number().int() }))
-  .handler(async ({ input }) => {
+  .handler(async ({ input, context }) => {
     const { workspaceId, id, stageId, moveDealsTo } = input
     return await pipelineService.removeStage({
       workspaceId,
       pipelineId: id,
       stageId,
       moveDealsTo,
+      viewer: viewerFromContext(context),
     })
   })
 
+const privateListPipelineMembersAPI = authorizedAPI
+  .route({
+    method: "GET",
+    path: "/workspaces/{workspaceId}/pipelines/{id}/members",
+    summary: "Members of a pipeline in rotation order",
+    tags: ["Pipelines"],
+  })
+  .input(withPipelineId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
+  .output(z.object({ data: z.array(pipelineMemberResource) }))
+  .handler(async ({ input, context }) => {
+    await pipelineService.findOrFail({
+      workspaceId: input.workspaceId,
+      id: input.id,
+      viewer: viewerFromContext(context),
+    })
+    return {
+      data: await pipelineMemberService.list({
+        workspaceId: input.workspaceId,
+        pipelineId: input.id,
+      }),
+    }
+  })
+
+const privateSetPipelineMembersAPI = authorizedAPI
+  .route({
+    method: "PUT",
+    path: "/workspaces/{workspaceId}/pipelines/{id}/members",
+    summary: "Replace the members of a pipeline",
+    tags: ["Pipelines"],
+  })
+  .input(setPipelineMembersRequest.and(withPipelineId))
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
+  .output(z.object({ data: z.array(pipelineMemberResource) }))
+  .handler(async ({ input, context }) => ({
+    data: await pipelineMemberService.set({
+      workspaceId: input.workspaceId,
+      pipelineId: input.id,
+      members: input.members,
+      viewer: viewerFromContext(context),
+    }),
+  }))
+
 export const privatePipelinesAPI = {
+  privateListPipelineMembersAPI,
+  privateSetPipelineMembersAPI,
   privateListWorkspacePipelinesAPI,
   privateGetPipelineAPI,
   privateCreatePipelineAPI,

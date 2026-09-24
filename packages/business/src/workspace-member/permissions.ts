@@ -45,3 +45,22 @@ export function hasContactsAccess(permissions: PermissionsInput): boolean {
     hasWorkspacePermission(permissions, "onlyAssignedContacts")
   )
 }
+
+/**
+ * The user id every read must be restricted to when the member sees only the
+ * records assigned to them (`onlyAssignedContacts` without full `contacts`
+ * access); `undefined` = unrestricted. A super admin is never restricted.
+ * Shared by the contacts list scope in the builder and the deal scope (s193)
+ * so both surfaces apply the ONE rule.
+ */
+export function assignedOnlyUserId(input: {
+  permissions: PermissionsInput
+  userId: string
+}): string | undefined {
+  if (hasWorkspacePermission(input.permissions, "superAdmin")) {
+    return
+  }
+  return hasWorkspacePermission(input.permissions, "onlyAssignedContacts")
+    ? input.userId
+    : undefined
+}
