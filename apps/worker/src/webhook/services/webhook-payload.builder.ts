@@ -48,6 +48,11 @@ const EVENT_NAMES = {
   [triggerEventTypes.enum.callEnded]: "call_ended",
   [triggerEventTypes.enum.callRecorded]: "call_recorded",
   [triggerEventTypes.enum.callTranscribed]: "call_transcribed",
+  [triggerEventTypes.enum.ticketCreated]: "deal_created",
+  [triggerEventTypes.enum.ticketMovedToStage]: "deal_moved_to_stage",
+  [triggerEventTypes.enum.ticketValueChanged]: "deal_value_changed",
+  [triggerEventTypes.enum.ticketStatusChanged]: "deal_status_changed",
+  [triggerEventTypes.enum.ticketPriorityChanged]: "deal_priority_changed",
 } satisfies Record<MatchableEventType, string>
 
 async function buildTagPayload(
@@ -133,6 +138,32 @@ async function buildNewContactPayload(
   }
 }
 
+/**
+ * Deal events project named fields only: the metadata bag also carries the
+ * internal `sourceId` (and may carry a contactInboxId), neither of which is a
+ * documented public field.
+ */
+function buildDealPayload(
+  basePayload: WebhookPayloadBase,
+  data: Record<string, unknown>,
+): WebhookPayload {
+  return {
+    ...basePayload,
+    deal: {
+      id: data.dealId as string,
+      pipeline_id: data.pipelineId as string,
+      stage_id: data.stageId as string,
+      title: data.title as string,
+      value: (data.value as string | null) ?? null,
+      currency: data.currency as string,
+      status: data.status as string,
+      priority: data.priority as string,
+      owner_id: (data.ownerId as string | null) ?? null,
+      company_id: (data.companyId as string | null) ?? null,
+    },
+  }
+}
+
 const PAYLOAD_BUILDERS = {
   [triggerEventTypes.enum.tagApplied]: buildTagPayload,
   [triggerEventTypes.enum.tagRemoved]: buildTagPayload,
@@ -212,6 +243,23 @@ const PAYLOAD_BUILDERS = {
   [triggerEventTypes.enum.callTranscribed]: (basePayload, data) => ({
     ...basePayload,
     ...data,
+  }),
+  [triggerEventTypes.enum.ticketCreated]: buildDealPayload,
+  [triggerEventTypes.enum.ticketMovedToStage]: (basePayload, data) => ({
+    ...buildDealPayload(basePayload, data),
+    from_stage_id: (data.fromStageId as string) ?? null,
+  }),
+  [triggerEventTypes.enum.ticketValueChanged]: (basePayload, data) => ({
+    ...buildDealPayload(basePayload, data),
+    old_value: (data.oldValue as string | null) ?? null,
+  }),
+  [triggerEventTypes.enum.ticketStatusChanged]: (basePayload, data) => ({
+    ...buildDealPayload(basePayload, data),
+    old_status: (data.oldStatus as string) ?? null,
+  }),
+  [triggerEventTypes.enum.ticketPriorityChanged]: (basePayload, data) => ({
+    ...buildDealPayload(basePayload, data),
+    old_priority: (data.oldPriority as string) ?? null,
   }),
 } satisfies Record<MatchableEventType, PayloadBuilder>
 

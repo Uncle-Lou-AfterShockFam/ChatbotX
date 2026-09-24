@@ -1,0 +1,955 @@
+import {
+  and,
+  type DatabaseClient,
+  db,
+  desc,
+  eq,
+  findOrFail,
+  inArray,
+  relationsFilterToSQL,
+  sql,
+} from "@chatbotx.io/database/client"
+import {
+  type DealActivityType,
+  type DealPriority,
+  type DealStatus,
+  dealPriorities,
+  dealStatuses,
+  normalizeDealValue,
+  type PipelineSettings,
+} from "@chatbotx.io/database/partials"
+import {
+  contactModel,
+  dealActivityModel,
+  dealModel,
+  workspaceMemberModel,
+} from "@chatbotx.io/database/schema"
+import type {
+  DealActivityModel,
+  DealModel,
+  PipelineStageModel,
+} from "@chatbotx.io/database/types"
+import {
+  likeContains,
+  parseOrderByAsObject,
+  parsePagination,
+} from "@chatbotx.io/database/utils"
+import {
+  type DealEventMetadata,
+  emitDealCreated,
+  emitDealMovedToStage,
+  emitDealPriorityChanged,
+  emitDealStatusChanged,
+  emitDealValueChanged,
+} from "@chatbotx.io/events"
+import { createId } from "@chatbotx.io/utils"
+import { BaseService } from "../base.service"
+import { notFoundException, validationException } from "../errors"
+import { logger } from "../logger"
+import { pipelineService } from "../pipeline/service"
+import type { PaginatedResult } from "../types"
+import { stopCompanyForDeal } from "./company-stop"
+
+export type ListDealsInput = {
+  workspaceId: string
+  pipelineId?: string | null
+  stageId?: string | null
+  contactId?: string | null
+  companyId?: string | null
+  ownerId?: string | null
+  status?: DealStatus | null
+  title?: string | null
+  page?: number | null
+  perPage?: number | null
+  sort?: { id: string; desc: boolean }[] | null
+}
+
+export type DealData = {
+  title: string
+  pipelineId: string
+  stageId?: string | null
+  value?: string | number | null
+  currency?: string | null
+  priority?: DealPriority | null
+  contactId?: string | null
+  companyId?: string | null
+  ownerId?: string | null
+  dueAt?: Date | null
+  fields?: Record<string, unknown> | null
+}
+
+export type DealUpdateData = Partial<
+  Pick<
+    DealData,
+    "title" | "value" | "currency" | "priority" | "ownerId" | "dueAt" | "fields"
+  >
+>
+
+export type BoardColumn = { stage: PipelineStageModel; deals: DealModel[] }
+
+const DEAL_NOT_FOUND = "Deal not found"
+const ISO_CURRENCY = /^[A-Z]{3}$/
+
+/** 409-class: the row moved under us; the caller reloads and retries. */
+const dealChangedConcurrently = () =>
+  validationException(
+    "id",
+    "Deal was changed by someone else; reload and retry.",
+    { conflict: "stale" },
+  )
+export const POSITION_STEP = 1000
+/** Below this gap two neighbouring positions are renormalised to `POSITION_STEP * i`. */
+export const MIN_POSITION_GAP = 1e-6
+
+/**
+ * Deals. Node-only (`@chatbotx.io/business/deal`): creating or winning a deal
+ * can run the company stop cascade, which reaches the sequence scheduler.
+ *
+ * Write order on every mutation: the row + its activity inside one
+ * transaction, THEN the trigger event, THEN the company stop. An emit or a
+ * stop failure never un-does the write.
+ */
+class DealService extends BaseService {
+  async findOrFail(props: {
+    workspaceId: string
+    id: string
+    tx?: DatabaseClient
+  }): Promise<DealModel> {
+    const { workspaceId, id, tx = db } = props
+    return await findOrFail({
+      client: tx,
+      table: dealModel,
+      where: { id, workspaceId },
+      message: DEAL_NOT_FOUND,
+    })
+  }
+
+  async list(input: ListDealsInput): Promise<PaginatedResult<DealModel>> {
+    const where = {
+      workspaceId: input.workspaceId,
+      pipelineId: input.pipelineId ?? undefined,
+      stageId: input.stageId ?? undefined,
+      contactId: input.contactId ?? undefined,
+      companyId: input.companyId ?? undefined,
+      ownerId: input.ownerId ?? undefined,
+      status: input.status ?? undefined,
+      title: input.title ? { ilike: likeContains(input.title) } : undefined,
+    }
+    const requestedOrderBy = parseOrderByAsObject(dealModel, input)
+    const orderBy =
+      Object.keys(requestedOrderBy).length > 0
+        ? requestedOrderBy
+        : { createdAt: "desc" as const }
+    const pagination = parsePagination(input)
+    const [data, total] = await Promise.all([
+      db.query.dealModel.findMany({ where, orderBy, ...pagination }),
+      db.$count(dealModel, relationsFilterToSQL(dealModel, where)),
+    ])
+    const pageCount = pagination?.limit
+      ? Math.ceil(total / pagination.limit)
+      : 1
+    return { data, pageCount }
+  }
+
+  /** Every stage of the pipeline with its deals ordered by `position`. */
+  async listBoard(props: {
+    workspaceId: string
+    pipelineId: string
+    status?: DealStatus | "all" | null
+    tx?: DatabaseClient
+  }): Promise<BoardColumn[]> {
+    const { workspaceId, pipelineId, tx = db } = props
+    const status = props.status ?? "all"
+    const pipeline = await pipelineService.find({
+      workspaceId,
+      id: pipelineId,
+      tx,
+    })
+    const deals = await tx.query.dealModel.findMany({
+      where: {
+        workspaceId,
+        pipelineId,
+        status: status === "all" ? undefined : status,
+      },
+      orderBy: { position: "asc", createdAt: "asc" },
+    })
+    const byStage = new Map<string, DealModel[]>()
+    for (const deal of deals) {
+      const list = byStage.get(deal.stageId) ?? []
+      list.push(deal)
+      byStage.set(deal.stageId, list)
+    }
+    return pipeline.stages.map((stage) => ({
+      stage,
+      deals: byStage.get(stage.id) ?? [],
+    }))
+  }
+
+  async listByContactId(props: {
+    workspaceId: string
+    contactId: string
+    tx?: DatabaseClient
+  }): Promise<DealModel[]> {
+    const { workspaceId, contactId, tx = db } = props
+    return await tx.query.dealModel.findMany({
+      where: { workspaceId, contactId },
+      orderBy: { createdAt: "desc" },
+    })
+  }
+
+  async findOpenForContactInPipeline(props: {
+    workspaceId: string
+    contactId: string
+    pipelineId: string
+    tx?: DatabaseClient
+  }): Promise<DealModel | undefined> {
+    const { workspaceId, contactId, pipelineId, tx = db } = props
+    return await tx.query.dealModel.findFirst({
+      where: { workspaceId, contactId, pipelineId, status: "open" },
+      orderBy: { createdAt: "desc" },
+    })
+  }
+
+  async listActivities(props: {
+    workspaceId: string
+    dealId: string
+    limit?: number
+    tx?: DatabaseClient
+  }): Promise<DealActivityModel[]> {
+    const { workspaceId, dealId, limit = 200, tx = db } = props
+    await this.findOrFail({ workspaceId, id: dealId, tx })
+    return await tx
+      .select()
+      .from(dealActivityModel)
+      .where(eq(dealActivityModel.dealId, dealId))
+      .orderBy(desc(dealActivityModel.createdAt))
+      .limit(limit)
+  }
+
+  async create(props: {
+    workspaceId: string
+    data: DealData
+    actorId?: string | null
+  }): Promise<DealModel> {
+    const { workspaceId, data } = props
+    const actorId = props.actorId ?? null
+    const parsed = this.parseCreateData(data)
+    const { deal, settings } = await db.transaction(
+      async (tx) =>
+        await this.insertInTx({ tx, workspaceId, data, parsed, actorId }),
+    )
+    await this.afterCreate(deal, settings)
+    return deal
+  }
+
+  /**
+   * `create`, but at most ONE open deal per contact per pipeline: the check and
+   * the insert run under a transaction-scoped advisory lock keyed on the
+   * contact + pipeline, so two concurrent flow runs cannot both pass the
+   * "no open deal yet" check (the flow step's `skipIfOpenDealExists`).
+   */
+  async createUnlessOpen(props: {
+    workspaceId: string
+    data: DealData & { contactId: string }
+    actorId?: string | null
+  }): Promise<{ deal: DealModel; created: boolean }> {
+    const { workspaceId, data } = props
+    const actorId = props.actorId ?? null
+    const parsed = this.parseCreateData(data)
+    const outcome = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`deal:${workspaceId}:${data.contactId}:${data.pipelineId}`}))`,
+      )
+      const existing = await this.findOpenForContactInPipeline({
+        workspaceId,
+        contactId: data.contactId,
+        pipelineId: data.pipelineId,
+        tx,
+      })
+      if (existing) {
+        return { created: false as const, deal: existing }
+      }
+      const inserted = await this.insertInTx({
+        tx,
+        workspaceId,
+        data,
+        parsed,
+        actorId,
+      })
+      return { created: true as const, ...inserted }
+    })
+    if (outcome.created) {
+      await this.afterCreate(outcome.deal, outcome.settings)
+    }
+    return { deal: outcome.deal, created: outcome.created }
+  }
+
+  private parseCreateData(data: DealData): {
+    title: string
+    value: string | null
+    priority: DealPriority
+  } {
+    const title = typeof data.title === "string" ? data.title.trim() : ""
+    if (title.length === 0) {
+      throw validationException("title", "Title is required.")
+    }
+    return {
+      title,
+      value: this.parseValue(data.value),
+      priority: this.parsePriority(data.priority) ?? "medium",
+    }
+  }
+
+  /** Event, audit and the company stop AFTER the row committed. */
+  private async afterCreate(
+    deal: DealModel,
+    settings: PipelineSettings,
+  ): Promise<void> {
+    await this.audit("deal.create", deal.id)
+    await this.emitFor(deal, emitDealCreated, {})
+    // A deal created straight into a won stage IS won: the `won` rule applies
+    // here too, not only through setStatus.
+    const stops =
+      settings.stopCompanyOn === "created" ||
+      (settings.stopCompanyOn === "won" && deal.status === "won")
+    if (stops && deal.companyId) {
+      await stopCompanyForDeal({
+        workspaceId: deal.workspaceId,
+        companyId: deal.companyId,
+        dealId: deal.id,
+        contactId: deal.contactId,
+      })
+    }
+  }
+
+  private async insertInTx(props: {
+    tx: DatabaseClient
+    workspaceId: string
+    data: DealData
+    parsed: { title: string; value: string | null; priority: DealPriority }
+    actorId: string | null
+  }): Promise<{ deal: DealModel; settings: PipelineSettings }> {
+    const { tx, workspaceId, data, actorId } = props
+    const { title, value, priority } = props.parsed
+    {
+      const pipeline = await pipelineService.findOrFail({
+        workspaceId,
+        id: data.pipelineId,
+        tx,
+      })
+      const stage = data.stageId
+        ? await pipelineService.resolveStage({
+            workspaceId,
+            pipelineId: pipeline.id,
+            stageId: data.stageId,
+            tx,
+          })
+        : await pipelineService.firstStage({
+            workspaceId,
+            pipelineId: pipeline.id,
+            tx,
+          })
+      const contact = data.contactId
+        ? await this.resolveContact({
+            workspaceId,
+            contactId: data.contactId,
+            tx,
+          })
+        : null
+      const companyId =
+        data.companyId !== undefined && data.companyId !== null
+          ? data.companyId
+          : (contact?.companyId ?? null)
+      const ownerId = await this.resolveOwner({
+        workspaceId,
+        ownerId: data.ownerId,
+        tx,
+      })
+      const currency = this.parseCurrency(
+        data.currency ?? pipeline.settings.defaultCurrency,
+      )
+      const position = await this.nextPosition({ stageId: stage.id, tx })
+      const status: DealStatus = stage.isWon
+        ? "won"
+        : // biome-ignore lint/style/noNestedTernary: three-way landing status
+          stage.isLost
+          ? "lost"
+          : "open"
+
+      const [row] = await tx
+        .insert(dealModel)
+        .values({
+          id: createId(),
+          workspaceId,
+          pipelineId: pipeline.id,
+          stageId: stage.id,
+          title,
+          value,
+          currency,
+          status,
+          priority,
+          position,
+          dueAt: data.dueAt ?? null,
+          closedAt: status === "open" ? null : new Date(),
+          contactId: contact?.id ?? null,
+          companyId,
+          ownerId,
+          // jsonb: written explicitly, never by a drizzle default (AGENTS.md)
+          fields: data.fields ?? {},
+        })
+        .returning()
+      await this.recordActivity({
+        tx,
+        dealId: row.id,
+        type: "created",
+        actorId,
+        payload: { stageId: stage.id, status },
+      })
+      return { deal: row, settings: pipeline.settings }
+    }
+  }
+
+  /** Title / value / currency / priority / owner / dueAt / fields; each change is one activity + one event. */
+  async update(props: {
+    workspaceId: string
+    id: string
+    data: DealUpdateData
+    actorId?: string | null
+  }): Promise<DealModel> {
+    const { workspaceId, id, data } = props
+    const actorId = props.actorId ?? null
+    const set: Partial<typeof dealModel.$inferInsert> = {}
+    const changes: { type: DealActivityType; from: unknown; to: unknown }[] = []
+
+    const result = await db.transaction(async (tx) => {
+      const current = await this.findOrFail({ workspaceId, id, tx })
+      if (data.title !== undefined) {
+        const title = typeof data.title === "string" ? data.title.trim() : ""
+        if (title.length === 0) {
+          throw validationException("title", "Title is required.")
+        }
+        set.title = title
+      }
+      if (data.value !== undefined) {
+        const value = this.parseValue(data.value)
+        if (value !== current.value) {
+          set.value = value
+          changes.push({ type: "valueChanged", from: current.value, to: value })
+        }
+      }
+      if (data.currency !== undefined && data.currency !== null) {
+        const currency = this.parseCurrency(data.currency)
+        if (currency !== current.currency) {
+          set.currency = currency
+        }
+      }
+      if (data.priority !== undefined && data.priority !== null) {
+        const priority = this.parsePriority(data.priority)
+        if (priority && priority !== current.priority) {
+          set.priority = priority
+          changes.push({
+            type: "priorityChanged",
+            from: current.priority,
+            to: priority,
+          })
+        }
+      }
+      if (data.ownerId !== undefined) {
+        const ownerId = await this.resolveOwner({
+          workspaceId,
+          ownerId: data.ownerId,
+          tx,
+        })
+        if (ownerId !== current.ownerId) {
+          set.ownerId = ownerId
+          changes.push({ type: "assigned", from: current.ownerId, to: ownerId })
+        }
+      }
+      if (data.dueAt !== undefined) {
+        set.dueAt = data.dueAt
+      }
+      if (data.fields !== undefined && data.fields !== null) {
+        set.fields = { ...current.fields, ...data.fields }
+      }
+      if (Object.keys(set).length === 0) {
+        return { deal: current, changed: false }
+      }
+      const [updated] = await tx
+        .update(dealModel)
+        .set(set)
+        .where(
+          and(eq(dealModel.id, id), eq(dealModel.workspaceId, workspaceId)),
+        )
+        .returning()
+      if (!updated) {
+        throw notFoundException(DEAL_NOT_FOUND)
+      }
+      for (const change of changes) {
+        await this.recordActivity({
+          tx,
+          dealId: id,
+          type: change.type,
+          actorId,
+          payload: { from: change.from, to: change.to },
+        })
+      }
+      return { deal: updated, changed: true }
+    })
+
+    if (!result.changed) {
+      return result.deal
+    }
+    await this.audit("deal.update", id)
+    for (const change of changes) {
+      if (change.type === "valueChanged") {
+        await this.emitFor(result.deal, emitDealValueChanged, {
+          oldValue: change.from as string | null,
+        })
+      } else if (change.type === "priorityChanged") {
+        await this.emitFor(result.deal, emitDealPriorityChanged, {
+          oldPriority: change.from as string,
+        })
+      }
+    }
+    return result.deal
+  }
+
+  /**
+   * Move a deal to a stage of ITS pipeline. Same stage = reposition only (no
+   * activity, no event). A won/lost stage also closes the deal through
+   * `setStatus`; a normal stage reopens a closed deal.
+   */
+  async moveStage(props: {
+    workspaceId: string
+    id: string
+    stageId: string
+    position?: number | null
+    actorId?: string | null
+  }): Promise<DealModel> {
+    const { workspaceId, id, stageId } = props
+    const actorId = props.actorId ?? null
+
+    const outcome = await db.transaction(async (tx) => {
+      const current = await this.findOrFail({ workspaceId, id, tx })
+      const stage = await pipelineService.resolveStage({
+        workspaceId,
+        pipelineId: current.pipelineId,
+        stageId,
+        tx,
+      })
+      const position =
+        props.position !== undefined && props.position !== null
+          ? this.parsePosition(props.position)
+          : await this.nextPosition({ stageId: stage.id, tx })
+      if (stage.id === current.stageId) {
+        const [repositioned] = await tx
+          .update(dealModel)
+          .set({ position })
+          .where(eq(dealModel.id, id))
+          .returning()
+        return { kind: "same" as const, deal: repositioned ?? current, stage }
+      }
+      // The predicate pins the stage this transaction read: a concurrent move
+      // that already changed it makes this UPDATE touch 0 rows, so the
+      // activity row and the event can never record a transition that did
+      // not happen in that order.
+      const [moved] = await tx
+        .update(dealModel)
+        .set({ stageId: stage.id, position })
+        .where(
+          and(
+            eq(dealModel.id, id),
+            eq(dealModel.workspaceId, workspaceId),
+            eq(dealModel.stageId, current.stageId),
+          ),
+        )
+        .returning()
+      if (!moved) {
+        throw dealChangedConcurrently()
+      }
+      await this.recordActivity({
+        tx,
+        dealId: id,
+        type: "stageMoved",
+        actorId,
+        payload: { from: current.stageId, to: stage.id },
+      })
+      return {
+        kind: "moved" as const,
+        deal: moved,
+        stage,
+        fromStageId: current.stageId,
+      }
+    })
+
+    if (outcome.kind === "same") {
+      await this.maybeRenormalize({ stageId: outcome.stage.id })
+      return outcome.deal
+    }
+    await this.audit("deal.move", id)
+    await this.emitFor(outcome.deal, emitDealMovedToStage, {
+      fromStageId: outcome.fromStageId,
+    })
+    await this.maybeRenormalize({ stageId: outcome.stage.id })
+
+    const target: DealStatus = outcome.stage.isWon
+      ? "won"
+      : // biome-ignore lint/style/noNestedTernary: three-way landing status
+        outcome.stage.isLost
+        ? "lost"
+        : "open"
+    if (target !== outcome.deal.status) {
+      return await this.setStatus({ workspaceId, id, status: target, actorId })
+    }
+    return outcome.deal
+  }
+
+  /**
+   * Open -> won|lost closes; won|lost -> open reopens; won <-> lost is refused
+   * ("reopen first"); the same status is a no-op (one activity, one event at
+   * most per real change). Winning a deal stops the company when the pipeline
+   * says `stopCompanyOn: won`.
+   */
+  async setStatus(props: {
+    workspaceId: string
+    id: string
+    status: DealStatus
+    actorId?: string | null
+  }): Promise<DealModel> {
+    const { workspaceId, id } = props
+    const actorId = props.actorId ?? null
+    const status = this.parseStatus(props.status)
+
+    const outcome = await db.transaction(async (tx) => {
+      const current = await this.findOrFail({ workspaceId, id, tx })
+      if (current.status === status) {
+        return { changed: false as const, deal: current }
+      }
+      if (current.status !== "open" && status !== "open") {
+        throw validationException(
+          "status",
+          `Deal is ${current.status}; reopen it before marking it ${status}.`,
+          { from: current.status, to: status },
+        )
+      }
+      const [updated] = await tx
+        .update(dealModel)
+        .set({ status, closedAt: status === "open" ? null : new Date() })
+        .where(
+          and(
+            eq(dealModel.id, id),
+            eq(dealModel.workspaceId, workspaceId),
+            eq(dealModel.status, current.status),
+          ),
+        )
+        .returning()
+      if (!updated) {
+        throw dealChangedConcurrently()
+      }
+      await this.recordActivity({
+        tx,
+        dealId: id,
+        type: "statusChanged",
+        actorId,
+        payload: { from: current.status, to: status },
+      })
+      const pipeline = await pipelineService.findOrFail({
+        workspaceId,
+        id: updated.pipelineId,
+        tx,
+      })
+      return {
+        changed: true as const,
+        deal: updated,
+        oldStatus: current.status,
+        settings: pipeline.settings,
+      }
+    })
+
+    if (!outcome.changed) {
+      return outcome.deal
+    }
+    await this.audit("deal.status", id)
+    await this.emitFor(outcome.deal, emitDealStatusChanged, {
+      oldStatus: outcome.oldStatus,
+    })
+    if (
+      status === "won" &&
+      outcome.settings.stopCompanyOn === "won" &&
+      outcome.deal.companyId
+    ) {
+      await stopCompanyForDeal({
+        workspaceId,
+        companyId: outcome.deal.companyId,
+        dealId: id,
+        contactId: outcome.deal.contactId,
+      })
+    }
+    return outcome.deal
+  }
+
+  async addNote(props: {
+    workspaceId: string
+    id: string
+    text: string
+    actorId?: string | null
+  }): Promise<DealActivityModel> {
+    const { workspaceId, id } = props
+    const text = typeof props.text === "string" ? props.text.trim() : ""
+    if (text.length === 0) {
+      throw validationException("text", "Note text is required.")
+    }
+    if (text.length > 4000) {
+      throw validationException("text", "Note text is at most 4000 characters.")
+    }
+    await this.findOrFail({ workspaceId, id })
+    return await this.recordActivity({
+      tx: db,
+      dealId: id,
+      type: "note",
+      actorId: props.actorId ?? null,
+      payload: { text },
+    })
+  }
+
+  async remove(props: {
+    workspaceId: string
+    ids: string[]
+    tx?: DatabaseClient
+  }): Promise<{ deletedCount: number }> {
+    const { workspaceId, ids, tx = db } = props
+    if (ids.length === 0) {
+      return { deletedCount: 0 }
+    }
+    const deleted = await tx
+      .delete(dealModel)
+      .where(
+        and(eq(dealModel.workspaceId, workspaceId), inArray(dealModel.id, ids)),
+      )
+      .returning({ id: dealModel.id })
+    if (deleted.length > 0) {
+      await this.audit("deal.delete", deleted.map((row) => row.id).join(","))
+    }
+    return { deletedCount: deleted.length }
+  }
+
+  /** `position` for a card dropped between two neighbours (either may be absent). */
+  positionBetween(
+    before: number | null | undefined,
+    after: number | null | undefined,
+  ): number {
+    if (before === null || before === undefined) {
+      return after === null || after === undefined
+        ? POSITION_STEP
+        : after - POSITION_STEP
+    }
+    if (after === null || after === undefined) {
+      return before + POSITION_STEP
+    }
+    return (before + after) / 2
+  }
+
+  // ---- internals ----------------------------------------------------------
+
+  private async recordActivity(props: {
+    tx: DatabaseClient
+    dealId: string
+    type: DealActivityType
+    actorId: string | null
+    payload: Record<string, unknown>
+  }): Promise<DealActivityModel> {
+    const [row] = await props.tx
+      .insert(dealActivityModel)
+      .values({
+        id: createId(),
+        dealId: props.dealId,
+        type: props.type,
+        actorId: props.actorId,
+        // jsonb: written explicitly, never by a drizzle default (AGENTS.md)
+        payload: props.payload,
+      })
+      .returning()
+    return row
+  }
+
+  private async emitFor<Extra extends Record<string, unknown>>(
+    deal: DealModel,
+    emit: (
+      workspaceId: string,
+      contactId: string,
+      metadata: DealEventMetadata & Extra,
+    ) => Promise<void>,
+    extra: Extra,
+  ): Promise<void> {
+    if (!deal.contactId) {
+      return
+    }
+    try {
+      await emit(deal.workspaceId, deal.contactId, {
+        dealId: deal.id,
+        pipelineId: deal.pipelineId,
+        stageId: deal.stageId,
+        title: deal.title,
+        value: deal.value,
+        currency: deal.currency,
+        status: deal.status,
+        priority: deal.priority,
+        ownerId: deal.ownerId,
+        companyId: deal.companyId,
+        ...extra,
+      })
+    } catch (error) {
+      logger.warn({ error, dealId: deal.id }, "deal: event emit failed")
+    }
+  }
+
+  private async resolveContact(props: {
+    workspaceId: string
+    contactId: string
+    tx: DatabaseClient
+  }): Promise<{ id: string; companyId: string | null }> {
+    const [contact] = await props.tx
+      .select({ id: contactModel.id, companyId: contactModel.companyId })
+      .from(contactModel)
+      .where(
+        and(
+          eq(contactModel.id, props.contactId),
+          eq(contactModel.workspaceId, props.workspaceId),
+        ),
+      )
+      .limit(1)
+    if (!contact) {
+      throw notFoundException("Contact not found")
+    }
+    return contact
+  }
+
+  /** An owner must be a member of the workspace; null clears the owner. */
+  private async resolveOwner(props: {
+    workspaceId: string
+    ownerId: string | null | undefined
+    tx: DatabaseClient
+  }): Promise<string | null> {
+    if (
+      props.ownerId === undefined ||
+      props.ownerId === null ||
+      props.ownerId === ""
+    ) {
+      return null
+    }
+    const [member] = await props.tx
+      .select({ userId: workspaceMemberModel.userId })
+      .from(workspaceMemberModel)
+      .where(
+        and(
+          eq(workspaceMemberModel.workspaceId, props.workspaceId),
+          eq(workspaceMemberModel.userId, props.ownerId),
+        ),
+      )
+      .limit(1)
+    if (!member) {
+      throw validationException(
+        "ownerId",
+        "Owner is not a member of this workspace.",
+      )
+    }
+    return member.userId
+  }
+
+  private async nextPosition(props: {
+    stageId: string
+    tx: DatabaseClient
+  }): Promise<number> {
+    const [{ maxPosition }] = await props.tx
+      .select({ maxPosition: sql<number | null>`max(${dealModel.position})` })
+      .from(dealModel)
+      .where(eq(dealModel.stageId, props.stageId))
+    return (Number(maxPosition) || 0) + POSITION_STEP
+  }
+
+  /** Rewrite positions to `POSITION_STEP * i` when any neighbouring gap collapsed. */
+  /**
+   * Rewrite positions to `POSITION_STEP * i` when any neighbouring gap
+   * collapsed. Read and write happen in ONE transaction with the rows locked,
+   * and the UPDATE is pinned to the stage, so a card that left the stage
+   * between read and write is never given a position from its old column.
+   */
+  private async maybeRenormalize(props: { stageId: string }): Promise<void> {
+    await db.transaction(async (tx) => {
+      const rows = await tx
+        .select({ id: dealModel.id, position: dealModel.position })
+        .from(dealModel)
+        .where(eq(dealModel.stageId, props.stageId))
+        .for("update")
+        .orderBy(dealModel.position, dealModel.createdAt)
+      let collapsed = false
+      for (let i = 1; i < rows.length; i += 1) {
+        if (
+          Math.abs(rows[i].position - rows[i - 1].position) < MIN_POSITION_GAP
+        ) {
+          collapsed = true
+          break
+        }
+      }
+      if (!collapsed) {
+        return
+      }
+      for (const [index, row] of rows.entries()) {
+        await tx
+          .update(dealModel)
+          .set({ position: (index + 1) * POSITION_STEP })
+          .where(
+            and(eq(dealModel.id, row.id), eq(dealModel.stageId, props.stageId)),
+          )
+      }
+    })
+  }
+
+  private parseValue(value: unknown): string | null {
+    if (value === undefined || value === null || value === "") {
+      return null
+    }
+    const normalized = normalizeDealValue(value)
+    if (normalized === null) {
+      throw validationException("value", "Value is a non-negative amount.")
+    }
+    return normalized
+  }
+
+  private parseCurrency(currency: unknown): string {
+    const code =
+      typeof currency === "string" ? currency.trim().toUpperCase() : ""
+    if (!ISO_CURRENCY.test(code)) {
+      throw validationException("currency", "Currency is a 3-letter ISO code.")
+    }
+    return code
+  }
+
+  private parsePriority(priority: unknown): DealPriority | null {
+    if (priority === undefined || priority === null) {
+      return null
+    }
+    const parsed = dealPriorities.safeParse(priority)
+    if (!parsed.success) {
+      throw validationException("priority", "Priority is low, medium or high.")
+    }
+    return parsed.data
+  }
+
+  private parseStatus(status: unknown): DealStatus {
+    const parsed = dealStatuses.safeParse(status)
+    if (!parsed.success) {
+      throw validationException("status", "Status is open, won or lost.")
+    }
+    return parsed.data
+  }
+
+  private parsePosition(position: unknown): number {
+    if (typeof position !== "number" || !Number.isFinite(position)) {
+      throw validationException("position", "Position is a finite number.")
+    }
+    return position
+  }
+}
+
+export const dealService = new DealService()

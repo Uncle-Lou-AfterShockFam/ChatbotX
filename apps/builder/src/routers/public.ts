@@ -21,6 +21,7 @@ import { contactsPublicRouter } from "@/features/contacts/api/public"
 import { conversationsPublicRouter } from "@/features/conversations/api/public"
 import { couponsPublicRouter } from "@/features/coupons/api/public"
 import { customFieldsPublicRouter } from "@/features/custom-fields/api/public"
+import { dealsPublicRouter } from "@/features/deals/api/public"
 import { dynamicImagesPublicRouter } from "@/features/dynamic-images/api/public"
 import { emailTopicsPublicRouter } from "@/features/email-topics/api/public"
 import { errorLogsPublicRouter } from "@/features/error-logs/api/public"
@@ -47,6 +48,7 @@ import { mediaLibraryPublicRouter } from "@/features/media-library/api/public"
 import { messagesPublicRouter } from "@/features/messages/api/public"
 import { minigamesPublicRouter } from "@/features/minigames/api/public"
 import { messengerPersonasPublicRouter } from "@/features/personas/api/public"
+import { pipelinesPublicRouter } from "@/features/pipelines/api/public"
 import { productCategoriesPublicRouter } from "@/features/product-categories/api/public"
 import { productsPublicRouter } from "@/features/products/api/public"
 import { qrCodesPublicRouter } from "@/features/qr-codes/api/public"
@@ -83,6 +85,7 @@ export const publicRouter = {
   conversations: conversationsPublicRouter,
   coupons: couponsPublicRouter,
   customFields: customFieldsPublicRouter,
+  deals: dealsPublicRouter,
   dynamicImages: dynamicImagesPublicRouter,
   emailTopics: emailTopicsPublicRouter,
   errorLogs: errorLogsPublicRouter,
@@ -102,6 +105,7 @@ export const publicRouter = {
   messengerChannels: messengerChannelsPublicRouter,
   messengerPersonas: messengerPersonasPublicRouter,
   minigames: minigamesPublicRouter,
+  pipelines: pipelinesPublicRouter,
   productCategories: productCategoriesPublicRouter,
   products: productsPublicRouter,
   qrCodes: qrCodesPublicRouter,

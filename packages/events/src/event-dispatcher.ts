@@ -4,6 +4,11 @@ import type {
   CallEndedMetadata,
   CallRecordedMetadata,
   CallTranscribedMetadata,
+  DealEventMetadata,
+  DealMovedToStageMetadata,
+  DealPriorityChangedMetadata,
+  DealStatusChangedMetadata,
+  DealValueChangedMetadata,
   IncomingCallMetadata,
 } from "./base-emitter"
 import { CompanyStopEventEmitter } from "./company-stop/emitter"
@@ -333,4 +338,44 @@ export const emitSequenceUnsubscribed = async (
     sequenceId,
     sequenceName,
     contactInboxId,
+  )
+
+// Deal events (the `ticket*` trigger types)
+export const emitDealCreated = async (
+  workspaceId: string,
+  contactId: string,
+  metadata: DealEventMetadata,
+) => await emitToAllEmitters("dealCreated", workspaceId, contactId, metadata)
+
+export const emitDealMovedToStage = async (
+  workspaceId: string,
+  contactId: string,
+  metadata: DealMovedToStageMetadata,
+) =>
+  await emitToAllEmitters("dealMovedToStage", workspaceId, contactId, metadata)
+
+export const emitDealValueChanged = async (
+  workspaceId: string,
+  contactId: string,
+  metadata: DealValueChangedMetadata,
+) =>
+  await emitToAllEmitters("dealValueChanged", workspaceId, contactId, metadata)
+
+export const emitDealStatusChanged = async (
+  workspaceId: string,
+  contactId: string,
+  metadata: DealStatusChangedMetadata,
+) =>
+  await emitToAllEmitters("dealStatusChanged", workspaceId, contactId, metadata)
+
+export const emitDealPriorityChanged = async (
+  workspaceId: string,
+  contactId: string,
+  metadata: DealPriorityChangedMetadata,
+) =>
+  await emitToAllEmitters(
+    "dealPriorityChanged",
+    workspaceId,
+    contactId,
+    metadata,
   )

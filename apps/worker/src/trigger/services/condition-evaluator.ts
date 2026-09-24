@@ -54,6 +54,19 @@ export class ConditionEvaluator {
       case triggerEventTypes.enum.contactReferredExistingContact:
         return true
 
+      // Deal events: the condition is pinned to a pipeline (created / value /
+      // status / priority) or to the destination stage (moved); the emitter
+      // put that id in `sourceId`. No sourceId on the condition = no match.
+      case triggerEventTypes.enum.ticketCreated:
+      case triggerEventTypes.enum.ticketMovedToStage:
+      case triggerEventTypes.enum.ticketValueChanged:
+      case triggerEventTypes.enum.ticketStatusChanged:
+      case triggerEventTypes.enum.ticketPriorityChanged:
+        return this.evaluateSourceIdMatch(
+          sourceId,
+          eventData.eventData.sourceId as string,
+        )
+
       case triggerEventTypes.enum.dateTimeBasedTrigger:
         return await this.evaluateDateTimeCondition(
           sourceId,

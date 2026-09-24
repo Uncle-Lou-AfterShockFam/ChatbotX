@@ -117,6 +117,11 @@ export const stepTypes = z.enum([
   "subscribeSequence",
   "unsubscribeSequence",
 
+  // Deal Operations
+  "createDeal",
+  "moveDealStage",
+  "setDealStatus",
+
   // Email
   "email",
 

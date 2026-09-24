@@ -824,6 +824,10 @@ describe("public API spec — error response coverage", () => {
       "inboxTeams.removeMembers",
       "keywords.delete",
       "messages.delete",
+      // s191: both carry only optional safety flags (`force`, `moveDealsTo`);
+      // the path alone identifies the resource.
+      "pipelines.delete",
+      "pipelines.removeStage",
     ])
   })
 })

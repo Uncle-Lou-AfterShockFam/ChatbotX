@@ -3290,7 +3290,11 @@
       "importStarted": "Flödet importeras. Kontrollera importhistoriken för resultat.",
       "importJsonOnly": "Endast JSON-filer",
       "whatsappCallButton": "Ring på WhatsApp",
-      "metaConversions": "Meta Conversions API"
+      "metaConversions": "Meta Conversions API",
+      "dealActions": "Deal Actions",
+      "createDeal": "Create Deal",
+      "moveDealStage": "Move Deal to Stage",
+      "setDealStatus": "Mark Deal Won / Lost"
     },
     "sendCarousel": {
       "addSlide": "Lägg till kort",
@@ -5163,11 +5167,11 @@
       "subscribedToSequence": "Har registrerats i en sekvens",
       "tagApplied": "Tagg har lagts till",
       "tagRemoved": "Tagg har tagits bort",
-      "ticketCreated": "Ärende har skapats",
-      "ticketMovedToStage": "Ärende har flyttats till ett steg",
-      "ticketPriorityChanged": "Ärendets prioritet har ändrats",
-      "ticketStatusChanged": "Ärendets status har ändrats",
-      "ticketValueChanged": "Ärendets värde har ändrats",
+      "ticketCreated": "Deal Created",
+      "ticketMovedToStage": "Deal Moved To Stage",
+      "ticketPriorityChanged": "Deal Priority Changed",
+      "ticketStatusChanged": "Deal Status Changed",
+      "ticketValueChanged": "Deal Value Changed",
       "unsubscribedFromSequence": "Har avregistrerats från en sekvens",
       "userAskedAboutProduct": "Användaren frågade om en produkt",
       "callRecorded": "Samtal inspelat",
@@ -6693,5 +6697,90 @@
   },
   "accountFields": {
     "title": "Botfält"
+  },
+  "deals": {
+    "title": "Deals",
+    "one": "Deal",
+    "pipeline": "Pipeline",
+    "pipelines": "Pipelines",
+    "stage": "Stage",
+    "stages": "Stages",
+    "noPipelines": "No pipelines yet. Create one under Settings > Pipelines.",
+    "pickPipelineFirst": "Pick a pipeline first.",
+    "firstStage": "First stage of the pipeline",
+    "titleHint": "Contact variables like '{{contact.full_name}}' are replaced per contact. Empty = \"Deal for\" plus the contact id.",
+    "valueHint": "A number, or a variable that resolves to one (e.g. a custom field). Empty = no value.",
+    "skipIfOpenDealExists": "Skip if an open deal exists",
+    "skipIfOpenDealExistsHint": "When on, a contact who already has an open deal in this pipeline gets no second one.",
+    "fields": {
+      "title": "Title",
+      "value": "Value",
+      "currency": "Currency",
+      "priority": "Priority",
+      "status": "Status",
+      "owner": "Owner",
+      "contact": "Contact",
+      "probability": "Probability (%)",
+      "color": "Color"
+    },
+    "priorities": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
+    },
+    "statuses": {
+      "open": "Open",
+      "won": "Won",
+      "lost": "Lost"
+    },
+    "managePipelines": "Manage pipelines",
+    "allStatuses": "All statuses",
+    "moveFailed": "The deal could not be moved.",
+    "searchContacts": "Search contacts by name, email or phone",
+    "noContact": "No contact",
+    "noOwner": "No owner",
+    "openContact": "Open contact",
+    "openCompany": "Open company",
+    "markWon": "Mark won",
+    "markLost": "Mark lost",
+    "reopen": "Reopen",
+    "deleteConfirm": "Delete this deal? Its activity log is deleted with it.",
+    "activityTitle": "Activity",
+    "notePlaceholder": "Add a note...",
+    "addNote": "Add note",
+    "activity": {
+      "created": "Created in {stage}",
+      "stageMoved": "Moved from {from} to {to}",
+      "valueChanged": "Value changed from {from} to {to}",
+      "statusChanged": "Status changed from {from} to {to}",
+      "priorityChanged": "Priority changed from {from} to {to}",
+      "assigned": "Owner changed",
+      "types": {
+        "created": "Created",
+        "stageMoved": "Stage",
+        "valueChanged": "Value",
+        "statusChanged": "Status",
+        "priorityChanged": "Priority",
+        "assigned": "Owner",
+        "note": "Note"
+      }
+    },
+    "reorder": "Reorder",
+    "moveDealsTo": "Move deals to...",
+    "stageRemovedMoved": "Stage removed; {count, plural, one {1 deal} other {# deals}} moved.",
+    "stageCount": "{count, plural, one {1 stage} other {# stages}}",
+    "deletePipelineConfirm": "Delete this pipeline and every deal in it? This cannot be undone.",
+    "stopCompanyOn": "Stop the contact's company",
+    "stopCompanyOnHint": "Runs the company stop cascade (sequences removed, waits canceled, contacts tagged company-stopped) for the deal contact's company.",
+    "stopCompanyOnOptions": {
+      "none": "Never",
+      "created": "When a deal is created",
+      "won": "When a deal is won"
+    },
+    "defaultCurrency": "Default currency",
+    "newStagePlaceholder": "New stage name",
+    "addStage": "Add stage",
+    "newPipelinePlaceholder": "New pipeline name",
+    "noPipelinesSettings": "No pipelines yet. Create one above; it starts with New, Qualified, Won and Lost."
   }
 }

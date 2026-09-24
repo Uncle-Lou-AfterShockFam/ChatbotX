@@ -1,0 +1,160 @@
+import { pipelineService } from "@chatbotx.io/business"
+import { zodBigintAsString } from "@chatbotx.io/utils"
+import z from "zod"
+import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
+import { contactsAccessAuthorizedMiddleware } from "@/middlewares/auth"
+import { authorizedAPI } from "@/orpc"
+import {
+  createPipelineRequest,
+  deletePipelineRequest,
+  removeStageRequest,
+  reorderStagesRequest,
+  updatePipelineRequest,
+  upsertStageRequest,
+} from "../schema/action"
+import {
+  pipelineStageResource,
+  pipelineWithStagesResource,
+} from "../schema/resource"
+
+const withPipelineId = withWorkspaceIdSchema.and(
+  z.object({ id: zodBigintAsString() }),
+)
+
+const privateListWorkspacePipelinesAPI = authorizedAPI
+  .route({
+    method: "GET",
+    path: "/workspaces/{workspaceId}/pipelines",
+    summary: "List pipelines with their stages",
+    tags: ["Pipelines"],
+  })
+  .input(withWorkspaceIdSchema)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
+  .output(z.object({ data: z.array(pipelineWithStagesResource) }))
+  .handler(async ({ input }) => ({
+    data: await pipelineService.list(input),
+  }))
+
+const privateGetPipelineAPI = authorizedAPI
+  .route({
+    method: "GET",
+    path: "/workspaces/{workspaceId}/pipelines/{id}",
+    summary: "Get a pipeline",
+    tags: ["Pipelines"],
+  })
+  .input(withPipelineId)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
+  .output(pipelineWithStagesResource)
+  .handler(async ({ input }) => await pipelineService.find(input))
+
+const privateCreatePipelineAPI = authorizedAPI
+  .route({
+    method: "POST",
+    path: "/workspaces/{workspaceId}/pipelines",
+    summary: "Create a pipeline",
+    tags: ["Pipelines"],
+  })
+  .input(createPipelineRequest.and(withWorkspaceIdSchema))
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
+  .output(pipelineWithStagesResource)
+  .handler(async ({ input }) => {
+    const { workspaceId, ...data } = input
+    return await pipelineService.create({ workspaceId, data })
+  })
+
+const privateUpdatePipelineAPI = authorizedAPI
+  .route({
+    method: "PUT",
+    path: "/workspaces/{workspaceId}/pipelines/{id}",
+    summary: "Update a pipeline",
+    tags: ["Pipelines"],
+  })
+  .input(updatePipelineRequest.and(withPipelineId))
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
+  .output(pipelineWithStagesResource)
+  .handler(async ({ input }) => {
+    const { workspaceId, id, ...data } = input
+    return await pipelineService.update({ workspaceId, id, data })
+  })
+
+const privateDeletePipelineAPI = authorizedAPI
+  .route({
+    method: "DELETE",
+    path: "/workspaces/{workspaceId}/pipelines/{id}",
+    summary: "Delete a pipeline",
+    tags: ["Pipelines"],
+  })
+  .input(deletePipelineRequest.and(withPipelineId))
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
+  .output(z.object({ deletedDeals: z.number().int() }))
+  .handler(async ({ input }) => await pipelineService.remove(input))
+
+const privateUpsertPipelineStageAPI = authorizedAPI
+  .route({
+    method: "PUT",
+    path: "/workspaces/{workspaceId}/pipelines/{id}/stages",
+    summary: "Create or update a stage",
+    tags: ["Pipelines"],
+  })
+  .input(upsertStageRequest.and(withPipelineId))
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
+  .output(pipelineStageResource)
+  .handler(async ({ input }) => {
+    const { workspaceId, id, stageId, ...data } = input
+    return await pipelineService.upsertStage({
+      workspaceId,
+      pipelineId: id,
+      stageId,
+      data,
+    })
+  })
+
+const privateReorderPipelineStagesAPI = authorizedAPI
+  .route({
+    method: "PUT",
+    path: "/workspaces/{workspaceId}/pipelines/{id}/stages/order",
+    summary: "Reorder stages",
+    tags: ["Pipelines"],
+  })
+  .input(reorderStagesRequest.and(withPipelineId))
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
+  .output(z.array(pipelineStageResource))
+  .handler(async ({ input }) => {
+    const { workspaceId, id, stageIds } = input
+    return await pipelineService.reorderStages({
+      workspaceId,
+      pipelineId: id,
+      stageIds,
+    })
+  })
+
+const privateRemovePipelineStageAPI = authorizedAPI
+  .route({
+    method: "DELETE",
+    path: "/workspaces/{workspaceId}/pipelines/{id}/stages/{stageId}",
+    summary: "Remove a stage",
+    tags: ["Pipelines"],
+  })
+  .input(removeStageRequest.and(withPipelineId))
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
+  .output(z.object({ movedDeals: z.number().int() }))
+  .handler(async ({ input }) => {
+    const { workspaceId, id, stageId, moveDealsTo } = input
+    return await pipelineService.removeStage({
+      workspaceId,
+      pipelineId: id,
+      stageId,
+      moveDealsTo,
+    })
+  })
+
+export const privatePipelinesAPI = {
+  privateListWorkspacePipelinesAPI,
+  privateGetPipelineAPI,
+  privateCreatePipelineAPI,
+  privateUpdatePipelineAPI,
+  privateDeletePipelineAPI,
+  privateUpsertPipelineStageAPI,
+  privateReorderPipelineStagesAPI,
+  privateRemovePipelineStageAPI,
+}

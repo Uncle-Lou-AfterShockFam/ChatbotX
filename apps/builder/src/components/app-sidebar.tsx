@@ -13,6 +13,7 @@ import {
   Building2Icon,
   ChartPieIcon,
   ChevronsRight,
+  HandshakeIcon,
   LightbulbIcon,
   type LucideIcon,
   MessageCircleMoreIcon,
@@ -119,6 +120,12 @@ export function AppSidebar({
         url: `/space/${workspaceId}/companies`,
         icon: Building2Icon,
         permission: PERMISSION_NAV.contacts,
+      },
+      {
+        title: t("deals.title"),
+        url: `/space/${workspaceId}/deals`,
+        icon: HandshakeIcon,
+        permission: PERMISSION_NAV.deals,
       },
       {
         title: t("aiAgent.title"),

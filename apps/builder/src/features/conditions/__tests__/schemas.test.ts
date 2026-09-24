@@ -76,3 +76,19 @@ describe("customFieldValueChanged schema timezone", () => {
     expect(parsed.value).toEqual(value)
   })
 })
+
+describe("deal condition schemas", () => {
+  test.each([
+    "ticketCreated",
+    "ticketMovedToStage",
+    "ticketValueChanged",
+    "ticketStatusChanged",
+    "ticketPriorityChanged",
+  ] as const)("%s requires a non-empty sourceId", async (type) => {
+    const { allConditions } = await import("../schema")
+    const schema = allConditions[type]
+    expect(schema.safeParse({ type, sourceId: "" }).success).toBe(false)
+    expect(schema.safeParse({ type }).success).toBe(false)
+    expect(schema.safeParse({ type, sourceId: "pipe-1" }).success).toBe(true)
+  })
+})

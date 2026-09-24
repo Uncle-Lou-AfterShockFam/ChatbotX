@@ -18,6 +18,7 @@ import { blockContactStepSchema } from "./steps/block-contact"
 import { clearCustomFieldStepSchema } from "./steps/clear-custom-field"
 import { countCharactersStepSchema } from "./steps/count-characters"
 import { markCouponUsedStepSchema, setUpCouponStepSchema } from "./steps/coupon"
+import { createDealStepSchema } from "./steps/create-deal"
 import { deleteContactStepSchema } from "./steps/delete-contact"
 import { disableBotStepSchema } from "./steps/disable-bot"
 import { disableMessengerComposerStepSchema } from "./steps/disable-messenger-composer"
@@ -38,6 +39,7 @@ import { mailerLiteAddSubscriberSchema } from "./steps/mailer-lite-add-subscribe
 import { makeStepSchema } from "./steps/make"
 import { markEmailVerifiedStepSchema } from "./steps/mark-email-verified"
 import { moosendCreateContactSchema } from "./steps/moosend-create-contact"
+import { moveDealStageStepSchema } from "./steps/move-deal-stage"
 import { optInEmailStepSchema } from "./steps/opt-in-email"
 import { optOutEmailStepSchema } from "./steps/opt-out-email"
 import { questionnairesStepSchema } from "./steps/questionnaires"
@@ -45,6 +47,7 @@ import { removeContactTagStepSchema } from "./steps/remove-contact-tag"
 import { sendMetaCapiEventSchema } from "./steps/send-meta-capi-event"
 import { sendGridAddContactSchema } from "./steps/sendgrid-add-contact"
 import { setCustomFieldStepSchema } from "./steps/set-custom-field"
+import { setDealStatusStepSchema } from "./steps/set-deal-status"
 import { setMessengerPersonaStepSchema } from "./steps/set-messenger-persona"
 import { setMessengerUserPersistentMenuStepSchema } from "./steps/set-messenger-user-persistent-menu"
 import { spreadsheetClearRowSchema } from "./steps/spreadsheet-clear-row"
@@ -99,6 +102,12 @@ const broadcastSteps = [
 const sequenceSteps = [
   subscribeSequenceStepSchema,
   unsubscribeSequenceStepSchema,
+]
+
+const dealSteps = [
+  createDealStepSchema,
+  moveDealStageStepSchema,
+  setDealStatusStepSchema,
 ]
 
 const toolSteps = [
@@ -167,6 +176,7 @@ export const actionSteps = [
   ...contactSteps,
   ...broadcastSteps,
   ...sequenceSteps,
+  ...dealSteps,
   ...toolSteps,
   ...emailSteps,
   ...flowSteps,

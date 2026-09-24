@@ -317,3 +317,51 @@ describe("ConditionEvaluator customFieldValueChanged operator vocabulary", () =>
     ).resolves.toBe(true)
   })
 })
+
+describe("ConditionEvaluator deal (ticket*) events", () => {
+  const evaluator = new ConditionEvaluator()
+  const dealTypes = [
+    triggerEventTypes.enum.ticketCreated,
+    triggerEventTypes.enum.ticketMovedToStage,
+    triggerEventTypes.enum.ticketValueChanged,
+    triggerEventTypes.enum.ticketStatusChanged,
+    triggerEventTypes.enum.ticketPriorityChanged,
+  ]
+
+  test.each(dealTypes)("%s matches only the event's sourceId", async (type) => {
+    await expect(
+      evaluator.evaluate(
+        buildContext({ type, sourceId: "pipe-1" }, { sourceId: "pipe-1" }),
+      ),
+    ).resolves.toBe(true)
+    await expect(
+      evaluator.evaluate(
+        buildContext({ type, sourceId: "pipe-1" }, { sourceId: "pipe-2" }),
+      ),
+    ).resolves.toBe(false)
+  })
+
+  test.each(
+    dealTypes,
+  )("%s without a condition sourceId never matches", async (type) => {
+    await expect(
+      evaluator.evaluate(
+        buildContext({ type, sourceId: null }, { sourceId: "pipe-1" }),
+      ),
+    ).resolves.toBe(false)
+  })
+
+  test("a stage move pinned to the pipeline does not match (sourceId is the destination stage)", async () => {
+    await expect(
+      evaluator.evaluate(
+        buildContext(
+          {
+            type: triggerEventTypes.enum.ticketMovedToStage,
+            sourceId: "pipe-1",
+          },
+          { sourceId: "stage-2", pipelineId: "pipe-1" },
+        ),
+      ),
+    ).resolves.toBe(false)
+  })
+})
