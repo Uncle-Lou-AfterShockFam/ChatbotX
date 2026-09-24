@@ -58,7 +58,7 @@ const proxy = (dflt: () => unknown) =>
     get: (t, k: string) => (t[k] ??= vi.fn(async () => dflt())),
   })
 const dealService = proxy(() => ({
-  data: [{ id: "d-1", status: "open", value: "10.50" }],
+  data: [{ id: "d-1", status: "open", value: "10.50", currency: "USD" }],
   pageCount: 1,
 }))
 const dealTaskService = proxy(() => [])
@@ -140,15 +140,17 @@ describe("crm private routes (s195)", () => {
     )
   })
 
-  test("metrics sums numeric strings exactly and counts overdue open tasks", async () => {
+  test("metrics sums numeric strings exactly PER CURRENCY and counts overdue open tasks", async () => {
     const now = Date.now()
     dealService.list.mockResolvedValueOnce({
       data: [
-        { id: "d-1", status: "open", value: "10.50" },
-        { id: "d-2", status: "open", value: "0.75" },
-        { id: "d-3", status: "won", value: "1000" },
-        { id: "d-4", status: "lost", value: "5" },
-        { id: "d-5", status: "open", value: null },
+        { id: "d-1", status: "open", value: "10.50", currency: "USD" },
+        { id: "d-2", status: "open", value: "0.75", currency: "USD" },
+        { id: "d-3", status: "won", value: "1000", currency: "USD" },
+        { id: "d-4", status: "lost", value: "5", currency: "USD" },
+        { id: "d-5", status: "open", value: null, currency: "USD" },
+        { id: "d-6", status: "open", value: "99.5", currency: "EUR" },
+        { id: "d-7", status: "won", value: "-1.05", currency: "EUR" },
       ],
       pageCount: 1,
     })
@@ -165,9 +167,9 @@ describe("crm private routes (s195)", () => {
     })) as Record<string, unknown>
     expect(out).toMatchObject({
       contacts: 3,
-      openDeals: 3,
-      openValue: "11.25",
-      wonValue: "1000.00",
+      openDeals: 4,
+      openValue: { USD: "11.25", EUR: "99.50" },
+      wonValue: { USD: "1000.00", EUR: "-1.05" },
       openTasks: 3,
       overdueTasks: 1,
       lastActivityAt: null,
