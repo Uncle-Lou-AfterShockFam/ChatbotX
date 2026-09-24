@@ -149,6 +149,20 @@ export const registerSchedules = async () => {
   )
 
   await scheduleQueue.upsertJobScheduler(
+    ScheduleJobData.scanDealTaskOverdue,
+    {
+      pattern: "*/5 * * * *",
+    },
+    {
+      name: ScheduleJobData.scanDealTaskOverdue,
+      data: {
+        type: ScheduleJobData.scanDealTaskOverdue,
+        data: {},
+      },
+    },
+  )
+
+  await scheduleQueue.upsertJobScheduler(
     ScheduleJobData.scanAppointmentReminders,
     {
       pattern: "*/5 * * * *",

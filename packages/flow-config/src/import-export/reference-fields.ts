@@ -50,6 +50,7 @@ export const REFERENCE_FIELD_ENTITY_KIND: Record<string, string> = {
   // Deal steps (s191); an export warns about them like any other entity id.
   pipelineId: "pipeline",
   stageId: "pipelineStage",
+  templateId: "dealTaskTemplate",
 }
 
 // `flowId` shows up both as a cross-flow jump target (steps/start-external-flow.ts,

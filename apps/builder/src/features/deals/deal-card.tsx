@@ -26,7 +26,7 @@ export function formatDealValue(
 
 /** Open and past its due date (a closed deal is never overdue). */
 export function isOverdue(
-  deal: Pick<DealResource, "status" | "dueAt">,
+  deal: { status: string; dueAt: Date | null },
   now: Date = new Date(),
 ): boolean {
   return deal.status === "open" && deal.dueAt !== null && deal.dueAt < now

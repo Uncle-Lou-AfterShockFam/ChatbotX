@@ -52,6 +52,7 @@ import { logger } from "../logger"
 import { pipelineService } from "../pipeline/service"
 import type { PaginatedResult } from "../types"
 import { stopCompanyForDeal } from "./company-stop"
+import { runStageEntered } from "./stage-hooks"
 
 export type ListDealsInput = {
   workspaceId: string
@@ -240,7 +241,7 @@ class DealService extends BaseService {
       async (tx) =>
         await this.insertInTx({ tx, workspaceId, data, parsed, actorId }),
     )
-    await this.afterCreate(deal, settings)
+    await this.afterCreate(deal, settings, actorId)
     return deal
   }
 
@@ -281,7 +282,7 @@ class DealService extends BaseService {
       return { created: true as const, ...inserted }
     })
     if (outcome.created) {
-      await this.afterCreate(outcome.deal, outcome.settings)
+      await this.afterCreate(outcome.deal, outcome.settings, actorId)
     }
     return { deal: outcome.deal, created: outcome.created }
   }
@@ -306,6 +307,7 @@ class DealService extends BaseService {
   private async afterCreate(
     deal: DealModel,
     settings: PipelineSettings,
+    actorId: string | null = null,
   ): Promise<void> {
     await this.audit("deal.create", deal.id)
     await this.emitFor(deal, emitDealCreated, {})
@@ -322,6 +324,12 @@ class DealService extends BaseService {
         contactId: deal.contactId,
       })
     }
+    await runStageEntered({
+      workspaceId: deal.workspaceId,
+      deal,
+      stageId: deal.stageId,
+      actorId,
+    })
   }
 
   private async insertInTx(props: {
@@ -648,6 +656,12 @@ class DealService extends BaseService {
       fromStageId: outcome.fromStageId,
     })
     await this.maybeRenormalize({ stageId: outcome.stage.id })
+    await runStageEntered({
+      workspaceId,
+      deal: outcome.deal,
+      stageId: outcome.stage.id,
+      actorId,
+    })
 
     const target: DealStatus = outcome.stage.isWon
       ? "won"

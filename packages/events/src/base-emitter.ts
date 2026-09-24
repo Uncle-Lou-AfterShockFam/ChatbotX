@@ -51,6 +51,23 @@ export type DealStatusChangedMetadata = DealEventMetadata & {
 export type DealPriorityChangedMetadata = DealEventMetadata & {
   oldPriority: string
 }
+/**
+ * Task events ride on the deal metadata (the trigger is pinned to the
+ * pipeline, `sourceId = pipelineId`) plus the task itself.
+ */
+export type DealTaskEventMetadata = DealEventMetadata & {
+  taskId: string
+  taskTitle: string
+  taskDueAt: string | null
+  assigneeId: string | null
+  templateId: string | null
+}
+export type DealTaskCompletedMetadata = DealTaskEventMetadata & {
+  completedById: string | null
+}
+export type DealTaskAssignedMetadata = DealTaskEventMetadata & {
+  previousAssigneeId: string | null
+}
 
 /**
  * Base event emitter class with common functionality
@@ -490,6 +507,55 @@ export abstract class BaseEventEmitter {
     metadata: DealPriorityChangedMetadata,
   ): Promise<void> {
     await this.emit(triggerEventTypes.enum.ticketPriorityChanged, {
+      workspaceId,
+      contactId,
+      metadata: { ...metadata, sourceId: metadata.pipelineId },
+    })
+  }
+
+  // Deal task events (s192). `sourceId` = pipelineId, always.
+  async dealTaskCreated(
+    workspaceId: string,
+    contactId: string,
+    metadata: DealTaskEventMetadata,
+  ): Promise<void> {
+    await this.emit(triggerEventTypes.enum.taskCreated, {
+      workspaceId,
+      contactId,
+      metadata: { ...metadata, sourceId: metadata.pipelineId },
+    })
+  }
+
+  async dealTaskCompleted(
+    workspaceId: string,
+    contactId: string,
+    metadata: DealTaskCompletedMetadata,
+  ): Promise<void> {
+    await this.emit(triggerEventTypes.enum.taskCompleted, {
+      workspaceId,
+      contactId,
+      metadata: { ...metadata, sourceId: metadata.pipelineId },
+    })
+  }
+
+  async dealTaskOverdue(
+    workspaceId: string,
+    contactId: string,
+    metadata: DealTaskEventMetadata,
+  ): Promise<void> {
+    await this.emit(triggerEventTypes.enum.taskOverdue, {
+      workspaceId,
+      contactId,
+      metadata: { ...metadata, sourceId: metadata.pipelineId },
+    })
+  }
+
+  async dealTaskAssigned(
+    workspaceId: string,
+    contactId: string,
+    metadata: DealTaskAssignedMetadata,
+  ): Promise<void> {
+    await this.emit(triggerEventTypes.enum.taskAssigned, {
       workspaceId,
       contactId,
       metadata: { ...metadata, sourceId: metadata.pipelineId },

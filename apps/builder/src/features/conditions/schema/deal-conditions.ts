@@ -32,6 +32,19 @@ export const ticketStatusChanged = createDealCondition(
 export const ticketPriorityChanged = createDealCondition(
   triggerEventTypes.enum.ticketPriorityChanged,
 )
+// Deal task events (s192): pinned to the pipeline like ticketCreated.
+export const taskCreated = createDealCondition(
+  triggerEventTypes.enum.taskCreated,
+)
+export const taskCompleted = createDealCondition(
+  triggerEventTypes.enum.taskCompleted,
+)
+export const taskOverdue = createDealCondition(
+  triggerEventTypes.enum.taskOverdue,
+)
+export const taskAssigned = createDealCondition(
+  triggerEventTypes.enum.taskAssigned,
+)
 
 export const DEAL_CONDITION_TYPES = [
   triggerEventTypes.enum.ticketCreated,
@@ -39,4 +52,8 @@ export const DEAL_CONDITION_TYPES = [
   triggerEventTypes.enum.ticketValueChanged,
   triggerEventTypes.enum.ticketStatusChanged,
   triggerEventTypes.enum.ticketPriorityChanged,
+  triggerEventTypes.enum.taskCreated,
+  triggerEventTypes.enum.taskCompleted,
+  triggerEventTypes.enum.taskOverdue,
+  triggerEventTypes.enum.taskAssigned,
 ] as const

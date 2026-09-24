@@ -1,6 +1,9 @@
 import { dealService } from "@chatbotx.io/business/deal"
+import { dealTaskService } from "@chatbotx.io/business/deal-task"
 import type {
+  CompleteTaskStepSchema,
   CreateDealStepSchema,
+  CreateTaskStepSchema,
   MoveDealStageStepSchema,
   SetDealStatusStepSchema,
 } from "@chatbotx.io/flow-config"
@@ -171,6 +174,174 @@ export async function setDealStatus({
     logger.error(
       { err: error, workspaceId, contactId, stepId: step.id },
       "setDealStatus step failed; continuing with the remaining steps",
+    )
+  }
+}
+
+export async function createTask({
+  conversation,
+  contactInbox,
+  step,
+}: ExecuteStepProps<CreateTaskStepSchema>) {
+  const { workspaceId, contactId } = conversation
+  if (!step.pipelineId) {
+    logger.warn({ workspaceId, stepId: step.id }, "createTask: no pipeline set")
+    return
+  }
+  try {
+    const open = await dealService.findOpenForContactInPipeline({
+      workspaceId,
+      contactId,
+      pipelineId: step.pipelineId,
+    })
+    if (!open) {
+      logger.info(
+        { workspaceId, contactId, stepId: step.id },
+        "createTask: no open deal for this contact in the pipeline; skipped",
+      )
+      return
+    }
+    const variables = await contactVariableService.getAll({
+      contactId,
+      contactInbox,
+      conversation,
+    })
+    const title = await contactVariableService.replaceAll({
+      text: step.title,
+      variables,
+    })
+    const assigneeId =
+      step.assignTo === "dealOwner"
+        ? (open.ownerId ?? null)
+        : // biome-ignore lint/style/noNestedTernary: three-way assignee
+          step.assignTo === "user"
+          ? step.assigneeId || null
+          : null
+    const write = (assignee: string | null) =>
+      dealTaskService.create({
+        workspaceId,
+        dealId: open.id,
+        data: {
+          title: title.trim().length > 0 ? title : `Task for ${contactId}`,
+          description: step.description || null,
+          dueAt:
+            step.dueInDays === null || step.dueInDays === undefined
+              ? null
+              : new Date(Date.now() + step.dueInDays * 86_400_000),
+          assigneeId: assignee,
+        },
+      })
+    let task: Awaited<ReturnType<typeof write>>
+    try {
+      task = await write(assigneeId)
+    } catch (error) {
+      if (!(assigneeId && isAssigneeNotMember(error))) {
+        throw error
+      }
+      logger.warn(
+        { workspaceId, contactId, stepId: step.id, assigneeId },
+        "createTask: configured assignee is no longer a workspace member; creating the task unassigned",
+      )
+      task = await write(null)
+    }
+    logger.info(
+      {
+        workspaceId,
+        contactId,
+        dealId: open.id,
+        taskId: task.id,
+        stepId: step.id,
+      },
+      "createTask: task created",
+    )
+  } catch (error) {
+    logger.error(
+      { err: error, workspaceId, contactId, stepId: step.id },
+      "createTask step failed; continuing with the remaining steps",
+    )
+  }
+}
+
+const ASSIGNEE_NOT_MEMBER = /assignee is not a member/i
+function isAssigneeNotMember(error: unknown): boolean {
+  return error instanceof Error && ASSIGNEE_NOT_MEMBER.test(error.message)
+}
+
+export async function completeTask({
+  conversation,
+  step,
+}: ExecuteStepProps<CompleteTaskStepSchema>) {
+  const { workspaceId, contactId } = conversation
+  const wanted =
+    step.match === "template"
+      ? step.templateId
+      : step.title.trim().toLowerCase()
+  if (!(step.pipelineId && wanted)) {
+    logger.warn(
+      { workspaceId, stepId: step.id },
+      "completeTask: pipeline or match target not set",
+    )
+    return
+  }
+  try {
+    const open = await dealService.findOpenForContactInPipeline({
+      workspaceId,
+      contactId,
+      pipelineId: step.pipelineId,
+    })
+    if (!open) {
+      logger.info(
+        { workspaceId, contactId, stepId: step.id },
+        "completeTask: no open deal for this contact in the pipeline; skipped",
+      )
+      return
+    }
+    const tasks = await dealTaskService.list({ workspaceId, dealId: open.id })
+    const matches = tasks.filter(
+      (t) =>
+        t.status === "open" &&
+        (step.match === "template"
+          ? t.templateId === wanted
+          : t.title.trim().toLowerCase() === wanted),
+    )
+    if (matches.length === 0) {
+      logger.info(
+        { workspaceId, contactId, dealId: open.id, stepId: step.id },
+        "completeTask: no open matching task; skipped",
+      )
+      return
+    }
+    let completed = 0
+    for (const task of matches) {
+      if (task.blockedBy.length > 0) {
+        logger.info(
+          {
+            workspaceId,
+            taskId: task.id,
+            blockedBy: task.blockedBy,
+            stepId: step.id,
+          },
+          "completeTask: task is blocked; skipped",
+        )
+        continue
+      }
+      const result = await dealTaskService.complete({
+        workspaceId,
+        dealId: open.id,
+        taskId: task.id,
+      })
+      if (result.completed) {
+        completed++
+      }
+    }
+    logger.info(
+      { workspaceId, contactId, dealId: open.id, stepId: step.id, completed },
+      `completeTask: ${completed} task(s) completed`,
+    )
+  } catch (error) {
+    logger.error(
+      { err: error, workspaceId, contactId, stepId: step.id },
+      "completeTask step failed; continuing with the remaining steps",
     )
   }
 }

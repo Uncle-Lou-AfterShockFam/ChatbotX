@@ -16,9 +16,11 @@ import { assignConversationStepSchema } from "./steps/assign-conversation"
 import { autoAssignConversationStepSchema } from "./steps/auto-assign-conversation"
 import { blockContactStepSchema } from "./steps/block-contact"
 import { clearCustomFieldStepSchema } from "./steps/clear-custom-field"
+import { completeTaskStepSchema } from "./steps/complete-task"
 import { countCharactersStepSchema } from "./steps/count-characters"
 import { markCouponUsedStepSchema, setUpCouponStepSchema } from "./steps/coupon"
 import { createDealStepSchema } from "./steps/create-deal"
+import { createTaskStepSchema } from "./steps/create-task"
 import { deleteContactStepSchema } from "./steps/delete-contact"
 import { disableBotStepSchema } from "./steps/disable-bot"
 import { disableMessengerComposerStepSchema } from "./steps/disable-messenger-composer"
@@ -108,6 +110,8 @@ const dealSteps = [
   createDealStepSchema,
   moveDealStageStepSchema,
   setDealStatusStepSchema,
+  createTaskStepSchema,
+  completeTaskStepSchema,
 ]
 
 const toolSteps = [

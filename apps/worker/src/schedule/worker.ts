@@ -41,6 +41,7 @@ import { registerSchedules } from "./handlers/register-schedules"
 import { scanAppointmentReminders } from "./handlers/scan-appointment-reminders"
 import { scanCoexistRuns } from "./handlers/scan-coexist-runs"
 import { scanContactScans } from "./handlers/scan-contact-scans"
+import { scanDealTaskOverdue } from "./handlers/scan-deal-task-overdue"
 import { scanSmartDelay } from "./handlers/scan-smart-delay"
 import { sweepStaleWhatsappCalls } from "./handlers/sweep-stale-whatsapp-calls"
 import { syncUserQuota } from "./handlers/sync-user-quota"
@@ -115,6 +116,10 @@ async function startScheduleWorker() {
 
             case ScheduleJobData.scanAppointmentReminders:
               await scanAppointmentReminders(job.data.data)
+              return
+
+            case ScheduleJobData.scanDealTaskOverdue:
+              await scanDealTaskOverdue()
               return
 
             case ScheduleJobData.syncUserQuota:

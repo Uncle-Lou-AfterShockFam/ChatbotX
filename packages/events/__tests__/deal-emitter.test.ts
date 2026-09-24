@@ -93,6 +93,35 @@ describe("deal events", () => {
     expect(data.metadata.dealId).toBe("deal-1")
   })
 
+  const TASK = {
+    ...DEAL,
+    taskId: "task-1",
+    taskTitle: "Call back",
+    taskDueAt: null,
+    assigneeId: null,
+    templateId: "tpl-1",
+  }
+
+  test.each([
+    ["dealTaskCreated", "taskCreated", TASK],
+    ["dealTaskCompleted", "taskCompleted", { ...TASK, completedById: "u1" }],
+    ["dealTaskOverdue", "taskOverdue", TASK],
+    ["dealTaskAssigned", "taskAssigned", { ...TASK, previousAssigneeId: null }],
+  ] as const)("%s emits %s with sourceId = pipelineId (s192)", async (method, type, meta) => {
+    expect(EMITTED_EVENT_TYPES).toContain(type)
+    const emitter = new RecordingEmitter()
+    await (
+      emitter[method] as (w: string, c: string, m: typeof meta) => Promise<void>
+    )("ws-1", "contact-1", meta)
+    const [queuedType, data] = emitter.queued.mock.calls[0] as [
+      string,
+      { metadata: Record<string, unknown> },
+    ]
+    expect(queuedType).toBe(triggerEventTypes.enum[type])
+    expect(data.metadata.sourceId).toBe("pipe-1")
+    expect(data.metadata.taskId).toBe("task-1")
+  })
+
   test("a deal event without a contact is dropped before the queue", async () => {
     const emitter = new RecordingEmitter()
     await emitter.dealCreated("ws-1", "", DEAL)

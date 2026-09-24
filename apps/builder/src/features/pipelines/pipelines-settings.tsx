@@ -49,6 +49,7 @@ import type {
   PipelineStageResource,
   PipelineWithStagesResource,
 } from "./schema/resource"
+import { StageTaskTemplates } from "./stage-task-templates"
 
 const onActionError = ({ error }: { error: { serverError?: string } }) => {
   if (error.serverError) {
@@ -182,6 +183,11 @@ function StageRow({
             {t("deals.statuses.lost")}
           </div>
           <div className="ml-auto flex items-center gap-1">
+            <StageTaskTemplates
+              pipelineId={pipelineId}
+              stageId={stage.id}
+              workspaceId={workspaceId}
+            />
             {others.length > 0 ? (
               <Select
                 onValueChange={(v) => setMoveTo(String(v ?? ""))}

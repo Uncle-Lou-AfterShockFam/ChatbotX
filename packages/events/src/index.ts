@@ -5,6 +5,9 @@ export type {
   DealMovedToStageMetadata,
   DealPriorityChangedMetadata,
   DealStatusChangedMetadata,
+  DealTaskAssignedMetadata,
+  DealTaskCompletedMetadata,
+  DealTaskEventMetadata,
   DealValueChangedMetadata,
 } from "./base-emitter"
 export * from "./contact-inbox-context"

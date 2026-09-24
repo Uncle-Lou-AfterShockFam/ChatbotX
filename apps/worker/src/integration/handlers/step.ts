@@ -43,7 +43,13 @@ import {
   unsubscribeBroadcast,
 } from "./contact"
 import { markCouponUsed, setUpCoupon } from "./coupon"
-import { createDeal, moveDealStage, setDealStatus } from "./deal"
+import {
+  completeTask,
+  createDeal,
+  createTask,
+  moveDealStage,
+  setDealStatus,
+} from "./deal"
 import { handleAIDeleteMessageHistory } from "./delete-message-history"
 import { subscribeDripSubscriber } from "./drip-handler"
 import { handleAIExtractData } from "./extract-data/index"
@@ -545,6 +551,8 @@ export const flowStepHandlers: Record<
   [stepTypes.enum.createDeal]: createDeal,
   [stepTypes.enum.moveDealStage]: moveDealStage,
   [stepTypes.enum.setDealStatus]: setDealStatus,
+  [stepTypes.enum.createTask]: createTask,
+  [stepTypes.enum.completeTask]: completeTask,
   [stepTypes.enum.sendQuickReply]: sendFlowMessage,
   [stepTypes.enum.email]: sendEmail,
   [stepTypes.enum.typing]: stepSendTyping,
