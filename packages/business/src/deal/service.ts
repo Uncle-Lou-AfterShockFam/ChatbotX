@@ -124,6 +124,13 @@ const dealChangedConcurrently = () =>
     "Deal was changed by someone else; reload and retry.",
     { conflict: "stale" },
   )
+/** A deal landing on a stage takes its status: won / lost stages close it, any other opens it. */
+const landingStatus = (stage: PipelineStageModel): DealStatus => {
+  if (stage.isWon) {
+    return "won"
+  }
+  return stage.isLost ? "lost" : "open"
+}
 /** Below this gap two neighbouring positions are renormalised to `DEAL_POSITION_STEP * i`. */
 export const MIN_POSITION_GAP = 1e-6
 
@@ -491,12 +498,7 @@ class DealService extends BaseService {
         fields: data.fields ?? {},
         requireAll: true,
       })
-      const status: DealStatus = stage.isWon
-        ? "won"
-        : // biome-ignore lint/style/noNestedTernary: three-way landing status
-          stage.isLost
-          ? "lost"
-          : "open"
+      const status = landingStatus(stage)
 
       const [row] = await tx
         .insert(dealModel)
@@ -833,12 +835,7 @@ class DealService extends BaseService {
       actorId,
     })
 
-    const target: DealStatus = outcome.stage.isWon
-      ? "won"
-      : // biome-ignore lint/style/noNestedTernary: three-way landing status
-        outcome.stage.isLost
-        ? "lost"
-        : "open"
+    const target = landingStatus(outcome.stage)
     if (target !== outcome.deal.status) {
       return await this.setStatus({ workspaceId, id, status: target, actorId })
     }
@@ -852,7 +849,8 @@ class DealService extends BaseService {
    * an owner who can still see the target pipeline (`ownerId` reassigns,
    * null clears). Tasks, comments and notifications stay with the deal; the
    * target stage's task templates run, the landing status follows the stage
-   * (the target's `stopCompanyOn` applies), and `ticketMovedToStage` fires
+   * (written in the move's own transaction; the target's `stopCompanyOn`
+   * applies), and `ticketMovedToStage` fires
    * for the destination stage with `fromPipelineId`. The same pipeline is a
    * 422 (that is `moveStage`). Landing OPEN in a pipeline where the contact already
    * has an open deal is refused (one open deal per contact per pipeline,
@@ -915,8 +913,11 @@ class DealService extends BaseService {
           : await this.resolveOwner({ workspaceId, ownerId: props.ownerId, tx })
       await this.assertOwnerCanView({ workspaceId, ownerId, target, tx })
 
-      const landsOpen = !(stage.isWon || stage.isLost)
-      if (landsOpen && current.contactId) {
+      // The landing status is written in THIS transaction, under the lock:
+      // a deferred setStatus would reopen a closed deal after the lock is
+      // gone (skeptic s196), and would refuse won -> lost after the move.
+      const status = landingStatus(stage)
+      if (status === "open" && current.contactId) {
         await tx.execute(
           sql`select pg_advisory_xact_lock(hashtext(${`deal:${workspaceId}:${current.contactId}:${target.id}`}))`,
         )
@@ -946,6 +947,14 @@ class DealService extends BaseService {
           position,
           fields,
           ownerId,
+          status,
+          closedAt:
+            // biome-ignore lint/style/noNestedTernary: open / unchanged / newly closed
+            status === "open"
+              ? null
+              : status === current.status
+                ? current.closedAt
+                : new Date(),
         })
         .where(
           and(
@@ -980,8 +989,20 @@ class DealService extends BaseService {
           payload: { from: current.ownerId, to: ownerId },
         })
       }
+      if (status !== current.status) {
+        await this.recordActivity({
+          tx,
+          dealId: id,
+          type: "statusChanged",
+          actorId,
+          payload: { from: current.status, to: status },
+        })
+      }
       return {
         deal: moved,
+        oldStatus: current.status,
+        status,
+        settings: target.settings,
         stage,
         fromPipelineId: current.pipelineId,
         fromStageId: current.stageId,
@@ -1015,14 +1036,14 @@ class DealService extends BaseService {
       actorId,
     })
 
-    const landing: DealStatus = outcome.stage.isWon
-      ? "won"
-      : // biome-ignore lint/style/noNestedTernary: three-way landing status
-        outcome.stage.isLost
-        ? "lost"
-        : "open"
-    if (landing !== outcome.deal.status) {
-      return await this.setStatus({ workspaceId, id, status: landing, actorId })
+    if (outcome.status !== outcome.oldStatus) {
+      await this.afterStatusChange({
+        deal: outcome.deal,
+        oldStatus: outcome.oldStatus,
+        status: outcome.status,
+        settings: outcome.settings,
+        actorId,
+      })
     }
     return outcome.deal
   }
@@ -1129,35 +1150,51 @@ class DealService extends BaseService {
     if (!outcome.changed) {
       return outcome.deal
     }
-    await this.audit("deal.status", id)
+    await this.afterStatusChange({
+      deal: outcome.deal,
+      oldStatus: outcome.oldStatus,
+      status,
+      settings: outcome.settings,
+      actorId,
+    })
+    return outcome.deal
+  }
+
+  /** Audit, company log, `ticketStatusChanged`, then the `won` company stop, AFTER the status committed. */
+  private async afterStatusChange(props: {
+    deal: DealModel
+    oldStatus: DealStatus
+    status: DealStatus
+    settings: PipelineSettings
+    actorId: string | null
+  }): Promise<void> {
+    const { deal, oldStatus, status, settings, actorId } = props
+    await this.audit("deal.status", deal.id)
     await companyActivityService.recordSafely({
-      workspaceId,
-      companyId: outcome.deal.companyId,
+      workspaceId: deal.workspaceId,
+      companyId: deal.companyId,
       type: "dealStatusChanged",
       actorId,
       payload: {
-        dealId: id,
-        title: outcome.deal.title,
-        from: outcome.oldStatus,
+        dealId: deal.id,
+        title: deal.title,
+        from: oldStatus,
         to: status,
       },
     })
-    await this.emitFor(outcome.deal, emitDealStatusChanged, {
-      oldStatus: outcome.oldStatus,
-    })
+    await this.emitFor(deal, emitDealStatusChanged, { oldStatus })
     if (
       status === "won" &&
-      outcome.settings.stopCompanyOn === "won" &&
-      outcome.deal.companyId
+      settings.stopCompanyOn === "won" &&
+      deal.companyId
     ) {
       await stopCompanyForDeal({
-        workspaceId,
-        companyId: outcome.deal.companyId,
-        dealId: id,
-        contactId: outcome.deal.contactId,
+        workspaceId: deal.workspaceId,
+        companyId: deal.companyId,
+        dealId: deal.id,
+        contactId: deal.contactId,
       })
     }
-    return outcome.deal
   }
 
   async addNote(props: {

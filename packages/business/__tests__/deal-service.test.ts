@@ -1230,7 +1230,7 @@ describe("dealService.movePipeline (s196)", () => {
       )
       expect(m.calls).toEqual([
         "advisory-lock",
-        "update:pipelineId,stageId,position,fields,ownerId",
+        "update:pipelineId,stageId,position,fields,ownerId,status,closedAt",
         "activity:pipelineMoved",
         "emit:moved",
         "hook:stage",
@@ -1363,7 +1363,9 @@ describe("dealService.movePipeline (s196)", () => {
       pipelineId: "pipe-2",
       fields: { sqft: 1200 },
     })
-    expect(m.calls[1]).toBe("update:pipelineId,stageId,position,fields,ownerId")
+    expect(m.calls[1]).toBe(
+      "update:pipelineId,stageId,position,fields,ownerId,status,closedAt",
+    )
   })
 
   test("a patch value of the wrong type for the target is a 422", async () => {
@@ -1517,19 +1519,91 @@ describe("dealService.movePipeline (s196)", () => {
     expect(m.calls).toEqual(["advisory-lock"])
   })
 
-  test("landing on a won stage skips the open-deal check and closes the deal", async () => {
+  test("landing on a won stage closes the deal IN the move's transaction (no second setStatus), skips the open-deal check, then emits + stops", async () => {
+    pipelines(TARGET({ stopCompanyOn: "won" }))
     m.resolveStage.mockResolvedValue(T_WON)
     m.state.openDeal = { ...OPEN_DEAL, id: "deal-other", pipelineId: "pipe-2" }
-    moved({ stageId: "t-won" })
+    moved({ stageId: "t-won", status: "won" })
     await dealService.movePipeline({
       workspaceId: WS,
       id: "deal-1",
       pipelineId: "pipe-2",
       stageId: "t-won",
     })
-    expect(m.calls).not.toContain("advisory-lock")
-    expect(m.calls).toContain("activity:statusChanged")
-    expect(m.calls).toContain("emit:status")
+    expect(m.calls).toEqual([
+      "update:pipelineId,stageId,position,fields,ownerId,status,closedAt",
+      "activity:pipelineMoved",
+      "activity:statusChanged",
+      "emit:moved",
+      "emit:status",
+      "stop:company",
+    ])
+    // one deal read only: setStatus (which re-reads the deal) never ran
+    expect(m.findOrFail).toHaveBeenCalledTimes(1)
+  })
+
+  test("a WON deal moved onto an open stage reopens under the lock: an open deal already there refuses it (skeptic s196)", async () => {
+    m.findOrFail.mockImplementation(async () => ({
+      ...OPEN_DEAL,
+      status: "won",
+    }))
+    m.state.openDeal = { ...OPEN_DEAL, id: "deal-other", pipelineId: "pipe-2" }
+    await expect(
+      dealService.movePipeline({
+        workspaceId: WS,
+        id: "deal-1",
+        pipelineId: "pipe-2",
+      }),
+    ).rejects.toMatchObject({ data: { conflict: "openDeal" } })
+    expect(m.calls).toEqual(["advisory-lock"])
+
+    m.state.openDeal = null
+    moved({ status: "open" })
+    await dealService.movePipeline({
+      workspaceId: WS,
+      id: "deal-1",
+      pipelineId: "pipe-2",
+    })
+    expect(m.calls.slice(1, 5)).toEqual([
+      "advisory-lock",
+      "update:pipelineId,stageId,position,fields,ownerId,status,closedAt",
+      "activity:pipelineMoved",
+      "activity:statusChanged",
+    ])
+    expect(m.state.activities.at(-1)).toMatchObject({
+      type: "statusChanged",
+      payload: { from: "won", to: "open" },
+    })
+  })
+
+  test("a WON deal moved onto a LOST stage goes won -> lost directly (setStatus would refuse it after the move)", async () => {
+    m.findOrFail.mockImplementation(async () => ({
+      ...OPEN_DEAL,
+      status: "won",
+    }))
+    m.resolveStage.mockResolvedValue({
+      ...T_WON,
+      id: "t-lost",
+      isWon: false,
+      isLost: true,
+    })
+    moved({ stageId: "t-lost", status: "lost" })
+    await dealService.movePipeline({
+      workspaceId: WS,
+      id: "deal-1",
+      pipelineId: "pipe-2",
+      stageId: "t-lost",
+    })
+    expect(m.state.activities.map((a) => a.type)).toEqual([
+      "pipelineMoved",
+      "statusChanged",
+    ])
+    expect(m.emitStatus).toHaveBeenCalledWith(
+      WS,
+      "contact-1",
+      expect.objectContaining({ oldStatus: "won" }),
+    )
+    expect(m.stopCompany).not.toHaveBeenCalled()
   })
 
   test("a deal without a contact takes no lock and emits nothing", async () => {
