@@ -28,6 +28,7 @@ import {
 import type {
   DealActivityModel,
   DealModel,
+  PipelineModel,
   PipelineStageModel,
 } from "@chatbotx.io/database/types"
 import {
@@ -58,6 +59,7 @@ import {
 import { pipelineMemberService } from "../pipeline/members"
 import { pipelineService } from "../pipeline/service"
 import type { PaginatedResult } from "../types"
+import { workspaceMemberService } from "../workspace-member/service"
 import { stopCompanyForDeal } from "./company-stop"
 import {
   dealEventMetadata,
@@ -841,6 +843,224 @@ class DealService extends BaseService {
       return await this.setStatus({ workspaceId, id, status: target, actorId })
     }
     return outcome.deal
+  }
+
+  /**
+   * Move a deal to ANOTHER pipeline (s196): the target stage (default: its
+   * first), the deal's fields re-validated against the TARGET `fieldDefs`
+   * with every required key present (`fields` patches what is missing), and
+   * an owner who can still see the target pipeline (`ownerId` reassigns,
+   * null clears). Tasks, comments and notifications stay with the deal; the
+   * target stage's task templates run, the landing status follows the stage
+   * (the target's `stopCompanyOn` applies), and `ticketMovedToStage` fires
+   * for the destination stage with `fromPipelineId`. The same pipeline is a
+   * 422 (that is `moveStage`). Landing OPEN in a pipeline where the contact already
+   * has an open deal is refused (one open deal per contact per pipeline,
+   * under `createUnlessOpen`'s lock).
+   */
+  async movePipeline(props: {
+    workspaceId: string
+    id: string
+    pipelineId: string
+    stageId?: string | null
+    fields?: Record<string, unknown> | null
+    ownerId?: string | null
+    actorId?: string | null
+    viewer?: DealViewer | null
+  }): Promise<DealModel> {
+    const { workspaceId, id, viewer } = props
+    const actorId = props.actorId ?? null
+    if (
+      props.fields !== undefined &&
+      props.fields !== null &&
+      (typeof props.fields !== "object" || Array.isArray(props.fields))
+    ) {
+      throw validationException("fields", "Fields must be an object.")
+    }
+
+    const outcome = await db.transaction(async (tx) => {
+      const current = await this.findOrFail({ workspaceId, id, viewer, tx })
+      if (current.pipelineId === props.pipelineId) {
+        throw validationException(
+          "pipelineId",
+          "The deal is already in that pipeline; move it to a stage instead.",
+        )
+      }
+      const target = await pipelineService.findOrFail({
+        workspaceId,
+        id: props.pipelineId,
+        viewer,
+        tx,
+      })
+      const stage = props.stageId
+        ? await pipelineService.resolveStage({
+            workspaceId,
+            pipelineId: target.id,
+            stageId: props.stageId,
+            tx,
+          })
+        : await pipelineService.firstStage({
+            workspaceId,
+            pipelineId: target.id,
+            tx,
+          })
+      const fields = this.parseFields({
+        defs: target.settings.fieldDefs,
+        fields: { ...current.fields, ...(props.fields ?? {}) },
+        requireAll: true,
+      })
+      const ownerId =
+        props.ownerId === undefined
+          ? current.ownerId
+          : await this.resolveOwner({ workspaceId, ownerId: props.ownerId, tx })
+      await this.assertOwnerCanView({ workspaceId, ownerId, target, tx })
+
+      const landsOpen = !(stage.isWon || stage.isLost)
+      if (landsOpen && current.contactId) {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${`deal:${workspaceId}:${current.contactId}:${target.id}`}))`,
+        )
+        const existing = await this.findOpenForContactInPipeline({
+          workspaceId,
+          contactId: current.contactId,
+          pipelineId: target.id,
+          tx,
+        })
+        if (existing) {
+          throw validationException(
+            "pipelineId",
+            "The contact already has an open deal in that pipeline.",
+            { conflict: "openDeal", dealId: existing.id },
+          )
+        }
+      }
+
+      const position = await this.nextPosition({ stageId: stage.id, tx })
+      // Pinned to the pipeline AND stage this transaction read: a concurrent
+      // move makes this UPDATE touch 0 rows (same rule as `moveStage`).
+      const [moved] = await tx
+        .update(dealModel)
+        .set({
+          pipelineId: target.id,
+          stageId: stage.id,
+          position,
+          fields,
+          ownerId,
+        })
+        .where(
+          and(
+            eq(dealModel.id, id),
+            eq(dealModel.workspaceId, workspaceId),
+            eq(dealModel.pipelineId, current.pipelineId),
+            eq(dealModel.stageId, current.stageId),
+          ),
+        )
+        .returning()
+      if (!moved) {
+        throw dealChangedConcurrently()
+      }
+      await this.recordActivity({
+        tx,
+        dealId: id,
+        type: "pipelineMoved",
+        actorId,
+        payload: {
+          fromPipelineId: current.pipelineId,
+          toPipelineId: target.id,
+          from: current.stageId,
+          to: stage.id,
+        },
+      })
+      if (ownerId !== current.ownerId) {
+        await this.recordActivity({
+          tx,
+          dealId: id,
+          type: "assigned",
+          actorId,
+          payload: { from: current.ownerId, to: ownerId },
+        })
+      }
+      return {
+        deal: moved,
+        stage,
+        fromPipelineId: current.pipelineId,
+        fromStageId: current.stageId,
+      }
+    })
+
+    await this.audit("deal.move-pipeline", id)
+    await companyActivityService.recordSafely({
+      workspaceId,
+      companyId: outcome.deal.companyId,
+      type: "dealMoved",
+      actorId,
+      payload: {
+        dealId: id,
+        title: outcome.deal.title,
+        from: outcome.fromStageId,
+        to: outcome.stage.id,
+        fromPipelineId: outcome.fromPipelineId,
+        toPipelineId: outcome.deal.pipelineId,
+      },
+    })
+    await this.emitFor(outcome.deal, emitDealMovedToStage, {
+      fromStageId: outcome.fromStageId,
+      fromPipelineId: outcome.fromPipelineId,
+    })
+    await this.maybeRenormalize({ stageId: outcome.stage.id })
+    await runStageEntered({
+      workspaceId,
+      deal: outcome.deal,
+      stageId: outcome.stage.id,
+      actorId,
+    })
+
+    const landing: DealStatus = outcome.stage.isWon
+      ? "won"
+      : // biome-ignore lint/style/noNestedTernary: three-way landing status
+        outcome.stage.isLost
+        ? "lost"
+        : "open"
+    if (landing !== outcome.deal.status) {
+      return await this.setStatus({ workspaceId, id, status: landing, actorId })
+    }
+    return outcome.deal
+  }
+
+  /**
+   * The owner must still be able to see the pipeline the deal moves into (a
+   * members-only target hides it from non-members, super admins excepted):
+   * a 422 the caller answers by reassigning (`ownerId`) or clearing it.
+   */
+  private async assertOwnerCanView(props: {
+    workspaceId: string
+    ownerId: string | null
+    target: PipelineModel
+    tx: DatabaseClient
+  }): Promise<void> {
+    const { workspaceId, ownerId, target, tx } = props
+    if (!ownerId || target.settings.access !== "members") {
+      return
+    }
+    const member = await workspaceMemberService.findByWorkspaceIdAndUserId({
+      workspaceId,
+      userId: ownerId,
+      tx,
+    })
+    const visible =
+      member !== undefined &&
+      (await canViewPipeline({
+        viewer: { userId: ownerId, permissions: member.permissions },
+        pipeline: target,
+        tx,
+      }))
+    if (!visible) {
+      throw validationException(
+        "ownerId",
+        "The owner is not a member of the target pipeline; pick another owner.",
+        { code: "ownerNotMember" },
+      )
+    }
   }
 
   /**

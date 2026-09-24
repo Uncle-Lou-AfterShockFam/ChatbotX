@@ -34,6 +34,8 @@ export const dealActivityTypes = z.enum([
   // s195 CRM 360: the deal's contact / company can be re-linked after creation
   "contactChanged",
   "companyChanged",
+  // s196: the deal moved to another pipeline (payload names both pipelines + stages)
+  "pipelineMoved",
 ])
 export type DealActivityType = z.infer<typeof dealActivityTypes>
 

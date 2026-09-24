@@ -1,0 +1,1 @@
+ALTER TYPE "dealActivityType" ADD VALUE 'pipelineMoved';

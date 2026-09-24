@@ -41,6 +41,8 @@ export type DealEventMetadata = {
 }
 export type DealMovedToStageMetadata = DealEventMetadata & {
   fromStageId: string
+  /** s196: set when the move crossed pipelines (`dealService.movePipeline`). */
+  fromPipelineId?: string
 }
 export type DealValueChangedMetadata = DealEventMetadata & {
   oldValue: string | null
