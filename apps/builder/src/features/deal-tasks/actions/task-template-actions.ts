@@ -81,3 +81,50 @@ export const removeTaskTemplateAction = workspaceActionClient
       return { deleted: true as const }
     },
   )
+
+const dependencyInput = z.object({
+  pipelineId: zodBigintAsString(),
+  stageId: zodBigintAsString(),
+  templateId: zodBigintAsString(),
+  dependsOnTemplateId: zodBigintAsString(),
+  remove: z.boolean().optional(),
+})
+
+/** Add (default) or remove one template dependency edge. */
+export const taskTemplateDependencyAction = workspaceActionClient
+  .use(requireContactsSectionAccess)
+  .inputSchema(dependencyInput)
+  .bindArgsSchemas(workspaceIdrequestParams)
+  .action(
+    async ({
+      parsedInput,
+      bindArgsParsedInputs: [workspaceId],
+      ctx,
+    }: {
+      parsedInput: z.infer<typeof dependencyInput>
+      bindArgsParsedInputs: WorkspaceIdRequestParams
+      ctx: {
+        user: { id: string }
+        workspaceMemberPermissions: PermissionsInput
+      }
+    }) => {
+      const { remove, ...edge } = parsedInput
+      const viewer = viewerFromActionCtx(ctx)
+      if (remove) {
+        return await dealTaskTemplateService.removeDependency({
+          workspaceId,
+          ...edge,
+          viewer,
+        })
+      }
+      const row = await dealTaskTemplateService.addDependency({
+        workspaceId,
+        ...edge,
+        viewer,
+      })
+      return {
+        templateId: row.templateId,
+        dependsOnTemplateId: row.dependsOnTemplateId,
+      }
+    },
+  )

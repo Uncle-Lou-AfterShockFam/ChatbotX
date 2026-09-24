@@ -12,6 +12,7 @@ import {
 import { workspaceTokenAuthAPIForScope } from "@/orpc"
 import {
   addDealDependencyRequest,
+  addTaskTemplateDependencyRequest,
   completeDealTaskRequest,
   createDealTaskRequest,
   updateDealTaskRequest,
@@ -22,9 +23,11 @@ import {
   dealTaskIdParams,
   dealTaskPublicResource,
   dealTaskTemplatePublicResource,
+  dealTaskUpdatePublicResource,
   dealTaskWithBlockersPublicResource,
   dependencyParams,
   stageTemplateParams,
+  templateDependencyParams,
   templateIdParams,
 } from "../schema/public"
 
@@ -79,11 +82,11 @@ export const dealTasksPublicRouter = {
       path: "/v1/deals/{id}/tasks/{taskId}",
       summary: "Update deal task",
       description:
-        "Changes a task's title, description, assignee or due date. A changed assignee emits `taskAssigned`; a due date moved into the future re-arms the overdue notice.",
+        "Changes a task's title, description, assignee, start or due date. A changed assignee emits `taskAssigned`; a due date moved into the future re-arms the overdue notice. With `shiftSuccessors`, a due-date move also moves every open task downstream of this one by the same amount (`shifted` lists them). A start after the due date is refused with 422 `startAfterDue`.",
       tags: ["Deals"],
     })
     .input(updateDealTaskRequest.and(dealTaskIdParams))
-    .output(dealTaskPublicResource)
+    .output(dealTaskUpdatePublicResource)
     .errors(possibleErrorsOnMutatingResource)
     .handler(async ({ context, input }) => {
       const { id, taskId, ...data } = input
@@ -291,6 +294,58 @@ export const dealTaskTemplatesPublicRouter = {
         pipelineId: input.id,
         stageId: input.stageId,
         templateId: input.templateId,
+      })
+    }),
+
+  addTaskTemplateDependency: workspaceTokenAuthAPI
+    .route({
+      method: "POST",
+      path: "/v1/pipelines/{id}/stages/{stageId}/task-templates/{templateId}/dependencies",
+      summary: "Add task template dependency",
+      description:
+        "Makes the template wait on another template of the same stage; a deal entering the stage gets the same dependency between the two tasks. Refused with 422 for a self-dependency, another stage, a duplicate, more than 20 dependencies, or a cycle.",
+      successStatus: 201,
+      tags: ["Pipelines"],
+    })
+    .input(addTaskTemplateDependencyRequest.and(templateIdParams))
+    .output(
+      z.object({ templateId: z.string(), dependsOnTemplateId: z.string() }),
+    )
+    .errors(possibleErrorsOnCreatingResource)
+    .handler(async ({ context, input }) => {
+      const row = await dealTaskTemplateService.addDependency({
+        workspaceId: context.workspace.id,
+        pipelineId: input.id,
+        stageId: input.stageId,
+        templateId: input.templateId,
+        dependsOnTemplateId: input.dependsOnTemplateId,
+      })
+      return {
+        templateId: row.templateId,
+        dependsOnTemplateId: row.dependsOnTemplateId,
+      }
+    }),
+
+  removeTaskTemplateDependency: workspaceTokenAuthAPI
+    .route({
+      method: "DELETE",
+      path: "/v1/pipelines/{id}/stages/{stageId}/task-templates/{templateId}/dependencies/{dependsOnTemplateId}",
+      summary: "Remove task template dependency",
+      description:
+        "Removes one template dependency; tasks already created keep theirs. Removing a missing edge is a no-op.",
+      successStatus: 204,
+      tags: ["Pipelines"],
+    })
+    .input(templateDependencyParams)
+    .output(z.void())
+    .errors(possibleErrorsOnDeletingResource)
+    .handler(async ({ context, input }) => {
+      await dealTaskTemplateService.removeDependency({
+        workspaceId: context.workspace.id,
+        pipelineId: input.id,
+        stageId: input.stageId,
+        templateId: input.templateId,
+        dependsOnTemplateId: input.dependsOnTemplateId,
       })
     }),
 }

@@ -167,7 +167,20 @@ vi.mock("@chatbotx.io/database/schema", () => ({
     dueAt: "dueAt",
     templateId: "templateId",
   },
-  dealTaskTemplateModel: { _name: "DealTaskTemplate" },
+  dealTaskTemplateModel: {
+    _name: "DealTaskTemplate",
+    id: "id",
+    stageId: "stageId",
+    workspaceId: "ws",
+    pipelineId: "pipelineId",
+  },
+  dealTaskTemplateDependencyModel: {
+    _name: "DealTaskTemplateDependency",
+    id: "id",
+    templateId: "templateId",
+    dependsOnTemplateId: "dependsOnTemplateId",
+    workspaceId: "ws",
+  },
   workspaceMemberModel: { workspaceId: "ws", userId: "userId" },
 }))
 vi.mock("@chatbotx.io/utils", async (importOriginal) => ({
@@ -196,7 +209,10 @@ vi.mock("../src/pipeline/service", () => ({
   },
 }))
 vi.mock("../src/audit/dispatcher", () => ({ dispatchAuditRecord: vi.fn() }))
-vi.mock("../src/logger", () => ({ logger: { warn: m.logWarn, info: vi.fn() } }))
+const logInfo = vi.fn()
+vi.mock("../src/logger", () => ({
+  logger: { warn: m.logWarn, info: (...a: unknown[]) => logInfo(...a) },
+}))
 // s194: the assignee's own notification, recorded apart from `calls` so the
 // tx-order assertions above stay exact
 const notify = vi.fn(async () => ({ notification: null, pushEnqueued: false }))
@@ -207,6 +223,19 @@ vi.mock("../src/notification/service", () => ({
 const { dealTaskService, DEPENDENCY_WALK_STEP_CAP } = await import(
   "../src/deal-task/service"
 )
+const { dealTaskTemplateService } = await import("../src/deal-task/templates")
+const { withSchedule, downstreamOpen } = await import(
+  "../src/deal-task/schedule"
+)
+const { createId } = await import("@chatbotx.io/utils")
+/**
+ * The ids the next instantiation of two templates will mint: each template
+ * takes one id for its task and one for its activity row.
+ */
+const nextTwoTaskIds = (): [string, string] => {
+  const n = Number(createId().split("-")[1])
+  return [`id-${n + 1}`, `id-${n + 3}`]
+}
 
 const WS = "ws-1"
 const DEAL = {
@@ -230,7 +259,9 @@ const TASK = (over: Record<string, unknown> = {}) => ({
   title: "Call back",
   description: null,
   status: "open",
+  startAt: null,
   dueAt: null,
+  createdAt: new Date("2026-09-01T00:00:00Z"),
   completedAt: null,
   overdueNotifiedAt: null,
   templateId: null,
@@ -703,17 +734,21 @@ describe("dealTaskService.claimOverdue + instantiateForStage", () => {
           id: "tpl-1",
           title: "Call back",
           description: null,
+          startInDays: null,
           dueInDays: 2,
           assignToOwner: true,
           assigneeId: null,
+          dependsOn: [],
         },
         {
           id: "tpl-2",
           title: "Send quote",
           description: null,
+          startInDays: null,
           dueInDays: null,
           assignToOwner: false,
           assigneeId: "user-9",
+          dependsOn: [],
         },
       ]
       const { created } = await dealTaskService.instantiateForStage({
@@ -776,5 +811,389 @@ describe("dealTaskService.listByDealIds (s195)", () => {
         viewer: { userId: "u-1", permissions: {} },
       }),
     ).toEqual([])
+  })
+})
+
+// ---- s197: timeline (startAt), successor shift, template dependencies ----
+
+const D = (iso: string) => new Date(`${iso}T00:00:00Z`)
+
+describe("s197 withSchedule (effectiveStart + conflicts)", () => {
+  test("start = startAt, else the latest predecessor due (never after its own due), else createdAt", () => {
+    const rows = withSchedule(
+      [
+        TASK({ id: "p1", dueAt: D("2026-10-05") }),
+        TASK({ id: "p2", dueAt: D("2026-10-08"), status: "done" }),
+        TASK({ id: "own", startAt: D("2026-10-02"), dueAt: D("2026-10-09") }),
+        TASK({ id: "derived", dueAt: D("2026-10-20") }),
+        TASK({ id: "clamped", dueAt: D("2026-10-06") }),
+        TASK({ id: "lonely" }),
+      ] as never[],
+      [
+        { taskId: "own", dependsOnTaskId: "p1" },
+        { taskId: "derived", dependsOnTaskId: "p1" },
+        { taskId: "derived", dependsOnTaskId: "p2" },
+        { taskId: "clamped", dependsOnTaskId: "p2" },
+      ],
+    )
+    const by = new Map(rows.map((r) => [r.id, r]))
+    expect(by.get("own")?.effectiveStart).toEqual(D("2026-10-02"))
+    // a DONE predecessor's due date still places the bar
+    expect(by.get("derived")?.effectiveStart).toEqual(D("2026-10-08"))
+    expect(by.get("clamped")?.effectiveStart).toEqual(D("2026-10-06"))
+    expect(by.get("lonely")?.effectiveStart).toEqual(D("2026-09-01"))
+    expect(by.get("derived")?.blockedBy).toEqual(["p1"])
+  })
+
+  test("conflicts = OPEN predecessors due after the task's own start (or due); a done task or a done predecessor has none", () => {
+    const rows = withSchedule(
+      [
+        TASK({ id: "p", dueAt: D("2026-10-10") }),
+        TASK({ id: "q", dueAt: D("2026-10-12"), status: "done" }),
+        TASK({ id: "early", startAt: D("2026-10-03"), dueAt: D("2026-10-15") }),
+        TASK({ id: "dueFirst", dueAt: D("2026-10-04") }),
+        TASK({ id: "fine", startAt: D("2026-10-11"), dueAt: D("2026-10-13") }),
+        TASK({ id: "finished", startAt: D("2026-10-01"), status: "done" }),
+        TASK({ id: "undated" }),
+      ] as never[],
+      ["early", "dueFirst", "fine", "finished", "undated"].flatMap((id) => [
+        { taskId: id, dependsOnTaskId: "p" },
+        { taskId: id, dependsOnTaskId: "q" },
+      ]),
+    )
+    const by = new Map(rows.map((r) => [r.id, r.conflicts]))
+    expect(by.get("early")).toEqual(["p"])
+    expect(by.get("dueFirst")).toEqual(["p"])
+    expect(by.get("fine")).toEqual([])
+    expect(by.get("finished")).toEqual([])
+    expect(by.get("undated")).toEqual([])
+  })
+})
+
+describe("s197 downstreamOpen", () => {
+  test("a diamond is walked once, a done task is neither returned nor walked through", () => {
+    const tasks = ["a", "b", "c", "d", "e", "f"].map((id) => ({
+      id,
+      status: id === "e" ? "done" : "open",
+    }))
+    const edges = [
+      { taskId: "b", dependsOnTaskId: "a" },
+      { taskId: "c", dependsOnTaskId: "a" },
+      { taskId: "d", dependsOnTaskId: "b" },
+      { taskId: "d", dependsOnTaskId: "c" },
+      { taskId: "e", dependsOnTaskId: "a" },
+      { taskId: "f", dependsOnTaskId: "e" },
+    ]
+    expect(downstreamOpen({ tasks, edges, from: "a" })).toEqual(["b", "c", "d"])
+    expect(downstreamOpen({ tasks, edges, from: "d" })).toEqual([])
+  })
+
+  test("a 200-task chain is walked end to end; a fan past the step cap throws a typed 422", () => {
+    const chain = Array.from({ length: 200 }, (_, i) => ({
+      id: `t${i}`,
+      status: "open",
+    }))
+    const chainEdges = chain
+      .slice(1)
+      .map((t, i) => ({ taskId: t.id, dependsOnTaskId: `t${i}` }))
+    expect(
+      downstreamOpen({ tasks: chain, edges: chainEdges, from: "t0" }),
+    ).toHaveLength(199)
+    const fan = Array.from(
+      { length: DEPENDENCY_WALK_STEP_CAP + 1 },
+      (_, i) => ({
+        taskId: `x${i}`,
+        dependsOnTaskId: "hub",
+      }),
+    )
+    expect(() =>
+      downstreamOpen({ tasks: [], edges: fan, from: "hub" }),
+    ).toThrow("too large")
+  })
+})
+
+describe("s197 dealTaskService.create / update dates", () => {
+  test("create refuses a start after the due date before any transaction (422 startAfterDue)", async () => {
+    await expect(
+      dealTaskService.create({
+        workspaceId: WS,
+        dealId: "deal-1",
+        data: {
+          title: "x",
+          startAt: D("2026-10-05"),
+          dueAt: D("2026-10-04"),
+        },
+      }),
+    ).rejects.toMatchObject({ data: { reason: "startAfterDue" } })
+    expect(m.state.calls).toEqual([])
+  })
+
+  test("update checks the MERGED dates: a start past the stored due date is refused, nothing written", async () => {
+    m.state.selects.push([TASK({ dueAt: D("2026-10-04") })])
+    await expect(
+      dealTaskService.update({
+        workspaceId: WS,
+        dealId: "deal-1",
+        taskId: "task-1",
+        data: { startAt: D("2026-10-05") },
+      }),
+    ).rejects.toMatchObject({ data: { reason: "startAfterDue" } })
+    expect(m.state.calls).not.toContain("update")
+  })
+
+  test("shiftSuccessors: lock BEFORE the row write, then every open downstream task moves by the same delta (start and due), done ones stay", async () => {
+    const edges = [
+      { taskId: "b", dependsOnTaskId: "task-1" },
+      { taskId: "c", dependsOnTaskId: "task-1" },
+      { taskId: "d", dependsOnTaskId: "b" },
+      { taskId: "d", dependsOnTaskId: "c" },
+      { taskId: "e", dependsOnTaskId: "task-1" },
+    ]
+    m.state.selects.push(
+      [TASK({ dueAt: D("2026-10-01") })],
+      [
+        { id: "task-1", status: "open", startAt: null, dueAt: D("2026-10-03") },
+        {
+          id: "b",
+          status: "open",
+          startAt: D("2026-10-02"),
+          dueAt: D("2026-10-05"),
+        },
+        { id: "c", status: "open", startAt: null, dueAt: D("2026-10-06") },
+        { id: "d", status: "open", startAt: null, dueAt: null },
+        { id: "e", status: "done", startAt: null, dueAt: D("2026-10-02") },
+      ],
+      edges,
+    )
+    m.state.updates.push([TASK({ dueAt: D("2026-10-03") })], [], [])
+    const result = await dealTaskService.update({
+      workspaceId: WS,
+      dealId: "deal-1",
+      taskId: "task-1",
+      data: { dueAt: D("2026-10-03"), shiftSuccessors: true },
+    })
+    expect(result.shifted).toEqual(["b", "c"])
+    const calls = m.state.calls
+    expect(calls.indexOf("execute")).toBeGreaterThan(-1)
+    expect(calls.indexOf("execute")).toBeLessThan(
+      calls.indexOf("update:dueAt,overdueNotifiedAt"),
+    )
+    expect(calls).toContain("for:update")
+    // b and c moved (+2 days); d has no dates; e is done
+    expect(calls.filter((c) => c.startsWith("update:startAt"))).toHaveLength(2)
+  })
+
+  test("without shiftSuccessors (or with no due-date move) there is no lock and no walk", async () => {
+    m.state.selects.push([TASK({ dueAt: D("2026-10-01") })])
+    m.state.updates.push([TASK({ dueAt: D("2026-10-03") })])
+    const plain = await dealTaskService.update({
+      workspaceId: WS,
+      dealId: "deal-1",
+      taskId: "task-1",
+      data: { dueAt: D("2026-10-03") },
+    })
+    expect(plain.shifted).toEqual([])
+    m.state.selects.push([TASK({ dueAt: D("2026-10-01") })])
+    m.state.updates.push([TASK({ title: "renamed" })])
+    await dealTaskService.update({
+      workspaceId: WS,
+      dealId: "deal-1",
+      taskId: "task-1",
+      data: { title: "renamed", shiftSuccessors: true },
+    })
+    expect(m.state.calls).not.toContain("execute")
+    expect(m.state.calls).not.toContain("for:update")
+  })
+})
+
+describe("s197 instantiateForStage copies template edges", () => {
+  const TPL = (over: Record<string, unknown>) => ({
+    id: "tpl",
+    title: "T",
+    description: null,
+    startInDays: null,
+    dueInDays: null,
+    assignToOwner: false,
+    assigneeId: null,
+    dependsOn: [] as string[],
+    ...over,
+  })
+
+  test("startInDays sets startAt; each template edge becomes a DealDependency between the new instances, under the deal lock", async () => {
+    vi.useFakeTimers({ now: new Date("2026-09-24T00:00:00Z") })
+    try {
+      const [a, b] = nextTwoTaskIds()
+      // the copy transaction: instances, then the deal's existing edges
+      m.state.selects.push(
+        [
+          { id: a, templateId: "tpl-a" },
+          { id: b, templateId: "tpl-b" },
+        ],
+        [],
+      )
+      const { created, edges } = await dealTaskService.instantiateForStage({
+        workspaceId: WS,
+        deal: DEAL as never,
+        stageId: "stage-1",
+        actorId: null,
+        templates: [
+          TPL({ id: "tpl-a", startInDays: 1, dueInDays: 3 }),
+          TPL({ id: "tpl-b", dueInDays: 5, dependsOn: ["tpl-a"] }),
+        ],
+      })
+      expect(created[0].startAt).toEqual(new Date("2026-09-25T00:00:00Z"))
+      expect(created[1].startAt).toBeNull()
+      expect(edges).toBe(1)
+      const dep = m.state.inserted.filter((r) => "dependsOnTaskId" in r)
+      expect(dep).toMatchObject([
+        { taskId: created[1].id, dependsOnTaskId: created[0].id },
+      ])
+      expect(m.state.calls.indexOf("execute")).toBeLessThan(
+        m.state.calls.indexOf("insert:DealDependency"),
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("a re-entry that creates nothing copies nothing (an edge removed by hand stays removed)", async () => {
+    m.state.insertConflict = true
+    const { edges } = await dealTaskService.instantiateForStage({
+      workspaceId: WS,
+      deal: DEAL as never,
+      stageId: "stage-1",
+      actorId: null,
+      templates: [
+        TPL({ id: "tpl-a" }),
+        TPL({ id: "tpl-b", dependsOn: ["tpl-a"] }),
+      ],
+    })
+    expect(edges).toBe(0)
+    expect(m.state.calls).not.toContain("execute")
+  })
+
+  test("an edge that would close a cycle with a hand-made edge is skipped and logged, never thrown", async () => {
+    const [a, b] = nextTwoTaskIds()
+    m.state.selects.push(
+      [
+        { id: a, templateId: "tpl-a" },
+        { id: b, templateId: "tpl-b" },
+      ],
+      // by hand, A's task already waits on B's: the template edge B -> A
+      // would close the loop
+      [{ taskId: a, dependsOnTaskId: b }],
+    )
+    const { edges } = await dealTaskService.instantiateForStage({
+      workspaceId: WS,
+      deal: DEAL as never,
+      stageId: "stage-1",
+      actorId: null,
+      templates: [
+        TPL({ id: "tpl-a" }),
+        TPL({ id: "tpl-b", dependsOn: ["tpl-a"] }),
+      ],
+    })
+    expect(edges).toBe(0)
+    expect(logInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: "dependencyCycle" }),
+      expect.any(String),
+    )
+  })
+})
+
+describe("s197 dealTaskTemplateService dependencies", () => {
+  const add = (over: Record<string, unknown> = {}) =>
+    dealTaskTemplateService.addDependency({
+      workspaceId: WS,
+      pipelineId: "pipe-1",
+      stageId: "stage-1",
+      templateId: "tpl-a",
+      dependsOnTemplateId: "tpl-b",
+      ...over,
+    })
+  const BOTH = [
+    { id: "tpl-a", stageId: "stage-1" },
+    { id: "tpl-b", stageId: "stage-1" },
+  ]
+
+  test("self = 422 before any transaction", async () => {
+    await expect(add({ dependsOnTemplateId: "tpl-a" })).rejects.toMatchObject({
+      data: { reason: "dependencySelf" },
+    })
+    expect(m.state.calls).toEqual([])
+  })
+
+  test("the other template on another stage = 422 dependencyCrossStage; an unknown or foreign-stage own template = 404", async () => {
+    m.state.selects.push([
+      { id: "tpl-a", stageId: "stage-1" },
+      { id: "tpl-b", stageId: "stage-2" },
+    ])
+    await expect(add()).rejects.toMatchObject({
+      data: { reason: "dependencyCrossStage" },
+    })
+    m.state.selects.push([{ id: "tpl-b", stageId: "stage-1" }])
+    await expect(add()).rejects.toThrow("Task template not found")
+    m.state.selects.push([
+      { id: "tpl-a", stageId: "stage-9" },
+      { id: "tpl-b", stageId: "stage-1" },
+    ])
+    await expect(add()).rejects.toThrow("Task template not found")
+  })
+
+  test("duplicate, cycle and fan-in cap are refused; the stage lock comes first", async () => {
+    m.state.selects.push(BOTH, [
+      { templateId: "tpl-a", dependsOnTemplateId: "tpl-b" },
+    ])
+    await expect(add()).rejects.toMatchObject({
+      data: { reason: "dependencyExists" },
+    })
+    expect(m.state.calls[0]).toBe("execute")
+    m.state.selects.push(BOTH, [
+      { templateId: "tpl-b", dependsOnTemplateId: "tpl-c" },
+      { templateId: "tpl-c", dependsOnTemplateId: "tpl-a" },
+    ])
+    await expect(add()).rejects.toMatchObject({
+      data: { reason: "dependencyCycle" },
+    })
+    m.state.selects.push(
+      BOTH,
+      Array.from({ length: 20 }, (_, i) => ({
+        templateId: "tpl-a",
+        dependsOnTemplateId: `other-${i}`,
+      })),
+    )
+    await expect(add()).rejects.toMatchObject({
+      data: { reason: "tooManyDependencies" },
+    })
+    expect(m.state.inserted).toEqual([])
+  })
+
+  test("happy path inserts one edge", async () => {
+    m.state.selects.push(BOTH, [])
+    const row = await add()
+    expect(row).toMatchObject({
+      templateId: "tpl-a",
+      dependsOnTemplateId: "tpl-b",
+      workspaceId: WS,
+    })
+  })
+
+  test("upsert refuses startInDays after dueInDays and a non-integer offset", async () => {
+    await expect(
+      dealTaskTemplateService.upsert({
+        workspaceId: WS,
+        pipelineId: "pipe-1",
+        stageId: "stage-1",
+        data: { title: "x", startInDays: 5, dueInDays: 2 },
+      }),
+    ).rejects.toMatchObject({ data: { reason: "startAfterDue" } })
+    await expect(
+      dealTaskTemplateService.upsert({
+        workspaceId: WS,
+        pipelineId: "pipe-1",
+        stageId: "stage-1",
+        data: { title: "x", startInDays: 1.5 },
+      }),
+    ).rejects.toThrow("startInDays must be an integer")
   })
 })

@@ -30,8 +30,9 @@ export const dealTaskStatus = pgEnum(
 /**
  * A task template on a pipeline stage: when a deal ENTERS the stage the
  * service instantiates one DealTask per template (idempotent per
- * `(dealId, templateId)`). `dueInDays` null = no due date; `assignToOwner`
- * wins over `assigneeId`.
+ * `(dealId, templateId)`). `dueInDays` null = no due date; `startInDays`
+ * null = no explicit start (the bar starts at its predecessors' due date);
+ * `assignToOwner` wins over `assigneeId`.
  */
 export const dealTaskTemplateModel = pgTable(
   "DealTaskTemplate",
@@ -40,6 +41,7 @@ export const dealTaskTemplateModel = pgTable(
     title: text().notNull(),
     description: text(),
     dueInDays: integer(),
+    startInDays: integer(),
     assignToOwner: boolean().notNull().default(false),
     order: doublePrecision().notNull().default(0),
     workspaceId: bigintAsString()
@@ -74,7 +76,8 @@ export const dealTaskTemplateModel = pgTable(
  * A task on a deal. `blocked` is never stored: it is derived at read time
  * from DealDependency rows whose blocker is still open. `overdueNotifiedAt`
  * is the claim column of the overdue scanner (one `taskOverdue` per task; a
- * due date moved into the future clears it).
+ * due date moved into the future clears it). `startAt` is the explicit
+ * start of the timeline bar (service-enforced `startAt <= dueAt`).
  */
 export const dealTaskModel = pgTable(
   "DealTask",
@@ -83,6 +86,7 @@ export const dealTaskModel = pgTable(
     title: text().notNull(),
     description: text(),
     status: dealTaskStatus().notNull().default("open"),
+    startAt: timestamp(timestampConfig),
     dueAt: timestamp(timestampConfig),
     completedAt: timestamp(timestampConfig),
     overdueNotifiedAt: timestamp(timestampConfig),
@@ -165,6 +169,48 @@ export const dealDependencyModel = pgTable(
     check(
       "DealDependency_no_self_check",
       sql`${table.taskId} <> ${table.dependsOnTaskId}`,
+    ),
+  ],
+)
+
+/**
+ * Template `templateId` waits on template `dependsOnTemplateId`; both sit on
+ * the same stage (service-enforced). Instantiating a stage copies each edge
+ * onto the deal as a DealDependency between the two instances.
+ */
+export const dealTaskTemplateDependencyModel = pgTable(
+  "DealTaskTemplateDependency",
+  {
+    ...sharedColumns,
+    workspaceId: bigintAsString()
+      .notNull()
+      .references(() => workspaceModel.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    templateId: bigintAsString()
+      .notNull()
+      .references(() => dealTaskTemplateModel.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    dependsOnTemplateId: bigintAsString()
+      .notNull()
+      .references(() => dealTaskTemplateModel.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+  },
+  (table) => [
+    uniqueIndex(
+      "DealTaskTemplateDependency_templateId_dependsOnTemplateId_key",
+    ).on(table.templateId, table.dependsOnTemplateId),
+    index("DealTaskTemplateDependency_dependsOnTemplateId_idx").on(
+      table.dependsOnTemplateId,
+    ),
+    check(
+      "DealTaskTemplateDependency_no_self_check",
+      sql`${table.templateId} <> ${table.dependsOnTemplateId}`,
     ),
   ],
 )

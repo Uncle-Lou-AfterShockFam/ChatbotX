@@ -242,10 +242,8 @@ export async function createTask({
         data: {
           title: title.trim().length > 0 ? title : `Task for ${contactId}`,
           description: step.description || null,
-          dueAt:
-            step.dueInDays === null || step.dueInDays === undefined
-              ? null
-              : new Date(Date.now() + step.dueInDays * 86_400_000),
+          startAt: daysFromNow(step.startInDays),
+          dueAt: daysFromNow(step.dueInDays),
           assigneeId: assignee,
         },
       })
@@ -362,4 +360,11 @@ export async function completeTask({
       "completeTask step failed; continuing with the remaining steps",
     )
   }
+}
+
+/** Run time + `days` (null / undefined = no date). */
+function daysFromNow(days: number | null | undefined): Date | null {
+  return days === null || days === undefined
+    ? null
+    : new Date(Date.now() + days * 86_400_000)
 }

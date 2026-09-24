@@ -12,7 +12,8 @@ export const createTaskAssignTo = z.enum(["none", "dealOwner", "user"])
 /**
  * Add a task to the contact's OPEN deal in `pipelineId` (none = the step
  * logs and does nothing). `title` may carry `{{variable}}` tokens. Due date =
- * run time + `dueInDays`; null = no due date.
+ * run time + `dueInDays`; null = no due date. Start = run time +
+ * `startInDays` (null = none; after the due date = the task is refused).
  */
 export const createTaskStepSchema = z.object({
   id: zodBigintAsString(),
@@ -20,6 +21,13 @@ export const createTaskStepSchema = z.object({
   pipelineId: z.string().optional(),
   title: z.string().trim().max(MAX_TASK_TITLE_LENGTH).default(""),
   description: z.string().trim().max(MAX_TASK_DESCRIPTION_LENGTH).default(""),
+  startInDays: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_TASK_DUE_IN_DAYS)
+    .nullable()
+    .default(null),
   dueInDays: z
     .number()
     .int()
@@ -39,6 +47,7 @@ export const createTaskStepDefaultFn = (): CreateTaskStepSchema => ({
   pipelineId: undefined,
   title: "",
   description: "",
+  startInDays: null,
   dueInDays: null,
   assignTo: "none",
   assigneeId: undefined,
