@@ -77,7 +77,10 @@ export function DealCardContent({
             title={isOverdue(deal) ? t("deals.overdue") : undefined}
           >
             <CalendarIcon className="size-3" />
-            {format.dateTime(deal.dueAt, { dateStyle: "medium" })}
+            {format.dateTime(deal.dueAt, {
+              dateStyle: "medium",
+              timeZone: "UTC",
+            })}
           </span>
         ) : null}
         {ownerName ? (

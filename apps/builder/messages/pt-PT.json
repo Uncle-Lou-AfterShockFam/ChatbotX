@@ -6782,9 +6782,9 @@
       "titleChanged": "Title changed from {from} to {to}",
       "currencyChanged": "Currency changed from {from} to {to}",
       "dueAtChanged": "Due date changed from {from} to {to}",
-      "fieldChanged": "Field '{key}' changed from {from} to {to}",
-      "taskCreated": "Task '{title}' created",
-      "taskCompleted": "Task '{title}' completed"
+      "fieldChanged": "Field {key} changed from {from} to {to}",
+      "taskCreated": "Task {title} created",
+      "taskCompleted": "Task {title} completed"
     },
     "reorder": "Reorder",
     "moveDealsTo": "Move deals to...",

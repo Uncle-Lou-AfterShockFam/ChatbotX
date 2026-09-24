@@ -240,7 +240,10 @@ function TaskRow({
           }
           data-testid={overdue ? `deal-task-overdue-${task.id}` : undefined}
         >
-          {format.dateTime(task.dueAt, { dateStyle: "medium" })}
+          {format.dateTime(task.dueAt, {
+            dateStyle: "medium",
+            timeZone: "UTC",
+          })}
         </span>
       ) : null}
       {assigneeName ? (
