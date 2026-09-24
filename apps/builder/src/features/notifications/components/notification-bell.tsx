@@ -48,6 +48,9 @@ export function NotificationBell({ workspaceId }: { workspaceId: string }) {
   const format = useFormatter()
   const router = useRouter()
   const [open, setOpen] = useState(false)
+  // next-intl logs ENVIRONMENT_FALLBACK (a console error per row) when
+  // relativeTime has no explicit `now`
+  const now = new Date()
   const unread = useUnreadNotificationCount(workspaceId)
   const list = useNotifications(workspaceId, open)
   const markRead = useMarkNotificationRead()
@@ -140,7 +143,7 @@ export function NotificationBell({ workspaceId }: { workspaceId: string }) {
                         {n.payload.excerpt ? ` — ${n.payload.excerpt}` : ""}
                       </span>
                       <span className="text-muted-foreground text-xs">
-                        {format.relativeTime(new Date(n.createdAt))}
+                        {format.relativeTime(new Date(n.createdAt), now)}
                       </span>
                     </span>
                   </button>
