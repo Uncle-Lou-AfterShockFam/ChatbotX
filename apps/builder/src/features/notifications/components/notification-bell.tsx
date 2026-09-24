@@ -23,14 +23,18 @@ import type { NotificationResource } from "../schema/resource"
 
 const BADGE_CAP = 99
 
-/** Where a notification opens: the deal board on its pipeline with the drawer open. */
+/**
+ * Where a notification opens: the deal board on its pipeline with the drawer
+ * open. `status=all` because the drawer finds the deal in the loaded columns
+ * and a comment on a won / lost deal is normal (blind probe, s194).
+ */
 export const notificationHref = (
   workspaceId: string,
   n: Pick<NotificationResource, "dealId" | "payload">,
 ) =>
   `/space/${workspaceId}/deals?pipelineId=${encodeURIComponent(
     n.payload.pipelineId,
-  )}&dealId=${encodeURIComponent(n.dealId)}`
+  )}&status=all&dealId=${encodeURIComponent(n.dealId)}`
 
 export const badgeLabel = (count: number) =>
   count > BADGE_CAP ? `${BADGE_CAP}+` : String(count)
@@ -46,8 +50,8 @@ export function NotificationBell({ workspaceId }: { workspaceId: string }) {
   const [open, setOpen] = useState(false)
   const unread = useUnreadNotificationCount(workspaceId)
   const list = useNotifications(workspaceId, open)
-  const markRead = useMarkNotificationRead(workspaceId)
-  const markAll = useMarkAllNotificationsRead(workspaceId)
+  const markRead = useMarkNotificationRead()
+  const markAll = useMarkAllNotificationsRead()
   const count = unread.data ?? 0
   const rows = list.data?.data ?? []
 

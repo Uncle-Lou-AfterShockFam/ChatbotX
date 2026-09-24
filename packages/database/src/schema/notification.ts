@@ -35,6 +35,7 @@ export const notificationType = pgEnum(
  * renders without a second query. A mention notification is unique per
  * `(commentId, userId)` (a comment edit retried by the caller cannot notify
  * twice); task assignments deliberately repeat (A -> B -> A is two events).
+ * The task / comment FKs cascade so a deleted comment's excerpt is retracted.
  */
 export const notificationModel = pgTable(
   "Notification",
@@ -61,12 +62,13 @@ export const notificationModel = pgTable(
         onDelete: "cascade",
         onUpdate: "cascade",
       }),
+    // cascade: a deleted task / comment retracts what was pushed about it
     taskId: bigintAsString().references(() => dealTaskModel.id, {
-      onDelete: "set null",
+      onDelete: "cascade",
       onUpdate: "cascade",
     }),
     commentId: bigintAsString().references(() => dealCommentModel.id, {
-      onDelete: "set null",
+      onDelete: "cascade",
       onUpdate: "cascade",
     }),
   },

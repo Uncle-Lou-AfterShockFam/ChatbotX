@@ -1,5 +1,4 @@
 import type {
-  NotificationType,
   WorkspaceMemberNotificationChannels,
   WorkspaceMemberNotificationTypes,
 } from "@chatbotx.io/database/partials"
@@ -8,13 +7,6 @@ export type ResolvedNotificationPrefs = {
   types: Required<WorkspaceMemberNotificationTypes>
   channels: Required<WorkspaceMemberNotificationChannels>
 }
-
-/** The deal keys added in s194: absent on every row written before. */
-export const NEW_NOTIFICATION_TYPE_KEYS = [
-  "taskAssigned",
-  "dealMentioned",
-] as const satisfies readonly NotificationType[]
-export const NEW_NOTIFICATION_CHANNEL_KEYS = ["push", "inApp"] as const
 
 const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v)

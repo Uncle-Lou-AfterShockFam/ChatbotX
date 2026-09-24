@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "4faf0507-7687-4edd-821d-6ae44cc27e5a",
+  "id": "2c0d377b-6958-4687-b958-34876b7b197a",
   "prevIds": [
     "34205e46-d77c-414f-bf16-b0c952b0a4b4"
   ],
@@ -529,15 +529,6 @@
     },
     {
       "values": [
-        "taskAssigned",
-        "dealMentioned"
-      ],
-      "name": "notificationType",
-      "entityType": "enums",
-      "schema": "public"
-    },
-    {
-      "values": [
         "import",
         "generic",
         "export"
@@ -806,6 +797,15 @@
         "scratchOff"
       ],
       "name": "minigameType",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "taskAssigned",
+        "dealMentioned"
+      ],
+      "name": "notificationType",
       "entityType": "enums",
       "schema": "public"
     },
@@ -1380,12 +1380,6 @@
     },
     {
       "isRlsEnabled": false,
-      "name": "Notification",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
       "name": "DynamicImage",
       "entityType": "tables",
       "schema": "public"
@@ -1813,6 +1807,12 @@
     {
       "isRlsEnabled": false,
       "name": "MinigamePlay",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "Notification",
       "entityType": "tables",
       "schema": "public"
     },
@@ -12502,149 +12502,6 @@
       "name": "id",
       "entityType": "columns",
       "schema": "public",
-      "table": "Notification"
-    },
-    {
-      "type": "timestamp(6) with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "createdAt",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "Notification"
-    },
-    {
-      "type": "timestamp(6) with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "updatedAt",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "Notification"
-    },
-    {
-      "type": "notificationType",
-      "typeSchema": "public",
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "type",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "Notification"
-    },
-    {
-      "type": "jsonb",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "payload",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "Notification"
-    },
-    {
-      "type": "timestamp(6) with time zone",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "readAt",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "Notification"
-    },
-    {
-      "type": "bigint",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "workspaceId",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "Notification"
-    },
-    {
-      "type": "bigint",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "userId",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "Notification"
-    },
-    {
-      "type": "bigint",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "dealId",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "Notification"
-    },
-    {
-      "type": "bigint",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "taskId",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "Notification"
-    },
-    {
-      "type": "bigint",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "commentId",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "Notification"
-    },
-    {
-      "type": "bigint",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
       "table": "DynamicImage"
     },
     {
@@ -23254,6 +23111,149 @@
       "entityType": "columns",
       "schema": "public",
       "table": "MinigamePlay"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "Notification"
+    },
+    {
+      "type": "timestamp(6) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "createdAt",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "Notification"
+    },
+    {
+      "type": "timestamp(6) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updatedAt",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "Notification"
+    },
+    {
+      "type": "notificationType",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "type",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "Notification"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "payload",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "Notification"
+    },
+    {
+      "type": "timestamp(6) with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "readAt",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "Notification"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspaceId",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "Notification"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "userId",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "Notification"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "dealId",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "Notification"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "taskId",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "Notification"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "commentId",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "Notification"
     },
     {
       "type": "bigint",
@@ -34833,97 +34833,6 @@
       "nameExplicit": true,
       "columns": [
         {
-          "value": "userId",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "workspaceId",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "readAt",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "createdAt",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "Notification_userId_workspaceId_readAt_createdAt_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "Notification"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "dealId",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "Notification_dealId_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "Notification"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "commentId",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "userId",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": true,
-      "where": "\"commentId\" IS NOT NULL",
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "Notification_commentId_userId_key",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "Notification"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
           "value": "workspaceId",
           "isExpression": false,
           "asc": true,
@@ -38461,6 +38370,97 @@
       "entityType": "indexes",
       "schema": "public",
       "table": "MinigamePlay"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "userId",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "workspaceId",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "readAt",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "createdAt",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "Notification_userId_workspaceId_readAt_createdAt_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "Notification"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "dealId",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "Notification_dealId_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "Notification"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "commentId",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "userId",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "\"commentId\" IS NOT NULL",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "Notification_commentId_userId_key",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "Notification"
     },
     {
       "nameExplicit": true,
@@ -43987,91 +43987,6 @@
       ],
       "onUpdate": "CASCADE",
       "onDelete": "CASCADE",
-      "name": "Notification_workspaceId_Workspace_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "Notification"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "userId"
-      ],
-      "schemaTo": "public",
-      "tableTo": "User",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "CASCADE",
-      "onDelete": "CASCADE",
-      "name": "Notification_userId_User_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "Notification"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "dealId"
-      ],
-      "schemaTo": "public",
-      "tableTo": "Deal",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "CASCADE",
-      "onDelete": "CASCADE",
-      "name": "Notification_dealId_Deal_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "Notification"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "taskId"
-      ],
-      "schemaTo": "public",
-      "tableTo": "DealTask",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "CASCADE",
-      "onDelete": "SET NULL",
-      "name": "Notification_taskId_DealTask_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "Notification"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "commentId"
-      ],
-      "schemaTo": "public",
-      "tableTo": "DealComment",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "CASCADE",
-      "onDelete": "SET NULL",
-      "name": "Notification_commentId_DealComment_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "Notification"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "workspaceId"
-      ],
-      "schemaTo": "public",
-      "tableTo": "Workspace",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "CASCADE",
-      "onDelete": "CASCADE",
       "name": "DynamicImage_workspaceId_Workspace_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -46388,6 +46303,91 @@
       "entityType": "fks",
       "schema": "public",
       "table": "MinigamePlay"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspaceId"
+      ],
+      "schemaTo": "public",
+      "tableTo": "Workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "CASCADE",
+      "onDelete": "CASCADE",
+      "name": "Notification_workspaceId_Workspace_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "Notification"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "userId"
+      ],
+      "schemaTo": "public",
+      "tableTo": "User",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "CASCADE",
+      "onDelete": "CASCADE",
+      "name": "Notification_userId_User_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "Notification"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "dealId"
+      ],
+      "schemaTo": "public",
+      "tableTo": "Deal",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "CASCADE",
+      "onDelete": "CASCADE",
+      "name": "Notification_dealId_Deal_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "Notification"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "taskId"
+      ],
+      "schemaTo": "public",
+      "tableTo": "DealTask",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "CASCADE",
+      "onDelete": "CASCADE",
+      "name": "Notification_taskId_DealTask_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "Notification"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "commentId"
+      ],
+      "schemaTo": "public",
+      "tableTo": "DealComment",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "CASCADE",
+      "onDelete": "CASCADE",
+      "name": "Notification_commentId_DealComment_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "Notification"
     },
     {
       "nameExplicit": false,
@@ -48803,16 +48803,6 @@
         "id"
       ],
       "nameExplicit": false,
-      "name": "Notification_pkey",
-      "schema": "public",
-      "table": "Notification",
-      "entityType": "pks"
-    },
-    {
-      "columns": [
-        "id"
-      ],
-      "nameExplicit": false,
       "name": "DynamicImage_pkey",
       "schema": "public",
       "table": "DynamicImage",
@@ -49506,6 +49496,16 @@
       "name": "MinigamePlay_pkey",
       "schema": "public",
       "table": "MinigamePlay",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "Notification_pkey",
+      "schema": "public",
+      "table": "Notification",
       "entityType": "pks"
     },
     {

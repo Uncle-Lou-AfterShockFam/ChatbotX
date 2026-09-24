@@ -14,7 +14,8 @@ import { notificationResource } from "../schema/resource"
  */
 const listNotificationsRequest = withWorkspaceIdSchema.and(
   z.object({
-    cursor: zodBigintAsString().nullish(),
+    /** `<rank>:<id>` from the previous page's `nextCursor` */
+    cursor: z.string().max(40).nullish(),
     limit: z.coerce.number().int().min(1).max(MAX_NOTIFICATION_PAGE).optional(),
     unreadOnly: z.coerce.boolean().optional(),
   }),

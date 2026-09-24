@@ -267,13 +267,34 @@ export class DealTaskService extends BaseService {
       if (Object.keys(set).length === 0) {
         return { task: current, changed: false, previousAssigneeId }
       }
+      // An assignee change is pinned to the assignee this call read: two
+      // concurrent identical reassignments touch one row between them, so
+      // the assignee is notified once (skeptic MEDIUM, s194).
       const [updated] = await tx
         .update(dealTaskModel)
         .set(set)
-        .where(eq(dealTaskModel.id, taskId))
+        .where(
+          previousAssigneeId === undefined
+            ? eq(dealTaskModel.id, taskId)
+            : and(
+                eq(dealTaskModel.id, taskId),
+                sql`${dealTaskModel.assigneeId} is not distinct from ${previousAssigneeId}`,
+              ),
+        )
         .returning()
       if (!updated) {
-        throw notFoundException(TASK_NOT_FOUND)
+        if (previousAssigneeId === undefined) {
+          throw notFoundException(TASK_NOT_FOUND)
+        }
+        // lost the race (or the task is gone: findOrFail says which)
+        const again = await this.findOrFail({
+          workspaceId,
+          dealId,
+          taskId,
+          viewer,
+          tx,
+        })
+        return { task: again, changed: false, previousAssigneeId: undefined }
       }
       const deal = await dealService.findOrFail({ workspaceId, id: dealId, tx })
       return { task: updated, changed: true, previousAssigneeId, deal }

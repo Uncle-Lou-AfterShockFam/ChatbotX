@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useCallback } from "react"
 import { orpc } from "@/lib/orpc/query"
 
 /**
@@ -28,27 +29,27 @@ export const useUnreadNotificationCount = (workspaceId: string) =>
 
 export const useInvalidateNotifications = () => {
   const queryClient = useQueryClient()
-  return () =>
-    queryClient.invalidateQueries({ queryKey: orpc.notificationsAPI.key() })
+  return useCallback(
+    () =>
+      queryClient.invalidateQueries({ queryKey: orpc.notificationsAPI.key() }),
+    [queryClient],
+  )
 }
 
-export const useMarkNotificationRead = (workspaceId: string) => {
+export const useMarkNotificationRead = () => {
   const invalidate = useInvalidateNotifications()
   return useMutation(
     orpc.notificationsAPI.privateMarkNotificationReadAPI.mutationOptions({
-      onSuccess: () => invalidate(),
       onSettled: () => invalidate(),
-      meta: { workspaceId },
     }),
   )
 }
 
-export const useMarkAllNotificationsRead = (workspaceId: string) => {
+export const useMarkAllNotificationsRead = () => {
   const invalidate = useInvalidateNotifications()
   return useMutation(
     orpc.notificationsAPI.privateMarkAllNotificationsReadAPI.mutationOptions({
-      onSuccess: () => invalidate(),
-      meta: { workspaceId },
+      onSettled: () => invalidate(),
     }),
   )
 }

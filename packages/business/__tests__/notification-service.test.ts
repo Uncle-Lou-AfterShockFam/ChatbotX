@@ -12,6 +12,8 @@ const m = vi.hoisted(() => {
     selectReturns: [] as unknown[][],
     calls: [] as string[],
     inserted: [] as Record<string, unknown>[],
+    pipelineAccess: "workspace" as "workspace" | "members",
+    pipelineMembers: [] as string[],
   }
   const insertChain = () => {
     const self: Record<string, unknown> = {}
@@ -110,6 +112,26 @@ vi.mock("@chatbotx.io/worker-config", () => ({
 vi.mock("../src/platform/realtime-broadcast", () => ({
   sendToWorkspaceMember: (...a: unknown[]) => m.sendToMember(...a),
 }))
+vi.mock("../src/pipeline/service", () => ({
+  pipelineService: {
+    findOrFail: async () => ({
+      id: "pipe-1",
+      workspaceId: "ws-1",
+      settings: { access: m.state.pipelineAccess },
+    }),
+  },
+}))
+vi.mock("../src/pipeline/access", () => ({
+  canViewPipeline: async ({
+    pipeline,
+    viewer,
+  }: {
+    pipeline: { settings: { access: string } }
+    viewer: { userId: string }
+  }) =>
+    pipeline.settings.access !== "members" ||
+    m.state.pipelineMembers.includes(viewer.userId),
+}))
 vi.mock("../src/workspace-member/service", () => ({
   workspaceMemberService: {
     findByWorkspaceIdAndUserId: async () => m.state.member,
@@ -119,8 +141,6 @@ vi.mock("../src/audit/dispatcher", () => ({ dispatchAuditRecord: vi.fn() }))
 vi.mock("../src/logger", () => ({
   logger: { warn: m.logWarn, info: m.logInfo },
 }))
-
-const FRESH_JOB_ID = /^notify-user-id-\d+$/
 
 const { notificationService } = await import("../src/notification/service")
 
@@ -159,6 +179,8 @@ beforeEach(() => {
   m.state.selectReturns = []
   m.state.calls.length = 0
   m.state.inserted.length = 0
+  m.state.pipelineAccess = "workspace"
+  m.state.pipelineMembers = []
 })
 
 describe("notificationService.notify", () => {
@@ -210,6 +232,33 @@ describe("notificationService.notify", () => {
     )
   })
 
+  test("a members-only pipeline never notifies a non-member (skeptic HIGH: no title leak); a member is notified", async () => {
+    m.state.pipelineAccess = "members"
+    const out = await notificationService.notify(INPUT)
+    expect(out).toEqual({ notification: null, pushEnqueued: false })
+    expect(m.state.calls).toEqual([])
+    expect(m.queueAdd).not.toHaveBeenCalled()
+    expect(m.logInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "u-2", pipelineId: "pipe-1" }),
+      "notification: recipient cannot view the pipeline, skipped",
+    )
+
+    m.state.pipelineMembers = ["u-2"]
+    const ok = await notificationService.notify(INPUT)
+    expect(ok.notification?.id).toBe("n-1")
+  })
+
+  test("a realtime send failure is logged on its own; the row and the push stand", async () => {
+    m.sendToMember.mockRejectedValueOnce(new Error("party down"))
+    const out = await notificationService.notify(INPUT)
+    expect(out.notification?.id).toBe("n-1")
+    expect(out.pushEnqueued).toBe(true)
+    expect(m.logWarn).toHaveBeenCalledWith(
+      expect.objectContaining({ notificationId: "n-1" }),
+      "notification: realtime send failed",
+    )
+  })
+
   test("not a member = nothing (a stale mention cannot notify a stranger)", async () => {
     m.state.member = undefined
     const out = await notificationService.notify(INPUT)
@@ -229,7 +278,7 @@ describe("notificationService.notify", () => {
     expect(m.state.calls).toEqual([])
   })
 
-  test("inApp off, push on = no row, a push job with notificationId null and a fresh jobId, no realtime", async () => {
+  test("inApp off, push on = no row, a push job with notificationId null and an EVENT-derived jobId, no realtime", async () => {
     m.state.member = {
       notificationTypes: {},
       notificationChannels: { inApp: false },
@@ -242,7 +291,9 @@ describe("notificationService.notify", () => {
     expect(
       (job as { data: { notificationId: unknown } }).data.notificationId,
     ).toBeNull()
-    expect((opts as { jobId: string }).jobId).toMatch(FRESH_JOB_ID)
+    expect((opts as { jobId: string }).jobId).toBe(
+      "notify-user-ws-1-u-2-taskAssigned-task-1",
+    )
     expect(m.sendToMember).not.toHaveBeenCalled()
   })
 
@@ -285,7 +336,7 @@ describe("notificationService.notify", () => {
 })
 
 describe("notificationService reads + marks", () => {
-  test("list: limit is clamped to 1..50, one extra row decides nextCursor", async () => {
+  test("list: limit is clamped to 1..50, one extra row decides nextCursor = <rank>:<id>", async () => {
     const rows = Array.from({ length: 3 }, (_, i) => ({ ...ROW, id: `n-${i}` }))
     m.state.selectReturns = [rows]
     const page = await notificationService.list({
@@ -294,7 +345,15 @@ describe("notificationService reads + marks", () => {
       limit: 2,
     })
     expect(page.data.map((r) => r.id)).toEqual(["n-0", "n-1"])
-    expect(page.nextCursor).toBe("n-1")
+    expect(page.nextCursor).toBe("1:n-1")
+
+    m.state.selectReturns = [rows.map((r) => ({ ...r, readAt: new Date() }))]
+    const read = await notificationService.list({
+      workspaceId: "ws-1",
+      userId: "u-2",
+      limit: 2,
+    })
+    expect(read.nextCursor).toBe("0:n-1")
 
     m.state.selectReturns = [rows.slice(0, 2)]
     const last = await notificationService.list({
@@ -305,14 +364,33 @@ describe("notificationService reads + marks", () => {
     expect(last.nextCursor).toBeNull()
   })
 
-  test("list with a cursor re-reads the anchor row first (keyset)", async () => {
-    m.state.selectReturns = [[{ createdAt: ROW.createdAt, readAt: null }], []]
-    await notificationService.list({
+  test("list with a cursor re-reads only the anchor's createdAt (its rank rides in the token); unknown anchor = empty page; malformed = first page", async () => {
+    m.state.selectReturns = [[{ createdAt: ROW.createdAt }], [{ ...ROW }]]
+    const page = await notificationService.list({
       workspaceId: "ws-1",
       userId: "u-2",
-      cursor: "n-1",
+      cursor: "1:123",
     })
+    expect(page.data).toHaveLength(1)
     expect(m.state.selectReturns).toEqual([])
+
+    m.state.selectReturns = [[]]
+    await expect(
+      notificationService.list({
+        workspaceId: "ws-1",
+        userId: "u-2",
+        cursor: "0:999",
+      }),
+    ).resolves.toEqual({ data: [], nextCursor: null })
+    expect(m.state.selectReturns).toEqual([])
+
+    m.state.selectReturns = [[{ ...ROW }]]
+    const first = await notificationService.list({
+      workspaceId: "ws-1",
+      userId: "u-2",
+      cursor: "garbage",
+    })
+    expect(first.data).toHaveLength(1)
   })
 
   test("countUnread returns a number, 0 when no row", async () => {

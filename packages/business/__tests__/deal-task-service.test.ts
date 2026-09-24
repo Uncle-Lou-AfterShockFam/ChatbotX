@@ -357,6 +357,28 @@ describe("dealTaskService.create", () => {
     })
   })
 
+  test("s194: a concurrent identical reassignment touches 0 rows = no second event, no second notification", async () => {
+    // update(): current row -> resolveAssignee member select -> UPDATE pinned
+    // to the old assignee returns 0 rows -> re-read the task
+    m.state.selects.push([TASK({ assigneeId: null })], MEMBER, [
+      TASK({ assigneeId: "user-9" }),
+    ])
+    m.state.updates.push([])
+    const task = await dealTaskService.update({
+      workspaceId: WS,
+      dealId: "deal-1",
+      taskId: "task-1",
+      data: { assigneeId: "user-9" },
+      actorId: "actor-1",
+    })
+    expect(task.assigneeId).toBe("user-9")
+    expect(m.emitAssigned).not.toHaveBeenCalled()
+    expect(notify).not.toHaveBeenCalled()
+    expect(m.state.calls.some((c) => c.startsWith("update:assigneeId"))).toBe(
+      true,
+    )
+  })
+
   test("s194: assigning yourself is silent; a notify failure never fails the create", async () => {
     m.state.selects.push([{ count: 0 }], MEMBER)
     await dealTaskService.create({

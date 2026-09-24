@@ -26,9 +26,15 @@ import {
 } from "@chatbotx.io/worker-config"
 import { BaseService } from "../base.service"
 import { logger } from "../logger"
+import { canViewPipeline } from "../pipeline/access"
+import { pipelineService } from "../pipeline/service"
 import { sendToWorkspaceMember } from "../platform/realtime-broadcast"
 import { resolveMemberNotificationPrefs } from "../workspace-member/notification-prefs"
 import { workspaceMemberService } from "../workspace-member/service"
+
+/** Unread rows sort first; the rank rides in the cursor so a mark-read between pages cannot flip it. */
+const unreadRankExpr = sql<number>`case when ${notificationModel.readAt} is null then 1 else 0 end`
+const CURSOR = /^([01]):(\d{1,30})$/
 
 export type NotifyInput = {
   workspaceId: string
@@ -50,12 +56,16 @@ export type NotifyOutcome = {
 const NOTHING: NotifyOutcome = { notification: null, pushEnqueued: false }
 
 /**
- * Per-user notifications (s194): one `notify` = the member's preference gate,
- * then the in-app row (`inApp`), a push job on the notification queue
- * (`push`) and a realtime `notificationCreated` to that user's open sockets.
- * Callers treat it as fire-and-forget after their own transaction: it never
- * throws for a delivery failure, only logs. A departed member (no row) is
- * silently skipped, so a stale mention cannot notify a stranger.
+ * Per-user notifications (s194): one `notify` = the member's preference gate
+ * AND the pipeline-access gate (a members-only pipeline never leaks a deal
+ * title to a non-member, whoever assigned the task), then the in-app row
+ * (`inApp`), a push job on the notification queue (`push`) and a realtime
+ * `notificationCreated` to that user's open sockets. The push enqueue and
+ * the realtime send each log their own failure and never throw; the row
+ * insert can (the database is the one dependency that must work). Callers
+ * still wrap the call so a deal write never fails on a notification bug. A
+ * departed member (no row) is silently skipped, so a stale mention cannot
+ * notify a stranger.
  */
 export class NotificationService extends BaseService {
   async notify(input: NotifyInput): Promise<NotifyOutcome> {
@@ -72,6 +82,21 @@ export class NotificationService extends BaseService {
     }
     const prefs = resolveMemberNotificationPrefs(member)
     if (!prefs.types[type]) {
+      return NOTHING
+    }
+    const pipeline = await pipelineService.findOrFail({
+      workspaceId,
+      id: payload.pipelineId,
+    })
+    const visible = await canViewPipeline({
+      viewer: { userId, permissions: member.permissions },
+      pipeline,
+    })
+    if (!visible) {
+      logger.info(
+        { workspaceId, userId, type, pipelineId: pipeline.id },
+        "notification: recipient cannot view the pipeline, skipped",
+      )
       return NOTHING
     }
 
@@ -102,6 +127,12 @@ export class NotificationService extends BaseService {
     let pushEnqueued = false
     if (prefs.channels.push) {
       const notificationId = notification?.id ?? null
+      // Without a row the job id is derived from the event itself, so a
+      // retried caller cannot enqueue the same push twice while the first
+      // job is still retained.
+      const jobId = notificationId
+        ? `notify-user-${notificationId}`
+        : `notify-user-${workspaceId}-${userId}-${type}-${taskId ?? commentId ?? dealId}`
       try {
         await notificationQueue.add(
           NotificationJobAction.notifyUser,
@@ -118,7 +149,7 @@ export class NotificationService extends BaseService {
               payload,
             },
           },
-          { jobId: `notify-user-${notificationId ?? createId()}` },
+          { jobId },
         )
         pushEnqueued = true
       } catch (err) {
@@ -130,26 +161,40 @@ export class NotificationService extends BaseService {
     }
 
     if (notification) {
-      await sendToWorkspaceMember(
-        { workspaceId, userId },
-        {
-          eventType: RealtimeEventType.notificationCreated,
-          data: {
-            id: notification.id,
-            type: notification.type,
-            dealId: notification.dealId,
-            taskId: notification.taskId,
-            commentId: notification.commentId,
-            payload: notification.payload,
-            createdAt: notification.createdAt.toISOString(),
+      try {
+        await sendToWorkspaceMember(
+          { workspaceId, userId },
+          {
+            eventType: RealtimeEventType.notificationCreated,
+            data: {
+              id: notification.id,
+              type: notification.type,
+              dealId: notification.dealId,
+              taskId: notification.taskId,
+              commentId: notification.commentId,
+              payload: notification.payload,
+              createdAt: notification.createdAt.toISOString(),
+            },
           },
-        },
-      )
+        )
+      } catch (err) {
+        // the 60 s poll still shows it; only the live nudge was lost
+        logger.warn(
+          { err, workspaceId, userId, notificationId: notification.id },
+          "notification: realtime send failed",
+        )
+      }
     }
     return { notification, pushEnqueued }
   }
 
-  /** Unread first, then newest; keyset cursor = the last row's id. */
+  /**
+   * Unread first, then newest. The cursor is `<rank>:<id>` of the last row
+   * (rank 1 = unread WHEN IT WAS RETURNED): the anchor's createdAt is
+   * re-read, its rank is not, so a row marked read between two pages keeps
+   * the keyset consistent instead of hiding every remaining unread row.
+   * A malformed cursor reads as the first page.
+   */
   async list(props: {
     workspaceId: string
     userId: string
@@ -169,28 +214,26 @@ export class NotificationService extends BaseService {
     if (unreadOnly) {
       conditions.push(isNull(notificationModel.readAt))
     }
-    if (cursor) {
-      // the page order is (readAt is null desc, createdAt desc, id desc); the
-      // cursor row is re-read so the keyset stays correct after a mark-read
+    const parsed = cursor ? CURSOR.exec(cursor) : null
+    if (parsed) {
+      const [, rank, anchorId] = parsed
       const [anchor] = await db
-        .select({
-          createdAt: notificationModel.createdAt,
-          readAt: notificationModel.readAt,
-        })
+        .select({ createdAt: notificationModel.createdAt })
         .from(notificationModel)
         .where(
           and(
-            eq(notificationModel.id, cursor),
+            eq(notificationModel.id, anchorId),
             eq(notificationModel.userId, userId),
           ),
         )
         .limit(1)
-      if (anchor) {
-        const unreadRank = anchor.readAt === null ? 1 : 0
-        conditions.push(
-          sql`(${sql`case when ${notificationModel.readAt} is null then 1 else 0 end`}, ${notificationModel.createdAt}, ${notificationModel.id}) < (${unreadRank}, ${anchor.createdAt}, ${cursor})`,
-        )
+      if (!anchor) {
+        // an unknown cursor (row deleted) must not restart at page one
+        return { data: [], nextCursor: null }
       }
+      conditions.push(
+        sql`(${unreadRankExpr}, ${notificationModel.createdAt}, ${notificationModel.id}) < (${Number(rank)}, ${anchor.createdAt}, ${anchorId})`,
+      )
     }
     const rows = await db
       .select()
@@ -205,9 +248,13 @@ export class NotificationService extends BaseService {
       )
       .limit(limit + 1)
     const page = rows.slice(0, limit)
+    const last = page.at(-1)
     return {
       data: page,
-      nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
+      nextCursor:
+        rows.length > limit && last
+          ? `${last.readAt === null ? 1 : 0}:${last.id}`
+          : null,
     }
   }
 

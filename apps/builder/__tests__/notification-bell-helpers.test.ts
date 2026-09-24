@@ -16,7 +16,7 @@ describe("notification bell helpers (s194)", () => {
           actorId: null,
         },
       }),
-    ).toBe("/space/ws 1/deals?pipelineId=p%261&dealId=d%2F1")
+    ).toBe("/space/ws 1/deals?pipelineId=p%261&status=all&dealId=d%2F1")
   })
 
   test("the badge caps at 99+", () => {

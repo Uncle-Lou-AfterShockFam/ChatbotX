@@ -19,5 +19,5 @@ CREATE UNIQUE INDEX "Notification_commentId_userId_key" ON "Notification" ("comm
 ALTER TABLE "Notification" ADD CONSTRAINT "Notification_workspaceId_Workspace_id_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
 ALTER TABLE "Notification" ADD CONSTRAINT "Notification_userId_User_id_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
 ALTER TABLE "Notification" ADD CONSTRAINT "Notification_dealId_Deal_id_fkey" FOREIGN KEY ("dealId") REFERENCES "Deal"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
-ALTER TABLE "Notification" ADD CONSTRAINT "Notification_taskId_DealTask_id_fkey" FOREIGN KEY ("taskId") REFERENCES "DealTask"("id") ON DELETE SET NULL ON UPDATE CASCADE;--> statement-breakpoint
-ALTER TABLE "Notification" ADD CONSTRAINT "Notification_commentId_DealComment_id_fkey" FOREIGN KEY ("commentId") REFERENCES "DealComment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Notification" ADD CONSTRAINT "Notification_taskId_DealTask_id_fkey" FOREIGN KEY ("taskId") REFERENCES "DealTask"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
+ALTER TABLE "Notification" ADD CONSTRAINT "Notification_commentId_DealComment_id_fkey" FOREIGN KEY ("commentId") REFERENCES "DealComment"("id") ON DELETE CASCADE ON UPDATE CASCADE;
