@@ -716,9 +716,9 @@ class DealService extends BaseService {
         await companyActivityService.recordSafely({
           workspaceId,
           companyId: change.to as string | null,
-          type: "dealCreated",
+          type: "dealLinked",
           actorId,
-          payload: { dealId: id, title: result.deal.title, linked: true },
+          payload: { dealId: id, title: result.deal.title },
         })
       }
       if (change.type === "valueChanged") {

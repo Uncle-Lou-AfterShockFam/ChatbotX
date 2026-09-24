@@ -18,7 +18,6 @@ import {
   AtSignIcon,
   Building2Icon,
   ExternalLinkIcon,
-  Loader2Icon,
   PencilIcon,
   PhoneIcon,
   TextIcon,
@@ -33,12 +32,10 @@ import { ConversationMessages } from "@/features/crm/components/conversation-mes
 import { CrmDealDrawer } from "@/features/crm/components/crm-deal-drawer"
 import { DealsList } from "@/features/crm/components/deals-list"
 import { NewDealButton } from "@/features/crm/components/new-deal-button"
+import { Spinner } from "@/features/crm/components/spinner"
 import { SubmissionsList } from "@/features/crm/components/submissions-list"
 import { TasksList } from "@/features/crm/components/tasks-list"
-import {
-  TimelineList,
-  useTimelinePages,
-} from "@/features/crm/components/timeline-list"
+import { TimelineList } from "@/features/crm/components/timeline-list"
 import {
   useContact,
   useContactConversation,
@@ -131,7 +128,7 @@ export function ContactView({
   )
 
   if (contact.isLoading) {
-    return <Loader2Icon className="size-5 animate-spin text-muted-foreground" />
+    return <Spinner />
   }
   if (!data) {
     return (
@@ -141,7 +138,7 @@ export function ContactView({
 
   return (
     <ChatStoreProvider>
-      <div className="space-y-4" data-testid="contact-view">
+      <div className="space-y-4" data-testid="contact-360">
         <div className="flex flex-wrap items-center gap-3">
           <Avatar className="size-12">
             <AvatarImage alt={name} className="object-cover" src={avatarUrl} />
@@ -150,7 +147,7 @@ export function ContactView({
           <div className="min-w-0 flex-1">
             <h4
               className={`truncate font-bold ${compact ? "text-lg" : "text-xl"}`}
-              data-testid="contact-view-name"
+              data-testid="contact-360-name"
             >
               {name}
             </h4>
@@ -351,7 +348,7 @@ function ConversationTab({
 }) {
   const conversation = useContactConversation(workspaceId, contactId)
   if (conversation.isLoading) {
-    return <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
+    return <Spinner />
   }
   return (
     <ConversationMessages
@@ -373,7 +370,7 @@ function DealsTab({
   const deals = useContactDeals(workspaceId, contactId)
   const pipelines = usePipelines(workspaceId)
   if (deals.isLoading) {
-    return <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
+    return <Spinner />
   }
   return (
     <DealsList
@@ -395,7 +392,7 @@ function TasksTab({
   const deals = useContactDeals(workspaceId, contactId)
   const invalidate = useInvalidateCrm()
   if (tasks.isLoading) {
-    return <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
+    return <Spinner />
   }
   return (
     <TasksList
@@ -416,7 +413,7 @@ function SubmissionsTab({
 }) {
   const submissions = useContactSubmissions(workspaceId, contactId)
   if (submissions.isLoading) {
-    return <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
+    return <Spinner />
   }
   return (
     <SubmissionsList
@@ -442,7 +439,7 @@ function AppointmentsTab({
       }),
   })
   if (appointments.isLoading) {
-    return <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
+    return <Spinner />
   }
   return <ContactAppointmentsList appointments={appointments.data ?? []} />
 }
@@ -466,20 +463,18 @@ function TimelineTab({
       ),
     [pipelines.data],
   )
-  const chain = useTimelinePages()
-  const pages = chain.cursors.map((cursor) =>
-    // biome-ignore lint/correctness/useHookAtTopLevel: the cursor list is append-only, so hook order is stable
-    useContactTimeline(workspaceId, contactId, chain.kinds, cursor),
-  )
+  const [kinds, setKinds] = useState<TimelineKind[]>([])
+  const timeline = useContactTimeline(workspaceId, contactId, kinds)
   return (
     <TimelineList
       availableKinds={CONTACT_KINDS}
-      kinds={chain.kinds}
-      loading={pages.some((p) => p.isLoading)}
-      onKindsChange={chain.setKinds}
-      onLoadMore={() => chain.loadMore(pages.at(-1)?.data?.nextCursor ?? null)}
+      hasMore={Boolean(timeline.hasNextPage)}
+      kinds={kinds}
+      loading={timeline.isLoading || timeline.isFetchingNextPage}
+      onKindsChange={setKinds}
+      onLoadMore={() => timeline.fetchNextPage()}
       onOpenDeal={onOpenDeal}
-      pages={pages.flatMap((p) => (p.data ? [p.data] : []))}
+      pages={timeline.data?.pages ?? []}
       stageNames={stageNames}
     />
   )

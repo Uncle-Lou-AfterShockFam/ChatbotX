@@ -8,7 +8,8 @@ import z from "zod"
 /**
  * The company change log's row types (s195 CRM 360). `dealCreated`,
  * `dealMoved` and `dealStatusChanged` mirror the DealActivity of a deal that
- * carries this company; the rest are company-side mutations.
+ * carries this company, `dealLinked` = an existing deal re-linked onto it;
+ * the rest are company-side mutations.
  */
 export const companyActivityTypes = z.enum([
   "created",
@@ -19,6 +20,7 @@ export const companyActivityTypes = z.enum([
   "contactLinked",
   "contactUnlinked",
   "dealCreated",
+  "dealLinked",
   "dealMoved",
   "dealStatusChanged",
 ])

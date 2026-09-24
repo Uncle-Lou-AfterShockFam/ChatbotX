@@ -1,11 +1,11 @@
 "use client"
 
 import { Button } from "@chatbotx.io/ui/components/ui/button"
-import { ExternalLinkIcon, Loader2Icon } from "lucide-react"
+import { ExternalLinkIcon } from "lucide-react"
 import Link from "next/link"
 import { useFormatter, useTranslations } from "next-intl"
-import { useState } from "react"
 import { useMessages } from "../provider/crm-hooks"
+import { Spinner } from "./spinner"
 
 /**
  * Read-only view of a contact's DM conversation (s195): newest page first,
@@ -21,20 +21,14 @@ export function ConversationMessages({
 }) {
   const t = useTranslations()
   const format = useFormatter()
-  const [cursors, setCursors] = useState<(string | null)[]>([null])
-  const pages = cursors.map((cursor) => ({
-    cursor,
-    // biome-ignore lint/correctness/useHookAtTopLevel: the cursor list only grows (append-only), so hook order is stable
-    query: useMessages(workspaceId, conversationId, cursor),
-  }))
+  const messages = useMessages(workspaceId, conversationId)
   if (!conversationId) {
     return (
       <p className="text-muted-foreground text-sm">{t("crm.noConversation")}</p>
     )
   }
-  const rows = pages.flatMap((p) => p.query.data?.data ?? [])
-  const loading = pages.some((p) => p.query.isLoading)
-  const nextCursor = pages.at(-1)?.query.data?.nextCursor ?? null
+  const rows = messages.data?.pages.flatMap((p) => p.data) ?? []
+  const loading = messages.isLoading || messages.isFetchingNextPage
   return (
     <div className="space-y-3" data-testid="crm-conversation">
       <Button
@@ -82,12 +76,10 @@ export function ConversationMessages({
           })}
         </ol>
       )}
-      {loading ? (
-        <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
-      ) : null}
-      {!loading && nextCursor && !cursors.includes(nextCursor) ? (
+      {loading ? <Spinner /> : null}
+      {!loading && messages.hasNextPage ? (
         <Button
-          onClick={() => setCursors([...cursors, nextCursor])}
+          onClick={() => messages.fetchNextPage()}
           size="sm"
           variant="outline"
         >

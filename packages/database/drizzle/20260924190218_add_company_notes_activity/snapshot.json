@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "b7acffbd-4098-4d1c-a6bf-f11d898f4d90",
+  "id": "75c60953-c196-40d3-b2a5-6d31f8461620",
   "prevIds": [
     "2c0d377b-6958-4687-b958-34876b7b197a"
   ],
@@ -416,6 +416,7 @@
         "contactLinked",
         "contactUnlinked",
         "dealCreated",
+        "dealLinked",
         "dealMoved",
         "dealStatusChanged"
       ],

@@ -1,4 +1,4 @@
-CREATE TYPE "companyActivityType" AS ENUM('created', 'updated', 'stopped', 'noteAdded', 'noteDeleted', 'contactLinked', 'contactUnlinked', 'dealCreated', 'dealMoved', 'dealStatusChanged');--> statement-breakpoint
+CREATE TYPE "companyActivityType" AS ENUM('created', 'updated', 'stopped', 'noteAdded', 'noteDeleted', 'contactLinked', 'contactUnlinked', 'dealCreated', 'dealLinked', 'dealMoved', 'dealStatusChanged');--> statement-breakpoint
 ALTER TYPE "dealActivityType" ADD VALUE 'contactChanged';--> statement-breakpoint
 ALTER TYPE "dealActivityType" ADD VALUE 'companyChanged';--> statement-breakpoint
 CREATE TABLE "CompanyActivity" (

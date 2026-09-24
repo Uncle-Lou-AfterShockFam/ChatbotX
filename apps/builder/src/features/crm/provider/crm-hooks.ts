@@ -1,4 +1,8 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query"
 import { orpc } from "@/lib/orpc/query"
 import type { TimelineKind } from "../schema/resource"
 
@@ -62,20 +66,22 @@ export const useCompanyNotes = (workspaceId: string, companyId: string) =>
     }),
   )
 
+/** Keyset-paged timelines: one infinite query per (target, kinds); a kinds change is a new key. */
 export const useCompanyTimeline = (
   workspaceId: string,
   companyId: string,
   kinds: TimelineKind[],
-  cursor: string | null,
 ) =>
-  useQuery(
-    orpc.crmAPI.privateGetCompanyTimelineAPI.queryOptions({
-      input: {
+  useInfiniteQuery(
+    orpc.crmAPI.privateGetCompanyTimelineAPI.infiniteOptions({
+      input: (cursor: string | null) => ({
         workspaceId,
         id: companyId,
         kinds: kinds.length > 0 ? kinds : undefined,
         cursor,
-      },
+      }),
+      initialPageParam: null,
+      getNextPageParam: (last) => last.nextCursor,
     }),
   )
 
@@ -83,16 +89,17 @@ export const useContactTimeline = (
   workspaceId: string,
   contactId: string,
   kinds: TimelineKind[],
-  cursor: string | null,
 ) =>
-  useQuery(
-    orpc.crmAPI.privateGetContactTimelineAPI.queryOptions({
-      input: {
+  useInfiniteQuery(
+    orpc.crmAPI.privateGetContactTimelineAPI.infiniteOptions({
+      input: (cursor: string | null) => ({
         workspaceId,
         contactId,
         kinds: kinds.length > 0 ? kinds : undefined,
         cursor,
-      },
+      }),
+      initialPageParam: null,
+      getNextPageParam: (last) => last.nextCursor,
     }),
   )
 
@@ -147,19 +154,21 @@ export const usePipelines = (workspaceId: string) =>
     }),
   )
 
+/** The DM conversation's messages, newest page first; `fetchNextPage` walks older. */
 export const useMessages = (
   workspaceId: string,
   conversationId: string | null,
-  cursor: string | null,
 ) =>
-  useQuery(
-    orpc.messagesAPI.listMessagesAuthenticatedAPI.queryOptions({
-      input: {
+  useInfiniteQuery(
+    orpc.messagesAPI.listMessagesAuthenticatedAPI.infiniteOptions({
+      input: (cursor: string | undefined) => ({
         workspaceId,
         conversationId: conversationId ?? "",
         perPage: 30,
-        cursor: cursor ?? undefined,
-      },
+        cursor,
+      }),
+      initialPageParam: undefined,
+      getNextPageParam: (last) => last.nextCursor ?? undefined,
       enabled: Boolean(conversationId),
     }),
   )

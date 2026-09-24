@@ -7000,7 +7000,6 @@
     "noConversations": "No conversations yet.",
     "lastActivityAt": "Last activity {date}",
     "noContactYet": "No contact",
-    "deleteWithCounts": "This deletes the company and its notes and change log. {contacts} contacts and {deals} deals keep their rows but lose the link.",
     "changeContact": "Change contact",
     "changeCompany": "Change company",
     "noCompany": "No company",

@@ -2,10 +2,7 @@
 
 import { Badge } from "@chatbotx.io/ui/components/ui/badge"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
-import { Loader2Icon } from "lucide-react"
-import Link from "next/link"
 import { useFormatter, useTranslations } from "next-intl"
-import { useState } from "react"
 import { describeActivity } from "@/features/deals/deal-drawer/activity-list"
 import type { DealActivityResource } from "@/features/deals/schema/resource"
 import type {
@@ -14,6 +11,7 @@ import type {
   TimelinePageResource,
   TimelineRowResource,
 } from "../schema/resource"
+import { Spinner } from "./spinner"
 
 type Translate = ReturnType<typeof useTranslations>
 
@@ -55,9 +53,9 @@ export function describeCompanyActivity(
     case "contactUnlinked":
       return t("crm.activity.contactUnlinked")
     case "dealCreated":
-      return p.linked
-        ? t("crm.activity.dealLinked", { title })
-        : t("crm.activity.dealCreated", { title })
+      return t("crm.activity.dealCreated", { title })
+    case "dealLinked":
+      return t("crm.activity.dealLinked", { title })
     case "dealMoved":
       return t("crm.activity.dealMoved", { title })
     case "dealStatusChanged":
@@ -74,7 +72,7 @@ function describeRow(
   row: TimelineRowResource,
   stageNames: Map<string, string>,
   t: Translate,
-): { text: string; href?: string; dealId?: string } {
+): { text: string; dealId?: string } {
   const p = row.payload as Record<string, unknown>
   switch (row.kind) {
     case "companyActivity":
@@ -121,12 +119,13 @@ function describeRow(
 
 /**
  * The merged timeline of a contact or a company: kind chips filter, keyset
- * "load more". `pages` is the list of fetched pages (the caller owns the
- * cursor chain so a chip change resets it).
+ * "load more" (the caller's infinite query owns the cursor chain; a chip
+ * change is a new query key).
  */
 export function TimelineList({
   pages,
   loading,
+  hasMore,
   kinds,
   onKindsChange,
   onLoadMore,
@@ -136,6 +135,7 @@ export function TimelineList({
 }: {
   pages: TimelinePageResource[]
   loading: boolean
+  hasMore: boolean
   kinds: TimelineKind[]
   onKindsChange: (kinds: TimelineKind[]) => void
   onLoadMore: () => void
@@ -146,7 +146,6 @@ export function TimelineList({
   const t = useTranslations()
   const format = useFormatter()
   const rows = pages.flatMap((page) => page.data)
-  const nextCursor = pages.at(-1)?.nextCursor ?? null
   const toggle = (kind: TimelineKind) =>
     onKindsChange(
       kinds.includes(kind) ? kinds.filter((k) => k !== kind) : [...kinds, kind],
@@ -184,7 +183,6 @@ export function TimelineList({
                 <div className="min-w-0 flex-1">
                   <RowText
                     dealId={d.dealId}
-                    href={d.href}
                     onOpenDeal={onOpenDeal}
                     text={d.text}
                   />
@@ -200,10 +198,8 @@ export function TimelineList({
           })}
         </ol>
       )}
-      {loading ? (
-        <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
-      ) : null}
-      {!loading && nextCursor ? (
+      {loading ? <Spinner /> : null}
+      {!loading && hasMore ? (
         <Button onClick={onLoadMore} size="sm" variant="outline">
           {t("crm.loadMore")}
         </Button>
@@ -214,12 +210,10 @@ export function TimelineList({
 
 function RowText({
   text,
-  href,
   dealId,
   onOpenDeal,
 }: {
   text: string
-  href?: string
   dealId?: string
   onOpenDeal?: (dealId: string) => void
 }) {
@@ -234,31 +228,5 @@ function RowText({
       </button>
     )
   }
-  if (href) {
-    return (
-      <Link className="hover:underline" href={href}>
-        {text}
-      </Link>
-    )
-  }
   return <span className="whitespace-pre-wrap break-words">{text}</span>
-}
-
-/** Cursor-chain state for a timeline: kinds reset the chain; `push` appends a page. */
-export function useTimelinePages() {
-  const [kinds, setKinds] = useState<TimelineKind[]>([])
-  const [cursors, setCursors] = useState<(string | null)[]>([null])
-  return {
-    kinds,
-    cursors,
-    setKinds: (next: TimelineKind[]) => {
-      setKinds(next)
-      setCursors([null])
-    },
-    loadMore: (nextCursor: string | null) => {
-      if (nextCursor && !cursors.includes(nextCursor)) {
-        setCursors([...cursors, nextCursor])
-      }
-    },
-  }
 }

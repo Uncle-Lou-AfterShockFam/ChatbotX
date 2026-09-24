@@ -20,7 +20,6 @@ import { Input } from "@chatbotx.io/ui/components/ui/input"
 import {
   ArrowLeftIcon,
   ExternalLinkIcon,
-  Loader2Icon,
   PencilIcon,
   PlusIcon,
   XIcon,
@@ -38,12 +37,12 @@ import { CompanyNotesPanel } from "@/features/crm/components/company-notes-panel
 import { CrmDealDrawer } from "@/features/crm/components/crm-deal-drawer"
 import { DealsList } from "@/features/crm/components/deals-list"
 import { NewDealButton } from "@/features/crm/components/new-deal-button"
+import { Spinner } from "@/features/crm/components/spinner"
 import { SubmissionsList } from "@/features/crm/components/submissions-list"
 import { TasksList } from "@/features/crm/components/tasks-list"
 import {
   describeCompanyActivity,
   TimelineList,
-  useTimelinePages,
 } from "@/features/crm/components/timeline-list"
 import {
   useCompanyActivities,
@@ -392,10 +391,6 @@ export function CompanyDetail({
       </SequenceStoreProvider>
     </div>
   )
-}
-
-function Spinner() {
-  return <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
 }
 
 function Metric({ label, value }: { label: string; value: string | null }) {
@@ -787,20 +782,18 @@ function TimelineCard({
   stageNames: Map<string, string>
   onOpenDeal: (dealId: string) => void
 }) {
-  const chain = useTimelinePages()
-  const pages = chain.cursors.map((cursor) =>
-    // biome-ignore lint/correctness/useHookAtTopLevel: the cursor list is append-only, so hook order is stable
-    useCompanyTimeline(workspaceId, companyId, chain.kinds, cursor),
-  )
+  const [kinds, setKinds] = useState<TimelineKind[]>([])
+  const timeline = useCompanyTimeline(workspaceId, companyId, kinds)
   return (
     <TimelineList
       availableKinds={COMPANY_KINDS}
-      kinds={chain.kinds}
-      loading={pages.some((p) => p.isLoading)}
-      onKindsChange={chain.setKinds}
-      onLoadMore={() => chain.loadMore(pages.at(-1)?.data?.nextCursor ?? null)}
+      hasMore={Boolean(timeline.hasNextPage)}
+      kinds={kinds}
+      loading={timeline.isLoading || timeline.isFetchingNextPage}
+      onKindsChange={setKinds}
+      onLoadMore={() => timeline.fetchNextPage()}
       onOpenDeal={onOpenDeal}
-      pages={pages.flatMap((p) => (p.data ? [p.data] : []))}
+      pages={timeline.data?.pages ?? []}
       stageNames={stageNames}
     />
   )

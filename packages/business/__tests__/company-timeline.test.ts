@@ -181,6 +181,20 @@ describe("crmTimelineService.forCompany", () => {
     }
   })
 
+  test("the keyset predicate names each branch's OWN columns (a joined branch would otherwise be ambiguous)", async () => {
+    const { dealActivityModel } = await import("@chatbotx.io/database/schema")
+    await crmTimelineService.forCompany({
+      workspaceId: WS,
+      companyId: "co-1",
+      kinds: ["dealActivity"],
+      cursor: "1758715200000:1001",
+    })
+    const [w] = m.state.branches.flat() as { and: { v?: unknown[] }[] }[]
+    const pred = w.and.at(-1) as { v: unknown[] }
+    expect(pred.v[0]).toBe(dealActivityModel.createdAt)
+    expect(pred.v[1]).toBe(dealActivityModel.id)
+  })
+
   test("a viewer with no visible pipeline gets a dead deal branch; an assigned-only viewer is owner-pinned", async () => {
     m.visibleIds.mockResolvedValueOnce([])
     await crmTimelineService.forCompany({

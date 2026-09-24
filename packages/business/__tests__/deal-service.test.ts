@@ -1116,8 +1116,8 @@ describe("dealService.update re-link (s195)", () => {
     expect(companyActivityService.recordSafely).toHaveBeenCalledWith(
       expect.objectContaining({
         companyId: "co-2",
-        type: "dealCreated",
-        payload: expect.objectContaining({ dealId: "deal-1", linked: true }),
+        type: "dealLinked",
+        payload: expect.objectContaining({ dealId: "deal-1" }),
       }),
     )
   })

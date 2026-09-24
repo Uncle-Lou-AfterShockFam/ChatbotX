@@ -48,6 +48,7 @@ describe("TimelineList", () => {
     const base = {
       pages: [],
       loading: false,
+      hasMore: false,
       kinds: [],
       onKindsChange: vi.fn(),
       onLoadMore: vi.fn(),
@@ -131,7 +132,7 @@ describe("TimelineList", () => {
     expect(props.onKindsChange).toHaveBeenLastCalledWith([])
   })
 
-  test("load-more only with a cursor and not while loading; the click forwards", () => {
+  test("load-more only with a next page and not while loading; the click forwards", () => {
     const props = render({
       pages: [
         page(
@@ -139,6 +140,7 @@ describe("TimelineList", () => {
           "1:1",
         ),
       ],
+      hasMore: true,
     })
     const more = Array.from(container.querySelectorAll("button")).find(
       (b) => b.textContent === "crm.loadMore",

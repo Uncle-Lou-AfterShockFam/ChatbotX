@@ -284,6 +284,34 @@ describe("companyService.assignContact", () => {
     record.mockRestore()
   })
 
+  test("a stale expectedCompanyId or a lost UPDATE race is a 409-class validation error, nothing logged", async () => {
+    const { companyActivityService } = await import("../src/company/activity")
+    const record = vi
+      .spyOn(companyActivityService, "record")
+      .mockResolvedValue({} as never)
+    mockSelectLimit.mockResolvedValue([{ id: "c-1", companyId: "company-9" }])
+    await expect(
+      companyService.assignContact({
+        workspaceId: WS,
+        contactId: "c-1",
+        companyId: null,
+        expectedCompanyId: "company-1",
+      }),
+    ).rejects.toMatchObject({ code: "validation" })
+    mockSelectLimit.mockResolvedValue([{ id: "c-1", companyId: "company-1" }])
+    mockUpdateReturning.mockResolvedValue([])
+    await expect(
+      companyService.assignContact({
+        workspaceId: WS,
+        contactId: "c-1",
+        companyId: null,
+        expectedCompanyId: "company-1",
+      }),
+    ).rejects.toMatchObject({ code: "validation" })
+    expect(record).not.toHaveBeenCalled()
+    record.mockRestore()
+  })
+
   test("null clears the company without a company lookup", async () => {
     mockSelectLimit.mockResolvedValue([{ id: "c-1", companyId: "company-1" }])
     mockUpdateReturning.mockResolvedValue([{ id: "c-1" }])

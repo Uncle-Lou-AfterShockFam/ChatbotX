@@ -174,7 +174,7 @@ describe("crm private routes (s195)", () => {
     })
   })
 
-  test("company timeline forwards kinds / cursor / limit with the viewer", async () => {
+  test("company timeline forwards kinds / cursor / limit with the viewer and the scope", async () => {
     await find("GET", "/companies/{id}/timeline").handler?.({
       context,
       input: { ...input, kinds: ["companyNote"], cursor: "1:2", limit: 7 },
@@ -186,6 +186,7 @@ describe("crm private routes (s195)", () => {
       cursor: "1:2",
       limit: 7,
       viewer: VIEWER,
+      accessScope: SCOPE,
     })
   })
 
@@ -209,24 +210,45 @@ describe("crm private routes (s195)", () => {
     })
   })
 
-  test("unlink: a contact not on THIS company is ignored; one on it is cleared with the actor", async () => {
-    companyService.listContactIds.mockResolvedValueOnce(["c-other"])
+  test("unlink: the contact is resolved in the caller's scope, then cleared PINNED to this company", async () => {
+    crmTimelineService.assertContact.mockClear()
     await find("DELETE", "/companies/{id}/contacts/{contactId}").handler?.({
       context,
       input,
     })
-    expect(companyService.assignContact).not.toHaveBeenCalled()
-    companyService.listContactIds.mockResolvedValueOnce(["c-1"])
-    await find("DELETE", "/companies/{id}/contacts/{contactId}").handler?.({
-      context,
-      input,
+    expect(crmTimelineService.assertContact).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      contactId: "c-1",
+      accessScope: SCOPE,
     })
     expect(companyService.assignContact).toHaveBeenCalledWith({
       workspaceId: "ws-1",
       contactId: "c-1",
       companyId: null,
+      expectedCompanyId: "co-1",
       actorId: "u-1",
     })
+  })
+
+  test("company rollups of contact data carry the caller's assigned-only scope", async () => {
+    for (const path of [
+      "/companies/{id}/conversations",
+      "/companies/{id}/submissions",
+    ]) {
+      companyService.listContactIds.mockClear()
+      await find("GET", path).handler?.({ context, input })
+      expect(companyService.listContactIds, path).toHaveBeenCalledWith(
+        expect.objectContaining({ companyId: "co-1", accessScope: SCOPE }),
+      )
+    }
+    await find("GET", "/companies/{id}/timeline").handler?.({ context, input })
+    expect(crmTimelineService.forCompany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ accessScope: SCOPE }),
+    )
+    await find("GET", "/companies/{id}/metrics").handler?.({ context, input })
+    expect(companyService.countContacts).toHaveBeenLastCalledWith(
+      expect.objectContaining({ accessScope: SCOPE }),
+    )
   })
 
   test("every contact route resolves the contact in the assigned-only scope first", async () => {

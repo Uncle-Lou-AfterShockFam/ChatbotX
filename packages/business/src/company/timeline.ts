@@ -57,9 +57,14 @@ const CURSOR = /^(\d{1,16}):(\d{1,30})$/
 
 // biome-ignore lint/suspicious/noExplicitAny: five differently-typed selects meet in one UNION ALL
 type TimelineSelect = any
+/** The branch's own `(createdAt, id)` columns -> the keyset predicate for this page, or undefined on page one. */
+type CursorFor = (
+  at: SQL | { getSQL(): SQL },
+  id: SQL | { getSQL(): SQL },
+) => SQL | undefined
 type Branch = {
   kind: TimelineKind
-  build: (cursor: SQL | undefined) => TimelineSelect
+  build: (cursor: CursorFor) => TimelineSelect
 }
 
 function parseLimit(limit: number | undefined): number {
@@ -81,19 +86,20 @@ function parseKinds(
   return out
 }
 
-/** `(at, id) < (anchorAt, anchorId)` for one branch; undefined = first page. */
-function cursorCond(
-  cursor: string | null | undefined,
-  at: SQL | { getSQL(): SQL },
-  id: SQL | { getSQL(): SQL },
-): SQL | undefined {
+/**
+ * `(at, id) < (anchorAt, anchorId)` built from the BRANCH'S OWN columns: a
+ * bare `"createdAt"` would be ambiguous in the branches that join a second
+ * table (deal activity + deal, submission + questionnaire, appointment +
+ * calendar). A malformed cursor = first page (no predicate).
+ */
+function cursorFor(cursor: string | null | undefined): CursorFor {
   const parsed = cursor ? CURSOR.exec(cursor) : null
   if (!parsed) {
-    return
+    return () => undefined
   }
   const [, ms, anchorId] = parsed
   const anchor = new Date(Number(ms))
-  return sql`(${at}, ${id}) < (${anchor}, ${anchorId}::bigint)`
+  return (at, id) => sql`(${at}, ${id}) < (${anchor}, ${anchorId}::bigint)`
 }
 
 /**
@@ -111,6 +117,8 @@ class CrmTimelineService {
     cursor?: string | null
     limit?: number
     viewer?: DealViewer | null
+    /** the caller's assigned-only contact scope: submissions / appointments of other reps' contacts stay out */
+    accessScope?: ContactAccessScope
     tx?: DatabaseClient
   }): Promise<TimelinePage> {
     const { workspaceId, companyId, cursor, viewer, tx = db } = props
@@ -118,6 +126,7 @@ class CrmTimelineService {
     const contactIds = await companyService.listContactIds({
       workspaceId,
       companyId,
+      accessScope: props.accessScope,
       tx,
     })
     const dealScope = and(
@@ -144,7 +153,7 @@ class CrmTimelineService {
               and(
                 eq(companyActivityModel.workspaceId, workspaceId),
                 eq(companyActivityModel.companyId, companyId),
-                c,
+                c(companyActivityModel.createdAt, companyActivityModel.id),
               ),
             ),
       },
@@ -166,7 +175,7 @@ class CrmTimelineService {
               and(
                 eq(companyNoteModel.workspaceId, workspaceId),
                 eq(companyNoteModel.companyId, companyId),
-                c,
+                c(companyNoteModel.createdAt, companyNoteModel.id),
               ),
             ),
       },
@@ -235,7 +244,12 @@ class CrmTimelineService {
               )`.as("payload"),
             })
             .from(contactNoteModel)
-            .where(and(eq(contactNoteModel.contactId, contactId), c)),
+            .where(
+              and(
+                eq(contactNoteModel.contactId, contactId),
+                c(contactNoteModel.createdAt, contactNoteModel.id),
+              ),
+            ),
       },
     ]
     return await this.run({
@@ -307,7 +321,7 @@ class CrmTimelineService {
                 ownerFilter === undefined
                   ? undefined
                   : eq(dealModel.ownerId, ownerFilter),
-                c,
+                c(dealActivityModel.createdAt, dealActivityModel.id),
               ),
             ),
       },
@@ -342,7 +356,10 @@ class CrmTimelineService {
                 contactIds.length === 0
                   ? sql`false`
                   : inArray(questionnaireSubmissionModel.contactId, contactIds),
-                c,
+                c(
+                  questionnaireSubmissionModel.createdAt,
+                  questionnaireSubmissionModel.id,
+                ),
               ),
             ),
       },
@@ -374,7 +391,7 @@ class CrmTimelineService {
                 contactIds.length === 0
                   ? sql`false`
                   : inArray(appointmentModel.contactId, contactIds),
-                c,
+                c(appointmentModel.createdAt, appointmentModel.id),
               ),
             ),
       },
@@ -383,10 +400,8 @@ class CrmTimelineService {
     if (selected.length === 0) {
       return { data: [], nextCursor: null }
     }
-    const at = sql`"createdAt"`
-    const queries = selected.map((b) =>
-      b.build(cursorCond(cursor, at, sql`"id"`)),
-    )
+    const c = cursorFor(cursor)
+    const queries = selected.map((b) => b.build(c))
     const [first, ...rest] = queries
     const union: TimelineSelect =
       rest.length === 0

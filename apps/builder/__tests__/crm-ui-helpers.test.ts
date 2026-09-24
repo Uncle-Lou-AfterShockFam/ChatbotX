@@ -34,7 +34,7 @@ describe("describeCompanyActivity (s195)", () => {
       'crm.activity.dealCreated|{"title":"Roof"}',
     ],
     [
-      { type: "dealCreated", payload: { title: "Roof", linked: true } },
+      { type: "dealLinked", payload: { title: "Roof" } },
       'crm.activity.dealLinked|{"title":"Roof"}',
     ],
     [

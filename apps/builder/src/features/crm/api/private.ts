@@ -48,7 +48,7 @@ const timelineQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),
 })
 const noteBody = z.object({
-  text: z.string().trim().min(1).max(4000).describe("Note text."),
+  text: z.string().trim().min(1).max(4000),
 })
 const withNoteId = withCompanyId.and(z.object({ noteId: zodBigintAsString() }))
 
@@ -131,11 +131,13 @@ const privateGetCompanyMetricsAPI = authorizedAPI
   .output(companyMetricsResource)
   .handler(async ({ input, context }) => {
     const viewer = viewerFromContext(context)
+    const accessScope = await requireContactPermissionScope(input.workspaceId)
     const deals = await companyDeals({ ...input, viewer })
     const [counts, tasks, timeline] = await Promise.all([
       companyService.countContacts({
         workspaceId: input.workspaceId,
         companyIds: [input.id],
+        accessScope,
       }),
       dealTaskService.listByDealIds({
         workspaceId: input.workspaceId,
@@ -148,6 +150,7 @@ const privateGetCompanyMetricsAPI = authorizedAPI
         companyId: input.id,
         limit: 1,
         viewer,
+        accessScope,
       }),
     ])
     const now = Date.now()
@@ -223,6 +226,7 @@ const privateListCompanyConversationsAPI = authorizedAPI
     const contactIds = await companyService.listContactIds({
       workspaceId: input.workspaceId,
       companyId: input.id,
+      accessScope: await requireContactPermissionScope(input.workspaceId),
     })
     return {
       data: await conversationSummaries({
@@ -250,6 +254,7 @@ const privateListCompanySubmissionsAPI = authorizedAPI
     const contactIds = await companyService.listContactIds({
       workspaceId: input.workspaceId,
       companyId: input.id,
+      accessScope: await requireContactPermissionScope(input.workspaceId),
     })
     return {
       data: await questionnaireSubmissionService.listByContactIds({
@@ -279,6 +284,7 @@ const privateGetCompanyTimelineAPI = authorizedAPI
         cursor: input.cursor,
         limit: input.limit,
         viewer: viewerFromContext(context),
+        accessScope: await requireContactPermissionScope(input.workspaceId),
       }),
   )
 
@@ -396,18 +402,18 @@ const privateUnlinkCompanyContactAPI = authorizedAPI
       workspaceId: input.workspaceId,
       id: input.id,
     })
-    const contactIds = await companyService.listContactIds({
+    // the caller must be allowed to open the contact it unlinks
+    await crmTimelineService.assertContact({
       workspaceId: input.workspaceId,
-      companyId: input.id,
+      contactId: input.contactId,
+      accessScope: await requireContactPermissionScope(input.workspaceId),
     })
-    if (!contactIds.includes(input.contactId)) {
-      // never touch a contact that is not on THIS company
-      return
-    }
+    // pinned to THIS company: a contact that moved elsewhere in between is a 409, never a silent detach
     await companyService.assignContact({
       workspaceId: input.workspaceId,
       contactId: input.contactId,
       companyId: null,
+      expectedCompanyId: input.id,
       actorId: context.user.id,
     })
   })

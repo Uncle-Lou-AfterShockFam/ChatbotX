@@ -70,6 +70,7 @@ describe("company activity types (s195)", () => {
       "contactLinked",
       "contactUnlinked",
       "dealCreated",
+      "dealLinked",
       "dealMoved",
       "dealStatusChanged",
     ])

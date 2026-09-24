@@ -8,8 +8,6 @@ import {
   SheetTitle,
 } from "@chatbotx.io/ui/components/ui/sheet"
 import { useTranslations } from "next-intl"
-import { parseAsString, useQueryStates } from "nuqs"
-import { useEffect, useState } from "react"
 import { ContactView } from "./contact-view"
 
 /** A stacked contact sheet (s195): opens over deals / companies / contacts pages. */
@@ -42,37 +40,5 @@ export function ContactSheet({
         ) : null}
       </SheetContent>
     </Sheet>
-  )
-}
-
-/**
- * `?contactId=` opens the sheet once, then local state owns it (the deals
- * board's `?dealId=` pattern, s194).
- */
-export function ContactSheetFromQuery({
-  workspaceId,
-}: {
-  workspaceId: string
-}) {
-  const [{ contactId: queryContactId }, setQuery] = useQueryStates({
-    contactId: parseAsString,
-  })
-  const [contactId, setContactId] = useState<string | null>(queryContactId)
-  useEffect(() => {
-    if (queryContactId) {
-      setContactId(queryContactId)
-      setQuery({ contactId: null })
-    }
-  }, [queryContactId, setQuery])
-  return (
-    <ContactSheet
-      contactId={contactId}
-      onOpenChange={(open) => {
-        if (!open) {
-          setContactId(null)
-        }
-      }}
-      workspaceId={workspaceId}
-    />
   )
 }
