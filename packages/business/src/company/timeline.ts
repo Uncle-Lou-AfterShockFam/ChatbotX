@@ -410,8 +410,12 @@ class CrmTimelineService {
             first,
             ...rest,
           )
+    // The union's OUTPUT columns keep the first select's COLUMN names
+    // (`"createdAt"`, `"id"`); `at` is only the result-mapping key, so the
+    // ORDER BY must name the column (measured live s195: `column "at" does
+    // not exist` was a 500 on every timeline / metrics call).
     const rows = (await union
-      .orderBy(sql`"at" desc, "id" desc`)
+      .orderBy(sql`"createdAt" desc, "id" desc`)
       .limit(limit + 1)) as TimelineRow[]
     const page = rows.slice(0, limit)
     const last = page.at(-1)

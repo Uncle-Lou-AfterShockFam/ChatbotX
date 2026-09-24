@@ -181,6 +181,14 @@ describe("crmTimelineService.forCompany", () => {
     }
   })
 
+  test("the union is ordered by the OUTPUT column names, never the mapping key", async () => {
+    m.state.rows = []
+    await crmTimelineService.forCompany({ workspaceId: WS, companyId: "co-1" })
+    const orderBy = m.state.orderBy as { sql: string }
+    expect(orderBy.sql).toContain('"createdAt" desc, "id" desc')
+    expect(orderBy.sql).not.toContain('"at"')
+  })
+
   test("the keyset predicate names each branch's OWN columns (a joined branch would otherwise be ambiguous)", async () => {
     const { dealActivityModel } = await import("@chatbotx.io/database/schema")
     await crmTimelineService.forCompany({
