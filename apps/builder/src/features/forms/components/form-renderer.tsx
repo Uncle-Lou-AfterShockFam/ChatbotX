@@ -171,11 +171,11 @@ function FieldInput(props: {
       return (
         <Textarea
           aria-invalid={invalid}
+          aria-required={required}
           disabled={disabled}
           id={id}
           onChange={(e) => onChange(e.target.value)}
           placeholder={field.placeholder}
-          required={required}
           value={typeof value === "string" ? value : ""}
         />
       )
@@ -262,12 +262,12 @@ function FieldInput(props: {
       return (
         <Input
           aria-invalid={invalid}
+          aria-required={required}
           disabled={disabled}
           id={id}
           inputMode={field.type === "number" ? "decimal" : undefined}
           onChange={(e) => onChange(e.target.value)}
           placeholder={field.placeholder}
-          required={required}
           type={INPUT_TYPES[field.type] ?? "text"}
           value={
             typeof value === "string" || typeof value === "number"

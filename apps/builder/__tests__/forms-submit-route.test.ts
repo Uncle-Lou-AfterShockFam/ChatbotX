@@ -154,6 +154,22 @@ describe("POST /api/forms/{ws}/{slug}/submit", () => {
     expect(m.submit).toHaveBeenCalledTimes(1)
     const same = await post({ values: {} }, { origin: "https://chat.example" })
     expect(same.status).toBe(200)
+    // Behind the proxy the request URL is the internal builder address; the
+    // page's own POST carries the PUBLIC origin (s200 live proof: was a 403).
+    const behindProxy = await POST(
+      new NextRequest("http://builder:3000/api/forms/x/demo-intake/submit", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://chat.example",
+          "x-forwarded-host": "chat.example",
+          "x-forwarded-proto": "https",
+        },
+        body: JSON.stringify({ values: {} }),
+      }),
+      params(),
+    )
+    expect(behindProxy.status).toBe(200)
   })
 
   test("rate limited -> 429 with Retry-After from the limiter, then from the pipeline budget", async () => {

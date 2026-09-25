@@ -106,6 +106,10 @@ export function FormPreview(props: {
     <form
       className="flex flex-col gap-4"
       data-testid="form-preview"
+      // The shared evaluator renders every required / format message itself;
+      // the browser's own required tooltip would fire first and hide it
+      // (live proof B4, s200).
+      noValidate
       onSubmit={async (e) => {
         e.preventDefault()
         if (!validateStep()) {
