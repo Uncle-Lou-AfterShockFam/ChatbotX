@@ -30,6 +30,20 @@ export const dealTaskRelations = defineRelationsPart(schema, (r) => ({
       from: r.dealTaskTemplateModel.stageId,
       to: r.pipelineStageModel.id,
     }),
+    dependsOn: r.many.dealTaskTemplateDependencyModel({
+      from: r.dealTaskTemplateModel.id,
+      to: r.dealTaskTemplateDependencyModel.templateId,
+    }),
+  },
+  dealTaskTemplateDependencyModel: {
+    template: r.one.dealTaskTemplateModel({
+      from: r.dealTaskTemplateDependencyModel.templateId,
+      to: r.dealTaskTemplateModel.id,
+    }),
+    dependsOn: r.one.dealTaskTemplateModel({
+      from: r.dealTaskTemplateDependencyModel.dependsOnTemplateId,
+      to: r.dealTaskTemplateModel.id,
+    }),
   },
   dealDependencyModel: {
     task: r.one.dealTaskModel({

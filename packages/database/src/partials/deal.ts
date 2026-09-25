@@ -49,6 +49,7 @@ export type DealTaskAssignTo = z.infer<typeof dealTaskAssignTo>
 export const MAX_DEAL_TASKS_PER_DEAL = 200
 export const MAX_DEAL_TASK_DEPENDENCIES_PER_TASK = 20
 export const MAX_DEAL_TASK_TEMPLATES_PER_STAGE = 20
+export const MAX_DEAL_TASK_TEMPLATE_DEPENDENCIES_PER_TEMPLATE = 20
 export const MAX_DEAL_TASK_TITLE_LENGTH = 200
 export const MAX_DEAL_TASK_DESCRIPTION_LENGTH = 2000
 export const MAX_DEAL_TASK_DUE_IN_DAYS = 365

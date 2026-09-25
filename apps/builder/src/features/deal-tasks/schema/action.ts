@@ -27,11 +27,24 @@ const dueAt = z.coerce
   .date()
   .nullish()
   .describe("Optional due date; an open task past it emits taskOverdue once.")
+const startAt = z.coerce
+  .date()
+  .nullish()
+  .describe(
+    "Optional start of the task's timeline bar; must not be after dueAt (422 startAfterDue).",
+  )
+const dayOffset = z
+  .number()
+  .int()
+  .min(0)
+  .max(MAX_DEAL_TASK_DUE_IN_DAYS)
+  .nullish()
 
 export const createDealTaskRequest = z.object({
   title,
   description,
   assigneeId,
+  startAt,
   dueAt,
 })
 export type CreateDealTaskRequest = z.infer<typeof createDealTaskRequest>
@@ -40,7 +53,14 @@ export const updateDealTaskRequest = z.object({
   title: title.optional(),
   description,
   assigneeId,
+  startAt,
   dueAt,
+  shiftSuccessors: z
+    .boolean()
+    .optional()
+    .describe(
+      "When dueAt moves, move every open task that waits on this one (directly or through other open tasks) by the same amount.",
+    ),
 })
 export type UpdateDealTaskRequest = z.infer<typeof updateDealTaskRequest>
 
@@ -60,15 +80,12 @@ export const addDealDependencyRequest = z.object({
 export const upsertDealTaskTemplateRequest = z.object({
   title,
   description,
-  dueInDays: z
-    .number()
-    .int()
-    .min(0)
-    .max(MAX_DEAL_TASK_DUE_IN_DAYS)
-    .nullish()
-    .describe(
-      "Due date offset in days from the day the deal enters the stage; null = none.",
-    ),
+  startInDays: dayOffset.describe(
+    "Start date offset in days from the day the deal enters the stage; null = none. Must not exceed dueInDays.",
+  ),
+  dueInDays: dayOffset.describe(
+    "Due date offset in days from the day the deal enters the stage; null = none.",
+  ),
   assignToOwner: z
     .boolean()
     .optional()
@@ -82,3 +99,9 @@ export const upsertDealTaskTemplateRequest = z.object({
 export type UpsertDealTaskTemplateRequest = z.infer<
   typeof upsertDealTaskTemplateRequest
 >
+
+export const addTaskTemplateDependencyRequest = z.object({
+  dependsOnTemplateId: zodBigintAsString().describe(
+    "Template of the same stage whose task must be completed first.",
+  ),
+})

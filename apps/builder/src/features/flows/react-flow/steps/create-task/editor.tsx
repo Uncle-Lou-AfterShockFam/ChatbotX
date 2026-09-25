@@ -34,6 +34,13 @@ const CreateTaskStepEditor = ({ parentName }: { parentName: string }) => {
           name={`${parentName}.description`}
         />
         <InputField
+          description={t("deals.startInDaysHint")}
+          label={t("deals.startInDays")}
+          name={`${parentName}.startInDays`}
+          placeholder="0"
+          type="number"
+        />
+        <InputField
           description={t("deals.dueInDaysHint")}
           label={t("deals.dueInDays")}
           name={`${parentName}.dueInDays`}

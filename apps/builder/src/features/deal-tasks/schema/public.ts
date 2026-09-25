@@ -4,10 +4,14 @@ import { dealIdParam } from "@/features/deals/schema/public-params"
 import {
   dealTaskResource,
   dealTaskTemplateResource,
+  dealTaskUpdateResource,
   dealTaskWithBlockersResource,
 } from "./resource"
 
 export const dealTaskPublicResource = dealTaskResource.omit({
+  workspaceId: true,
+})
+export const dealTaskUpdatePublicResource = dealTaskUpdateResource.omit({
   workspaceId: true,
 })
 export const dealTaskWithBlockersPublicResource =
@@ -35,6 +39,11 @@ export const stageTemplateParams = z.object({
 export const templateIdParams = stageTemplateParams.extend({
   templateId: zodBigintAsString().describe(
     "Task template id. Get it from `pipelines.listTaskTemplates`.",
+  ),
+})
+export const templateDependencyParams = templateIdParams.extend({
+  dependsOnTemplateId: zodBigintAsString().describe(
+    "Id of the template this one waits on.",
   ),
 })
 

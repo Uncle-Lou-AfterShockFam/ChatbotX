@@ -56,6 +56,8 @@ describe("deal task public API (s192)", () => {
       "POST /v1/pipelines/{id}/stages/{stageId}/task-templates",
       "PUT /v1/pipelines/{id}/stages/{stageId}/task-templates/{templateId}",
       "DELETE /v1/pipelines/{id}/stages/{stageId}/task-templates/{templateId}",
+      "POST /v1/pipelines/{id}/stages/{stageId}/task-templates/{templateId}/dependencies",
+      "DELETE /v1/pipelines/{id}/stages/{stageId}/task-templates/{templateId}/dependencies/{dependsOnTemplateId}",
     ])
     for (const p of capturedProcedures) {
       if (p.route.method === "DELETE") {
@@ -63,6 +65,6 @@ describe("deal task public API (s192)", () => {
       }
     }
     expect(Object.keys(dealTasksPublicRouter)).toHaveLength(8)
-    expect(Object.keys(dealTaskTemplatesPublicRouter)).toHaveLength(4)
+    expect(Object.keys(dealTaskTemplatesPublicRouter)).toHaveLength(6)
   })
 })
