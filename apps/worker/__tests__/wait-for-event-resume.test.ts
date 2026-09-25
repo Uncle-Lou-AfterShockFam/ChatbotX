@@ -5,9 +5,11 @@ const { runFlowNode, smartDelayService, queueRemove } = vi.hoisted(() => ({
   queueRemove: vi.fn(),
   smartDelayService: {
     claimForEvent: vi.fn(),
-    claimForRun: vi.fn(),
+    claimRunning: vi.fn(),
     findActiveWaitForEvent: vi.fn(),
     findById: vi.fn(),
+    finishClaimedRun: vi.fn(),
+    heartbeatClaim: vi.fn(),
     requeueClaimedRun: vi.fn(),
   },
 }))
@@ -29,9 +31,12 @@ vi.mock("@chatbotx.io/worker-config", () => ({
 
 vi.mock("../src/integration/handlers/flow", () => ({ runFlowNode }))
 
-const { eventMatchesSpec, runWaitForEventResume } = await import(
-  "../src/integration/handlers/wait-for-event-resume"
-)
+const {
+  eventInstant,
+  eventMatchesSpec,
+  eventPrecedesRow,
+  runWaitForEventResume,
+} = await import("../src/integration/handlers/wait-for-event-resume")
 
 const NOW = new Date("2026-09-23T18:02:00.000Z")
 
@@ -52,6 +57,8 @@ const row = {
   createdAt: new Date("2026-09-23T18:00:00.000Z"),
   triggerAt: NOW,
   status: "scheduled",
+  claimGeneration: 0,
+  claimedAt: null,
 }
 
 const tagEvent = {
@@ -60,6 +67,7 @@ const tagEvent = {
   contactId: "contact-1",
   eventType: "tagApplied" as const,
   tagId: "tag-clicked",
+  emittedAt: NOW.toISOString(),
 }
 
 const fieldEvent = {
@@ -68,7 +76,22 @@ const fieldEvent = {
   contactId: "contact-1",
   eventType: "customFieldChanged" as const,
   customFieldId: "f",
+  emittedAt: NOW.toISOString(),
 }
+
+// What the service hands back from a winning claim: the row as RUNNING with
+// a bumped generation; the event claim also re-points nodeId at the event edge.
+const claimedByTimeout = (base: typeof row) => ({
+  ...base,
+  status: "running",
+  claimGeneration: base.claimGeneration + 1,
+  claimedAt: NOW,
+})
+const claimedByEvent = (base: typeof row) => ({
+  ...claimedByTimeout(base),
+  nodeId: base.eventNodeId,
+  triggerAt: NOW,
+})
 
 describe("runWaitForEventResume", () => {
   beforeEach(() => {
@@ -77,17 +100,69 @@ describe("runWaitForEventResume", () => {
     vi.setSystemTime(NOW)
     smartDelayService.findById.mockResolvedValue(row)
     smartDelayService.findActiveWaitForEvent.mockResolvedValue([row])
-    smartDelayService.claimForRun.mockResolvedValue(true)
-    smartDelayService.claimForEvent.mockResolvedValue(true)
-    smartDelayService.requeueClaimedRun.mockResolvedValue(true)
+    smartDelayService.claimRunning.mockImplementation(
+      ({ id }: { id: string }) =>
+        Promise.resolve(claimedByTimeout({ ...row, id })),
+    )
+    smartDelayService.claimForEvent.mockImplementation(
+      ({ id }: { id: string }) =>
+        Promise.resolve(claimedByEvent({ ...row, id })),
+    )
+    smartDelayService.finishClaimedRun.mockResolvedValue(true)
+    smartDelayService.heartbeatClaim.mockResolvedValue(true)
+    smartDelayService.requeueClaimedRun.mockResolvedValue("scheduled")
     queueRemove.mockResolvedValue(1)
   })
 
-  test("timeout: claims the scheduled row and resumes on the timeout edge", async () => {
-    await runWaitForEventResume({ reason: "timeout", smartDelayId: "sd-1" })
-    expect(smartDelayService.claimForRun).toHaveBeenCalledWith({
+  test("HOSTILE (skeptic HIGH): a slow but ALIVE run renews its claim every 2 min so the 10-min sweep never re-runs it; renewal stops with the run", async () => {
+    let finish: (() => void) | undefined
+    runFlowNode.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finish = resolve)),
+    )
+    const run = runWaitForEventResume(tagEvent)
+    await vi.advanceTimersByTimeAsync(11 * 60 * 1000) // past the sweep grace
+    expect(smartDelayService.heartbeatClaim.mock.calls.length).toBe(5)
+    expect(smartDelayService.heartbeatClaim).toHaveBeenLastCalledWith({
       id: "sd-1",
-      to: "completed",
+      generation: 1,
+    })
+    expect(smartDelayService.finishClaimedRun).not.toHaveBeenCalled()
+    finish?.()
+    await run
+    expect(smartDelayService.finishClaimedRun).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(10 * 60 * 1000)
+    expect(smartDelayService.heartbeatClaim.mock.calls.length).toBe(5) // cleared
+  })
+
+  test("the heartbeat also stops when the flow throws, and a failed renewal never aborts the run", async () => {
+    smartDelayService.heartbeatClaim
+      .mockRejectedValueOnce(new Error("db blip"))
+      .mockResolvedValueOnce(false)
+    runFlowNode.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) =>
+          setTimeout(() => reject(new Error("boom")), 5 * 60 * 1000),
+        ),
+    )
+    const run = runWaitForEventResume(tagEvent)
+    const settled = run.catch((error: Error) => error.message)
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
+    await expect(settled).resolves.toBe("boom")
+    expect(smartDelayService.heartbeatClaim).toHaveBeenCalledTimes(2)
+    expect(smartDelayService.requeueClaimedRun).toHaveBeenCalledWith({
+      id: "sd-1",
+      generation: 1,
+    })
+    await vi.advanceTimersByTimeAsync(10 * 60 * 1000)
+    expect(smartDelayService.heartbeatClaim).toHaveBeenCalledTimes(2)
+  })
+
+  test("timeout: claims the scheduled row as running and resumes on the timeout edge, then finishes THAT generation", async () => {
+    await runWaitForEventResume({ reason: "timeout", smartDelayId: "sd-1" })
+    expect(smartDelayService.claimRunning).toHaveBeenCalledWith({ id: "sd-1" })
+    expect(smartDelayService.finishClaimedRun).toHaveBeenCalledWith({
+      id: "sd-1",
+      generation: 1,
     })
     expect(runFlowNode).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -98,10 +173,17 @@ describe("runWaitForEventResume", () => {
     )
   })
 
-  test("timeout with no timeout edge completes the row and runs nothing", async () => {
+  test("timeout with no timeout edge claims, finishes the row and runs nothing", async () => {
     smartDelayService.findById.mockResolvedValue({ ...row, nodeId: null })
+    smartDelayService.claimRunning.mockResolvedValueOnce(
+      claimedByTimeout({ ...row, nodeId: null }),
+    )
     await runWaitForEventResume({ reason: "timeout", smartDelayId: "sd-1" })
-    expect(smartDelayService.claimForRun).toHaveBeenCalledTimes(1)
+    expect(smartDelayService.claimRunning).toHaveBeenCalledTimes(1)
+    expect(smartDelayService.finishClaimedRun).toHaveBeenCalledWith({
+      id: "sd-1",
+      generation: 1,
+    })
     expect(runFlowNode).not.toHaveBeenCalled()
   })
 
@@ -116,10 +198,11 @@ describe("runWaitForEventResume", () => {
       triggerAt: new Date(NOW.getTime() + 1000),
     })
     await runWaitForEventResume({ reason: "timeout", smartDelayId: "sd-1" })
-    expect(smartDelayService.claimForRun).not.toHaveBeenCalled()
-    smartDelayService.claimForRun.mockResolvedValueOnce(false)
+    expect(smartDelayService.claimRunning).not.toHaveBeenCalled()
+    smartDelayService.claimRunning.mockResolvedValueOnce(null)
     await runWaitForEventResume({ reason: "timeout", smartDelayId: "sd-1" })
     expect(runFlowNode).not.toHaveBeenCalled()
+    expect(smartDelayService.finishClaimedRun).not.toHaveBeenCalled()
   })
 
   test("event: claims, removes the timeout job, resumes on the event edge", async () => {
@@ -136,6 +219,10 @@ describe("runWaitForEventResume", () => {
       expect.objectContaining({ nodeId: "event-node" }),
       { flowExecutionKey: undefined },
     )
+    expect(smartDelayService.finishClaimedRun).toHaveBeenCalledWith({
+      id: "sd-1",
+      generation: 1,
+    })
   })
 
   test("event on a still-pending row (no job yet) claims without a remove", async () => {
@@ -149,7 +236,7 @@ describe("runWaitForEventResume", () => {
   })
 
   test("event that lost the CAS to the timeout does nothing (no double resume)", async () => {
-    smartDelayService.claimForEvent.mockResolvedValueOnce(false)
+    smartDelayService.claimForEvent.mockResolvedValueOnce(null)
     await runWaitForEventResume(tagEvent)
     expect(queueRemove).not.toHaveBeenCalled()
     expect(runFlowNode).not.toHaveBeenCalled()
@@ -161,9 +248,17 @@ describe("runWaitForEventResume", () => {
     smartDelayService.findActiveWaitForEvent.mockResolvedValueOnce([
       { ...row, eventNodeId: null },
     ])
+    smartDelayService.claimForEvent.mockResolvedValueOnce(
+      claimedByEvent({ ...row, eventNodeId: null }),
+    )
     await runWaitForEventResume(tagEvent)
     expect(smartDelayService.claimForEvent).toHaveBeenCalledTimes(1)
     expect(runFlowNode).not.toHaveBeenCalled()
+    // The claimed row (no edge) is closed with its generation, never left running.
+    expect(smartDelayService.finishClaimedRun).toHaveBeenCalledWith({
+      id: "sd-1",
+      generation: 1,
+    })
   })
 
   test("a failed timeout-job remove is logged, not fatal", async () => {
@@ -172,23 +267,117 @@ describe("runWaitForEventResume", () => {
     expect(runFlowNode).toHaveBeenCalledTimes(1)
   })
 
-  test("a flow failure on the EVENT path requeues the row pointed at the event edge, due now", async () => {
+  test("a flow failure on the EVENT path requeues the row with the generation it claimed (the edge is already on the row)", async () => {
     runFlowNode.mockRejectedValueOnce(new Error("boom"))
     await expect(runWaitForEventResume(tagEvent)).rejects.toThrow("boom")
     expect(smartDelayService.requeueClaimedRun).toHaveBeenCalledWith({
       id: "sd-1",
-      resumeAt: { nodeId: "event-node", triggerAt: NOW },
+      generation: 1,
     })
+    expect(smartDelayService.finishClaimedRun).not.toHaveBeenCalled()
   })
 
-  test("a flow failure on the TIMEOUT path requeues the row as it is", async () => {
+  test("a flow failure on the TIMEOUT path requeues the row with its generation", async () => {
     runFlowNode.mockRejectedValueOnce(new Error("boom"))
     await expect(
       runWaitForEventResume({ reason: "timeout", smartDelayId: "sd-1" }),
     ).rejects.toThrow("boom")
     expect(smartDelayService.requeueClaimedRun).toHaveBeenCalledWith({
       id: "sd-1",
+      generation: 1,
     })
+  })
+
+  test("HOSTILE #1: a crash between the claim and the run leaves the row RUNNING (recoverable), never completed", async () => {
+    // Simulate the worker dying right after the claim: runFlowNode never
+    // returns (the process is gone). What the claim wrote is all the DB has.
+    let persisted: { status: string; nodeId: string | null } | undefined
+    smartDelayService.claimForEvent.mockImplementationOnce(
+      ({ id }: { id: string }) => {
+        persisted = claimedByEvent({ ...row, id })
+        // Kill the worker "here": nothing after the claim executes.
+        return Promise.reject(new Error("SIGKILL after claim"))
+      },
+    )
+    await expect(runWaitForEventResume(tagEvent)).rejects.toThrow(
+      "SIGKILL after claim",
+    )
+    expect(persisted?.status).toBe("running")
+    expect(persisted?.nodeId).toBe("event-node")
+    expect(runFlowNode).not.toHaveBeenCalled()
+    expect(smartDelayService.finishClaimedRun).not.toHaveBeenCalled()
+    expect(smartDelayService.requeueClaimedRun).not.toHaveBeenCalled()
+  })
+
+  test("HOSTILE #3: a retried event job never resumes a wait CREATED AFTER the event fired", async () => {
+    const newerWait = {
+      ...row,
+      id: "sd-new",
+      createdAt: new Date(NOW.getTime() + 60_000),
+    }
+    smartDelayService.findActiveWaitForEvent.mockResolvedValueOnce([newerWait])
+    await runWaitForEventResume(tagEvent) // emittedAt = NOW < createdAt
+    expect(smartDelayService.claimForEvent).not.toHaveBeenCalled()
+    expect(runFlowNode).not.toHaveBeenCalled()
+
+    // The same event, replayed AFTER the wait existed, still matches it.
+    smartDelayService.findActiveWaitForEvent.mockResolvedValueOnce([newerWait])
+    await runWaitForEventResume({
+      ...tagEvent,
+      emittedAt: new Date(NOW.getTime() + 61_000).toISOString(),
+    })
+    expect(smartDelayService.claimForEvent).toHaveBeenCalledWith({
+      id: "sd-new",
+    })
+  })
+
+  test("HOSTILE #3b: an event job without emittedAt (pre-deploy) falls back to its enqueue timestamp, else fails closed", async () => {
+    const { emittedAt: _dropped, ...legacyEvent } = tagEvent
+    await runWaitForEventResume(legacyEvent)
+    expect(smartDelayService.claimForEvent).not.toHaveBeenCalled()
+    await runWaitForEventResume({ ...tagEvent, emittedAt: "not a date" })
+    expect(smartDelayService.claimForEvent).not.toHaveBeenCalled()
+    // Enqueued (by an old emitter) after the wait existed: resumes it.
+    await runWaitForEventResume(legacyEvent, {
+      timestamp: NOW.getTime(),
+    } as never)
+    expect(smartDelayService.claimForEvent).toHaveBeenCalledTimes(1)
+    // Enqueued before the wait existed: a retry of an old event, ignored.
+    await runWaitForEventResume(legacyEvent, {
+      timestamp: row.createdAt.getTime() - 1,
+    } as never)
+    expect(smartDelayService.claimForEvent).toHaveBeenCalledTimes(1)
+  })
+
+  test("HOSTILE (probe): a wait whose edge throws does not starve its siblings; the job still rethrows for the retry", async () => {
+    const rowA = { ...row, id: "sd-a" }
+    const rowB = { ...row, id: "sd-b" }
+    smartDelayService.findActiveWaitForEvent.mockResolvedValueOnce([rowA, rowB])
+    runFlowNode.mockRejectedValueOnce(new Error("edge A boom"))
+    await expect(runWaitForEventResume(tagEvent)).rejects.toThrow("edge A boom")
+    expect(smartDelayService.claimForEvent).toHaveBeenCalledTimes(2)
+    expect(runFlowNode).toHaveBeenCalledTimes(2)
+    expect(smartDelayService.requeueClaimedRun).toHaveBeenCalledWith({
+      id: "sd-a",
+      generation: 1,
+    })
+    expect(smartDelayService.finishClaimedRun).toHaveBeenCalledWith({
+      id: "sd-b",
+      generation: 1,
+    })
+  })
+
+  test("a run failing on its last allowed claim is logged as failed, not requeued", async () => {
+    smartDelayService.requeueClaimedRun.mockResolvedValueOnce("failed")
+    runFlowNode.mockRejectedValueOnce(new Error("boom"))
+    await expect(runWaitForEventResume(tagEvent)).rejects.toThrow("boom")
+    expect(smartDelayService.finishClaimedRun).not.toHaveBeenCalled()
+  })
+
+  test("a finish whose claim is no longer current is logged, never retried into a resurrect", async () => {
+    smartDelayService.finishClaimedRun.mockResolvedValueOnce(false)
+    await expect(runWaitForEventResume(tagEvent)).resolves.toBeUndefined()
+    expect(smartDelayService.requeueClaimedRun).not.toHaveBeenCalled()
   })
 
   test("value-scoped waits: paying order B resumes only the row waiting for B", async () => {
@@ -219,11 +408,13 @@ describe("runWaitForEventResume", () => {
     expect(runFlowNode).toHaveBeenCalledTimes(1)
   })
 
-  test("timeout: runs the edge of the row it CLAIMED, not its pre-claim snapshot (a failed event resume re-pointed it)", async () => {
-    smartDelayService.findById
-      .mockResolvedValueOnce(row)
-      .mockResolvedValueOnce({ ...row, nodeId: "event-node" })
+  test("timeout: runs the edge of the row the claim RETURNED, not its pre-claim snapshot (a failed event resume re-pointed it)", async () => {
+    smartDelayService.findById.mockResolvedValueOnce(row)
+    smartDelayService.claimRunning.mockResolvedValueOnce(
+      claimedByTimeout({ ...row, nodeId: "event-node" }),
+    )
     await runWaitForEventResume({ reason: "timeout", smartDelayId: "sd-1" })
+    expect(smartDelayService.findById).toHaveBeenCalledTimes(1) // no re-read
     expect(runFlowNode).toHaveBeenCalledTimes(1)
     expect(JSON.stringify(runFlowNode.mock.calls[0])).toContain("event-node")
     expect(JSON.stringify(runFlowNode.mock.calls[0])).not.toContain(
@@ -238,6 +429,38 @@ describe("runWaitForEventResume", () => {
     ])
     await runWaitForEventResume(tagEvent)
     expect(smartDelayService.claimForEvent).not.toHaveBeenCalled()
+  })
+})
+
+describe("eventInstant / eventPrecedesRow", () => {
+  const createdAt = new Date("2026-09-25T15:00:00.000Z")
+  const at = (iso: string) => eventInstant({ emittedAt: iso })
+  test("true only when the event fired at or after the wait was created", () => {
+    expect(
+      eventPrecedesRow(at("2026-09-25T15:00:00.000Z"), { createdAt }),
+    ).toBe(true)
+    expect(
+      eventPrecedesRow(at("2026-09-25T15:00:01.000Z"), { createdAt }),
+    ).toBe(true)
+    expect(
+      eventPrecedesRow(at("2026-09-25T14:59:59.999Z"), { createdAt }),
+    ).toBe(false)
+  })
+  test("a job without emittedAt (pre-deploy emitter) uses its BullMQ enqueue timestamp", () => {
+    expect(eventInstant({}, { timestamp: 1_790_000_000_000 })).toBe(
+      1_790_000_000_000,
+    )
+    expect(
+      eventInstant({ emittedAt: "2026-09-25T15:00:00.000Z" }, { timestamp: 1 }),
+    ).toBe(createdAt.getTime())
+  })
+  test("fails closed on a missing or malformed instant", () => {
+    expect(eventInstant({})).toBeNull()
+    expect(eventInstant({}, {} as never)).toBeNull()
+    expect(eventInstant({ emittedAt: "" })).toBeNull()
+    expect(eventInstant({ emittedAt: "yesterday" })).toBeNull()
+    expect(eventInstant({ emittedAt: 1 as unknown as string })).toBeNull()
+    expect(eventPrecedesRow(null, { createdAt })).toBe(false)
   })
 })
 

@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 const { runFlowNode, smartDelayService } = vi.hoisted(() => ({
   runFlowNode: vi.fn(),
   smartDelayService: {
-    claimForRun: vi.fn(),
+    claimRunning: vi.fn(),
     findById: vi.fn(),
+    finishClaimedRun: vi.fn(),
+    heartbeatClaim: vi.fn(),
     requeueClaimedRun: vi.fn(),
   },
 }))
@@ -45,22 +47,30 @@ const waitRow = {
   status: "scheduled",
 }
 
+// What the service hands back from a winning claim: the row as RUNNING.
+const claimed = (row: typeof waitRow) => ({
+  ...row,
+  status: "running",
+  claimGeneration: 7,
+})
+
 describe("runWaitResume", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-07-16T00:01:00.000Z"))
     smartDelayService.findById.mockResolvedValue(waitRow)
-    smartDelayService.claimForRun.mockResolvedValue(true)
-    smartDelayService.requeueClaimedRun.mockResolvedValue(true)
+    smartDelayService.claimRunning.mockResolvedValue(claimed(waitRow))
+    smartDelayService.finishClaimedRun.mockResolvedValue(true)
+    smartDelayService.heartbeatClaim.mockResolvedValue(true)
+    smartDelayService.requeueClaimedRun.mockResolvedValue("scheduled")
   })
 
   test("runs the connected node after claiming the scheduled row", async () => {
     await runWaitResume({ smartDelayId: "smart-delay-1" })
 
-    expect(smartDelayService.claimForRun).toHaveBeenCalledWith({
+    expect(smartDelayService.claimRunning).toHaveBeenCalledWith({
       id: "smart-delay-1",
-      to: "completed",
     })
     expect(runFlowNode).toHaveBeenCalledWith(
       {
@@ -75,14 +85,16 @@ describe("runWaitResume", () => {
   })
 
   test("preserves broadcast metadata when resuming the connected node", async () => {
-    smartDelayService.findById.mockResolvedValueOnce({
+    const broadcastRow = {
       ...waitRow,
       metadata: {
         type: "broadcast",
         broadcastId: "broadcast-1",
         contactInboxId: "contact-inbox-1",
       },
-    })
+    }
+    smartDelayService.findById.mockResolvedValueOnce(broadcastRow)
+    smartDelayService.claimRunning.mockResolvedValueOnce(claimed(broadcastRow))
 
     await runWaitResume({ smartDelayId: "smart-delay-1" })
 
@@ -103,6 +115,9 @@ describe("runWaitResume", () => {
       ...waitRow,
       appointmentId: "appointment-1",
     })
+    smartDelayService.claimRunning.mockResolvedValueOnce(
+      claimed({ ...waitRow, appointmentId: "appointment-1" }),
+    )
 
     await runWaitResume({ smartDelayId: "smart-delay-1" })
 
@@ -115,7 +130,7 @@ describe("runWaitResume", () => {
   })
 
   test("does not run when another worker already claimed the row", async () => {
-    smartDelayService.claimForRun.mockResolvedValueOnce(false)
+    smartDelayService.claimRunning.mockResolvedValueOnce(null)
 
     await runWaitResume({ smartDelayId: "smart-delay-1" })
 
@@ -132,7 +147,35 @@ describe("runWaitResume", () => {
 
     expect(smartDelayService.requeueClaimedRun).toHaveBeenCalledWith({
       id: "smart-delay-1",
+      generation: 7,
     })
+    expect(smartDelayService.finishClaimedRun).not.toHaveBeenCalled()
+  })
+
+  test("finishes the claimed row with ITS generation after the flow ran", async () => {
+    await runWaitResume({ smartDelayId: "smart-delay-1" })
+
+    expect(smartDelayService.finishClaimedRun).toHaveBeenCalledWith({
+      id: "smart-delay-1",
+      generation: 7,
+    })
+    expect(smartDelayService.requeueClaimedRun).not.toHaveBeenCalled()
+  })
+
+  test("runs the edge of the row the claim RETURNED, not the pre-claim snapshot", async () => {
+    smartDelayService.claimRunning.mockResolvedValueOnce({
+      ...waitRow,
+      nodeId: "re-pointed-node",
+      status: "running",
+      claimGeneration: 8,
+    })
+
+    await runWaitResume({ smartDelayId: "smart-delay-1" })
+
+    expect(runFlowNode).toHaveBeenCalledWith(
+      expect.objectContaining({ nodeId: "re-pointed-node" }),
+      { flowExecutionKey: undefined },
+    )
   })
 
   test("does not touch rows scheduled for the future", async () => {
@@ -143,7 +186,7 @@ describe("runWaitResume", () => {
 
     await runWaitResume({ smartDelayId: "smart-delay-1" })
 
-    expect(smartDelayService.claimForRun).not.toHaveBeenCalled()
+    expect(smartDelayService.claimRunning).not.toHaveBeenCalled()
     expect(runFlowNode).not.toHaveBeenCalled()
   })
 
@@ -157,7 +200,7 @@ describe("runWaitResume", () => {
 
     await runWaitResume({ smartDelayId: "smart-delay-1" })
 
-    expect(smartDelayService.claimForRun).not.toHaveBeenCalled()
+    expect(smartDelayService.claimRunning).not.toHaveBeenCalled()
     expect(runFlowNode).not.toHaveBeenCalled()
   })
 })

@@ -2,6 +2,7 @@ import { createId } from "@chatbotx.io/utils"
 import { sql } from "drizzle-orm"
 import {
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -66,6 +67,13 @@ export const contactOnSmartDelayModel = pgTable(
     status: contactOnSmartDelayStatus()
       .default(smartDelayStatuses.enum.pending)
       .notNull(),
+    // A resume CLAIMS the row (status running, claimedAt now, generation + 1)
+    // and finishes or requeues it only with the generation it claimed, so a
+    // stale retry can never complete or reopen a row another path re-claimed.
+    // The scanner sweeps running rows whose claimedAt is stale (a worker died
+    // between the claim and the run) back to pending.
+    claimGeneration: integer().default(0).notNull(),
+    claimedAt: timestamp(timestampConfig),
   },
   (table) => [
     index(
@@ -82,6 +90,13 @@ export const contactOnSmartDelayModel = pgTable(
       table.status,
       table.triggerAt,
     ),
+    // Stuck-running sweep: only the (few) claimed rows. Partial, so it is
+    // tiny and its build never scans the table; it lives in its own
+    // migration because a new enum value cannot be used in the transaction
+    // that adds it.
+    index("ContactOnSmartDelay_running_claimedAt_idx")
+      .using("btree", table.claimedAt)
+      .where(sql`${table.status} = 'running'`),
     // waitForEvent lookup on an incoming tag / custom-field event.
     index(
       "ContactOnSmartDelay_workspaceId_type_status_contactInboxId_idx",

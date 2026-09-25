@@ -52,6 +52,7 @@ class SmartDelayEventEmitterImpl extends BaseEventEmitter {
           reason: "event",
           workspaceId: data.workspaceId,
           contactId: data.contactId,
+          emittedAt: new Date().toISOString(),
           ...(isTag
             ? { eventType: "tagApplied", tagId: id }
             : {

@@ -1,0 +1,1 @@
+CREATE INDEX "ContactOnSmartDelay_running_claimedAt_idx" ON "ContactOnSmartDelay" ("claimedAt") WHERE "status" = 'running';
