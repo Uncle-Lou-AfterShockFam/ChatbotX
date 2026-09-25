@@ -11,7 +11,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@chatbotx.io/ui/components/ui/select"
-import { LinkIcon, Loader2Icon, PlusIcon, TrashIcon } from "lucide-react"
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@chatbotx.io/ui/components/ui/toggle-group"
+import {
+  GanttChartIcon,
+  LinkIcon,
+  ListIcon,
+  Loader2Icon,
+  PlusIcon,
+  TrashIcon,
+} from "lucide-react"
 import { useFormatter, useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { useState } from "react"
@@ -20,12 +31,20 @@ import { completeDealTaskAction } from "@/features/deal-tasks/actions/complete-d
 import { createDealTaskAction } from "@/features/deal-tasks/actions/create-deal-task-action"
 import { dealDependencyAction } from "@/features/deal-tasks/actions/deal-dependency-action"
 import { deleteDealTaskAction } from "@/features/deal-tasks/actions/delete-deal-task-action"
+import { TasksTimeline } from "@/features/deal-tasks/components/tasks-timeline"
+import { useRescheduleTask } from "@/features/deal-tasks/components/use-reschedule-task"
 import { useDealTasks } from "@/features/deal-tasks/provider/deal-task-hook"
 import type { DealTaskWithBlockersResource } from "@/features/deal-tasks/schema/resource"
 import { isOverdue } from "../deal-card"
 import { NONE } from "../deal-field-input"
 
-/** Tasks of the deal: complete / reopen, add, wait-on, delete. */
+/** A `<input type=date>` value as the UTC midnight the server stores. */
+const fromDateInput = (value: string): Date | null =>
+  value ? new Date(`${value}T00:00:00Z`) : null
+const toDateInput = (value: Date | string | null): string =>
+  value ? new Date(value).toISOString().slice(0, 10) : ""
+
+/** Tasks of the deal: list (complete / reopen, add, wait-on, dates, delete) or timeline. */
 export function DealTasksPanel({
   workspaceId,
   dealId,
@@ -40,7 +59,9 @@ export function DealTasksPanel({
   const t = useTranslations()
   const format = useFormatter()
   const tasks = useDealTasks(workspaceId, dealId)
+  const [view, setView] = useState<"list" | "timeline">("list")
   const [title, setTitle] = useState("")
+  const [startAt, setStartAt] = useState("")
   const [dueAt, setDueAt] = useState("")
   const [assigneeId, setAssigneeId] = useState<string>(NONE)
   const refresh = () => {
@@ -50,6 +71,7 @@ export function DealTasksPanel({
   const create = useAction(createDealTaskAction.bind(null, workspaceId), {
     onSuccess: () => {
       setTitle("")
+      setStartAt("")
       setDueAt("")
       setAssigneeId(NONE)
       refresh()
@@ -68,18 +90,50 @@ export function DealTasksPanel({
     onSuccess: refresh,
     onError: onActionError,
   })
+  const rows = tasks.data ?? []
+  const reschedule = useRescheduleTask({
+    workspaceId,
+    dealId,
+    tasks: rows,
+    onSaved: refresh,
+  })
   const busy =
     create.isPending ||
     toggle.isPending ||
     dependency.isPending ||
-    remove.isPending
-  const rows = tasks.data ?? []
+    remove.isPending ||
+    reschedule.isPending
   const nameOf = (id: string) => rows.find((r) => r.id === id)?.title ?? id
   const assigneeName = (id: string | null) =>
     id ? (ownerOptions.find((o) => o.value === id)?.label ?? id) : null
 
   return (
     <div className="space-y-3" data-testid="deal-tasks">
+      {reschedule.dialog}
+      <ToggleGroup
+        aria-label={t("deals.tasks.view")}
+        onValueChange={(value) => {
+          const next = value[0]
+          if (next === "list" || next === "timeline") {
+            setView(next)
+          }
+        }}
+        size="sm"
+        value={[view]}
+        variant="outline"
+      >
+        <ToggleGroupItem data-testid="deal-tasks-view-list" value="list">
+          <ListIcon className="size-4" />
+          {t("deals.tasks.list")}
+        </ToggleGroupItem>
+        <ToggleGroupItem
+          data-testid="deal-tasks-view-timeline"
+          value="timeline"
+        >
+          <GanttChartIcon className="size-4" />
+          {t("deals.tasks.timeline")}
+        </ToggleGroupItem>
+      </ToggleGroup>
       <form
         className="flex flex-wrap items-end gap-2"
         onSubmit={(e) => {
@@ -88,7 +142,8 @@ export function DealTasksPanel({
             create.execute({
               dealId,
               title: title.trim(),
-              dueAt: dueAt ? new Date(`${dueAt}T00:00:00Z`) : null,
+              startAt: fromDateInput(startAt),
+              dueAt: fromDateInput(dueAt),
               assigneeId: assigneeId === NONE ? null : assigneeId,
             })
           }
@@ -104,10 +159,22 @@ export function DealTasksPanel({
           value={title}
         />
         <Input
+          aria-label={t("deals.tasks.startAt")}
+          className="w-36"
+          data-testid="deal-task-start-at"
+          max={dueAt || undefined}
+          onChange={(e) => setStartAt(e.target.value)}
+          title={t("deals.tasks.startAt")}
+          type="date"
+          value={startAt}
+        />
+        <Input
           aria-label={t("deals.fields.dueAt")}
-          className="w-40"
+          className="w-36"
           data-testid="deal-task-due-at"
+          min={startAt || undefined}
           onChange={(e) => setDueAt(e.target.value)}
+          title={t("deals.fields.dueAt")}
           type="date"
           value={dueAt}
         />
@@ -146,10 +213,17 @@ export function DealTasksPanel({
         </Button>
       </form>
 
-      {rows.length === 0 ? (
+      {view === "timeline" ? (
+        <TasksTimeline
+          busy={busy}
+          onReschedule={reschedule.reschedule}
+          tasks={rows}
+        />
+      ) : null}
+      {view === "list" && rows.length === 0 ? (
         <p className="text-muted-foreground text-xs">{t("deals.tasks.none")}</p>
       ) : null}
-      <ul className="space-y-2 text-sm">
+      <ul className={view === "list" ? "space-y-2 text-sm" : "hidden"}>
         {rows.map((task) => (
           <TaskRow
             assigneeName={assigneeName(task.assigneeId)}
@@ -157,6 +231,7 @@ export function DealTasksPanel({
             format={format}
             key={task.id}
             nameOf={nameOf}
+            onDates={(dates) => reschedule.reschedule(task.id, dates)}
             onDependency={(dependsOnTaskId, removeEdge) =>
               dependency.execute({
                 dealId,
@@ -191,6 +266,7 @@ function TaskRow({
   format,
   onToggle,
   onDependency,
+  onDates,
   onRemove,
 }: {
   task: DealTaskWithBlockersResource
@@ -201,6 +277,7 @@ function TaskRow({
   format: ReturnType<typeof useFormatter>
   onToggle: () => void
   onDependency: (dependsOnTaskId: string, remove: boolean) => void
+  onDates: (dates: { startAt?: Date | null; dueAt?: Date | null }) => void
   onRemove: () => void
 }) {
   const t = useTranslations()
@@ -235,15 +312,64 @@ function TaskRow({
           })}
         </Badge>
       ) : null}
-      {task.dueAt ? (
-        <span
-          className={
-            overdue
-              ? "font-medium text-destructive text-xs"
-              : "text-muted-foreground text-xs"
-          }
-          data-testid={overdue ? `deal-task-overdue-${task.id}` : undefined}
+      {task.conflicts.length > 0 ? (
+        <Badge
+          data-testid={`deal-task-conflict-${task.id}`}
+          variant="destructive"
         >
+          {t("deals.tasks.startsBefore", {
+            tasks: task.conflicts.map(nameOf).join(", "),
+          })}
+        </Badge>
+      ) : null}
+      {task.status === "open" ? (
+        <span className="flex items-center gap-1">
+          <Input
+            aria-label={t("deals.tasks.startAt")}
+            className="h-7 w-34 text-xs"
+            data-testid={`deal-task-start-${task.id}`}
+            defaultValue={toDateInput(task.startAt)}
+            disabled={busy}
+            key={`s-${toDateInput(task.startAt)}`}
+            onBlur={(e) => {
+              if (e.target.value !== toDateInput(task.startAt)) {
+                onDates({ startAt: fromDateInput(e.target.value) })
+              }
+            }}
+            title={t("deals.tasks.startAt")}
+            type="date"
+          />
+          <Input
+            aria-label={t("deals.fields.dueAt")}
+            className={
+              overdue
+                ? "h-7 w-34 border-destructive text-destructive text-xs"
+                : "h-7 w-34 text-xs"
+            }
+            data-testid={`deal-task-due-${task.id}`}
+            defaultValue={toDateInput(task.dueAt)}
+            disabled={busy}
+            key={`d-${toDateInput(task.dueAt)}`}
+            onBlur={(e) => {
+              if (e.target.value !== toDateInput(task.dueAt)) {
+                onDates({ dueAt: fromDateInput(e.target.value) })
+              }
+            }}
+            title={t("deals.fields.dueAt")}
+            type="date"
+          />
+          {overdue ? (
+            <span
+              className="font-medium text-destructive text-xs"
+              data-testid={`deal-task-overdue-${task.id}`}
+            >
+              {t("deals.overdue")}
+            </span>
+          ) : null}
+        </span>
+      ) : null}
+      {task.status === "done" && task.dueAt ? (
+        <span className="text-muted-foreground text-xs">
           {format.dateTime(task.dueAt, {
             dateStyle: "medium",
             timeZone: "UTC",

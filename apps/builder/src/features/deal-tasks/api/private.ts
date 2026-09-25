@@ -10,6 +10,7 @@ import { contactsAccessAuthorizedMiddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
 import {
   addDealDependencyRequest,
+  addTaskTemplateDependencyRequest,
   completeDealTaskRequest,
   createDealTaskRequest,
   updateDealTaskRequest,
@@ -18,6 +19,7 @@ import {
 import {
   dealTaskResource,
   dealTaskTemplateResource,
+  dealTaskUpdateResource,
   dealTaskWithBlockersResource,
 } from "../schema/resource"
 
@@ -77,7 +79,7 @@ const privateUpdateDealTaskAPI = authorizedAPI
   })
   .input(updateDealTaskRequest.and(withTaskId))
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
-  .output(dealTaskResource)
+  .output(dealTaskUpdateResource)
   .handler(async ({ input, context }) => {
     const { workspaceId, id, taskId, ...data } = input
     return await dealTaskService.update({
@@ -257,6 +259,51 @@ const privateRemoveTaskTemplateAPI = authorizedAPI
     return { deleted: true as const }
   })
 
+const withTemplateId = withStage.and(
+  z.object({ templateId: zodBigintAsString() }),
+)
+
+const privateAddTaskTemplateDependencyAPI = authorizedAPI
+  .route({
+    method: "POST",
+    path: "/workspaces/{workspaceId}/pipelines/{pipelineId}/stages/{stageId}/task-templates/{templateId}/dependencies",
+    summary: "Make a task template wait on another template of the stage",
+    tags: ["Pipelines"],
+  })
+  .input(addTaskTemplateDependencyRequest.and(withTemplateId))
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
+  .output(z.object({ templateId: z.string(), dependsOnTemplateId: z.string() }))
+  .handler(async ({ input, context }) => {
+    const row = await dealTaskTemplateService.addDependency({
+      ...input,
+      viewer: viewerFromContext(context),
+    })
+    return {
+      templateId: row.templateId,
+      dependsOnTemplateId: row.dependsOnTemplateId,
+    }
+  })
+
+const privateRemoveTaskTemplateDependencyAPI = authorizedAPI
+  .route({
+    method: "DELETE",
+    path: "/workspaces/{workspaceId}/pipelines/{pipelineId}/stages/{stageId}/task-templates/{templateId}/dependencies/{dependsOnTemplateId}",
+    summary: "Remove a task template dependency",
+    tags: ["Pipelines"],
+  })
+  .input(
+    withTemplateId.and(z.object({ dependsOnTemplateId: zodBigintAsString() })),
+  )
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
+  .output(z.object({ removed: z.boolean() }))
+  .handler(
+    async ({ input, context }) =>
+      await dealTaskTemplateService.removeDependency({
+        ...input,
+        viewer: viewerFromContext(context),
+      }),
+  )
+
 export const privateDealTasksAPI = {
   privateListDealTasksAPI,
   privateCreateDealTaskAPI,
@@ -268,5 +315,7 @@ export const privateDealTasksAPI = {
   privateRemoveDealDependencyAPI,
   privateListPipelineTaskTemplatesAPI,
   privateUpsertTaskTemplateAPI,
+  privateAddTaskTemplateDependencyAPI,
+  privateRemoveTaskTemplateDependencyAPI,
   privateRemoveTaskTemplateAPI,
 }

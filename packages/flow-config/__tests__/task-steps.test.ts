@@ -47,6 +47,26 @@ describe("deal task steps (s192)", () => {
     ).toMatchObject({ assigneeId: "u1", dueInDays: 3 })
   })
 
+  test("createTask startInDays (s197): bounded like dueInDays (after it = clamped by the worker)", () => {
+    const step = createTaskStepDefaultFn()
+    expect(step.startInDays).toBeNull()
+    for (const bad of [-1, 366, 1.5]) {
+      expect(
+        createTaskStepSchema.safeParse({ ...step, startInDays: bad }).success,
+      ).toBe(false)
+    }
+    expect(
+      createTaskStepSchema.parse({ ...step, startInDays: 2, dueInDays: 2 }),
+    ).toMatchObject({ startInDays: 2, dueInDays: 2 })
+    // a start with no due date is fine
+    expect(
+      createTaskStepSchema.safeParse({ ...step, startInDays: 9 }).success,
+    ).toBe(true)
+    expect(
+      actionSteps.some((s) => s.safeParse({ ...step, startInDays: 1 }).success),
+    ).toBe(true)
+  })
+
   test("completeTask matches by template (default) or title", () => {
     const step = completeTaskStepDefaultFn()
     expect(step.match).toBe("template")

@@ -6888,7 +6888,20 @@
         "template": "Stage template",
         "title": "Exact title"
       },
-      "matchTitleHint": "Case-insensitive exact match on the task title."
+      "matchTitleHint": "Case-insensitive exact match on the task title.",
+      "view": "Task view",
+      "list": "List",
+      "timeline": "Timeline",
+      "startAt": "Start date",
+      "startsBefore": "Starts before {tasks} is due",
+      "shiftTitle": "{count, plural, one {1 open task waits} other {# open tasks wait}} on this one. Move them too?",
+      "shiftHint": "Moving them shifts every open task further down the chain by the same number of days. Only this task: they keep their dates and the timeline marks the clash in red.",
+      "shiftOnlyThis": "Only this task",
+      "shiftAll": "Move them too",
+      "barLabel": "{title}: {start} to {due}",
+      "conflicts": "{count, plural, one {1 task starts} other {# tasks start}} before a task it waits on is due",
+      "unscheduled": "No due date",
+      "timelineHint": "Drag a bar to move it; drag its end to change the due date. Arrow keys move a selected bar by a day; Shift + arrow changes only the due date."
     },
     "taskTemplates": {
       "one": "Task template",
@@ -6899,7 +6912,9 @@
       "add": "Add template",
       "noDue": "No due date",
       "dueIn": "Due in {count, plural, one {1 day} other {# days}}",
-      "toOwner": "Assign to deal owner"
+      "toOwner": "Assign to deal owner",
+      "startIn": "Starts in {count, plural, one {1 day} other {# days}}",
+      "waitsOn": "Waits on {tasks}"
     },
     "comments": {
       "placeholder": "Write a comment... mention a teammate with the @ picker",
@@ -6918,7 +6933,9 @@
       "ownerMembersOnly": "This pipeline is members-only: the owner must be one of its members.",
       "confirm": "Move",
       "moved": "Deal moved to {pipeline}"
-    }
+    },
+    "startInDays": "Start in (days)",
+    "startInDaysHint": "Start date = that same day plus this many days; not after the due date. Empty = the task starts when the tasks it waits on are due."
   },
   "notifications": {
     "title": "Notifications",

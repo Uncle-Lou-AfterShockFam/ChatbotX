@@ -18,13 +18,20 @@ import {
   SelectValue,
 } from "@chatbotx.io/ui/components/ui/select"
 import { Switch } from "@chatbotx.io/ui/components/ui/switch"
-import { ListChecksIcon, Loader2Icon, PlusIcon, TrashIcon } from "lucide-react"
+import {
+  LinkIcon,
+  ListChecksIcon,
+  Loader2Icon,
+  PlusIcon,
+  TrashIcon,
+} from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { useState } from "react"
 import { onActionError } from "@/features/common/lib/on-action-error"
 import {
   removeTaskTemplateAction,
+  taskTemplateDependencyAction,
   upsertTaskTemplateAction,
 } from "@/features/deal-tasks/actions/task-template-actions"
 import { usePipelineTaskTemplates } from "@/features/deal-tasks/provider/deal-task-hook"
@@ -47,12 +54,14 @@ export function StageTaskTemplates({
   const rows = (templates.data ?? []).filter((tpl) => tpl.stageId === stageId)
   const ownerOptions = useOwnerOptions(workspaceId, { enabled: open })
   const [title, setTitle] = useState("")
+  const [startInDays, setStartInDays] = useState("")
   const [dueInDays, setDueInDays] = useState("")
   const [assignToOwner, setAssignToOwner] = useState(true)
   const [assigneeId, setAssigneeId] = useState<string>(NONE)
   const upsert = useAction(upsertTaskTemplateAction.bind(null, workspaceId), {
     onSuccess: () => {
       setTitle("")
+      setStartInDays("")
       setDueInDays("")
       templates.refetch()
     },
@@ -62,6 +71,14 @@ export function StageTaskTemplates({
     onSuccess: () => templates.refetch(),
     onError: onActionError,
   })
+  const dependency = useAction(
+    taskTemplateDependencyAction.bind(null, workspaceId),
+    {
+      onSuccess: () => templates.refetch(),
+      onError: onActionError,
+    },
+  )
+  const nameOf = (id: string) => rows.find((r) => r.id === id)?.title ?? id
 
   return (
     <Dialog onOpenChange={setOpen} open={open}>
@@ -89,11 +106,30 @@ export function StageTaskTemplates({
         >
           {rows.map((tpl) => (
             <li
-              className="flex items-center gap-2 rounded-md border p-2"
+              className="flex flex-wrap items-center gap-2 rounded-md border p-2"
               data-testid={`task-template-${tpl.id}`}
               key={tpl.id}
             >
-              <span className="flex-1">{tpl.title}</span>
+              <span className="min-w-24 flex-1">
+                {tpl.title}
+                {tpl.dependsOn.length > 0 ? (
+                  <span
+                    className="block text-muted-foreground text-xs"
+                    data-testid={`task-template-waits-${tpl.id}`}
+                  >
+                    {t("deals.taskTemplates.waitsOn", {
+                      tasks: tpl.dependsOn.map(nameOf).join(", "),
+                    })}
+                  </span>
+                ) : null}
+              </span>
+              {tpl.startInDays === null ? null : (
+                <span className="text-muted-foreground text-xs">
+                  {t("deals.taskTemplates.startIn", {
+                    count: tpl.startInDays,
+                  })}
+                </span>
+              )}
               <span className="text-muted-foreground text-xs">
                 {tpl.dueInDays === null
                   ? t("deals.taskTemplates.noDue")
@@ -105,6 +141,52 @@ export function StageTaskTemplates({
                   : (ownerOptions.find((o) => o.value === tpl.assigneeId)
                       ?.label ?? t("deals.tasks.unassigned"))}
               </span>
+              {rows.length > 1 ? (
+                <Select
+                  items={[
+                    { value: NONE, label: t("deals.tasks.waitOn") },
+                    ...rows
+                      .filter((o) => o.id !== tpl.id)
+                      .map((o) => ({ value: o.id, label: o.title })),
+                  ]}
+                  onValueChange={(v) => {
+                    const id = String(v ?? "")
+                    if (id && id !== NONE) {
+                      dependency.execute({
+                        pipelineId,
+                        stageId,
+                        templateId: tpl.id,
+                        dependsOnTemplateId: id,
+                        remove: tpl.dependsOn.includes(id),
+                      })
+                    }
+                  }}
+                  value={NONE}
+                >
+                  <SelectTrigger
+                    aria-label={t("deals.tasks.waitOn")}
+                    className="w-36"
+                    data-testid={`task-template-wait-on-${tpl.id}`}
+                    disabled={dependency.isPending}
+                  >
+                    <LinkIcon className="size-3" />
+                    <SelectValue placeholder={t("deals.tasks.waitOn")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>
+                      {t("deals.tasks.waitOn")}
+                    </SelectItem>
+                    {rows
+                      .filter((o) => o.id !== tpl.id)
+                      .map((o) => (
+                        <SelectItem key={o.id} value={o.id}>
+                          {tpl.dependsOn.includes(o.id) ? "✓ " : ""}
+                          {o.title}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
               <Button
                 aria-label={t("actions.delete")}
                 data-testid={`task-template-remove-${tpl.id}`}
@@ -129,6 +211,7 @@ export function StageTaskTemplates({
                 pipelineId,
                 stageId,
                 title: title.trim(),
+                startInDays: startInDays === "" ? null : Number(startInDays),
                 dueInDays: dueInDays === "" ? null : Number(dueInDays),
                 assignToOwner,
                 assigneeId:
@@ -145,6 +228,18 @@ export function StageTaskTemplates({
             onChange={(e) => setTitle(e.target.value)}
             placeholder={t("deals.tasks.titlePlaceholder")}
             value={title}
+          />
+          <Input
+            aria-label={t("deals.startInDays")}
+            className="w-28"
+            data-testid="task-template-start-in-days"
+            inputMode="numeric"
+            max={365}
+            min={0}
+            onChange={(e) => setStartInDays(e.target.value)}
+            placeholder={t("deals.startInDays")}
+            type="number"
+            value={startInDays}
           />
           <Input
             aria-label={t("deals.dueInDays")}
