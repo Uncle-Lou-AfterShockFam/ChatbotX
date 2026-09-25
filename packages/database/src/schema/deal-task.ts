@@ -121,8 +121,9 @@ export const dealTaskModel = pgTable(
   },
   (table) => [
     index("DealTask_dealId_status_idx").on(table.dealId, table.status),
-    // "My tasks" (s198): one member's open/done tasks by due date; its
-    // assigneeId prefix also serves the user-delete SET NULL scan
+    // "My tasks" (s198): one member's open tasks by due date (the done list
+    // uses the (assigneeId, status) prefix; its completedAt sort is not
+    // indexed); the assigneeId prefix also serves the user-delete SET NULL scan
     index("DealTask_assigneeId_status_dueAt_idx").on(
       table.assigneeId,
       table.status,

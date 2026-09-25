@@ -343,11 +343,7 @@ export class DealTaskService extends BaseService {
     }
     const done = status === "done"
     const key = done ? dealTaskModel.completedAt : dealTaskModel.dueAt
-    const rows = await calendarRows(
-      tx,
-      workspaceId,
-      sql<string | null>`${key}::text`,
-    )
+    const rows = await calendarRows(tx, workspaceId, epochMicros(key))
       .where(
         and(
           eq(dealTaskModel.workspaceId, workspaceId),
@@ -1410,8 +1406,8 @@ export class DealTaskService extends BaseService {
 
 /**
  * The calendar-row select (task + deal + pipeline names + open successors),
- * shared by the task calendar and "My tasks". `sortKey` is the keyset
- * column as Postgres text, so a cursor keeps microsecond precision.
+ * shared by the task calendar and "My tasks" (whose `sortKey` is the keyset
+ * column's `epochMicros`).
  */
 function calendarRows(
   tx: DatabaseClient,
@@ -1459,12 +1455,36 @@ function toCalendarRow(r: {
   }
 }
 
+/** `k` = the key in epoch microseconds, `i` = the task id (both int8 text). */
 type MyTasksCursor = { s: "open" | "done"; k: string | null; i: string }
-const MY_TASKS_CURSOR_MAX_LENGTH = 256
-// Postgres timestamptz::text, e.g. `2026-10-02 00:00:00.123456+00`
-const PG_TIMESTAMPTZ_TEXT =
-  /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,6})?[+-]\d{2}(:\d{2})?$/
-const BIGINT_ID = /^\d{1,20}$/
+/** Mirrored by the route's `cursor` max length (apps/builder listMyTasksQuery). */
+export const MY_TASKS_CURSOR_MAX_LENGTH = 256
+const INT8_TEXT = /^-?\d{1,19}$/
+const INT8_MIN = -(2n ** 63n)
+const INT8_MAX = 2n ** 63n - 1n
+
+/**
+ * A timestamp as epoch microseconds (int8 text): exact at the column's
+ * precision and independent of the session TimeZone / DateStyle, unlike
+ * `::text` (s198 probe: an LMT offset like `-04:56:02`, or DateStyle SQL).
+ */
+function epochMicros(key: typeof dealTaskModel.dueAt): SQL<string | null> {
+  return sql<
+    string | null
+  >`(extract(epoch from ${key}) * 1000000)::bigint::text`
+}
+
+function fromEpochMicros(micros: string): SQL {
+  return sql`(timestamptz 'epoch' + ${micros}::bigint * interval '1 microsecond')`
+}
+
+function isInt8(value: unknown, min = INT8_MIN): value is string {
+  if (typeof value !== "string" || !INT8_TEXT.test(value)) {
+    return false
+  }
+  const n = BigInt(value)
+  return n >= min && n <= INT8_MAX
+}
 
 export function encodeMyTasksCursor(c: MyTasksCursor): string {
   return Buffer.from(JSON.stringify(c)).toString("base64url")
@@ -1495,9 +1515,8 @@ export function decodeMyTasksCursor(
   if (
     Object.keys(rest).length > 0 ||
     s !== status ||
-    !(k === null || (typeof k === "string" && PG_TIMESTAMPTZ_TEXT.test(k))) ||
-    typeof i !== "string" ||
-    !BIGINT_ID.test(i)
+    !(k === null || isInt8(k)) ||
+    !isInt8(i, 1n)
   ) {
     throw refuse()
   }
@@ -1516,9 +1535,10 @@ function afterCursor(
       ? sql`(${key} is null and ${id} < ${c.i}::bigint)`
       : sql`(${key} is null and ${id} > ${c.i}::bigint)`
   }
+  const at = fromEpochMicros(c.k)
   return desc
-    ? sql`(${key} < ${c.k}::timestamptz or (${key} = ${c.k}::timestamptz and ${id} < ${c.i}::bigint) or ${key} is null)`
-    : sql`(${key} > ${c.k}::timestamptz or (${key} = ${c.k}::timestamptz and ${id} > ${c.i}::bigint) or ${key} is null)`
+    ? sql`(${key} < ${at} or (${key} = ${at} and ${id} < ${c.i}::bigint) or ${key} is null)`
+    : sql`(${key} > ${at} or (${key} = ${at} and ${id} > ${c.i}::bigint) or ${key} is null)`
 }
 
 /** The Deal predicate of a 360 parent, or null when none is named. */

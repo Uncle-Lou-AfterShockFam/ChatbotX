@@ -136,6 +136,7 @@ export const listMyTasksQuery = z
       ),
     cursor: z
       .string()
+      // = MY_TASKS_CURSOR_MAX_LENGTH in the deal-task service
       .max(256)
       .optional()
       .describe("`nextCursor` of the previous page."),

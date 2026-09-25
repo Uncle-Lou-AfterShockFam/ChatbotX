@@ -954,7 +954,7 @@ describe("s197 dealTaskService.listInRange (task calendar)", () => {
 
 describe("s198 dealTaskService.listMine (My tasks)", () => {
   const ME = { userId: "u-1", permissions: {} }
-  const KEY = "2026-10-02 00:00:00.123456+00"
+  const KEY = "1790899200123456" // 2026-10-02T00:00:00.123456Z in epoch µs
   const client = () =>
     import("@chatbotx.io/database/client") as unknown as Promise<{
       eq: ReturnType<typeof vi.fn>
@@ -1017,7 +1017,7 @@ describe("s198 dealTaskService.listMine (My tasks)", () => {
     expect(eq).toHaveBeenCalledWith("status", "done")
   })
 
-  test("a cursor round-trips into the keyset predicate, microseconds intact; an undated cursor too", async () => {
+  test("a cursor round-trips into the keyset predicate as epoch µs (zone- and DateStyle-free); an undated cursor too", async () => {
     const { sql } = await client()
     for (const k of [KEY, null]) {
       sql.mockClear()
@@ -1029,6 +1029,17 @@ describe("s198 dealTaskService.listMine (My tasks)", () => {
       if (k) {
         expect(bound).toContain(k)
       }
+    }
+  })
+
+  test("the int8 extremes and a pre-epoch key are valid cursors", () => {
+    for (const k of [
+      "-9223372036854775808",
+      "9223372036854775807",
+      "-3786825600000000",
+    ]) {
+      const c = { s: "done" as const, k, i: "9223372036854775807" }
+      expect(decodeMyTasksCursor(encodeMyTasksCursor(c), "done")).toEqual(c)
     }
   })
 
@@ -1059,7 +1070,16 @@ describe("s198 dealTaskService.listMine (My tasks)", () => {
       b64({ s: "done", k: KEY, i: "1" }),
       b64({ s: "open", k: KEY, i: "1", extra: 1 }),
       b64({ s: "open", k: "yesterday", i: "1" }),
-      b64({ s: "open", k: "2026-10-02'; drop table", i: "1" }),
+      b64({ s: "open", k: "2026-10-02 00:00:00+00", i: "1" }),
+      b64({ s: "open", k: "1'; drop table", i: "1" }),
+      b64({ s: "open", k: 1_791_072_000_123_456, i: "1" }),
+      // int8 bounds: a value Postgres would refuse is a 422, never a 500
+      b64({ s: "open", k: "9223372036854775808", i: "1" }),
+      b64({ s: "open", k: "-9223372036854775809", i: "1" }),
+      b64({ s: "open", k: KEY, i: "99999999999999999999" }),
+      b64({ s: "open", k: KEY, i: "9223372036854775808" }),
+      b64({ s: "open", k: KEY, i: "0" }),
+      b64({ s: "open", k: KEY, i: "-1" }),
       b64({ s: "open", k: KEY, i: "1 or 1=1" }),
       b64({ s: "open", k: KEY, i: 1 }),
       b64({ s: "open", k: KEY }),
