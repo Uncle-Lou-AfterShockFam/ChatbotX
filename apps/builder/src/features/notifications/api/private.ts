@@ -1,3 +1,4 @@
+import { workspaceMemberService } from "@chatbotx.io/business"
 import { notificationService } from "@chatbotx.io/business/notification"
 import { MAX_NOTIFICATION_PAGE } from "@chatbotx.io/database/partials"
 import { zodBigintAsString } from "@chatbotx.io/utils"
@@ -101,7 +102,72 @@ const privateMarkAllNotificationsReadAPI = authorizedAPI
       }),
   )
 
+/** The caller's self-service preferences (s198); closed on every level. */
+const ownNotificationPrefsResource = z.object({
+  types: z.object({ taskAssigned: z.boolean(), dealMentioned: z.boolean() }),
+  channels: z.object({ inApp: z.boolean(), push: z.boolean() }),
+})
+export const updateOwnNotificationPrefsRequest = z
+  .object({
+    workspaceId: zodBigintAsString(),
+    types: z
+      .object({
+        taskAssigned: z.boolean().optional(),
+        dealMentioned: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
+    channels: z
+      .object({ inApp: z.boolean().optional(), push: z.boolean().optional() })
+      .strict()
+      .optional(),
+  })
+  .strict()
+
+const privateGetNotificationPrefsAPI = authorizedAPI
+  .route({
+    method: "GET",
+    path: "/workspaces/{workspaceId}/notifications/preferences",
+    summary: "My notification preferences",
+    tags: ["Notifications"],
+  })
+  .input(withWorkspaceIdSchema)
+  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .output(ownNotificationPrefsResource)
+  .handler(
+    async ({ input, context }) =>
+      await workspaceMemberService.getOwnNotificationPrefs({
+        workspaceId: input.workspaceId,
+        userId: context.user.id,
+      }),
+  )
+
+const privateUpdateNotificationPrefsAPI = authorizedAPI
+  .route({
+    method: "PATCH",
+    path: "/workspaces/{workspaceId}/notifications/preferences",
+    summary: "Change my notification preferences",
+    tags: ["Notifications"],
+  })
+  .input(updateOwnNotificationPrefsRequest)
+  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .output(ownNotificationPrefsResource)
+  .handler(
+    async ({ input, context }) =>
+      await workspaceMemberService.updateOwnNotificationPrefs({
+        workspaceId: input.workspaceId,
+        userId: context.user.id,
+        // only the groups that were sent (an absent group is not a change)
+        patch: {
+          ...(input.types ? { types: input.types } : {}),
+          ...(input.channels ? { channels: input.channels } : {}),
+        },
+      }),
+  )
+
 export const privateNotificationsAPI = {
+  privateGetNotificationPrefsAPI,
+  privateUpdateNotificationPrefsAPI,
   privateListNotificationsAPI,
   privateCountUnreadNotificationsAPI,
   privateMarkNotificationReadAPI,

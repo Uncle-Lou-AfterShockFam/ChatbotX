@@ -6953,7 +6953,29 @@
     "markAllRead": "Mark all read",
     "taskAssigned": "Task assigned: {task}",
     "dealMentioned": "You were mentioned on a deal",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "preferences": {
+      "title": "Notification preferences",
+      "description": "Choose which deal events notify you and where. These settings are yours alone; workspace-wide notifications are managed by an admin.",
+      "types": "Notify me when",
+      "channels": "Deliver to",
+      "taskAssigned": {
+        "label": "A task is assigned to me",
+        "hint": "Someone else assigns you a deal task."
+      },
+      "dealMentioned": {
+        "label": "I am mentioned in a deal comment",
+        "hint": "Someone @mentions you on a deal."
+      },
+      "inApp": {
+        "label": "In the app",
+        "hint": "The bell in the sidebar."
+      },
+      "push": {
+        "label": "Mobile push",
+        "hint": "A push notification on your signed-in mobile devices."
+      }
+    }
   },
   "crm": {
     "tabs": {
