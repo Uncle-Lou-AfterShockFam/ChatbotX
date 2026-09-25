@@ -7084,5 +7084,23 @@
       "linkExpires": "Enlace válido hasta {date}",
       "open": "Abrir PDF"
     }
+  },
+  "tasks": {
+    "calendar": {
+      "title": "Task calendar",
+      "weekOf": "Week of {date}",
+      "assignee": "Whose tasks",
+      "mine": "Mine",
+      "everyone": "Everyone",
+      "view": "Calendar view",
+      "month": "Month",
+      "week": "Week",
+      "previous": "Previous",
+      "next": "Next",
+      "today": "Today",
+      "truncated": "Showing the first 500 tasks of this range; narrow it to see the rest.",
+      "empty": "No tasks are due in this range.",
+      "hint": "Click a task to open its deal. Drag an open task to another day to move its due date; a start date moves with it."
+    }
   }
 }

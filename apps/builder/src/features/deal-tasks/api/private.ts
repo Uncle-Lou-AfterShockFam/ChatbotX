@@ -13,10 +13,12 @@ import {
   addTaskTemplateDependencyRequest,
   completeDealTaskRequest,
   createDealTaskRequest,
+  listTasksInRangeQuery,
   updateDealTaskRequest,
   upsertDealTaskTemplateRequest,
 } from "../schema/action"
 import {
+  dealTaskCalendarResource,
   dealTaskResource,
   dealTaskTemplateResource,
   dealTaskUpdateResource,
@@ -304,7 +306,36 @@ const privateRemoveTaskTemplateDependencyAPI = authorizedAPI
       }),
   )
 
+const privateListTasksInRangeAPI = authorizedAPI
+  .route({
+    method: "GET",
+    path: "/workspaces/{workspaceId}/tasks",
+    summary: "Tasks due in a date range across the deals the caller may see",
+    tags: ["Deals"],
+  })
+  .input(withWorkspaceIdSchema.and(listTasksInRangeQuery))
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
+  .output(
+    z.object({
+      data: z.array(dealTaskCalendarResource),
+      truncated: z.boolean(),
+    }),
+  )
+  .handler(
+    async ({ input, context }) =>
+      await dealTaskService.listInRange({
+        workspaceId: input.workspaceId,
+        from: input.from,
+        to: input.to,
+        assigneeId: input.assignee === "me" ? context.user.id : null,
+        status: input.status ?? null,
+        pipelineId: input.pipelineId ?? null,
+        viewer: viewerFromContext(context),
+      }),
+  )
+
 export const privateDealTasksAPI = {
+  privateListTasksInRangeAPI,
   privateListDealTasksAPI,
   privateCreateDealTaskAPI,
   privateUpdateDealTaskAPI,

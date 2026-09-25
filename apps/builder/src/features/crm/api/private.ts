@@ -150,9 +150,9 @@ const privateGetCompanyMetricsAPI = authorizedAPI
         companyIds: [input.id],
         accessScope,
       }),
-      dealTaskService.listByDealIds({
+      dealTaskService.listForDealsOf({
         workspaceId: input.workspaceId,
-        dealIds: deals.map((d) => d.id),
+        parent: { companyId: input.id },
         viewer,
         limit: 200,
       }),
@@ -205,13 +205,15 @@ const privateListCompanyTasksAPI = authorizedAPI
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ data: z.array(dealTaskResource) }))
   .handler(async ({ input, context }) => {
-    const viewer = viewerFromContext(context)
-    const deals = await companyDeals({ ...input, viewer })
+    await companyService.findOrFail({
+      workspaceId: input.workspaceId,
+      id: input.id,
+    })
     return {
-      data: await dealTaskService.listByDealIds({
+      data: await dealTaskService.listForDealsOf({
         workspaceId: input.workspaceId,
-        dealIds: deals.map((d) => d.id),
-        viewer,
+        parent: { companyId: input.id },
+        viewer: viewerFromContext(context),
         limit: input.limit,
       }),
     }
@@ -495,19 +497,11 @@ const privateListContactTasksAPI = authorizedAPI
       contactId: input.contactId,
       accessScope: scope,
     })
-    const viewer = viewerFromContext(context)
-    const { data: deals } = await dealService.list({
-      workspaceId: input.workspaceId,
-      contactId: input.contactId,
-      viewer,
-      page: 1,
-      perPage: 200,
-    })
     return {
-      data: await dealTaskService.listByDealIds({
+      data: await dealTaskService.listForDealsOf({
         workspaceId: input.workspaceId,
-        dealIds: deals.map((d) => d.id),
-        viewer,
+        parent: { contactId: input.contactId },
+        viewer: viewerFromContext(context),
         limit: input.limit,
       }),
     }

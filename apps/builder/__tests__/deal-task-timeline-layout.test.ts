@@ -6,6 +6,8 @@ import {
   DAY_MS,
   draggedDates,
   layoutTimeline,
+  localToday,
+  moveToDay,
   openSuccessors,
   type TimelineTask,
   utcDay,
@@ -168,28 +170,71 @@ describe("s197 draggedDates / openSuccessors", () => {
     dueDay: utcDay(D("2026-10-04")),
   }
 
+  const task = { effectiveStart: D("2026-10-02"), dueAt: D("2026-10-04") }
+
   test("move shifts both ends and pins an explicit start; resize moves only the due day and never before the start", () => {
-    expect(draggedDates({ bar, mode: "move", deltaDays: 2 })).toEqual({
+    expect(draggedDates({ bar, task, mode: "move", deltaDays: 2 })).toEqual({
       startAt: D("2026-10-04"),
       dueAt: D("2026-10-06"),
     })
-    expect(draggedDates({ bar, mode: "resize", deltaDays: -1 })).toEqual({
+    expect(draggedDates({ bar, task, mode: "resize", deltaDays: -1 })).toEqual({
       startAt: undefined,
       dueAt: D("2026-10-03"),
     })
-    expect(draggedDates({ bar, mode: "resize", deltaDays: -9 })).toEqual({
+    expect(draggedDates({ bar, task, mode: "resize", deltaDays: -9 })).toEqual({
       startAt: undefined,
       dueAt: D("2026-10-02"),
     })
-    expect(draggedDates({ bar, mode: "move", deltaDays: 0 })).toBeNull()
+    expect(draggedDates({ bar, task, mode: "move", deltaDays: 0 })).toBeNull()
     expect(
       draggedDates({
         bar: { ...bar, dueDay: bar.startDay },
+        task,
         mode: "resize",
         deltaDays: -1,
       }),
     ).toBeNull()
     expect(DAY_MS).toBe(86_400_000)
+  })
+
+  test("a template task (start and due on ONE day, start at 15:00, due at 10:00 the next) keeps its times and never starts after it ends", () => {
+    const t = {
+      effectiveStart: new Date("2026-10-02T15:00:00Z"),
+      dueAt: new Date("2026-10-02T15:00:00Z"),
+    }
+    const one = { startDay: utcDay(t.effectiveStart), dueDay: utcDay(t.dueAt) }
+    expect(
+      draggedDates({ bar: one, task: t, mode: "move", deltaDays: 3 }),
+    ).toEqual({
+      startAt: new Date("2026-10-05T15:00:00Z"),
+      dueAt: new Date("2026-10-05T15:00:00Z"),
+    })
+    // resize back onto the start day: clamped to the start instant, not 422
+    const two = {
+      effectiveStart: new Date("2026-10-02T15:00:00Z"),
+      dueAt: new Date("2026-10-03T10:00:00Z"),
+    }
+    const bar2 = {
+      startDay: utcDay(two.effectiveStart),
+      dueDay: utcDay(two.dueAt),
+    }
+    expect(
+      draggedDates({ bar: bar2, task: two, mode: "resize", deltaDays: -1 }),
+    ).toEqual({ startAt: undefined, dueAt: new Date("2026-10-02T15:00:00Z") })
+  })
+
+  test("moveToDay keeps the time of day (midnight when there is none); localToday is the LOCAL date in the UTC-midnight convention", () => {
+    expect(
+      moveToDay(new Date("2026-10-02T15:30:00Z"), utcDay(D("2026-10-09"))),
+    ).toEqual(new Date("2026-10-09T15:30:00Z"))
+    expect(moveToDay(null, utcDay(D("2026-10-09")))).toEqual(D("2026-10-09"))
+    // a local wall clock of Oct 2 18:00 is Oct 2 whatever the UTC day is
+    expect(localToday(new Date(2026, 9, 2, 18, 0, 0))).toBe(
+      utcDay(D("2026-10-02")),
+    )
+    expect(localToday(new Date(2026, 9, 2, 0, 30, 0))).toBe(
+      utcDay(D("2026-10-02")),
+    )
   })
 
   test("openSuccessors = open tasks waiting on the task directly", () => {

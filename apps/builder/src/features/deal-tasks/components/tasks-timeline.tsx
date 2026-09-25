@@ -7,8 +7,8 @@ import {
   dayToDate,
   draggedDates,
   layoutTimeline,
+  localToday,
   type TimelineBar,
-  utcDay,
 } from "../lib/timeline-layout"
 import type { DealTaskWithBlockersResource } from "../schema/resource"
 
@@ -69,12 +69,13 @@ export function TasksTimeline({
   const [drag, setDrag] = useState<Drag | null>(null)
   const dragRef = useRef<Drag | null>(null)
   const byId = new Map(tasks.map((task) => [task.id, task]))
-  const today = utcDay(new Date())
+  const today = localToday()
   const todayTick = layout.ticks.find((tick) => tick.day === today)
   const dir = rtl ? -1 : 1
 
   const commit = (bar: TimelineBar, mode: Drag["mode"], deltaDays: number) => {
-    const dates = draggedDates({ bar, mode, deltaDays })
+    const task = byId.get(bar.id)
+    const dates = task ? draggedDates({ bar, task, mode, deltaDays }) : null
     if (dates) {
       onReschedule(bar.id, dates)
     }
