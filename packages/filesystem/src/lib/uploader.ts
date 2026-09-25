@@ -2,6 +2,7 @@ import type { Readable } from "node:stream"
 import {
   CopyObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
@@ -10,9 +11,11 @@ import {
   type PutObjectCommandInput,
   S3Client,
 } from "@aws-sdk/client-s3"
+import { mapWithConcurrency } from "@chatbotx.io/utils"
 import { AwsClient } from "aws4fetch"
 import { keys } from "../keys"
 import { buildCopySource } from "./copy-source"
+import { uploaderLogger } from "./logger"
 
 const env = keys()
 
@@ -200,6 +203,67 @@ export class Uploader {
     return await this.#client.send(command)
   }
 
+  /**
+   * One S3 multi-object delete (at most 1000 distinct keys, one listing
+   * page; more throws a RangeError before any request). Per key, not
+   * all-or-nothing: returns how many keys the store confirmed gone and the
+   * first failure; a key the reply omits, or names in `Errors`, counts as
+   * failed.
+   */
+  async deleteObjects(
+    keys: string[],
+  ): Promise<{ deleted: number; firstFailure?: unknown }> {
+    if (keys.length === 0) {
+      return { deleted: 0 }
+    }
+    // Counted by distinct key on both sides: a repeated key in the request or
+    // a key acknowledged twice in the reply must never inflate the count.
+    const requested = new Set(keys)
+    if (requested.size > MAX_DELETE_OBJECTS_KEYS) {
+      throw new RangeError(
+        `deleteObjects: ${requested.size} keys exceeds the S3 limit of ${MAX_DELETE_OBJECTS_KEYS} per request`,
+      )
+    }
+    const reply = await this.#client.send(
+      new DeleteObjectsCommand({
+        Bucket: env.S3_BUCKET,
+        Delete: {
+          Objects: [...requested].map((Key) => ({ Key })),
+          Quiet: false,
+        },
+      }),
+    )
+    // A key the store names in BOTH lists is ambiguous: count it failed.
+    const failed = new Set((reply.Errors ?? []).map((entry) => entry.Key))
+    const confirmed = new Set(
+      (reply.Deleted ?? [])
+        .map((entry) => entry.Key)
+        .filter(
+          (key): key is string =>
+            key !== undefined && requested.has(key) && !failed.has(key),
+        ),
+    )
+    const deleted = confirmed.size
+    const error = reply.Errors?.[0]
+    if (error) {
+      return {
+        deleted,
+        firstFailure: new Error(
+          `${error.Code ?? "DeleteError"} on "${error.Key}": ${error.Message ?? ""}`,
+        ),
+      }
+    }
+    if (deleted < requested.size) {
+      return {
+        deleted,
+        firstFailure: new Error(
+          `multi-object delete confirmed ${deleted} of ${requested.size} key(s)`,
+        ),
+      }
+    }
+    return { deleted }
+  }
+
   async listObjects(
     prefix: string,
     options: Partial<ListObjectsV2CommandInput> = {},
@@ -247,11 +311,57 @@ export class Uploader {
         .map((object) => object.Key)
         .filter((key): key is string => Boolean(key) && key !== options.except)
 
-      // Per object, not all-or-nothing: S3 deletes do not roll back, so the
-      // count must reflect what is actually gone even when one key fails.
-      const results = await Promise.allSettled(
-        keys.map((key) => this.deleteObject(key)),
+      // One request per page (a page is at most 1000 keys, the S3 limit),
+      // counted per key: S3 deletes do not roll back, so the count must
+      // reflect what is actually gone even when one key fails.
+      const outcome = await this.#deletePage(keys)
+      deleted += outcome.deleted
+      const firstFailure = outcome.firstFailure
+      if (firstFailure !== undefined) {
+        throw new PrefixPurgeError(prefix, deleted, firstFailure)
+      }
+
+      if (!listed.IsTruncated) {
+        return { deleted }
+      }
+      // Truncated but no token: the rest of the prefix is unreachable, which
+      // must read as a partial purge, never as success.
+      if (!listed.NextContinuationToken) {
+        throw new PrefixPurgeError(
+          prefix,
+          deleted,
+          new Error("listing is truncated but has no continuation token"),
+        )
+      }
+      continuationToken = listed.NextContinuationToken
+    }
+  }
+
+  /**
+   * One page through the multi-object delete. If that REQUEST fails as a
+   * whole (e.g. one key the XML body cannot carry), fall back to per-key
+   * deletes, bounded, so one bad key cannot keep up to 999 others from ever
+   * being purged; the bad key then fails alone.
+   */
+  async #deletePage(
+    keys: string[],
+  ): Promise<Awaited<ReturnType<Uploader["deleteObjects"]>>> {
+    try {
+      return await this.deleteObjects(keys)
+    } catch (error) {
+      // Not rethrown: the per-key pass below re-attempts every key and
+      // surfaces its own first failure, which is the actionable one. Logged so
+      // how often (and why) the fallback runs stays visible.
+      uploaderLogger.warn(
+        { err: error, keys: keys.length },
+        "multi-object delete refused; falling back to per-key deletes",
       )
+      const results = await mapWithConcurrency(
+        [...new Set(keys)],
+        PER_KEY_FALLBACK_CONCURRENCY,
+        (key) => this.deleteObject(key),
+      )
+      let deleted = 0
       let firstFailure: unknown
       for (const result of results) {
         if (result.status === "fulfilled") {
@@ -260,19 +370,18 @@ export class Uploader {
           firstFailure ??= result.reason
         }
       }
-      if (firstFailure !== undefined) {
-        throw new PrefixPurgeError(prefix, deleted, firstFailure)
-      }
-
-      continuationToken = listed.IsTruncated
-        ? listed.NextContinuationToken
-        : undefined
-      if (!continuationToken) {
-        return { deleted }
-      }
+      return firstFailure === undefined
+        ? { deleted }
+        : { deleted, firstFailure }
     }
   }
 }
+
+/** S3's per-request cap for DeleteObjects. */
+export const MAX_DELETE_OBJECTS_KEYS = 1000
+
+/** Parallel single deletes when a whole multi-object request is refused. */
+const PER_KEY_FALLBACK_CONCURRENCY = 8
 
 /** 1000 keys per S3 page: 100 pages = 100k objects under one prefix. */
 export const DEFAULT_DELETE_BY_PREFIX_MAX_PAGES = 100

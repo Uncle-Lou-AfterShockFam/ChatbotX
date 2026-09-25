@@ -19,6 +19,9 @@ const { checkApiRateLimit, assertApiNotRateLimited } = await import(
 const WINDOW_MS = 10_000
 const REQUEST_LIMIT = 120
 
+// A Redis that accepted the socket but stopped answering.
+const neverSettles = (): void => undefined
+
 // Mirrors `INCR_WITH_WINDOW_LUA`'s contract (see packages/redis) in a single
 // call, matching the real `incrWithWindow` store method's signature.
 function createFakeStore() {
@@ -204,6 +207,93 @@ describe("checkApiRateLimit", () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  test("a HUNG store is abandoned at the store timeout and takes the local fallback", async () => {
+    const { STORE_TIMEOUT_MS } = await import(
+      "../src/lib/rate-limit/api-rate-limit"
+    )
+    const hungStore = {
+      incrWithWindow: vi.fn(() => new Promise<number>(neverSettles)),
+    }
+    vi.useFakeTimers()
+    try {
+      let settled = false
+      const pending = checkApiRateLimit({
+        scope: "documenso-webhook-rate-limit",
+        key: "hung-store-ip",
+        store: hungStore,
+        now: 0,
+      }).then((result) => {
+        settled = true
+        return result
+      })
+
+      await vi.advanceTimersByTimeAsync(STORE_TIMEOUT_MS - 1)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      const result = await pending
+      expect(settled).toBe(true)
+      expect(result.limited).toBe(false)
+      expect(STORE_TIMEOUT_MS).toBeLessThan(10_000)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("the hung-store fallback still enforces the limit", async () => {
+    const hungStore = {
+      incrWithWindow: vi.fn(() => new Promise<number>(neverSettles)),
+    }
+    const results = await Promise.all(
+      Array.from({ length: 4 }, () =>
+        checkApiRateLimit({
+          scope: "documenso-webhook-rate-limit",
+          key: "hung-store-limit",
+          limit: 3,
+          store: hungStore,
+          now: 0,
+          storeTimeoutMs: 5,
+        }),
+      ),
+    )
+    expect(results.map((r) => r.limited)).toEqual([false, false, false, true])
+  })
+
+  test.each([
+    0,
+    -1,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    2 ** 31,
+  ])("refuses storeTimeoutMs %s instead of silently running on the local counter", async (bad) => {
+    await expect(
+      checkApiRateLimit({
+        scope: "channel-api-rate-limit",
+        key: "bad-timeout",
+        store,
+        now: 0,
+        storeTimeoutMs: bad,
+      }),
+    ).rejects.toThrow(RangeError)
+    expect(store.incrWithWindow).not.toHaveBeenCalled()
+  })
+
+  test("a slow store that answers inside the timeout is still the source of truth", async () => {
+    const slowStore = {
+      incrWithWindow: vi.fn(
+        () =>
+          new Promise<number>((resolve) => setTimeout(() => resolve(999), 5)),
+      ),
+    }
+    const result = await checkApiRateLimit({
+      scope: "channel-api-rate-limit",
+      key: "slow-store",
+      store: slowStore,
+      now: 0,
+      storeTimeoutMs: 1000,
+    })
+    expect(result.limited).toBe(true)
   })
 })
 

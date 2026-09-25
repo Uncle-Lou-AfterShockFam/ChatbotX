@@ -1,5 +1,7 @@
 import { distributedStore } from "@chatbotx.io/redis"
+import { assertTimeoutMs, withTimeout } from "@chatbotx.io/utils"
 import { logger } from "@/lib/log"
+import { STORE_TIMEOUT_MS } from "./api-rate-limit"
 
 const WINDOW_SECONDS = 10
 const IP_LIMIT = 60
@@ -17,6 +19,8 @@ type GuestRateLimitInput = {
   guestConversationId?: string | null
   store?: RateLimitStore
   now?: number
+  /** Test seam; app code keeps the default `STORE_TIMEOUT_MS`. */
+  storeTimeoutMs?: number
 }
 
 type GuestRateLimitResult = {
@@ -76,7 +80,10 @@ export const checkGuestRateLimit = async ({
   guestConversationId,
   store = distributedStore,
   now = Date.now(),
+  storeTimeoutMs = STORE_TIMEOUT_MS,
 }: GuestRateLimitInput): Promise<GuestRateLimitResult> => {
+  // Outside the try: a bad seam value is a caller bug, never a fallback.
+  assertTimeoutMs(storeTimeoutMs)
   const windowSuffix = buildWindowSuffix(now, WINDOW_SECONDS)
   const retryAfter = secondsUntilNextWindow(now, WINDOW_SECONDS)
   const ipKey = buildRateLimitKey("ip", webchatId, clientIp, windowSuffix)
@@ -84,7 +91,12 @@ export const checkGuestRateLimit = async ({
     ? buildRateLimitKey("session", webchatId, guestConversationId, windowSuffix)
     : null
 
-  try {
+  // Up to four sequential round trips (set-if-absent + increment, per IP and
+  // per session). ONE budget covers all of them: bounding each call instead
+  // would let a slow-but-answering Redis hold a guest message ~4x
+  // STORE_TIMEOUT_MS (s201c skeptic). Past the budget the request takes the
+  // local fallback; the abandoned calls may still land (accepted over-count).
+  const checkStore = async (): Promise<GuestRateLimitResult> => {
     const ipCount = await incrementWindowCounter(store, ipKey, WINDOW_SECONDS)
     if (ipCount > IP_LIMIT) {
       return { limited: true, retryAfter }
@@ -102,6 +114,14 @@ export const checkGuestRateLimit = async ({
     }
 
     return { limited: false, retryAfter }
+  }
+
+  try {
+    return await withTimeout(
+      checkStore(),
+      storeTimeoutMs,
+      "Guest rate limit store did not answer in time",
+    )
   } catch (error) {
     logger.warn(
       { err: error, webchatId, clientIp },
