@@ -120,18 +120,15 @@ describe("handleFollowUp", () => {
       },
       { delay: 60_000, jobId: `smart-delay-${rowId}-${triggerAt.getTime()}` },
     )
-    expect(smartDelayService.markScheduled).toHaveBeenCalledWith({ id: rowId })
+    // Unconditional for followUp: upsertFollowUp re-arms a scheduled row, and a
+    // pending-only CAS there could skip the re-armed row's job (skeptic HIGH).
+    expect(smartDelayService.markScheduled).toHaveBeenCalledWith({
+      id: rowId,
+      ifPending: false,
+    })
     expect(
       smartDelayService.markScheduled.mock.invocationCallOrder[0],
     ).toBeLessThan(integrationQueueAdd.mock.invocationCallOrder[0])
-  })
-
-  test("a row that left pending before markScheduled (claimed meanwhile) is not enqueued", async () => {
-    smartDelayService.markScheduled.mockResolvedValueOnce(false)
-    await handleFollowUp(makeProps())
-    expect(smartDelayService.markScheduled).toHaveBeenCalledOnce()
-    expect(integrationQueueAdd).not.toHaveBeenCalled()
-    expect(smartDelayService.resetToPending).not.toHaveBeenCalled()
   })
 
   test("keeps long-delay rows pending for the scanner", async () => {
