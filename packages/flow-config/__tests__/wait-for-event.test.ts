@@ -189,4 +189,14 @@ describe("wait step: event matchValue", () => {
         .success,
     ).toBe(true)
   })
+
+  test("the stored spec schema trims, like the step and the resume compare", () => {
+    expect(
+      waitForEventSpecSchema.parse({
+        eventType: "customFieldChanged",
+        customFieldId: "cf-1",
+        matchValue: " 3635 ",
+      }).matchValue,
+    ).toBe("3635")
+  })
 })

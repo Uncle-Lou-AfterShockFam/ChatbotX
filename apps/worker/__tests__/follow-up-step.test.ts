@@ -84,6 +84,7 @@ describe("handleFollowUp", () => {
     vi.setSystemTime(new Date("2026-07-16T00:00:00.000Z"))
     integrationQueueAdd.mockResolvedValue(undefined)
     smartDelayService.resetToPending.mockResolvedValue(undefined)
+    smartDelayService.markScheduled.mockResolvedValue(true)
     smartDelayService.upsertFollowUp.mockImplementation(
       async ({ data }: { data: Record<string, unknown> }) => data,
     )
@@ -123,6 +124,14 @@ describe("handleFollowUp", () => {
     expect(
       smartDelayService.markScheduled.mock.invocationCallOrder[0],
     ).toBeLessThan(integrationQueueAdd.mock.invocationCallOrder[0])
+  })
+
+  test("a row that left pending before markScheduled (claimed meanwhile) is not enqueued", async () => {
+    smartDelayService.markScheduled.mockResolvedValueOnce(false)
+    await handleFollowUp(makeProps())
+    expect(smartDelayService.markScheduled).toHaveBeenCalledOnce()
+    expect(integrationQueueAdd).not.toHaveBeenCalled()
+    expect(smartDelayService.resetToPending).not.toHaveBeenCalled()
   })
 
   test("keeps long-delay rows pending for the scanner", async () => {

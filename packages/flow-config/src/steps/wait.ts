@@ -38,7 +38,7 @@ export const waitForEventSpecSchema = z.object({
   customFieldId: z.string().trim().min(1).optional(),
   // customFieldChanged only: the RESOLVED value the field must change TO,
   // captured once at wait start (so paying order B cannot resume invoice A).
-  matchValue: z.string().max(MATCH_VALUE_MAX).optional(),
+  matchValue: z.string().trim().max(MATCH_VALUE_MAX).optional(),
 })
 export type WaitForEventSpec = z.infer<typeof waitForEventSpecSchema>
 

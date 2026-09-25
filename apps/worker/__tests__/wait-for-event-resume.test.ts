@@ -99,7 +99,7 @@ describe("runWaitForEventResume", () => {
   })
 
   test("timeout with no timeout edge completes the row and runs nothing", async () => {
-    smartDelayService.findById.mockResolvedValueOnce({ ...row, nodeId: null })
+    smartDelayService.findById.mockResolvedValue({ ...row, nodeId: null })
     await runWaitForEventResume({ reason: "timeout", smartDelayId: "sd-1" })
     expect(smartDelayService.claimForRun).toHaveBeenCalledTimes(1)
     expect(runFlowNode).not.toHaveBeenCalled()
@@ -217,6 +217,18 @@ describe("runWaitForEventResume", () => {
       id: "sd-b",
     })
     expect(runFlowNode).toHaveBeenCalledTimes(1)
+  })
+
+  test("timeout: runs the edge of the row it CLAIMED, not its pre-claim snapshot (a failed event resume re-pointed it)", async () => {
+    smartDelayService.findById
+      .mockResolvedValueOnce(row)
+      .mockResolvedValueOnce({ ...row, nodeId: "event-node" })
+    await runWaitForEventResume({ reason: "timeout", smartDelayId: "sd-1" })
+    expect(runFlowNode).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(runFlowNode.mock.calls[0])).toContain("event-node")
+    expect(JSON.stringify(runFlowNode.mock.calls[0])).not.toContain(
+      "timeout-node",
+    )
   })
 
   test("a malformed stored spec never matches", async () => {

@@ -165,7 +165,9 @@ export async function scheduleSmartDelayResume(props: {
   }
 
   try {
-    await smartDelayService.markScheduled({ id: persistedRow.id })
+    if (!(await smartDelayService.markScheduled({ id: persistedRow.id }))) {
+      return // already claimed (an event beat the enqueue): nothing to time out
+    }
 
     const job = smartDelayResumeJobFactories[persistedRow.type](persistedRow, {
       metadata: props.metadata,
