@@ -14,6 +14,8 @@ const m = vi.hoisted(() => {
     executes: [] as { rows: unknown[] }[],
     inserted: [] as Record<string, unknown>[],
     insertConflict: false,
+    /** A task insert with this title rejects (an FK violation stand-in). */
+    insertFailTitle: null as string | null,
     activities: [] as Record<string, unknown>[],
     calls: [] as string[],
   }
@@ -83,6 +85,9 @@ const m = vi.hoisted(() => {
               return Promise.resolve([row])
             }
             state.calls.push(`insert:${model._name}`)
+            if (state.insertFailTitle && v.title === state.insertFailTitle) {
+              return Promise.reject(new Error("fk violation"))
+            }
             if (state.insertConflict) {
               return Promise.resolve([])
             }
@@ -286,6 +291,7 @@ beforeEach(() => {
     ;(m.state[k] as unknown[]).length = 0
   }
   m.state.insertConflict = false
+  m.state.insertFailTitle = null
   m.dealFindOrFail.mockResolvedValue({ ...DEAL })
 })
 
@@ -452,6 +458,9 @@ describe("dealTaskService.complete", () => {
     })
     expect(result.completed).toBe(true)
     expect(m.state.calls.filter((c) => !c.startsWith("select"))).toEqual([
+      // s197: the deal graph lock before the blocker read (no deadlock with
+      // a successor shift, which locks every task of the deal)
+      "execute",
       "for:share",
       "update",
       "update:status,completedAt,completedById",
@@ -983,7 +992,7 @@ describe("s197 dealTaskService.create / update dates", () => {
     expect(calls.filter((c) => c.startsWith("update:startAt"))).toHaveLength(2)
   })
 
-  test("without shiftSuccessors (or with no due-date move) there is no lock and no walk", async () => {
+  test("without shiftSuccessors (or with no due-date move) there is no graph lock and no walk; a date change still reads its row FOR UPDATE", async () => {
     m.state.selects.push([TASK({ dueAt: D("2026-10-01") })])
     m.state.updates.push([TASK({ dueAt: D("2026-10-03") })])
     const plain = await dealTaskService.update({
@@ -993,6 +1002,9 @@ describe("s197 dealTaskService.create / update dates", () => {
       data: { dueAt: D("2026-10-03") },
     })
     expect(plain.shifted).toEqual([])
+    // the date change validated against a LOCKED row (codex probe, s197)
+    expect(m.state.calls.filter((c) => c === "for:update")).toHaveLength(1)
+    m.state.calls.length = 0
     m.state.selects.push([TASK({ dueAt: D("2026-10-01") })])
     m.state.updates.push([TASK({ title: "renamed" })])
     await dealTaskService.update({
@@ -1003,6 +1015,22 @@ describe("s197 dealTaskService.create / update dates", () => {
     })
     expect(m.state.calls).not.toContain("execute")
     expect(m.state.calls).not.toContain("for:update")
+  })
+
+  test("shiftSuccessors takes the graph lock BEFORE the source row is read (the delta comes from the locked row)", async () => {
+    m.state.selects.push([TASK({ dueAt: D("2026-10-01") })], [], [])
+    m.state.updates.push([TASK({ dueAt: D("2026-10-02") })])
+    await dealTaskService.update({
+      workspaceId: WS,
+      dealId: "deal-1",
+      taskId: "task-1",
+      data: { dueAt: D("2026-10-02"), shiftSuccessors: true },
+    })
+    expect(m.state.calls.slice(0, 3)).toEqual([
+      "execute",
+      "select",
+      "for:update",
+    ])
   })
 })
 
@@ -1054,6 +1082,59 @@ describe("s197 instantiateForStage copies template edges", () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  test("a template whose insert fails (deleted since the snapshot) is skipped; the others and their edges still land", async () => {
+    const [a, c] = nextTwoTaskIds()
+    m.state.insertFailTitle = "gone"
+    m.state.selects.push(
+      [
+        { id: a, templateId: "tpl-a", status: "open" },
+        { id: c, templateId: "tpl-c", status: "open" },
+      ],
+      [],
+    )
+    const { created, edges } = await dealTaskService.instantiateForStage({
+      workspaceId: WS,
+      deal: DEAL as never,
+      stageId: "stage-1",
+      actorId: null,
+      templates: [
+        TPL({ id: "tpl-a", title: "a" }),
+        TPL({ id: "tpl-b", title: "gone" }),
+        TPL({ id: "tpl-c", title: "c", dependsOn: ["tpl-a", "tpl-b"] }),
+      ],
+    })
+    expect(created.map((t) => t.title)).toEqual(["a", "c"])
+    expect(edges).toBe(1)
+    expect(m.logWarn).toHaveBeenCalledWith(
+      expect.objectContaining({ templateId: "tpl-b" }),
+      expect.any(String),
+    )
+  })
+
+  test("a DONE dependent from an earlier entry gains no blocker", async () => {
+    const [a] = nextTwoTaskIds()
+    m.state.selects.push(
+      [
+        { id: a, templateId: "tpl-a", status: "open" },
+        { id: "old-b", templateId: "tpl-b", status: "done" },
+      ],
+      [],
+    )
+    // tpl-b's instance from an earlier entry is the one the lookup finds
+    const { edges } = await dealTaskService.instantiateForStage({
+      workspaceId: WS,
+      deal: DEAL as never,
+      stageId: "stage-1",
+      actorId: null,
+      templates: [
+        TPL({ id: "tpl-a", title: "a" }),
+        TPL({ id: "tpl-b", title: "b", dependsOn: ["tpl-a"] }),
+      ],
+    })
+    expect(edges).toBe(0)
+    expect(m.state.inserted.filter((r) => "dependsOnTaskId" in r)).toEqual([])
   })
 
   test("a re-entry that creates nothing copies nothing (an edge removed by hand stays removed)", async () => {

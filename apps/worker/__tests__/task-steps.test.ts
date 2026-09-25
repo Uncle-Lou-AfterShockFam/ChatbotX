@@ -65,11 +65,12 @@ describe("createTask step", () => {
     pipelineId: "pipe-1",
     title: "Call {{contact.full_name}}",
     description: "",
+    startInDays: 1,
     dueInDays: 2,
     assignTo: "dealOwner",
   }
 
-  test("creates on the contact's open deal: variables resolved, owner assigned, dueAt = now + days", async () => {
+  test("creates on the contact's open deal: variables resolved, owner assigned, startAt / dueAt = now + days", async () => {
     vi.useFakeTimers({ now: new Date("2026-09-24T00:00:00Z") })
     try {
       await createTask(props(step))
@@ -82,6 +83,7 @@ describe("createTask step", () => {
       data: {
         title: "Call Lou",
         description: null,
+        startAt: new Date("2026-09-25T00:00:00Z"),
         dueAt: new Date("2026-09-26T00:00:00Z"),
         assigneeId: "owner-1",
       },
@@ -113,11 +115,18 @@ describe("createTask step", () => {
 
   test("empty title falls back to a contact-keyed title; assignTo none = no assignee", async () => {
     await createTask(
-      props({ ...step, title: "", assignTo: "none", dueInDays: null }),
+      props({
+        ...step,
+        title: "",
+        assignTo: "none",
+        startInDays: null,
+        dueInDays: null,
+      }),
     )
     expect(m.taskCreate.mock.calls[0][0].data).toMatchObject({
       title: "Task for contact-1",
       assigneeId: null,
+      startAt: null,
       dueAt: null,
     })
   })

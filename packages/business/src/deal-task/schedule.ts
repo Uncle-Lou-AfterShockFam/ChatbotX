@@ -126,3 +126,80 @@ export function downstreamOpen(props: {
   }
   return out
 }
+
+export type EdgeRefusal =
+  | "tooManyDependencies"
+  | "dependencyExists"
+  | "dependencyCycle"
+
+/**
+ * Bounded BFS: does `from` reach `to` along `dependsOn` edges? The visited
+ * set makes it O(E); the step cap is the hard stop for a caller-supplied
+ * graph the caps somehow let through.
+ */
+export function reaches(props: {
+  edges: Edge[]
+  from: string
+  to: string
+  field?: string
+}): boolean {
+  const { edges, from, to, field = "dependsOnTaskId" } = props
+  const next = new Map<string, string[]>()
+  for (const e of edges) {
+    const list = next.get(e.taskId) ?? []
+    list.push(e.dependsOnTaskId)
+    next.set(e.taskId, list)
+  }
+  const visited = new Set<string>([from])
+  const queue = [from]
+  let steps = 0
+  while (queue.length > 0) {
+    const node = queue.shift() as string
+    if (node === to) {
+      return true
+    }
+    for (const dep of next.get(node) ?? []) {
+      if (++steps > DEPENDENCY_WALK_STEP_CAP) {
+        throw validationException(
+          field,
+          "The dependency graph is too large to check.",
+          { reason: "dependencyWalkCap" },
+        )
+      }
+      if (!visited.has(dep)) {
+        visited.add(dep)
+        queue.push(dep)
+      }
+    }
+  }
+  return false
+}
+
+/**
+ * Why `taskId -> dependsOnTaskId` may not be added to `edges` (fan-in cap,
+ * duplicate, cycle), or null. Shared by task and template edges (a template
+ * edge is passed in the same `{taskId, dependsOnTaskId}` shape).
+ */
+export function edgeRefusal(props: {
+  edges: Edge[]
+  taskId: string
+  dependsOnTaskId: string
+  cap: number
+  field?: string
+}): EdgeRefusal | null {
+  const { edges, taskId, dependsOnTaskId, cap, field } = props
+  if (edges.filter((e) => e.taskId === taskId).length >= cap) {
+    return "tooManyDependencies"
+  }
+  if (
+    edges.some(
+      (e) => e.taskId === taskId && e.dependsOnTaskId === dependsOnTaskId,
+    )
+  ) {
+    return "dependencyExists"
+  }
+  if (reaches({ edges, from: dependsOnTaskId, to: taskId, field })) {
+    return "dependencyCycle"
+  }
+  return null
+}

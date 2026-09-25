@@ -106,6 +106,11 @@ export function TasksTimeline({
       setDrag(next)
     }
   }
+  /** An interrupted gesture (browser scroll, lost capture): drop it uncommitted. */
+  const onPointerCancel = () => {
+    dragRef.current = null
+    setDrag(null)
+  }
   const onPointerUp = (bar: TimelineBar) => {
     const current = dragRef.current
     dragRef.current = null
@@ -306,10 +311,13 @@ export function TasksTimeline({
                     <rect
                       className={barClass(done, conflict)}
                       height={ROW_HEIGHT - BAR_INSET * 2}
+                      onLostPointerCapture={onPointerCancel}
+                      onPointerCancel={onPointerCancel}
                       onPointerDown={(e) => onPointerDown(e, bar, "move")}
                       onPointerMove={onPointerMove}
                       onPointerUp={() => onPointerUp(bar)}
                       rx={4}
+                      style={{ touchAction: "none" }}
                       width={shown.width}
                       x={shown.x}
                       y={shown.y + BAR_INSET}
@@ -319,9 +327,12 @@ export function TasksTimeline({
                         className="cursor-ew-resize fill-transparent"
                         data-testid={`timeline-resize-${bar.id}`}
                         height={ROW_HEIGHT - BAR_INSET * 2}
+                        onLostPointerCapture={onPointerCancel}
+                        onPointerCancel={onPointerCancel}
                         onPointerDown={(e) => onPointerDown(e, bar, "resize")}
                         onPointerMove={onPointerMove}
                         onPointerUp={() => onPointerUp(bar)}
+                        style={{ touchAction: "none" }}
                         width={RESIZE_HANDLE}
                         x={handleX}
                         y={shown.y + BAR_INSET}

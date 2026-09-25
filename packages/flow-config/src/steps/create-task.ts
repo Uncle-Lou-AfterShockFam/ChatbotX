@@ -15,30 +15,46 @@ export const createTaskAssignTo = z.enum(["none", "dealOwner", "user"])
  * run time + `dueInDays`; null = no due date. Start = run time +
  * `startInDays` (null = none; after the due date = the task is refused).
  */
-export const createTaskStepSchema = z.object({
-  id: zodBigintAsString(),
-  stepType: z.literal(stepTypes.enum.createTask),
-  pipelineId: z.string().optional(),
-  title: z.string().trim().max(MAX_TASK_TITLE_LENGTH).default(""),
-  description: z.string().trim().max(MAX_TASK_DESCRIPTION_LENGTH).default(""),
-  startInDays: z
-    .number()
-    .int()
-    .min(0)
-    .max(MAX_TASK_DUE_IN_DAYS)
-    .nullable()
-    .default(null),
-  dueInDays: z
-    .number()
-    .int()
-    .min(0)
-    .max(MAX_TASK_DUE_IN_DAYS)
-    .nullable()
-    .default(null),
-  assignTo: createTaskAssignTo.default("none"),
-  /** Workspace member id when `assignTo` = user; never remapped on import. */
-  assigneeId: z.string().optional(),
-})
+export const createTaskStepSchema = z
+  .object({
+    id: zodBigintAsString(),
+    stepType: z.literal(stepTypes.enum.createTask),
+    pipelineId: z.string().optional(),
+    title: z.string().trim().max(MAX_TASK_TITLE_LENGTH).default(""),
+    description: z.string().trim().max(MAX_TASK_DESCRIPTION_LENGTH).default(""),
+    startInDays: z
+      .number()
+      .int()
+      .min(0)
+      .max(MAX_TASK_DUE_IN_DAYS)
+      .nullable()
+      .default(null),
+    dueInDays: z
+      .number()
+      .int()
+      .min(0)
+      .max(MAX_TASK_DUE_IN_DAYS)
+      .nullable()
+      .default(null),
+    assignTo: createTaskAssignTo.default("none"),
+    /** Workspace member id when `assignTo` = user; never remapped on import. */
+    assigneeId: z.string().optional(),
+  })
+  // refused at save, not at every run: the service would 422 each run and the
+  // step would log and skip forever (skeptic HIGH, s197)
+  .superRefine((value, ctx) => {
+    if (
+      typeof value.startInDays === "number" &&
+      typeof value.dueInDays === "number" &&
+      value.startInDays > value.dueInDays
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["startInDays"],
+        message: "startInDays must not be after dueInDays",
+      })
+    }
+  })
 export type CreateTaskStepSchema = z.infer<typeof createTaskStepSchema>
 
 export const createTaskStepDefaultFn = (): CreateTaskStepSchema => ({

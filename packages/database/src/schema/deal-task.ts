@@ -77,7 +77,7 @@ export const dealTaskTemplateModel = pgTable(
  * from DealDependency rows whose blocker is still open. `overdueNotifiedAt`
  * is the claim column of the overdue scanner (one `taskOverdue` per task; a
  * due date moved into the future clears it). `startAt` is the explicit
- * start of the timeline bar (service-enforced `startAt <= dueAt`).
+ * start of the timeline bar (`startAt <= dueAt`: service + CHECK).
  */
 export const dealTaskModel = pgTable(
   "DealTask",
@@ -133,6 +133,12 @@ export const dealTaskModel = pgTable(
     uniqueIndex("DealTask_dealId_templateId_key")
       .on(table.dealId, table.templateId)
       .where(sql`${table.templateId} IS NOT NULL`),
+    // The service refuses it first (422 startAfterDue); this is the backstop
+    // for any writer that bypasses it.
+    check(
+      "DealTask_start_not_after_due_check",
+      sql`${table.startAt} IS NULL OR ${table.dueAt} IS NULL OR ${table.startAt} <= ${table.dueAt}`,
+    ),
   ],
 )
 

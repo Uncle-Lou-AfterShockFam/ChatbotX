@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "6ad8740f-ece0-448d-b6e7-71967c294ea9",
+  "id": "89420cce-0309-4fe0-abf5-e2ee8ad42bf7",
   "prevIds": [
     "d7b480e4-3208-4cfc-b3b5-653c592ba62b"
   ],
@@ -50670,6 +50670,13 @@
       "entityType": "checks",
       "schema": "public",
       "table": "DealDependency"
+    },
+    {
+      "value": "\"startAt\" IS NULL OR \"dueAt\" IS NULL OR \"startAt\" <= \"dueAt\"",
+      "name": "DealTask_start_not_after_due_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "DealTask"
     },
     {
       "value": "\"templateId\" <> \"dependsOnTemplateId\"",

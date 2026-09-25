@@ -31,10 +31,15 @@ import {
 import { notFoundException, validationException } from "../errors"
 import type { DealViewer } from "../pipeline/access"
 import { pipelineService } from "../pipeline/service"
-import { dealTaskService } from "./service"
+import { type EdgeRefusal, edgeRefusal } from "./schedule"
 
 const TEMPLATE_NOT_FOUND = "Task template not found"
 const ORDER_STEP = 1000
+const TEMPLATE_EDGE_REFUSAL_MESSAGES: Record<EdgeRefusal, string> = {
+  tooManyDependencies: `A template waits on at most ${MAX_DEAL_TASK_TEMPLATE_DEPENDENCIES_PER_TEMPLATE} templates.`,
+  dependencyExists: "That dependency already exists.",
+  dependencyCycle: "That dependency would create a cycle.",
+}
 
 export type DealTaskTemplateData = {
   title: string
@@ -233,9 +238,7 @@ export class DealTaskTemplateService extends BaseService {
       )
     }
     const row = await db.transaction(async (tx) => {
-      await tx.execute(
-        sql`select pg_advisory_xact_lock(hashtext(${`tpl-deps:${stageId}`}))`,
-      )
+      await lockStageTemplates(tx, stageId)
       await pipelineService.resolveStage({
         workspaceId,
         pipelineId,
@@ -276,41 +279,18 @@ export class DealTaskTemplateService extends BaseService {
           dependsOnTaskId: e.dependsOnTemplateId,
         }),
       )
-      if (
-        edges.filter((e) => e.taskId === templateId).length >=
-        MAX_DEAL_TASK_TEMPLATE_DEPENDENCIES_PER_TEMPLATE
-      ) {
+      const refusal = edgeRefusal({
+        edges,
+        taskId: templateId,
+        dependsOnTaskId: dependsOnTemplateId,
+        cap: MAX_DEAL_TASK_TEMPLATE_DEPENDENCIES_PER_TEMPLATE,
+        field: "dependsOnTemplateId",
+      })
+      if (refusal) {
         throw validationException(
           "dependsOnTemplateId",
-          `A template waits on at most ${MAX_DEAL_TASK_TEMPLATE_DEPENDENCIES_PER_TEMPLATE} templates.`,
-          { reason: "tooManyDependencies" },
-        )
-      }
-      if (
-        edges.some(
-          (e) =>
-            e.taskId === templateId &&
-            e.dependsOnTaskId === dependsOnTemplateId,
-        )
-      ) {
-        throw validationException(
-          "dependsOnTemplateId",
-          "That dependency already exists.",
-          { reason: "dependencyExists" },
-        )
-      }
-      if (
-        dealTaskService.reaches({
-          edges,
-          from: dependsOnTemplateId,
-          to: templateId,
-          field: "dependsOnTemplateId",
-        })
-      ) {
-        throw validationException(
-          "dependsOnTemplateId",
-          "That dependency would create a cycle.",
-          { reason: "dependencyCycle" },
+          TEMPLATE_EDGE_REFUSAL_MESSAGES[refusal],
+          { reason: refusal },
         )
       }
       const [inserted] = await tx
@@ -343,34 +323,40 @@ export class DealTaskTemplateService extends BaseService {
       templateId,
       dependsOnTemplateId,
     } = props
-    await pipelineService.resolveStage({
-      workspaceId,
-      pipelineId,
-      stageId,
-      viewer: props.viewer,
+    // the same per-stage lock as addDependency: its cycle check never reads
+    // an edge set that a remove is changing underneath it
+    const deleted = await db.transaction(async (tx) => {
+      await lockStageTemplates(tx, stageId)
+      await pipelineService.resolveStage({
+        workspaceId,
+        pipelineId,
+        stageId,
+        viewer: props.viewer,
+        tx,
+      })
+      return await tx
+        .delete(dealTaskTemplateDependencyModel)
+        .where(
+          and(
+            eq(dealTaskTemplateDependencyModel.workspaceId, workspaceId),
+            eq(dealTaskTemplateDependencyModel.templateId, templateId),
+            eq(
+              dealTaskTemplateDependencyModel.dependsOnTemplateId,
+              dependsOnTemplateId,
+            ),
+            // pinned to the named stage: a template id from another stage
+            // (or pipeline) removes nothing
+            inArray(
+              dealTaskTemplateDependencyModel.templateId,
+              tx
+                .select({ id: dealTaskTemplateModel.id })
+                .from(dealTaskTemplateModel)
+                .where(eq(dealTaskTemplateModel.stageId, stageId)),
+            ),
+          ),
+        )
+        .returning({ id: dealTaskTemplateDependencyModel.id })
     })
-    const deleted = await db
-      .delete(dealTaskTemplateDependencyModel)
-      .where(
-        and(
-          eq(dealTaskTemplateDependencyModel.workspaceId, workspaceId),
-          eq(dealTaskTemplateDependencyModel.templateId, templateId),
-          eq(
-            dealTaskTemplateDependencyModel.dependsOnTemplateId,
-            dependsOnTemplateId,
-          ),
-          // pinned to the named stage: a template id from another stage
-          // (or pipeline) removes nothing
-          inArray(
-            dealTaskTemplateDependencyModel.templateId,
-            db
-              .select({ id: dealTaskTemplateModel.id })
-              .from(dealTaskTemplateModel)
-              .where(eq(dealTaskTemplateModel.stageId, stageId)),
-          ),
-        ),
-      )
-      .returning({ id: dealTaskTemplateDependencyModel.id })
     if (deleted.length > 0) {
       await this.audit("deal.task-template.dependency.remove", deleted[0].id)
     }
@@ -508,3 +494,13 @@ function parseDayOffset(value: unknown, field: string): number | null {
 }
 
 export const dealTaskTemplateService = new DealTaskTemplateService()
+
+/** The per-stage lock every writer of template edges takes first. */
+async function lockStageTemplates(
+  tx: DatabaseClient,
+  stageId: string,
+): Promise<void> {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${`tpl-deps:${stageId}`}))`,
+  )
+}

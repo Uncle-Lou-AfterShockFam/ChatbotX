@@ -45,8 +45,9 @@ import { notificationService } from "../notification/service"
 import type { DealViewer } from "../pipeline/access"
 import {
   assertStartNotAfterDue,
-  DEPENDENCY_WALK_STEP_CAP,
   downstreamOpen,
+  edgeRefusal,
+  reaches,
   sameInstant,
   withSchedule,
 } from "./schedule"
@@ -121,12 +122,14 @@ export class DealTaskService extends BaseService {
     taskId: string
     viewer?: DealViewer | null
     tx?: DatabaseClient
+    /** `FOR UPDATE`: the caller derives its write from this row (s197). */
+    forUpdate?: boolean
   }): Promise<DealTaskModel> {
     const { workspaceId, dealId, taskId, viewer, tx = db } = props
     if (viewer) {
       await dealService.findOrFail({ workspaceId, id: dealId, viewer, tx })
     }
-    const [task] = await tx
+    const query = tx
       .select()
       .from(dealTaskModel)
       .where(
@@ -137,6 +140,7 @@ export class DealTaskService extends BaseService {
         ),
       )
       .limit(1)
+    const [task] = props.forUpdate ? await query.for("update") : await query
     if (!task) {
       throw notFoundException(TASK_NOT_FOUND)
     }
@@ -291,13 +295,24 @@ export class DealTaskService extends BaseService {
   }): Promise<DealTaskModel & { shifted: string[] }> {
     const { workspaceId, dealId, taskId, data, viewer } = props
     const set: Partial<typeof dealTaskModel.$inferInsert> = {}
+    const datesChange = data.startAt !== undefined || data.dueAt !== undefined
     const result = await db.transaction(async (tx) => {
+      // A successor shift takes the deal graph lock FIRST (lock, then rows:
+      // the order of addDependency / complete), and a date change reads its
+      // row FOR UPDATE: the start <= due check and the shift delta are then
+      // derived from the row this write replaces, never a stale read (codex
+      // probe, s197: a concurrent date update between read and lock skewed
+      // the delta and could leave start > due).
+      if (data.shiftSuccessors && data.dueAt !== undefined) {
+        await lockDealGraph(tx, dealId)
+      }
       const current = await this.findOrFail({
         workspaceId,
         dealId,
         taskId,
         viewer,
         tx,
+        forUpdate: datesChange,
       })
       if (data.title !== undefined) {
         const title = this.parseTitle(data.title)
@@ -350,16 +365,10 @@ export class DealTaskService extends BaseService {
           shifted: [],
         }
       }
-      // Lock the deal's graph BEFORE the row write when successors move, the
-      // same order `addDependency` takes (lock, then rows): a concurrent edge
-      // insert cannot slip a new successor in between the walk and the shift.
       const deltaMs =
         data.shiftSuccessors && set.dueAt && current.dueAt
           ? set.dueAt.getTime() - current.dueAt.getTime()
           : 0
-      if (deltaMs !== 0) {
-        await lockDealGraph(tx, dealId)
-      }
       // An assignee change is pinned to the assignee this call read: two
       // concurrent identical reassignments touch one row between them, so
       // the assignee is notified once (skeptic MEDIUM, s194).
@@ -446,6 +455,10 @@ export class DealTaskService extends BaseService {
         return { task: current, completed: false as const }
       }
       if (!props.force) {
+        // The graph lock before the FOR SHARE blocker read: a successor
+        // shift holds it while locking every task of the deal, so without it
+        // the two lock rows in opposite orders and deadlock (codex, s197).
+        await lockDealGraph(tx, dealId)
         const open = await this.openBlockers({ taskId, tx })
         if (open.length > 0) {
           throw validationException(
@@ -573,7 +586,12 @@ export class DealTaskService extends BaseService {
         tx,
       })
       const edges = await this.dealEdges(tx, workspaceId, dealId)
-      const refusal = this.edgeRefusal({ edges, taskId, dependsOnTaskId })
+      const refusal = edgeRefusal({
+        edges,
+        taskId,
+        dependsOnTaskId,
+        cap: MAX_DEAL_TASK_DEPENDENCIES_PER_TASK,
+      })
       if (refusal) {
         throw validationException(
           "dependsOnTaskId",
@@ -745,43 +763,26 @@ export class DealTaskService extends BaseService {
         template.dueInDays === null
           ? null
           : new Date(now + template.dueInDays * DAY_MS)
-      const row = await db.transaction(async (tx) => {
-        const [inserted] = await tx
-          .insert(dealTaskModel)
-          .values({
-            id: createId(),
-            workspaceId,
-            dealId: deal.id,
-            title: template.title,
-            description: template.description,
-            status: "open",
-            startAt,
-            dueAt,
-            assigneeId,
-            templateId: template.id,
-            createdById: actorId,
-          })
-          .onConflictDoNothing({
-            target: [dealTaskModel.dealId, dealTaskModel.templateId],
-            where: sql`${dealTaskModel.templateId} is not null`,
-          })
-          .returning()
-        if (!inserted) {
-          return null
-        }
-        await this.recordActivity({
-          tx,
+      let row: DealTaskModel | null
+      try {
+        row = await this.insertFromTemplate({
+          workspaceId,
           dealId: deal.id,
-          type: "taskCreated",
+          template,
+          startAt,
+          dueAt,
+          assigneeId,
           actorId,
-          payload: {
-            taskId: inserted.id,
-            title: inserted.title,
-            templateId: template.id,
-          },
         })
-        return inserted
-      })
+      } catch (error) {
+        // A template (or its assignee) deleted since `listForStage` fails
+        // its FK: skip that one, keep the rest and the edge copy (probe, s197).
+        logger.warn(
+          { error, dealId: deal.id, templateId: template.id },
+          "deal-task: template instantiation failed; skipped",
+        )
+        continue
+      }
       if (!row) {
         continue
       }
@@ -812,6 +813,64 @@ export class DealTaskService extends BaseService {
     return { created, edges }
   }
 
+  /** One template's task + activity in one transaction; null = already instantiated. */
+  private async insertFromTemplate(props: {
+    workspaceId: string
+    dealId: string
+    template: InstantiableTemplate
+    startAt: Date | null
+    dueAt: Date | null
+    assigneeId: string | null
+    actorId: string | null
+  }): Promise<DealTaskModel | null> {
+    const {
+      workspaceId,
+      dealId,
+      template,
+      startAt,
+      dueAt,
+      assigneeId,
+      actorId,
+    } = props
+    return await db.transaction(async (tx) => {
+      const [inserted] = await tx
+        .insert(dealTaskModel)
+        .values({
+          id: createId(),
+          workspaceId,
+          dealId,
+          title: template.title,
+          description: template.description,
+          status: "open",
+          startAt,
+          dueAt,
+          assigneeId,
+          templateId: template.id,
+          createdById: actorId,
+        })
+        .onConflictDoNothing({
+          target: [dealTaskModel.dealId, dealTaskModel.templateId],
+          where: sql`${dealTaskModel.templateId} is not null`,
+        })
+        .returning()
+      if (!inserted) {
+        return null
+      }
+      await this.recordActivity({
+        tx,
+        dealId,
+        type: "taskCreated",
+        actorId,
+        payload: {
+          taskId: inserted.id,
+          title: inserted.title,
+          templateId: template.id,
+        },
+      })
+      return inserted
+    })
+  }
+
   /**
    * Copy the stage templates' edges onto the deal as DealDependency rows
    * between their instances. Only an edge touching a task THIS entry created
@@ -836,7 +895,11 @@ export class DealTaskService extends BaseService {
     return await db.transaction(async (tx) => {
       await lockDealGraph(tx, dealId)
       const instances = await tx
-        .select({ id: dealTaskModel.id, templateId: dealTaskModel.templateId })
+        .select({
+          id: dealTaskModel.id,
+          templateId: dealTaskModel.templateId,
+          status: dealTaskModel.status,
+        })
         .from(dealTaskModel)
         .where(
           and(
@@ -850,6 +913,10 @@ export class DealTaskService extends BaseService {
       const taskByTemplate = new Map(
         instances.map((i) => [i.templateId as string, i.id]),
       )
+      // a DONE dependent from an earlier entry never gains a blocker
+      const done = new Set(
+        instances.filter((i) => i.status === "done").map((i) => i.id),
+      )
       const edges = await this.dealEdges(tx, workspaceId, dealId)
       let inserted = 0
       for (const { from, to } of wanted) {
@@ -859,12 +926,18 @@ export class DealTaskService extends BaseService {
           !(
             taskId &&
             dependsOnTaskId &&
+            !done.has(taskId) &&
             (createdIds.has(taskId) || createdIds.has(dependsOnTaskId))
           )
         ) {
           continue
         }
-        const skip = this.edgeRefusal({ edges, taskId, dependsOnTaskId })
+        const skip = edgeRefusal({
+          edges,
+          taskId,
+          dependsOnTaskId,
+          cap: MAX_DEAL_TASK_DEPENDENCIES_PER_TASK,
+        })
         if (skip) {
           logger.info(
             { dealId, taskId, dependsOnTaskId, reason: skip },
@@ -971,32 +1044,6 @@ export class DealTaskService extends BaseService {
       )
   }
 
-  /** Why an edge may not be added (cap / duplicate / cycle), or null. */
-  private edgeRefusal(props: {
-    edges: { taskId: string; dependsOnTaskId: string }[]
-    taskId: string
-    dependsOnTaskId: string
-  }): "tooManyDependencies" | "dependencyExists" | "dependencyCycle" | null {
-    const { edges, taskId, dependsOnTaskId } = props
-    if (
-      edges.filter((e) => e.taskId === taskId).length >=
-      MAX_DEAL_TASK_DEPENDENCIES_PER_TASK
-    ) {
-      return "tooManyDependencies"
-    }
-    if (
-      edges.some(
-        (e) => e.taskId === taskId && e.dependsOnTaskId === dependsOnTaskId,
-      )
-    ) {
-      return "dependencyExists"
-    }
-    if (this.reaches({ edges, from: dependsOnTaskId, to: taskId })) {
-      return "dependencyCycle"
-    }
-    return null
-  }
-
   /**
    * Open blockers of a task, read `FOR SHARE` inside the completing
    * transaction: a concurrent `reopen()` of a blocker (an UPDATE on that row)
@@ -1033,38 +1080,8 @@ export class DealTaskService extends BaseService {
     edges: { taskId: string; dependsOnTaskId: string }[]
     from: string
     to: string
-    field?: string
   }): boolean {
-    const { edges, from, to, field = "dependsOnTaskId" } = props
-    const next = new Map<string, string[]>()
-    for (const e of edges) {
-      const list = next.get(e.taskId) ?? []
-      list.push(e.dependsOnTaskId)
-      next.set(e.taskId, list)
-    }
-    const visited = new Set<string>([from])
-    const queue = [from]
-    let steps = 0
-    while (queue.length > 0) {
-      const node = queue.shift() as string
-      if (node === to) {
-        return true
-      }
-      for (const dep of next.get(node) ?? []) {
-        if (++steps > DEPENDENCY_WALK_STEP_CAP) {
-          throw validationException(
-            field,
-            "The dependency graph is too large to check.",
-            { reason: "dependencyWalkCap" },
-          )
-        }
-        if (!visited.has(dep)) {
-          visited.add(dep)
-          queue.push(dep)
-        }
-      }
-    }
-    return false
+    return reaches(props)
   }
 
   private async recordActivity(props: {
