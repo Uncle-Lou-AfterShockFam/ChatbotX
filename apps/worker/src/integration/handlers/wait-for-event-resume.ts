@@ -142,10 +142,34 @@ async function resumeOnEvent(
     contactId: event.contactId,
   })
   const instant = eventInstant(event, parentJob)
+  // Every matching wait of the contact gets its claim + run in this one job.
+  // A row whose edge throws must not starve its siblings (they would sit
+  // until their timeout edge although the event fired): run each under its
+  // own catch and rethrow the first failure after the loop, so BullMQ still
+  // retries the job for the requeued rows.
+  let firstFailure: unknown
   for (const row of rows) {
+    try {
+      await resumeRowOnEvent(row, event, instant, parentJob)
+    } catch (err) {
+      firstFailure ??= err
+    }
+  }
+  if (firstFailure !== undefined) {
+    throw firstFailure
+  }
+}
+
+async function resumeRowOnEvent(
+  row: SmartDelayRow,
+  event: EventPayload,
+  instant: number | null,
+  parentJob?: Job,
+): Promise<void> {
+  {
     const spec = waitForEventSpecSchema.safeParse(row.eventSpec)
     if (!(spec.success && eventMatchesSpec(spec.data, event))) {
-      continue
+      return
     }
     if (!eventPrecedesRow(instant, row)) {
       // Silent drops hide a cutover gap: say which wait was left to its timeout.
@@ -153,13 +177,13 @@ async function resumeOnEvent(
         { smartDelayId: row.id, instant, createdAt: row.createdAt },
         "waitForEvent: event predates the wait (or carries no instant); left to its timeout",
       )
-      continue
+      return
     }
     const wasScheduled = row.status === smartDelayStatuses.enum.scheduled
     // The claim re-points the row at its event edge (nodeId) and returns it.
     const claimed = await smartDelayService.claimForEvent({ id: row.id })
     if (!claimed) {
-      continue // the timeout (or another event) got there first
+      return // the timeout (or another event) got there first
     }
     if (wasScheduled) {
       // Best effort: a job already running loses the CAS above anyway. The
@@ -179,7 +203,7 @@ async function resumeOnEvent(
         id: claimed.id,
         generation: claimed.claimGeneration,
       })
-      continue
+      return
     }
     await runClaimedSmartDelay(
       claimed,

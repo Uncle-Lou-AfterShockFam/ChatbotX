@@ -64,10 +64,15 @@ export async function runClaimedSmartDelay(
         id: smartDelayId,
         generation,
       })
-      if (!requeued) {
+      if (requeued === null) {
         logger.error(
           { smartDelayId, generation },
           "Failed to requeue a claimed smart delay after flow failure",
+        )
+      } else if (requeued === "failed") {
+        logger.error(
+          { smartDelayId, generation, err: normalizeError(error) },
+          "Smart delay resume failed on its last allowed claim; row marked failed",
         )
       }
     } catch (requeueError) {

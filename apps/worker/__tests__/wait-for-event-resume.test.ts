@@ -110,7 +110,7 @@ describe("runWaitForEventResume", () => {
     )
     smartDelayService.finishClaimedRun.mockResolvedValue(true)
     smartDelayService.heartbeatClaim.mockResolvedValue(true)
-    smartDelayService.requeueClaimedRun.mockResolvedValue(true)
+    smartDelayService.requeueClaimedRun.mockResolvedValue("scheduled")
     queueRemove.mockResolvedValue(1)
   })
 
@@ -347,6 +347,31 @@ describe("runWaitForEventResume", () => {
       timestamp: row.createdAt.getTime() - 1,
     } as never)
     expect(smartDelayService.claimForEvent).toHaveBeenCalledTimes(1)
+  })
+
+  test("HOSTILE (probe): a wait whose edge throws does not starve its siblings; the job still rethrows for the retry", async () => {
+    const rowA = { ...row, id: "sd-a" }
+    const rowB = { ...row, id: "sd-b" }
+    smartDelayService.findActiveWaitForEvent.mockResolvedValueOnce([rowA, rowB])
+    runFlowNode.mockRejectedValueOnce(new Error("edge A boom"))
+    await expect(runWaitForEventResume(tagEvent)).rejects.toThrow("edge A boom")
+    expect(smartDelayService.claimForEvent).toHaveBeenCalledTimes(2)
+    expect(runFlowNode).toHaveBeenCalledTimes(2)
+    expect(smartDelayService.requeueClaimedRun).toHaveBeenCalledWith({
+      id: "sd-a",
+      generation: 1,
+    })
+    expect(smartDelayService.finishClaimedRun).toHaveBeenCalledWith({
+      id: "sd-b",
+      generation: 1,
+    })
+  })
+
+  test("a run failing on its last allowed claim is logged as failed, not requeued", async () => {
+    smartDelayService.requeueClaimedRun.mockResolvedValueOnce("failed")
+    runFlowNode.mockRejectedValueOnce(new Error("boom"))
+    await expect(runWaitForEventResume(tagEvent)).rejects.toThrow("boom")
+    expect(smartDelayService.finishClaimedRun).not.toHaveBeenCalled()
   })
 
   test("a finish whose claim is no longer current is logged, never retried into a resurrect", async () => {

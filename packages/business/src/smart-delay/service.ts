@@ -44,6 +44,9 @@ const toSmartDelayRow = (
   type: smartDelayTypes.parse(row.type),
 })
 
+/** Claims a resume may take (initial + retries + recoveries) before the row is `failed`. */
+export const MAX_RESUME_CLAIMS = 3
+
 class SmartDelayService extends BaseService {
   async create(props: {
     tx?: DatabaseClient
@@ -417,16 +420,26 @@ class SmartDelayService extends BaseService {
    * generation CAS keeps a stale retry from resurrecting a row that a
    * different claim has since taken (or that a terminal path has closed).
    * The edge to resume on is already on the row (claimForEvent wrote it).
+   *
+   * The generation counts the claims so far. Past MAX_RESUME_CLAIMS the row
+   * goes to `failed` instead: otherwise a permanently failing edge would
+   * re-run (with every side effect before the failing step) on each retry,
+   * then every ~10 min through the stuck-scheduled sweep, forever.
+   * Returns the status written, or null when the CAS matched nothing.
    */
   async requeueClaimedRun(props: {
     tx?: DatabaseClient
     id: string
     generation: number
-  }): Promise<boolean> {
+  }): Promise<"scheduled" | "failed" | null> {
     const { tx = db, id, generation } = props
+    const to =
+      generation >= MAX_RESUME_CLAIMS
+        ? smartDelayStatuses.enum.failed
+        : smartDelayStatuses.enum.scheduled
     const rows = await tx
       .update(contactOnSmartDelayModel)
-      .set({ status: smartDelayStatuses.enum.scheduled })
+      .set({ status: to })
       .where(
         and(
           eq(contactOnSmartDelayModel.id, id),
@@ -436,7 +449,7 @@ class SmartDelayService extends BaseService {
       )
       .returning({ id: contactOnSmartDelayModel.id })
 
-    return rows.length > 0
+    return rows.length > 0 ? to : null
   }
 
   // Recovery input for the scanner: running rows whose claim is older than

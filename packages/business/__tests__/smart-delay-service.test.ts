@@ -113,7 +113,9 @@ vi.mock("@chatbotx.io/database/client", () => ({
   sql: mockSql,
 }))
 
-const { smartDelayService } = await import("../src/smart-delay/service")
+const { MAX_RESUME_CLAIMS, smartDelayService } = await import(
+  "../src/smart-delay/service"
+)
 
 const smartDelayRow = {
   id: "row-1",
@@ -404,17 +406,39 @@ describe("smartDelayService", () => {
     mockDbReturning.mockResolvedValueOnce([{ id: "row-1" }])
 
     await expect(
-      smartDelayService.requeueClaimedRun({ id: "row-1", generation: 4 }),
-    ).resolves.toBe(true)
+      smartDelayService.requeueClaimedRun({ id: "row-1", generation: 2 }),
+    ).resolves.toBe("scheduled")
 
     expect(mockDbSet).toHaveBeenCalledWith({ status: "scheduled" })
     expect(mockEq).toHaveBeenCalledWith(expect.anything(), "running")
-    expect(mockEq).toHaveBeenCalledWith(expect.anything(), 4)
+    expect(mockEq).toHaveBeenCalledWith(expect.anything(), 2)
 
     mockDbReturning.mockResolvedValueOnce([])
     await expect(
-      smartDelayService.requeueClaimedRun({ id: "row-1", generation: 3 }),
-    ).resolves.toBe(false)
+      smartDelayService.requeueClaimedRun({ id: "row-1", generation: 1 }),
+    ).resolves.toBeNull()
+  })
+
+  test("requeueClaimedRun marks the row FAILED on its last allowed claim instead of re-arming it forever", async () => {
+    // Probe finding: a permanently failing edge re-ran on every BullMQ retry
+    // and then every ~10 min via the stuck sweep, repeating every send before
+    // the failing step each time. The generation is the claim count.
+    mockDbReturning.mockResolvedValueOnce([{ id: "row-1" }])
+    await expect(
+      smartDelayService.requeueClaimedRun({
+        id: "row-1",
+        generation: MAX_RESUME_CLAIMS,
+      }),
+    ).resolves.toBe("failed")
+    expect(mockDbSet).toHaveBeenCalledWith({ status: "failed" })
+
+    mockDbReturning.mockResolvedValueOnce([{ id: "row-1" }])
+    await expect(
+      smartDelayService.requeueClaimedRun({
+        id: "row-1",
+        generation: MAX_RESUME_CLAIMS - 1,
+      }),
+    ).resolves.toBe("scheduled")
   })
 
   test("listStuckRunning returns a bounded batch of running rows with a stale claim", async () => {

@@ -63,7 +63,7 @@ describe("runWaitResume", () => {
     smartDelayService.claimRunning.mockResolvedValue(claimed(waitRow))
     smartDelayService.finishClaimedRun.mockResolvedValue(true)
     smartDelayService.heartbeatClaim.mockResolvedValue(true)
-    smartDelayService.requeueClaimedRun.mockResolvedValue(true)
+    smartDelayService.requeueClaimedRun.mockResolvedValue("scheduled")
   })
 
   test("runs the connected node after claiming the scheduled row", async () => {
