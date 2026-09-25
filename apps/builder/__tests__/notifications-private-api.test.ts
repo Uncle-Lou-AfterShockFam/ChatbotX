@@ -54,8 +54,19 @@ const notificationService = {
   markAllRead: vi.fn(async () => ({ count: 0 })),
 }
 vi.mock("@chatbotx.io/business/notification", () => ({ notificationService }))
+const PREFS = {
+  types: { taskAssigned: true, dealMentioned: false },
+  channels: { inApp: true, push: true },
+}
+const workspaceMemberService = {
+  getOwnNotificationPrefs: vi.fn(async () => PREFS),
+  updateOwnNotificationPrefs: vi.fn(async () => PREFS),
+}
+vi.mock("@chatbotx.io/business", () => ({ workspaceMemberService }))
 
-await import("../src/features/notifications/api/private")
+const { updateOwnNotificationPrefsRequest } = await import(
+  "../src/features/notifications/api/private"
+)
 
 const context = { user: { id: "u-1" }, member: { permissions: {} } }
 const byPath = (method: string, suffix: string) => {
@@ -69,12 +80,14 @@ const byPath = (method: string, suffix: string) => {
 }
 
 describe("private notifications routes (s194)", () => {
-  test("four routes, every one on the workspace-membership middleware", () => {
+  test("six routes, every one on the workspace-membership middleware", () => {
     expect(captured.map((c) => `${c.route.method} ${c.route.path}`)).toEqual([
       "GET /workspaces/{workspaceId}/notifications",
       "GET /workspaces/{workspaceId}/notifications/unread-count",
       "POST /workspaces/{workspaceId}/notifications/{id}/read",
       "POST /workspaces/{workspaceId}/notifications/read-all",
+      "GET /workspaces/{workspaceId}/notifications/preferences",
+      "PATCH /workspaces/{workspaceId}/notifications/preferences",
     ])
     for (const p of captured) {
       expect(p.uses).toEqual([MW])
@@ -128,5 +141,54 @@ describe("private notifications routes (s194)", () => {
       workspaceId: "ws-1",
       userId: "u-1",
     })
+  })
+
+  test("s198 preferences read and write the CALLER's own row", async () => {
+    await expect(
+      byPath("GET", "/preferences").handler?.({
+        context,
+        input: { workspaceId: "ws-1" },
+      }),
+    ).resolves.toEqual(PREFS)
+    expect(workspaceMemberService.getOwnNotificationPrefs).toHaveBeenCalledWith(
+      { workspaceId: "ws-1", userId: "u-1" },
+    )
+    await byPath("PATCH", "/preferences").handler?.({
+      context,
+      input: { workspaceId: "ws-1", channels: { push: false } },
+    })
+    // only the groups that were sent reach the service
+    expect(
+      workspaceMemberService.updateOwnNotificationPrefs,
+    ).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      userId: "u-1",
+      patch: { channels: { push: false } },
+    })
+  })
+
+  test("s198 the PATCH schema is closed on every level", () => {
+    for (const bad of [
+      { permissions: { superAdmin: true } },
+      { userId: "u-2" },
+      { types: { notifyAdmin: true } },
+      { channels: { email: true } },
+      { types: { taskAssigned: "true" } },
+      { types: [] },
+    ]) {
+      expect(
+        updateOwnNotificationPrefsRequest.safeParse({
+          workspaceId: "1",
+          ...bad,
+        }).success,
+      ).toBe(false)
+    }
+    expect(
+      updateOwnNotificationPrefsRequest.safeParse({
+        workspaceId: "1",
+        types: { taskAssigned: false },
+        channels: { inApp: true, push: false },
+      }).success,
+    ).toBe(true)
   })
 })

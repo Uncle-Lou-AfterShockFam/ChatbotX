@@ -9,7 +9,13 @@ import {
 } from "@chatbotx.io/ui/components/ui/popover"
 import { ScrollArea } from "@chatbotx.io/ui/components/ui/scroll-area"
 import { cn } from "@chatbotx.io/ui/lib/utils"
-import { AtSignIcon, BellIcon, ClipboardCheckIcon } from "lucide-react"
+import {
+  AtSignIcon,
+  BellIcon,
+  ClipboardCheckIcon,
+  SettingsIcon,
+} from "lucide-react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useFormatter, useTranslations } from "next-intl"
 import { useState } from "react"
@@ -102,6 +108,20 @@ export function NotificationBell({ workspaceId }: { workspaceId: string }) {
             variant="ghost"
           >
             {t("notifications.markAllRead")}
+          </Button>
+          <Button
+            aria-label={t("notifications.preferences.title")}
+            data-testid="notification-preferences-link"
+            nativeButton={false}
+            onClick={() => setOpen(false)}
+            render={
+              <Link href={`/space/${workspaceId}/notifications/preferences`} />
+            }
+            size="icon"
+            title={t("notifications.preferences.title")}
+            variant="ghost"
+          >
+            <SettingsIcon className="size-4" />
           </Button>
         </div>
         <ScrollArea className="max-h-96">

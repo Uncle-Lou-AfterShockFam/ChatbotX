@@ -28,6 +28,23 @@ import { useWorkspaceMemberPermissionsCoupling } from "../hooks/use-permissions-
 import { updateWorkspaceMemberRequest } from "../schema/mutation"
 import type { WorkspaceMemberResource } from "../schema/resource"
 
+// a new member's defaults: the s194 deal keys on, the legacy ones off
+const DEFAULT_TYPES = {
+  notifyAdmin: false,
+  newMessageToHuman: false,
+  newOrder: false,
+  taskAssigned: true,
+  dealMentioned: true,
+}
+const DEFAULT_CHANNELS = {
+  messenger: false,
+  email: false,
+  browser: false,
+  telegram: false,
+  push: true,
+  inApp: true,
+}
+
 export function UpdateWorkspaceMemberDialog({
   workspaceMember,
   open,
@@ -116,21 +133,10 @@ export function UpdateWorkspaceMemberForm({
           mode: "onChange",
           defaultValues: {
             permissions: getSuperAdminPermissions(),
-            notificationTypes: {
-              notifyAdmin: false,
-              newMessageToHuman: false,
-              newOrder: false,
-              taskAssigned: true,
-              dealMentioned: true,
-            },
-            notificationChannels: {
-              messenger: false,
-              email: false,
-              browser: false,
-              telegram: false,
-              push: true,
-              inApp: true,
-            },
+            notificationTypes: DEFAULT_TYPES,
+            notificationChannels: DEFAULT_CHANNELS,
+            loadedNotificationTypes: DEFAULT_TYPES,
+            loadedNotificationChannels: DEFAULT_CHANNELS,
           },
         },
       },
@@ -149,6 +155,8 @@ export function UpdateWorkspaceMemberForm({
         permissions: workspaceMember.permissions,
         notificationTypes: prefs.types,
         notificationChannels: prefs.channels,
+        loadedNotificationTypes: prefs.types,
+        loadedNotificationChannels: prefs.channels,
       })
     }
   }, [workspaceMember, reset])

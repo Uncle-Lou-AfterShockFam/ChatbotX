@@ -4,6 +4,8 @@ import {
   db,
   eq,
   relationsFilterToSQL,
+  type SQL,
+  sql,
 } from "@chatbotx.io/database/client"
 import { workspaceMemberRoles } from "@chatbotx.io/database/partials"
 import {
@@ -25,9 +27,14 @@ import {
 } from "@chatbotx.io/database/utils"
 import { withCache } from "@chatbotx.io/redis"
 import { BaseService } from "../base.service"
-import { notFoundException } from "../errors"
+import { notFoundException, validationException } from "../errors"
 import { logger } from "../logger"
 import { workspaceUsageService } from "../workspace-usage/service"
+import {
+  type OwnNotificationPrefs,
+  ownNotificationPrefs,
+  parseOwnNotificationPrefsPatch,
+} from "./notification-prefs"
 
 type ListWorkspaceMembersInput = {
   workspaceId: string
@@ -364,12 +371,23 @@ export class WorkspaceMemberService extends BaseService {
     id: string
     workspaceId: string
     data: Partial<typeof workspaceMemberModel.$inferInsert>
+    /**
+     * Notification flags MERGED into the stored jsonb (s198): only the keys
+     * the caller actually changed, so a member's own self-service choices
+     * survive an admin save made from a stale page.
+     */
+    notificationPatch?: NotificationFlagsPatch
   }): Promise<{ id: string } | undefined> {
     const { tx = db, id, workspaceId, data } = input
 
     const updated = await tx
       .update(workspaceMemberModel)
-      .set(data)
+      .set({
+        ...data,
+        ...(input.notificationPatch
+          ? notificationMergeSet(input.notificationPatch)
+          : {}),
+      })
       .where(
         and(
           eq(workspaceMemberModel.id, id),
@@ -391,6 +409,68 @@ export class WorkspaceMemberService extends BaseService {
     await this.invalidateCacheTags(workspaceMemberCacheTag(row.userId))
 
     return { id: row.id }
+  }
+
+  /** The caller's own self-service preferences, resolved (s198). */
+  async getOwnNotificationPrefs(input: {
+    tx?: DatabaseClient
+    workspaceId: string
+    userId: string
+  }): Promise<OwnNotificationPrefs> {
+    if (!(input.workspaceId && input.userId)) {
+      throw notFoundException("Workspace member not found")
+    }
+    const member = await this.findByWorkspaceIdAndUserId(input)
+    if (!member) {
+      throw notFoundException("Workspace member not found")
+    }
+    return ownNotificationPrefs(member)
+  }
+
+  /**
+   * A member changes their OWN notification preferences (s198). Only the
+   * self-service keys (`parseOwnNotificationPrefsPatch`) are accepted, and
+   * they are MERGED into the stored jsonb in one UPDATE, so the legacy keys
+   * an admin set, and a concurrent admin edit of other keys, survive. Never
+   * touches permissions.
+   */
+  async updateOwnNotificationPrefs(input: {
+    tx?: DatabaseClient
+    workspaceId: string
+    userId: string
+    patch: unknown
+  }): Promise<OwnNotificationPrefs> {
+    const { tx = db, workspaceId, userId } = input
+    if (!(workspaceId && userId)) {
+      throw notFoundException("Workspace member not found")
+    }
+    const patch = parseOwnNotificationPrefsPatch(input.patch)
+    if (!patch) {
+      throw validationException(
+        "prefs",
+        "Only taskAssigned / dealMentioned and inApp / push can be changed, as true or false.",
+        { reason: "invalidPrefs" },
+      )
+    }
+    const set = notificationMergeSet(patch)
+    const [row] = await tx
+      .update(workspaceMemberModel)
+      .set(set)
+      .where(
+        and(
+          eq(workspaceMemberModel.workspaceId, workspaceId),
+          eq(workspaceMemberModel.userId, userId),
+        ),
+      )
+      .returning({
+        notificationTypes: workspaceMemberModel.notificationTypes,
+        notificationChannels: workspaceMemberModel.notificationChannels,
+      })
+    if (!row) {
+      throw notFoundException("Workspace member not found")
+    }
+    await this.invalidateCacheTags(workspaceMemberCacheTag(userId))
+    return ownNotificationPrefs(row)
   }
 
   async listPaginated(
@@ -444,3 +524,40 @@ export class WorkspaceMemberService extends BaseService {
 }
 
 export const workspaceMemberService = new WorkspaceMemberService()
+
+/** Changed notification flags per jsonb column (keys are the column's own). */
+export type NotificationFlagsPatch = {
+  types?: Record<string, boolean>
+  channels?: Record<string, boolean>
+}
+
+/**
+ * The SET clause that merges flags into the two jsonb columns: a non-object
+ * stored value (legacy / garbage) is treated as `{}`, like
+ * `resolveMemberNotificationPrefs` does. An empty group sets nothing.
+ */
+function notificationMergeSet(
+  patch: NotificationFlagsPatch,
+): Record<string, SQL> {
+  const merge = (
+    column:
+      | typeof workspaceMemberModel.notificationTypes
+      | typeof workspaceMemberModel.notificationChannels,
+    values: Record<string, boolean>,
+  ) =>
+    sql`(case when jsonb_typeof(${column}) = 'object' then ${column} else '{}'::jsonb end) || ${JSON.stringify(values)}::jsonb`
+  const set: Record<string, SQL> = {}
+  if (patch.types && Object.keys(patch.types).length > 0) {
+    set.notificationTypes = merge(
+      workspaceMemberModel.notificationTypes,
+      patch.types,
+    )
+  }
+  if (patch.channels && Object.keys(patch.channels).length > 0) {
+    set.notificationChannels = merge(
+      workspaceMemberModel.notificationChannels,
+      patch.channels,
+    )
+  }
+  return set
+}

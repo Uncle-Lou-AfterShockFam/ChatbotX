@@ -153,19 +153,33 @@ const fullPermissions = getSuperAdminPermissions()
 const normalizedGranularPermissions =
   normalizeContactsPermissions(granularPermissions)
 
+const LOADED_TYPES = {
+  notifyAdmin: false,
+  newMessageToHuman: false,
+  newOrder: false,
+  taskAssigned: true,
+  dealMentioned: true,
+}
+const LOADED_CHANNELS = {
+  messenger: false,
+  email: false,
+  telegram: false,
+  browser: false,
+  push: true,
+  inApp: true,
+}
+// the admin turned notifyAdmin, email and browser on (s198: `loaded*` = the
+// values the form was opened with)
 const updateInput = {
   permissions: granularPermissions,
-  notificationTypes: {
-    notifyAdmin: true,
-    newMessageToHuman: false,
-    newOrder: false,
-  },
-  notificationChannels: {
-    messenger: false,
-    email: true,
-    telegram: false,
-    browser: true,
-  },
+  notificationTypes: { ...LOADED_TYPES, notifyAdmin: true },
+  notificationChannels: { ...LOADED_CHANNELS, email: true, browser: true },
+  loadedNotificationTypes: LOADED_TYPES,
+  loadedNotificationChannels: LOADED_CHANNELS,
+}
+const ADMIN_PATCH = {
+  types: { notifyAdmin: true },
+  channels: { email: true, browser: true },
 }
 
 function actionCtx(permissions = granularPermissions) {
@@ -336,7 +350,8 @@ describe("updateWorkspaceMemberAction", () => {
     expect(mockUpdateMember).toHaveBeenCalledWith({
       id: MEMBER_ID,
       workspaceId: WORKSPACE_ID,
-      data: { ...updateInput, permissions: fullPermissions },
+      data: { permissions: fullPermissions },
+      notificationPatch: ADMIN_PATCH,
     })
   })
 
@@ -348,7 +363,8 @@ describe("updateWorkspaceMemberAction", () => {
     expect(mockUpdateMember).toHaveBeenCalledWith({
       id: MEMBER_ID,
       workspaceId: WORKSPACE_ID,
-      data: { ...updateInput, permissions: normalizedGranularPermissions },
+      data: { permissions: normalizedGranularPermissions },
+      notificationPatch: ADMIN_PATCH,
     })
   })
 
@@ -360,7 +376,8 @@ describe("updateWorkspaceMemberAction", () => {
     expect(mockUpdateMember).toHaveBeenCalledWith({
       id: MEMBER_ID,
       workspaceId: WORKSPACE_ID,
-      data: { ...updateInput, permissions: assignedOnlyPermissions },
+      data: { permissions: assignedOnlyPermissions },
+      notificationPatch: ADMIN_PATCH,
     })
   })
 
@@ -376,7 +393,8 @@ describe("updateWorkspaceMemberAction", () => {
     expect(mockUpdateMember).toHaveBeenCalledWith({
       id: MEMBER_ID,
       workspaceId: WORKSPACE_ID,
-      data: { ...updateInput, permissions: normalizedGranularPermissions },
+      data: { permissions: normalizedGranularPermissions },
+      notificationPatch: ADMIN_PATCH,
     })
   })
 
@@ -386,12 +404,17 @@ describe("updateWorkspaceMemberAction", () => {
       userId: MEMBER_USER_ID,
       workspaceId: WORKSPACE_ID,
       permissions: normalizedGranularPermissions,
-      notificationTypes: updateInput.notificationTypes,
-      notificationChannels: updateInput.notificationChannels,
     })
 
     await (updateWorkspaceMemberAction as (props: unknown) => Promise<unknown>)(
-      updateActionCtx(),
+      {
+        bindArgsParsedInputs: [WORKSPACE_ID, MEMBER_ID],
+        parsedInput: {
+          ...updateInput,
+          notificationTypes: LOADED_TYPES,
+          notificationChannels: LOADED_CHANNELS,
+        },
+      },
     )
 
     expect(mockUpdateMember).not.toHaveBeenCalled()
@@ -400,25 +423,13 @@ describe("updateWorkspaceMemberAction", () => {
     expect(mockAuditRecord).not.toHaveBeenCalled()
   })
 
-  test("still writes the update when only notification settings change, without auditing a role change", async () => {
+  test("only notification settings changed: merges just those flags, no permissions write, no role audit", async () => {
     mockFindByIdOrFail.mockResolvedValue({
       id: MEMBER_ID,
       userId: MEMBER_USER_ID,
       workspaceId: WORKSPACE_ID,
-      // Same permissions as the submitted payload — only notification
-      // fields differ from what's stored.
+      // Same permissions as the submitted payload
       permissions: normalizedGranularPermissions,
-      notificationTypes: {
-        notifyAdmin: false,
-        newMessageToHuman: false,
-        newOrder: false,
-      },
-      notificationChannels: {
-        messenger: false,
-        email: false,
-        telegram: false,
-        browser: false,
-      },
     })
 
     await (updateWorkspaceMemberAction as (props: unknown) => Promise<unknown>)(
@@ -428,12 +439,43 @@ describe("updateWorkspaceMemberAction", () => {
     expect(mockUpdateMember).toHaveBeenCalledWith({
       id: MEMBER_ID,
       workspaceId: WORKSPACE_ID,
-      data: { ...updateInput, permissions: normalizedGranularPermissions },
+      data: {},
+      notificationPatch: ADMIN_PATCH,
     })
-    // Permissions didn't actually change, so this must not be recorded as
-    // a "changed role" audit event.
     expect(mockFindNameAndEmail).not.toHaveBeenCalled()
     expect(mockAuditRecord).not.toHaveBeenCalled()
+  })
+
+  test("s198: a save from a stale page never writes back the member's own self-service change", async () => {
+    // the member turned push + taskAssigned OFF after the admin opened the
+    // form (the fresh row); the admin only changes a permission
+    mockFindByIdOrFail.mockResolvedValue({
+      id: MEMBER_ID,
+      userId: MEMBER_USER_ID,
+      workspaceId: WORKSPACE_ID,
+      permissions: fullPermissions,
+      notificationTypes: { ...LOADED_TYPES, taskAssigned: false },
+      notificationChannels: { ...LOADED_CHANNELS, push: false },
+    })
+
+    await (updateWorkspaceMemberAction as (props: unknown) => Promise<unknown>)(
+      {
+        bindArgsParsedInputs: [WORKSPACE_ID, MEMBER_ID],
+        parsedInput: {
+          ...updateInput,
+          notificationTypes: LOADED_TYPES,
+          notificationChannels: LOADED_CHANNELS,
+        },
+      },
+    )
+
+    // permissions written; NO notification flag rides along
+    expect(mockUpdateMember).toHaveBeenCalledWith({
+      id: MEMBER_ID,
+      workspaceId: WORKSPACE_ID,
+      data: { permissions: normalizedGranularPermissions },
+      notificationPatch: { types: {}, channels: {} },
+    })
   })
 
   test("records role change for a real permission change", async () => {
@@ -444,7 +486,8 @@ describe("updateWorkspaceMemberAction", () => {
     expect(mockUpdateMember).toHaveBeenCalledWith({
       id: MEMBER_ID,
       workspaceId: WORKSPACE_ID,
-      data: { ...updateInput, permissions: normalizedGranularPermissions },
+      data: { permissions: normalizedGranularPermissions },
+      notificationPatch: ADMIN_PATCH,
     })
     expect(mockAuditRecord).toHaveBeenCalledWith({
       action: "role_change",

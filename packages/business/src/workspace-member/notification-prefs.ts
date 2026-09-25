@@ -56,3 +56,66 @@ export const resolveMemberNotificationPrefs = (
     },
   }
 }
+
+/**
+ * The preferences a member may change for THEMSELVES (s198): only the keys a
+ * delivery path reads today (`notificationService.notify`); the legacy keys
+ * stay admin-only in Settings > Admins.
+ */
+export type OwnNotificationPrefs = {
+  types: { taskAssigned: boolean; dealMentioned: boolean }
+  channels: { inApp: boolean; push: boolean }
+}
+export type OwnNotificationPrefsPatch = {
+  types?: Partial<OwnNotificationPrefs["types"]>
+  channels?: Partial<OwnNotificationPrefs["channels"]>
+}
+
+const OWN_KEYS = {
+  types: ["taskAssigned", "dealMentioned"],
+  channels: ["inApp", "push"],
+} as const
+
+export const ownNotificationPrefs = (
+  member: Parameters<typeof resolveMemberNotificationPrefs>[0],
+): OwnNotificationPrefs => {
+  const { types, channels } = resolveMemberNotificationPrefs(member)
+  return {
+    types: {
+      taskAssigned: types.taskAssigned,
+      dealMentioned: types.dealMentioned,
+    },
+    channels: { inApp: channels.inApp, push: channels.push },
+  }
+}
+
+/**
+ * A closed self-service patch, or null: an unknown group or key (e.g. a
+ * smuggled `permissions` or `notifyAdmin`), a non-boolean value, or nothing
+ * to change.
+ */
+export const parseOwnNotificationPrefsPatch = (
+  input: unknown,
+): OwnNotificationPrefsPatch | null => {
+  if (!isObject(input)) {
+    return null
+  }
+  const out: Record<string, Record<string, boolean>> = {}
+  let changes = 0
+  for (const [group, value] of Object.entries(input)) {
+    if (!((group === "types" || group === "channels") && isObject(value))) {
+      return null
+    }
+    const allowed: readonly string[] = OWN_KEYS[group]
+    const picked: Record<string, boolean> = {}
+    for (const [key, flag] of Object.entries(value)) {
+      if (!allowed.includes(key) || typeof flag !== "boolean") {
+        return null
+      }
+      picked[key] = flag
+      changes++
+    }
+    out[group] = picked
+  }
+  return changes > 0 ? (out as OwnNotificationPrefsPatch) : null
+}

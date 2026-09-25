@@ -15,6 +15,7 @@ import {
 } from "@chatbotx.io/database/partials"
 import {
   dealCommentMentionModel,
+  dealModel,
   notificationModel,
 } from "@chatbotx.io/database/schema"
 import type { NotificationModel } from "@chatbotx.io/database/types"
@@ -26,7 +27,7 @@ import {
 } from "@chatbotx.io/worker-config"
 import { BaseService } from "../base.service"
 import { logger } from "../logger"
-import { canViewPipeline } from "../pipeline/access"
+import { canViewPipeline, viewerOwnerFilter } from "../pipeline/access"
 import { pipelineService } from "../pipeline/service"
 import { sendToWorkspaceMember } from "../platform/realtime-broadcast"
 import { resolveMemberNotificationPrefs } from "../workspace-member/notification-prefs"
@@ -103,6 +104,25 @@ export class NotificationService extends BaseService {
         "notification: recipient cannot view the pipeline, skipped",
       )
       return NOTHING
+    }
+    // s198: an assigned-only recipient sees only deals they own; a task on
+    // someone else's deal must not carry its titles to them either
+    const owner = viewerOwnerFilter({ userId, permissions: member.permissions })
+    if (owner !== undefined) {
+      const [deal] = await db
+        .select({ ownerId: dealModel.ownerId })
+        .from(dealModel)
+        .where(
+          and(eq(dealModel.id, dealId), eq(dealModel.workspaceId, workspaceId)),
+        )
+        .limit(1)
+      if (deal?.ownerId !== owner) {
+        logger.info(
+          { workspaceId, userId, type, dealId },
+          "notification: assigned-only recipient does not own the deal, skipped",
+        )
+        return NOTHING
+      }
     }
 
     let notification: NotificationModel | null = null

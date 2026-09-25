@@ -40,35 +40,35 @@ export const updateWorkspaceMemberAction = workspaceActionClient
       )
     }
 
-    const updateInput = isCommunity()
-      ? {
-          ...parsedInput,
-          permissions: getSuperAdminPermissions(),
-        }
-      : {
-          ...parsedInput,
-          permissions: normalizeContactsPermissions(parsedInput.permissions),
-        }
+    const permissionsInput = isCommunity()
+      ? getSuperAdminPermissions()
+      : normalizeContactsPermissions(parsedInput.permissions)
 
     const permissionsChanged = !isDeepStrictEqual(
       workspaceMember.permissions,
-      updateInput.permissions,
+      permissionsInput,
     )
-    const notificationsChanged = !(
-      isDeepStrictEqual(
-        workspaceMember.notificationTypes,
-        updateInput.notificationTypes,
-      ) &&
-      isDeepStrictEqual(
-        workspaceMember.notificationChannels,
-        updateInput.notificationChannels,
-      )
-    )
+    // s198: only the flags the admin changed on THIS form (against the
+    // values it was opened with) are written, merged into the stored jsonb:
+    // diffing against the fresh row would write the stale form back over a
+    // member's own self-service change made since the page loaded.
+    const notificationPatch = {
+      types: changedFlags(
+        parsedInput.notificationTypes,
+        parsedInput.loadedNotificationTypes,
+      ),
+      channels: changedFlags(
+        parsedInput.notificationChannels,
+        parsedInput.loadedNotificationChannels,
+      ),
+    }
+    const notificationsChanged =
+      Object.keys(notificationPatch.types).length > 0 ||
+      Object.keys(notificationPatch.channels).length > 0
 
-    // updateWorkspaceMemberRequest currently has exactly these 3 fields, so
-    // this covers every field in updateInput. If a new field is added to the
-    // schema, it MUST be added to permissionsChanged/notificationsChanged (or
-    // diffed separately) below, or it will silently never be persisted.
+    // updateWorkspaceMemberRequest = permissions + the notification flags
+    // (+ their loaded values). A new field MUST be diffed here too, or it
+    // will silently never be persisted.
     if (!(permissionsChanged || notificationsChanged)) {
       return
     }
@@ -76,7 +76,8 @@ export const updateWorkspaceMemberAction = workspaceActionClient
     const updated = await workspaceMemberService.update({
       id: workspaceMember.id,
       workspaceId,
-      data: updateInput,
+      data: permissionsChanged ? { permissions: permissionsInput } : {},
+      notificationPatch,
     })
 
     if (!updated) {
@@ -93,7 +94,21 @@ export const updateWorkspaceMemberAction = workspaceActionClient
 
       await auditService.record({
         action: "role_change",
-        detail: `changed role of ${targetUser?.name ?? targetUser?.email ?? "a member"} to ${updateInput.permissions.superAdmin ? "admin" : "member"}`,
+        detail: `changed role of ${targetUser?.name ?? targetUser?.email ?? "a member"} to ${permissionsInput.superAdmin ? "admin" : "member"}`,
       })
     }
   })
+
+/** The flags whose submitted value differs from the value the form loaded. */
+function changedFlags(
+  submitted: Record<string, boolean>,
+  loaded: Record<string, boolean>,
+): Record<string, boolean> {
+  const out: Record<string, boolean> = {}
+  for (const [key, value] of Object.entries(submitted)) {
+    if (loaded[key] !== value) {
+      out[key] = value
+    }
+  }
+  return out
+}

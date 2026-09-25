@@ -53,3 +53,20 @@ export const useMarkAllNotificationsRead = () => {
     }),
   )
 }
+
+/** The caller's self-service notification preferences (s198). */
+export const useOwnNotificationPrefs = (workspaceId: string) =>
+  useQuery(
+    orpc.notificationsAPI.privateGetNotificationPrefsAPI.queryOptions({
+      input: { workspaceId },
+    }),
+  )
+
+export const useUpdateOwnNotificationPrefs = () => {
+  const invalidate = useInvalidateNotifications()
+  return useMutation(
+    orpc.notificationsAPI.privateUpdateNotificationPrefsAPI.mutationOptions({
+      onSettled: () => invalidate(),
+    }),
+  )
+}
