@@ -1,5 +1,7 @@
 import { distributedStore } from "@chatbotx.io/redis"
+import { assertTimeoutMs, withTimeout } from "@chatbotx.io/utils"
 import { logger } from "@/lib/log"
+import { STORE_TIMEOUT_MS } from "./api-rate-limit"
 
 const WINDOW_SECONDS = 10
 const IP_LIMIT = 60
@@ -17,6 +19,8 @@ type GuestRateLimitInput = {
   guestConversationId?: string | null
   store?: RateLimitStore
   now?: number
+  /** Test seam; app code keeps the default `STORE_TIMEOUT_MS`. */
+  storeTimeoutMs?: number
 }
 
 type GuestRateLimitResult = {
@@ -57,17 +61,30 @@ const incrementMemoryWindowCounter = (key: string, windowSeconds: number) => {
   return next
 }
 
+// Each round trip is bounded (see STORE_TIMEOUT_MS): a HUNG Redis would
+// otherwise hold every guest message for the connection's 10 s timeout.
 const incrementWindowCounter = async (
   store: RateLimitStore,
   key: string,
   windowSeconds: number,
+  timeoutMs: number,
 ) => {
-  const created = await store.setNumberIfNotExists(key, 1, windowSeconds)
+  const created = await withTimeout(
+    store.setNumberIfNotExists(key, 1, windowSeconds),
+    timeoutMs,
+    "Guest rate limit store did not answer in time",
+  )
   if (created) {
     return 1
   }
 
-  return (await store.incrementCounter(key, 1, windowSeconds)) ?? 1
+  return (
+    (await withTimeout(
+      store.incrementCounter(key, 1, windowSeconds),
+      timeoutMs,
+      "Guest rate limit store did not answer in time",
+    )) ?? 1
+  )
 }
 
 export const checkGuestRateLimit = async ({
@@ -76,7 +93,10 @@ export const checkGuestRateLimit = async ({
   guestConversationId,
   store = distributedStore,
   now = Date.now(),
+  storeTimeoutMs = STORE_TIMEOUT_MS,
 }: GuestRateLimitInput): Promise<GuestRateLimitResult> => {
+  // Outside the try: a bad seam value is a caller bug, never a fallback.
+  assertTimeoutMs(storeTimeoutMs)
   const windowSuffix = buildWindowSuffix(now, WINDOW_SECONDS)
   const retryAfter = secondsUntilNextWindow(now, WINDOW_SECONDS)
   const ipKey = buildRateLimitKey("ip", webchatId, clientIp, windowSuffix)
@@ -85,7 +105,12 @@ export const checkGuestRateLimit = async ({
     : null
 
   try {
-    const ipCount = await incrementWindowCounter(store, ipKey, WINDOW_SECONDS)
+    const ipCount = await incrementWindowCounter(
+      store,
+      ipKey,
+      WINDOW_SECONDS,
+      storeTimeoutMs,
+    )
     if (ipCount > IP_LIMIT) {
       return { limited: true, retryAfter }
     }
@@ -95,6 +120,7 @@ export const checkGuestRateLimit = async ({
         store,
         sessionKey,
         WINDOW_SECONDS,
+        storeTimeoutMs,
       )
       if (sessionCount > SESSION_LIMIT) {
         return { limited: true, retryAfter }

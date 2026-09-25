@@ -260,6 +260,25 @@ describe("checkApiRateLimit", () => {
     expect(results.map((r) => r.limited)).toEqual([false, false, false, true])
   })
 
+  test.each([
+    0,
+    -1,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    2 ** 31,
+  ])("refuses storeTimeoutMs %s instead of silently running on the local counter", async (bad) => {
+    await expect(
+      checkApiRateLimit({
+        scope: "channel-api-rate-limit",
+        key: "bad-timeout",
+        store,
+        now: 0,
+        storeTimeoutMs: bad,
+      }),
+    ).rejects.toThrow(RangeError)
+    expect(store.incrWithWindow).not.toHaveBeenCalled()
+  })
+
   test("a slow store that answers inside the timeout is still the source of truth", async () => {
     const slowStore = {
       incrWithWindow: vi.fn(

@@ -1,5 +1,6 @@
 import { ChatbotXException } from "@chatbotx.io/business/errors"
 import { distributedStore } from "@chatbotx.io/redis"
+import { assertTimeoutMs, withTimeout } from "@chatbotx.io/utils"
 import { logger } from "@/lib/log"
 
 const WINDOW_SECONDS = 10
@@ -104,32 +105,9 @@ const incrementMemoryWindowCounter = (key: string, windowSeconds: number) => {
  * limited request for the full 10 s. Past this bound the request takes the
  * same local fallback as a failed store. The abandoned INCR may still land
  * later; over-counting one window during an outage is the accepted cost.
+ * Shared with the guest limiter.
  */
 export const STORE_TIMEOUT_MS = 2000
-
-const incrementWindowCounter = async (
-  store: RateLimitStore,
-  key: string,
-  windowSeconds: number,
-  timeoutMs: number,
-) => {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () =>
-        reject(new Error(`rate limit store did not answer in ${timeoutMs}ms`)),
-      timeoutMs,
-    )
-  })
-  try {
-    return await Promise.race([
-      store.incrWithWindow(key, windowSeconds),
-      timeout,
-    ])
-  } finally {
-    clearTimeout(timer)
-  }
-}
 
 /**
  * Keyed on the caller's authenticated identity (inbox id, workspace id, ...),
@@ -145,16 +123,17 @@ export const checkApiRateLimit = async ({
   now = Date.now(),
   storeTimeoutMs = STORE_TIMEOUT_MS,
 }: ApiRateLimitInput): Promise<ApiRateLimitResult> => {
+  // Outside the try: a bad seam value is a caller bug, never a fallback.
+  assertTimeoutMs(storeTimeoutMs)
   const windowSuffix = buildWindowSuffix(now, WINDOW_SECONDS)
   const retryAfter = secondsUntilNextWindow(now, WINDOW_SECONDS)
   const key = buildRateLimitKey(scope, identityKey, windowSuffix)
 
   try {
-    const count = await incrementWindowCounter(
-      store,
-      key,
-      WINDOW_SECONDS,
+    const count = await withTimeout(
+      store.incrWithWindow(key, WINDOW_SECONDS),
       storeTimeoutMs,
+      "API rate limit store did not answer in time",
     )
     return { limited: count > limit, retryAfter }
   } catch (error) {

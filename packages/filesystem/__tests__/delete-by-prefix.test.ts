@@ -6,6 +6,7 @@ process.env.S3_BUCKET ??= "test-bucket"
 
 const {
   DEFAULT_DELETE_BY_PREFIX_MAX_PAGES,
+  MAX_DELETE_OBJECTS_KEYS,
   PrefixPurgeError,
   PrefixTooLargeError,
   uploader,
@@ -104,23 +105,61 @@ describe("uploader.deleteByPrefix", () => {
     expect((err as PrefixPurgeError).cause).toBe(boom)
   })
 
-  test("a rejected multi-delete request stops the purge with the count from earlier pages only", async () => {
+  test("a whole multi-delete REQUEST refused: the page falls back to per-key deletes and one bad key fails alone", async () => {
     stubPages([
       {
         Contents: [{ Key: "p/a" }],
         IsTruncated: true,
         NextContinuationToken: "t",
       },
-      { Contents: [{ Key: "p/b" }] },
+      { Contents: [{ Key: "p/b" }, { Key: "p/bad" }, { Key: "p/c" }] },
     ])
-    const boom = new Error("socket hang up")
+    const refused = new Error("MalformedXML")
     vi.spyOn(uploader, "deleteObjects")
       .mockResolvedValueOnce({ deleted: 1 })
-      .mockRejectedValueOnce(boom)
+      .mockRejectedValueOnce(refused)
+    const badKey = new Error("InvalidArgument")
+    const deleteObject = vi
+      .spyOn(uploader, "deleteObject")
+      .mockImplementation((key: string) =>
+        key === "p/bad" ? Promise.reject(badKey) : Promise.resolve({} as never),
+      )
+    const err = await uploader.deleteByPrefix("p/").catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(PrefixPurgeError)
+    // 1 from page 1, 2 of 3 from the per-key pass on page 2.
+    expect((err as PrefixPurgeError).deleted).toBe(3)
+    expect((err as PrefixPurgeError).cause).toBe(badKey)
+    expect(deleteObject.mock.calls.map(([k]) => k).sort()).toEqual([
+      "p/b",
+      "p/bad",
+      "p/c",
+    ])
+  })
+
+  test("a refused request whose per-key pass fully succeeds keeps paging and returns the full count", async () => {
+    stubPages([
+      {
+        Contents: [{ Key: "p/a" }, { Key: "p/b" }],
+        IsTruncated: true,
+        NextContinuationToken: "t",
+      },
+      { Contents: [{ Key: "p/c" }] },
+    ])
+    vi.spyOn(uploader, "deleteObjects")
+      .mockRejectedValueOnce(new Error("MalformedXML"))
+      .mockResolvedValueOnce({ deleted: 1 })
+    vi.spyOn(uploader, "deleteObject").mockResolvedValue({} as never)
+    expect(await uploader.deleteByPrefix("p/")).toEqual({ deleted: 3 })
+  })
+
+  test("a listing marked truncated with no continuation token is a partial purge, not success", async () => {
+    stubPages([{ Contents: [{ Key: "p/a" }], IsTruncated: true }])
     const err = await uploader.deleteByPrefix("p/").catch((e: unknown) => e)
     expect(err).toBeInstanceOf(PrefixPurgeError)
     expect((err as PrefixPurgeError).deleted).toBe(1)
-    expect((err as PrefixPurgeError).cause).toBe(boom)
+    expect(String((err as PrefixPurgeError).cause)).toContain(
+      "no continuation token",
+    )
   })
 
   test("the default cap is finite and the errors name prefix, cap and count", () => {
@@ -186,6 +225,52 @@ describe("uploader.deleteObjects (the multi-object reply is counted per key)", (
     const result = await uploader.deleteObjects(["p/a", "p/b"])
     expect(result.deleted).toBe(1)
     expect(String(result.firstFailure)).toContain("1 of 2")
+  })
+
+  test("a key acknowledged twice counts once and cannot hide a missing key (s201c Codex probe)", async () => {
+    stubReply({ Deleted: [{ Key: "p/a" }, { Key: "p/a" }] })
+    const result = await uploader.deleteObjects(["p/a", "p/b"])
+    expect(result.deleted).toBe(1)
+    expect(String(result.firstFailure)).toContain("1 of 2")
+  })
+
+  test("a key repeated in the request is sent once and counted once", async () => {
+    const send = stubReply({ Deleted: [{ Key: "p/a" }] })
+    expect(await uploader.deleteObjects(["p/a", "p/a"])).toEqual({ deleted: 1 })
+    const command = send.mock.calls[0]?.[0] as DeleteObjectsCommand
+    expect(command.input.Delete?.Objects).toEqual([{ Key: "p/a" }])
+  })
+
+  test("a key named in BOTH Deleted and Errors counts as failed, not deleted", async () => {
+    stubReply({
+      Deleted: [{ Key: "p/a" }, { Key: "p/b" }],
+      Errors: [{ Key: "p/b", Code: "AccessDenied" }],
+    })
+    const result = await uploader.deleteObjects(["p/a", "p/b"])
+    expect(result.deleted).toBe(1)
+    expect(String(result.firstFailure)).toContain("AccessDenied")
+  })
+
+  test("more than 1000 distinct keys is refused before any request (S3's per-request cap)", async () => {
+    const send = stubReply({})
+    const keys = Array.from(
+      { length: MAX_DELETE_OBJECTS_KEYS + 1 },
+      (_, i) => `p/${i}`,
+    )
+    await expect(uploader.deleteObjects(keys)).rejects.toThrow(RangeError)
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  test("exactly 1000 keys, or 1001 entries that collapse to 1000 distinct, is one request", async () => {
+    const keys = Array.from(
+      { length: MAX_DELETE_OBJECTS_KEYS },
+      (_, i) => `p/${i}`,
+    )
+    const send = stubReply({ Deleted: keys.map((Key) => ({ Key })) })
+    expect(await uploader.deleteObjects([...keys, "p/0"])).toEqual({
+      deleted: MAX_DELETE_OBJECTS_KEYS,
+    })
+    expect(send).toHaveBeenCalledTimes(1)
   })
 
   test("an empty reply (no Deleted, no Errors) confirms nothing", async () => {
