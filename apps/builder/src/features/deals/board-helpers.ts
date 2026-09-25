@@ -1,5 +1,5 @@
 import { positionBetween } from "@chatbotx.io/utils/deal-position"
-import type { BoardColumnResource, DealResource } from "./schema/resource"
+import type { BoardColumnResource, BoardDealResource } from "./schema/resource"
 
 export { positionBetween } from "@chatbotx.io/utils/deal-position"
 
@@ -26,7 +26,12 @@ export function applyMove(
     targetDeals[index - 1]?.position,
     targetDeals[index]?.position,
   )
-  const moved: DealResource = { ...deal, stageId: target.stage.id, position }
+  // the spread keeps the card counts (s198)
+  const moved: BoardDealResource = {
+    ...deal,
+    stageId: target.stage.id,
+    position,
+  }
   const nextTarget = [
     ...targetDeals.slice(0, index),
     moved,

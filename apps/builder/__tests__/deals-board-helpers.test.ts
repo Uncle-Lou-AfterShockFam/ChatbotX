@@ -30,6 +30,27 @@ const board = (): BoardColumnResource[] => [
 ]
 
 describe("applyMove", () => {
+  test("a moved card keeps its task / comment counts (s198)", () => {
+    const columns = board()
+    Object.assign(columns[0].deals[0], {
+      openTaskCount: 3,
+      overdueTaskCount: 1,
+      commentCount: 2,
+    })
+    const next = applyMove(columns, {
+      cardId: "a",
+      toColumnId: "won",
+      index: 0,
+    })
+    expect(next?.columns[1].deals[0]).toMatchObject({
+      id: "a",
+      stageId: "won",
+      openTaskCount: 3,
+      overdueTaskCount: 1,
+      commentCount: 2,
+    })
+  })
+
   test("moves a card to another column at the end with position after the last card", () => {
     const next = applyMove(board(), {
       cardId: "a",

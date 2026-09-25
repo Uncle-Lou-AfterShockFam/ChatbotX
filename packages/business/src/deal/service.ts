@@ -7,6 +7,7 @@ import {
   findOrFail,
   inArray,
   relationsFilterToSQL,
+  type SQL,
   sql,
 } from "@chatbotx.io/database/client"
 import {
@@ -23,7 +24,9 @@ import {
 import {
   contactModel,
   dealActivityModel,
+  dealCommentModel,
   dealModel,
+  dealTaskModel,
 } from "@chatbotx.io/database/schema"
 import type {
   DealActivityModel,
@@ -112,8 +115,20 @@ export type DealUpdateData = Partial<
   >
 >
 
-export type BoardColumn = { stage: PipelineStageModel; deals: DealModel[] }
+/** Per-deal task / comment counts on a board card (s198). */
+export type DealCardCounts = {
+  openTaskCount: number
+  overdueTaskCount: number
+  commentCount: number
+}
+export type BoardDeal = DealModel & DealCardCounts
+export type BoardColumn = { stage: PipelineStageModel; deals: BoardDeal[] }
 
+const NO_COUNTS: DealCardCounts = {
+  openTaskCount: 0,
+  overdueTaskCount: 0,
+  commentCount: 0,
+}
 const DEAL_NOT_FOUND = "Deal not found"
 const ISO_CURRENCY = /^[A-Z]{3}$/
 
@@ -242,7 +257,12 @@ class DealService extends BaseService {
     return { data, pageCount }
   }
 
-  /** Every stage of the pipeline with its deals ordered by `position`. */
+  /**
+   * Every stage of the pipeline with its deals ordered by `position`, each
+   * with its card counts. Without a caller `tx` it reads ONE repeatable-read
+   * snapshot, so a deal changing between the list and the counts can never
+   * show a card with zeroed counts (s198 review).
+   */
   async listBoard(props: {
     workspaceId: string
     pipelineId: string
@@ -250,7 +270,13 @@ class DealService extends BaseService {
     viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<BoardColumn[]> {
-    const { workspaceId, pipelineId, viewer, tx = db } = props
+    if (!props.tx) {
+      return await db.transaction(
+        async (tx) => await this.listBoard({ ...props, tx }),
+        { isolationLevel: "repeatable read", accessMode: "read only" },
+      )
+    }
+    const { workspaceId, pipelineId, viewer, tx } = props
     const status = props.status ?? "all"
     const pipeline = await pipelineService.find({
       workspaceId,
@@ -258,25 +284,86 @@ class DealService extends BaseService {
       viewer,
       tx,
     })
+    const where = {
+      workspaceId,
+      pipelineId,
+      status: status === "all" ? undefined : status,
+      ownerId: viewer ? viewerOwnerFilter(viewer) : undefined,
+    }
     const deals = await tx.query.dealModel.findMany({
-      where: {
-        workspaceId,
-        pipelineId,
-        status: status === "all" ? undefined : status,
-        ownerId: viewer ? viewerOwnerFilter(viewer) : undefined,
-      },
+      where,
       orderBy: { position: "asc", createdAt: "asc" },
     })
-    const byStage = new Map<string, DealModel[]>()
+    const counts =
+      deals.length > 0
+        ? await this.boardCounts({
+            tx,
+            // the board's own filter, as SQL (one source for both reads)
+            dealWhere: relationsFilterToSQL(dealModel, where),
+          })
+        : new Map<string, DealCardCounts>()
+    const byStage = new Map<string, BoardDeal[]>()
     for (const deal of deals) {
       const list = byStage.get(deal.stageId) ?? []
-      list.push(deal)
+      list.push({ ...deal, ...(counts.get(deal.id) ?? NO_COUNTS) })
       byStage.set(deal.stageId, list)
     }
     return pipeline.stages.map((stage) => ({
       stage,
       deals: byStage.get(stage.id) ?? [],
     }))
+  }
+
+  /**
+   * Open / overdue task and comment counts of the deals matching `dealWhere`,
+   * one grouped query each, joined through Deal (a board has no size cap, so
+   * never an id list). Deals with none are absent from the map.
+   */
+  private async boardCounts(props: {
+    tx: DatabaseClient
+    dealWhere: SQL | undefined
+  }): Promise<Map<string, DealCardCounts>> {
+    const { tx, dealWhere } = props
+    const [tasks, comments] = await Promise.all([
+      tx
+        .select({
+          dealId: dealTaskModel.dealId,
+          open: sql<number>`(count(*) filter (where ${dealTaskModel.status} = 'open'))::int`,
+          overdue: sql<number>`(count(*) filter (where ${dealTaskModel.status} = 'open' and ${dealTaskModel.dueAt} < now()))::int`,
+        })
+        .from(dealTaskModel)
+        .innerJoin(dealModel, eq(dealModel.id, dealTaskModel.dealId))
+        .where(dealWhere)
+        .groupBy(dealTaskModel.dealId),
+      tx
+        .select({
+          dealId: dealCommentModel.dealId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(dealCommentModel)
+        .innerJoin(dealModel, eq(dealModel.id, dealCommentModel.dealId))
+        .where(dealWhere)
+        .groupBy(dealCommentModel.dealId),
+    ])
+    const out = new Map<string, DealCardCounts>()
+    const entry = (dealId: string) => {
+      const found = out.get(dealId)
+      if (found) {
+        return found
+      }
+      const fresh = { ...NO_COUNTS }
+      out.set(dealId, fresh)
+      return fresh
+    }
+    for (const row of tasks) {
+      const counts = entry(row.dealId)
+      counts.openTaskCount = Number(row.open)
+      counts.overdueTaskCount = Number(row.overdue)
+    }
+    for (const row of comments) {
+      entry(row.dealId).commentCount = Number(row.count)
+    }
+    return out
   }
 
   async listByContactId(props: {

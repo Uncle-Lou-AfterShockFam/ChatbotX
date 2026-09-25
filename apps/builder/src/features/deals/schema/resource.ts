@@ -34,8 +34,16 @@ export const dealActivityResource = createSelectSchema(dealActivityModel, {
 })
 export type DealActivityResource = z.infer<typeof dealActivityResource>
 
+/** A board card: the deal + its open / overdue task and comment counts (s198). */
+export const boardDealResource = dealResource.extend({
+  openTaskCount: z.number().int(),
+  overdueTaskCount: z.number().int(),
+  commentCount: z.number().int(),
+})
+export type BoardDealResource = z.infer<typeof boardDealResource>
+
 export const boardColumnResource = z.object({
   stage: pipelineStageResource,
-  deals: z.array(dealResource),
+  deals: z.array(boardDealResource),
 })
 export type BoardColumnResource = z.infer<typeof boardColumnResource>

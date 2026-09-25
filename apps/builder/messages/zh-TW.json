@@ -6940,7 +6940,12 @@
       "moved": "Deal moved to {pipeline}"
     },
     "startInDays": "Start in (days)",
-    "startInDaysHint": "Start date = that same day plus this many days; not after the due date. Empty = the task starts when the tasks it waits on are due."
+    "startInDaysHint": "Start date = that same day plus this many days; not after the due date. Empty = the task starts when the tasks it waits on are due.",
+    "card": {
+      "tasks": "{count, plural, one {# open task} other {# open tasks}}",
+      "tasksOverdue": "{count, plural, one {# open task} other {# open tasks}}, {overdue} overdue",
+      "comments": "{count, plural, one {# comment} other {# comments}}"
+    }
   },
   "notifications": {
     "title": "Notifications",

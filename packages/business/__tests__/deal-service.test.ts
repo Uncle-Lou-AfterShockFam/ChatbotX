@@ -23,6 +23,10 @@ const m = vi.hoisted(() => {
     updateEmpty: false,
     lastListWhere: null as unknown,
     rowLocks: [] as string[],
+    /** s198 board: findMany rows, then one groupBy result per count query */
+    boardDeals: [] as Record<string, unknown>[],
+    groupResults: [] as unknown[][],
+    groupByCalls: 0,
   }
   const calls: string[] = []
   const makeTx = () => {
@@ -30,6 +34,10 @@ const m = vi.hoisted(() => {
     selectChain.from = () => selectChain
     selectChain.where = () => selectChain
     selectChain.innerJoin = () => selectChain
+    selectChain.groupBy = () => {
+      state.groupByCalls++
+      return Promise.resolve(state.groupResults.shift() ?? [])
+    }
     selectChain.for = (mode: string) => {
       state.rowLocks.push(mode)
       return selectChain
@@ -93,7 +101,7 @@ const m = vi.hoisted(() => {
           findFirst: () => Promise.resolve(state.openDeal ?? undefined),
           findMany: (args: { where?: unknown }) => {
             state.lastListWhere = args?.where ?? null
-            return Promise.resolve([])
+            return Promise.resolve(state.boardDeals)
           },
         },
       },
@@ -1639,5 +1647,117 @@ describe("dealService.movePipeline (s196)", () => {
     ).rejects.toMatchObject({ data: { conflict: "stale" } })
     expect(m.state.activities).toEqual([])
     expect(m.emitMoved).not.toHaveBeenCalled()
+  })
+})
+
+describe("dealService.listBoard card counts (s198)", () => {
+  const stage = (id: string) => ({ id, name: id, pipelineId: "pipe-1" })
+  const deal = (id: string, stageId: string) => ({
+    id,
+    stageId,
+    workspaceId: WS,
+    pipelineId: "pipe-1",
+    title: id,
+  })
+  beforeEach(() => {
+    m.state.boardDeals = []
+    m.state.groupResults = []
+    m.state.groupByCalls = 0
+    m.pipelineFind.mockResolvedValue({
+      id: "pipe-1",
+      stages: [stage("s-1"), stage("s-2")],
+    })
+  })
+
+  test("merges open / overdue task and comment counts; a deal with none gets zeros", async () => {
+    m.state.boardDeals = [
+      deal("d-1", "s-1"),
+      deal("d-2", "s-1"),
+      deal("d-3", "s-2"),
+    ]
+    m.state.groupResults = [
+      [
+        { dealId: "d-1", open: 3, overdue: 1 },
+        { dealId: "d-3", open: 0, overdue: 0 },
+      ],
+      [{ dealId: "d-2", count: "4" }],
+    ]
+    const board = await dealService.listBoard({
+      workspaceId: WS,
+      pipelineId: "pipe-1",
+    })
+    const cards = board.flatMap((c) => c.deals)
+    expect(
+      cards.map((d) => [
+        d.id,
+        d.openTaskCount,
+        d.overdueTaskCount,
+        d.commentCount,
+      ]),
+    ).toEqual([
+      ["d-1", 3, 1, 0],
+      ["d-2", 0, 0, 4],
+      ["d-3", 0, 0, 0],
+    ])
+    expect(board.map((c) => c.deals.map((d) => d.id))).toEqual([
+      ["d-1", "d-2"],
+      ["d-3"],
+    ])
+    expect(m.state.groupByCalls).toBe(2)
+  })
+
+  test("an empty board runs no count query", async () => {
+    const board = await dealService.listBoard({
+      workspaceId: WS,
+      pipelineId: "pipe-1",
+    })
+    expect(board.map((c) => c.deals)).toEqual([[], []])
+    expect(m.state.groupByCalls).toBe(0)
+  })
+
+  test("the count queries use the board's own filter (one source), incl. the assigned-only owner", async () => {
+    const { relationsFilterToSQL } = (await import(
+      "@chatbotx.io/database/client"
+    )) as unknown as { relationsFilterToSQL: ReturnType<typeof vi.fn> }
+    relationsFilterToSQL.mockClear()
+    m.state.boardDeals = [deal("d-1", "s-1")]
+    await dealService.listBoard({
+      workspaceId: WS,
+      pipelineId: "pipe-1",
+      status: "open",
+      viewer: {
+        userId: "user-1",
+        permissions: {
+          superAdmin: false,
+          contacts: false,
+          onlyAssignedContacts: true,
+        },
+      } as never,
+    })
+    expect(m.state.lastListWhere).toEqual({
+      workspaceId: WS,
+      pipelineId: "pipe-1",
+      status: "open",
+      ownerId: "user-1",
+    })
+    // the SAME object the card list was filtered by
+    expect(relationsFilterToSQL.mock.calls.at(-1)?.[1]).toBe(
+      m.state.lastListWhere,
+    )
+  })
+
+  test("without a caller tx the board reads one read-only repeatable-read snapshot", async () => {
+    const { db } = (await import(
+      "@chatbotx.io/database/client"
+    )) as unknown as {
+      db: { transaction: (...a: unknown[]) => unknown }
+    }
+    const spy = vi.spyOn(db, "transaction")
+    await dealService.listBoard({ workspaceId: WS, pipelineId: "pipe-1" })
+    expect(spy).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: "repeatable read",
+      accessMode: "read only",
+    })
+    spy.mockRestore()
   })
 })
