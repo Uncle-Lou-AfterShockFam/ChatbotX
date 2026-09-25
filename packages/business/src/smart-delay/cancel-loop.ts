@@ -1,4 +1,3 @@
-import { setTimeout as sleep } from "node:timers/promises"
 import { buildJobId } from "@chatbotx.io/flow-config"
 import { integrationQueue } from "@chatbotx.io/worker-config"
 import { logger } from "../logger"
@@ -90,7 +89,8 @@ export async function runSmartDelayCancelLoop(props: {
         reason: "locked-rows",
       })
     }
-    await sleep(delay)
+    // No node:timers/promises: the business barrel must stay Edge-safe.
+    await new Promise((resolve) => setTimeout(resolve, delay))
   }
 }
 
