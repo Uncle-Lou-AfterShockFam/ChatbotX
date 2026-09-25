@@ -18,11 +18,8 @@ import {
 } from "./documenso"
 import { isJsonObject, type JsonObject } from "./gotenberg"
 import { documentsEnv } from "./keys"
-import {
-  contactDocumentPath,
-  documentService,
-  type ResolveDocumentVariables,
-} from "./service"
+import { contactDocumentPath } from "./paths"
+import { documentService, type ResolveDocumentVariables } from "./service"
 
 /**
  * Signing a contact document with Documenso (roadmap B6, hub-native; the

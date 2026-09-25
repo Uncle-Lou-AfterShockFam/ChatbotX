@@ -16,6 +16,8 @@ vi.mock("@chatbotx.io/business/documents", () => ({
   },
 }))
 vi.mock("@/lib/log", () => ({ logger: { warn, error } }))
+const checkApiRateLimit = vi.fn()
+vi.mock("@/lib/rate-limit/api-rate-limit", () => ({ checkApiRateLimit }))
 
 const BODY = JSON.stringify({ event: "DOCUMENT_COMPLETED", payload: {} })
 const post = (body: string, headers: Record<string, string> = {}) =>
@@ -27,6 +29,7 @@ const post = (body: string, headers: Record<string, string> = {}) =>
 
 beforeEach(() => {
   vi.clearAllMocks()
+  checkApiRateLimit.mockResolvedValue({ limited: false, retryAfter: 1 })
   verifyDocumensoSecret.mockReturnValue("ok")
   completeFromWebhook.mockResolvedValue({
     outcome: "signed",
@@ -100,4 +103,50 @@ test("a thrown service error (DB down, out-of-range id) is a logged 503, not a b
   const res = await POST(post(BODY))
   expect(res.status).toBe(503)
   expect(error).toHaveBeenCalled()
+})
+
+test("rate limit: keyed on the hop the PROXY wrote (rightmost X-Forwarded-For), never a client-supplied one; checked BEFORE the secret and the body; over the limit = 429 with Retry-After", async () => {
+  const { POST, DOCUMENSO_WEBHOOK_RATE_LIMIT, documensoWebhookRateLimitKey } =
+    await import("@/app/integrations/documenso/webhook/route")
+  // Appending proxy: the attacker's spoofed hops are on the left, the proxy's
+  // view of the connection is last.
+  expect(
+    documensoWebhookRateLimitKey(
+      new Headers({ "x-forwarded-for": "6.6.6.6, 7.7.7.7 , 203.0.113.9" }),
+    ),
+  ).toBe("203.0.113.9")
+  // Overwriting proxy: a single value.
+  expect(
+    documensoWebhookRateLimitKey(
+      new Headers({ "x-forwarded-for": "203.0.113.9" }),
+    ),
+  ).toBe("203.0.113.9")
+  // Garbage or empty header never crashes and never yields an empty key.
+  expect(
+    documensoWebhookRateLimitKey(new Headers({ "x-forwarded-for": " , ," })),
+  ).toBe("unknown")
+  expect(documensoWebhookRateLimitKey(new Headers())).toBe("unknown")
+  expect(
+    documensoWebhookRateLimitKey(new Headers({ "x-real-ip": "198.51.100.4" })),
+  ).toBe("198.51.100.4")
+
+  await POST(post(BODY, { "x-forwarded-for": "6.6.6.6, 203.0.113.9" }))
+  expect(checkApiRateLimit).toHaveBeenCalledWith({
+    scope: "documenso-webhook-rate-limit",
+    key: "203.0.113.9",
+    limit: DOCUMENSO_WEBHOOK_RATE_LIMIT,
+  })
+  // 4 retries per event and no backoff on the sender: the cap must hold
+  // 150 completions x 4 attempts in one window without a terminal 429.
+  expect(DOCUMENSO_WEBHOOK_RATE_LIMIT).toBeGreaterThanOrEqual(600)
+
+  checkApiRateLimit.mockResolvedValueOnce({ limited: true, retryAfter: 7 })
+  verifyDocumensoSecret.mockClear()
+  completeFromWebhook.mockClear()
+  const res = await POST(post(BODY))
+  expect(res.status).toBe(429)
+  expect(res.headers.get("retry-after")).toBe("7")
+  expect(await res.json()).toEqual({ code: "tooManyRequests" })
+  expect(verifyDocumensoSecret).not.toHaveBeenCalled()
+  expect(completeFromWebhook).not.toHaveBeenCalled()
 })

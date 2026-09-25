@@ -35,6 +35,7 @@ import {
   unsafeTemplateMarkup,
   wrapDocumentHtml,
 } from "./html"
+import { contactDocumentPath } from "./paths"
 
 const TEMPLATE_NOT_FOUND = "Document template not found"
 const DOCUMENT_NOT_FOUND = "Document not found"
@@ -50,14 +51,6 @@ export const isContactDocumentToken = (value: unknown): value is string =>
 export const mintContactDocumentToken = (
   random?: (bytes: number) => Uint8Array,
 ): string => mintBase62Token(16, CONTACT_DOCUMENT_TOKEN_LENGTH, random)
-
-/** Private object key: never under `public/` (anonymous-read prefix). */
-export const contactDocumentPath = (
-  workspaceId: string,
-  contactId: string,
-  documentId: string,
-): string =>
-  `workspaces/${workspaceId}/documents/${contactId}/${documentId}.pdf`
 
 /**
  * Resolves the `{{variable}}` keys of a template for one contact. Injected by
