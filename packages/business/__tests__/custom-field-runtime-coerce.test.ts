@@ -162,3 +162,101 @@ describe("temporal stays on its own (unchanged) branch", () => {
     ).resolves.toBe("2026-07-22T00:00:00+07:00")
   })
 })
+
+describe("runtime coercion — select / multiSelect (s201)", () => {
+  const options = ["Gold", "Silver", "Red, White"]
+  const run = (type: "select" | "multiSelect", value: string, opts = options) =>
+    normalizeCustomFieldValueForStorage({
+      type,
+      value,
+      options: opts,
+      resolveSourceTimezone: resolver,
+    })
+
+  test("select stores the canonical option spelling; blank stays unset", async () => {
+    await expect(run("select", " gold ")).resolves.toBe("Gold")
+    await expect(run("select", "Red, White")).resolves.toBe("Red, White")
+    await expect(run("select", "  ")).resolves.toBe("")
+  })
+
+  test("select refuses an unknown option with a typed 400", async () => {
+    await expect(run("select", "Platinum")).rejects.toMatchObject({
+      code: "invalidCustomFieldValue",
+      httpStatusCode: 400,
+    })
+  })
+
+  test("multiSelect stores canonical JSON in option order", async () => {
+    await expect(run("multiSelect", "silver, GOLD, gold")).resolves.toBe(
+      '["Gold","Silver"]',
+    )
+    await expect(run("multiSelect", '["Red, White","Gold"]')).resolves.toBe(
+      '["Gold","Red, White"]',
+    )
+    await expect(run("multiSelect", "[]")).resolves.toBe("")
+  })
+
+  test("multiSelect refuses unknown, malformed and oversized input", async () => {
+    await expect(run("multiSelect", "Gold, Platinum")).rejects.toMatchObject({
+      code: "invalidCustomFieldValue",
+    })
+    await expect(run("multiSelect", '["Gold", 7]')).rejects.toMatchObject({
+      code: "invalidCustomFieldValue",
+    })
+    await expect(
+      run(
+        "multiSelect",
+        JSON.stringify(Array.from({ length: 101 }, () => "Gold")),
+      ),
+    ).rejects.toMatchObject({ code: "invalidCustomFieldValue" })
+  })
+
+  test("an option field without its option list fails closed", async () => {
+    for (const opts of [undefined, null, []] as const) {
+      await expect(
+        normalizeCustomFieldValueForStorage({
+          type: "select",
+          value: "Gold",
+          options: opts,
+          resolveSourceTimezone: resolver,
+        }),
+      ).rejects.toMatchObject({ code: "invalidCustomFieldValue" })
+    }
+  })
+
+  test("text types ignore options entirely", async () => {
+    await expect(
+      normalizeCustomFieldValueForStorage({
+        type: "shortText",
+        value: "Platinum",
+        options,
+        resolveSourceTimezone: resolver,
+      }),
+    ).resolves.toBe("Platinum")
+  })
+})
+
+describe("import cell validation — option types (s201)", async () => {
+  const { validateCustomFieldValue } = await import(
+    "../src/javascript-execution/custom-field-value"
+  )
+  test("unknown list or unknown option -> skipped (null); a known one is canonical", () => {
+    expect(validateCustomFieldValue("select", "Gold")).toBeNull()
+    expect(validateCustomFieldValue("select", "Gold", null, [])).toBeNull()
+    expect(
+      validateCustomFieldValue("select", "Platinum", null, ["Gold"]),
+    ).toBeNull()
+    expect(validateCustomFieldValue("select", "gold", null, ["Gold"])).toBe(
+      "Gold",
+    )
+    expect(
+      validateCustomFieldValue("multiSelect", "silver, gold", null, [
+        "Gold",
+        "Silver",
+      ]),
+    ).toBe('["Gold","Silver"]')
+    expect(
+      validateCustomFieldValue("multiSelect", "[]", null, ["Gold"]),
+    ).toBeNull()
+  })
+})

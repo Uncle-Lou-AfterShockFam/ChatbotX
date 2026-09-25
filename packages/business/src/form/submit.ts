@@ -12,6 +12,7 @@ import {
 import {
   EMPTY_FORM_DEFINITION,
   evaluateForm,
+  FORM_OPTION_FIELD_TYPES,
   type FormDefinition,
   type FormSubmissionVisibility,
   type FormSystemFieldKey,
@@ -25,11 +26,17 @@ import {
 } from "@chatbotx.io/database/partials"
 import {
   contactCustomFieldModel,
+  customFieldModel,
   formSubmissionModel,
 } from "@chatbotx.io/database/schema"
 import type { FormSubmissionModel } from "@chatbotx.io/database/types"
 import { emitFormSubmitted } from "@chatbotx.io/events"
 import { createId, isPlainRecord } from "@chatbotx.io/utils"
+import {
+  canonicalMultiSelectValue,
+  canonicalSelectValue,
+  type OptionFieldType,
+} from "@chatbotx.io/utils/custom-field"
 import { parsePhoneNumberFromString } from "libphonenumber-js"
 import { attachContactToInbox } from "../contact/attach-inbox"
 import {
@@ -143,6 +150,25 @@ const toStoredText = (value: FormValue): string => {
     return value ? "true" : "false"
   }
   return String(value ?? "")
+}
+
+type OptionTarget = { type: OptionFieldType; options: string[] }
+
+/**
+ * An answer as stored in a select / multiSelect field (s201): the canonical
+ * option text, or null when it is not (or no longer) an option. A checkbox
+ * group goes in as a JSON array, so an option holding a comma stays one item.
+ */
+const optionTargetText = (
+  value: FormValue,
+  target: OptionTarget,
+): string | null => {
+  if (target.type === "select") {
+    return canonicalSelectValue(toStoredText(value), target.options)
+  }
+  const raw = Array.isArray(value) ? JSON.stringify(value) : toStoredText(value)
+  const result = canonicalMultiSelectValue(raw, target.options)
+  return result.ok ? result.value : null
 }
 
 type Identity = { phoneNumber: string | null; email: string | null }
@@ -620,6 +646,7 @@ export class FormSubmitService {
       ? await this.storedValues({ workspaceId, contactId, def, tx })
       : null
     const custom: { customFieldId: string; value: string; key: string }[] = []
+    const optionTargets = await this.optionTargets({ workspaceId, def, tx })
     for (const field of formInputFields(def)) {
       const value = values[field.key]
       if (
@@ -651,9 +678,30 @@ export class FormSubmitService {
           tx,
         })
       } else {
+        const target = optionTargets.get(field.mapTo.customFieldId)
+        const stored = target
+          ? optionTargetText(value, target)
+          : toStoredText(value)
+        if (stored === null) {
+          // The field's options changed after this form was published (the
+          // publish check passed then): keep the submission, skip the write.
+          logger.warn(
+            {
+              workspaceId,
+              contactId,
+              fieldKey: field.key,
+              customFieldId: field.mapTo.customFieldId,
+            },
+            "form submit: answer is no longer an option of the mapped field; not written",
+          )
+          continue
+        }
+        if (stored === "") {
+          continue
+        }
         custom.push({
           customFieldId: field.mapTo.customFieldId,
-          value: toStoredText(value),
+          value: stored,
           key: field.key,
         })
       }
@@ -672,6 +720,44 @@ export class FormSubmitService {
         sourceTimezone,
       },
       tx,
+    )
+  }
+
+  /** The mapped custom fields of an option type, with their option lists. */
+  private async optionTargets(props: {
+    workspaceId: string
+    def: FormDefinition
+    tx: DatabaseClient
+  }): Promise<Map<string, OptionTarget>> {
+    // Publish admits only a choice field into a select / multiSelect target
+    // (formMappingIssue), so a form without one never needs this lookup.
+    const ids = formInputFields(props.def).flatMap((f) =>
+      f.mapTo?.kind === "custom" && FORM_OPTION_FIELD_TYPES.has(f.type)
+        ? [f.mapTo.customFieldId]
+        : [],
+    )
+    if (ids.length === 0) {
+      return new Map()
+    }
+    const rows = await props.tx
+      .select({
+        id: customFieldModel.id,
+        type: customFieldModel.type,
+        options: customFieldModel.options,
+      })
+      .from(customFieldModel)
+      .where(
+        and(
+          eq(customFieldModel.workspaceId, props.workspaceId),
+          inArray(customFieldModel.id, ids),
+          inArray(customFieldModel.type, ["select", "multiSelect"]),
+        ),
+      )
+    return new Map(
+      rows.map((r) => [
+        String(r.id),
+        { type: r.type as OptionFieldType, options: r.options ?? [] },
+      ]),
     )
   }
 

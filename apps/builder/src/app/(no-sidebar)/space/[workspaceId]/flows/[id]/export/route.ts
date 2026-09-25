@@ -91,7 +91,9 @@ export async function GET(
   const customFields = Object.fromEntries(
     customFieldRows.map((row): [string, FlowExportCustomField] => [
       row.id,
-      { name: row.name, type: row.type },
+      row.options
+        ? { name: row.name, type: row.type, options: row.options }
+        : { name: row.name, type: row.type },
     ]),
   )
   const botFields = Object.fromEntries(

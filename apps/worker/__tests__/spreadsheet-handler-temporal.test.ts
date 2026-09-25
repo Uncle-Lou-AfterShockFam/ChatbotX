@@ -90,6 +90,7 @@ describe("spreadsheet handler - temporal custom-field write", () => {
       fields: [{ customFieldId: "cf-d", value: "23/07/2026" }],
       temporalInputParsing: "lenient",
       sourceTimezoneStrategy: "workspace",
+      skipInvalidOptions: true,
     })
   })
 

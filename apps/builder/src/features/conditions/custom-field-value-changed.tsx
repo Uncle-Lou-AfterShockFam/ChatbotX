@@ -1,6 +1,5 @@
 import {
   type CustomFieldType,
-  customFieldTypes,
   operatorTypes,
 } from "@chatbotx.io/database/partials"
 import { DateTimePicker } from "@chatbotx.io/ui/components/ui/date-picker"
@@ -13,6 +12,7 @@ import {
   SelectValue,
 } from "@chatbotx.io/ui/components/ui/select"
 import { Textarea } from "@chatbotx.io/ui/components/ui/textarea"
+import { customFieldTypes } from "@chatbotx.io/utils/custom-field"
 import { useTranslations } from "next-intl"
 import { useMemo } from "react"
 import { Controller, useFormContext } from "react-hook-form"
@@ -24,6 +24,12 @@ import {
 } from "@/features/contact-filter/schema"
 import { CustomFieldSelect } from "@/features/custom-fields/custom-field-select"
 import { useCustomFieldStore } from "@/features/custom-fields/provider/custom-field-store-context"
+
+// s201: a multiSelect stores JSON-array text, which the value-changed
+// operators cannot compare yet (typed operators land in part 2).
+const TRIGGER_FIELD_TYPES = customFieldTypes.options.filter(
+  (type) => type !== "multiSelect",
+)
 
 export const CustomFieldValueChanged = ({
   parentName,
@@ -66,6 +72,7 @@ export const CustomFieldValueChanged = ({
   return (
     <div className="flex flex-col gap-4">
       <CustomFieldSelect
+        customFieldTypes={TRIGGER_FIELD_TYPES}
         label=""
         name={`${parentName}.sourceId`}
         onValueChange={() => {

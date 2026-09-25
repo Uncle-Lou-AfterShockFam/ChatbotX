@@ -506,7 +506,10 @@ export const ContactDetail = ({
   }
 
   const customFieldMap = useMemo(() => {
-    const map = new Map<string, { name: string; type: CustomFieldType }>()
+    const map = new Map<
+      string,
+      { name: string; type: CustomFieldType; options?: string[] | null }
+    >()
     for (const field of customFields) {
       const parsedType = customFieldTypes.safeParse(field.type)
       if (!parsedType.success) {
@@ -515,6 +518,7 @@ export const ContactDetail = ({
       map.set(field.id.toString(), {
         name: field.name,
         type: parsedType.data,
+        options: field.options,
       })
     }
     return map
@@ -644,6 +648,7 @@ export const ContactDetail = ({
                     contactCustomField.value,
                   )
                 : contactCustomField.value,
+              choices: targetCustomField.options,
               type: targetCustomField.type,
             })
           }

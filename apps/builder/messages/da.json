@@ -1716,6 +1716,18 @@
     "longText": {
       "label": "Long Tekst"
     },
+    "select": {
+      "label": "Valg"
+    },
+    "multiSelect": {
+      "label": "Flervalg"
+    },
+    "customFieldOptions": {
+      "label": "Muligheder",
+      "description": "Én mulighed pr. linje (op til 100). Kontakter kan kun have disse værdier.",
+      "placeholder": "Guld\nSølv\nBronze",
+      "editHint": "Fjernes en mulighed, beholdes værdier, som kontakter allerede har; de vises som de er."
+    },
     "replyFormat": {
       "label": "Svar Format",
       "number": "Nummer",
@@ -4760,6 +4772,7 @@
       "mapSystem": "Contact",
       "mapCustom": "Custom field",
       "mapSelectHint": "Choice answers are written as text; a multiple choice as a comma-separated list.",
+      "mapOptionsMissing": "Det tilknyttede felt har ikke muligheden {options}: tilføj den der eller ret denne mulighed, ellers afvises publicering.",
       "mapped": "mapped",
       "conditional": "conditional",
       "visibleWhen": "Show this field only when",

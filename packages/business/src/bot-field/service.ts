@@ -26,6 +26,7 @@ import { createId } from "@chatbotx.io/utils"
 import {
   canonicalNumberLiteral,
   customFieldResolutionKey,
+  isOptionFieldType,
 } from "@chatbotx.io/utils/custom-field"
 import {
   SourceTimezoneStrategy,
@@ -82,6 +83,16 @@ const OPERATION_ALLOWED_TYPES: Record<
   [FieldOperationType.prepend]: ["shortText", "longText"],
   [FieldOperationType.increase]: ["number"],
   [FieldOperationType.decrease]: ["number"],
+}
+
+/** Bot fields have no option list (s201): the option types never reach one. */
+const assertBotFieldType = (type: CustomFieldType): void => {
+  if (isOptionFieldType(type)) {
+    throw validationException(
+      "type",
+      "Account fields cannot be select or multi-select fields.",
+    )
+  }
 }
 
 const isOperationAllowedForType = (
@@ -274,6 +285,9 @@ class BotFieldService extends BaseService {
     tx?: DatabaseClient
   }): Promise<{ idMap: Map<string, string>; createdIds: string[] }> {
     const { workspaceId, fields, tx = db } = props
+    for (const field of fields) {
+      assertBotFieldType(field.type)
+    }
 
     const uniqueFields = Array.from(
       new Map(
@@ -489,6 +503,7 @@ class BotFieldService extends BaseService {
     tx?: DatabaseClient
   }): Promise<BotFieldModel> {
     const { workspaceId, data, tx = db } = props
+    assertBotFieldType(data.type)
 
     if (data.folderId) {
       await folderService.ensureExists({
@@ -528,6 +543,9 @@ class BotFieldService extends BaseService {
     tx?: DatabaseClient
   }): Promise<BotFieldModel> {
     const { workspaceId, key, data, tx = db } = props
+    if (data.type !== undefined) {
+      assertBotFieldType(data.type)
+    }
     const existing = await this.findByKeyOrFail({ workspaceId, key, tx })
 
     const preparedData = await this.prepareValuePatch(

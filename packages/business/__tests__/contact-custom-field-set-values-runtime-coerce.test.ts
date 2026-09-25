@@ -268,3 +268,108 @@ describe("insertNormalizedValuesForNewContacts — canonical-contract guard", ()
     expect(mocks.insertValues).toHaveBeenCalledTimes(1)
   })
 })
+
+describe("setValues — select / multiSelect (s201)", () => {
+  const SELECT_FIELD = {
+    id: "cf-tier",
+    name: "tier",
+    type: "select",
+    options: ["Gold", "Silver"],
+  }
+  const NOTE_FIELD = { id: "cf-note", name: "note", type: "shortText" }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.contactCustomFieldFindMany.mockResolvedValue([])
+    mocks.contactFindFirst.mockResolvedValue({ timezone: "UTC" })
+    mocks.workspaceFindFirst.mockResolvedValue({ timezone: "UTC" })
+  })
+
+  test("a direct write of an unknown option fails the batch with a typed 400", async () => {
+    mocks.customFieldFindMany.mockResolvedValue([SELECT_FIELD, NOTE_FIELD])
+    await expect(
+      contactCustomFieldService.setValues({
+        workspaceId: "ws-1",
+        contactId: "contact-1",
+        fields: [
+          { customFieldId: "cf-tier", value: "Platinum" },
+          { customFieldId: "cf-note", value: "hi" },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: "invalidCustomFieldValue" })
+    expect(mocks.insertValues).not.toHaveBeenCalled()
+  })
+
+  test("skipInvalidOptions: the off-option field is skipped, the rest of the batch lands", async () => {
+    mocks.customFieldFindMany.mockResolvedValue([SELECT_FIELD, NOTE_FIELD])
+    await contactCustomFieldService.setValues({
+      workspaceId: "ws-1",
+      contactId: "contact-1",
+      fields: [
+        { customFieldId: "cf-tier", value: "Platinum" },
+        { customFieldId: "cf-note", value: "hi" },
+      ],
+      skipInvalidOptions: true,
+    })
+    expect(mocks.insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ customFieldId: "cf-note", value: "hi" }),
+    )
+    expect(mocks.insertValues).not.toHaveBeenCalledWith(
+      expect.objectContaining({ customFieldId: "cf-tier" }),
+    )
+  })
+
+  test("skipInvalidOptions never swallows a non-option type's error", async () => {
+    mocks.customFieldFindMany.mockResolvedValue([NUMBER_FIELD])
+    await expect(
+      contactCustomFieldService.setValues({
+        workspaceId: "ws-1",
+        contactId: "contact-1",
+        fields: [{ customFieldId: "cf-num", value: "1aaa1" }],
+        skipInvalidOptions: true,
+      }),
+    ).rejects.toMatchObject({ code: "invalidCustomFieldValue" })
+  })
+
+  test("insertNormalizedValuesForNewContacts: only canonical option text inserts", async () => {
+    const insertOne = (customFieldId: string, value: string) =>
+      contactCustomFieldService.insertNormalizedValuesForNewContacts({
+        workspaceId: "ws-1",
+        entries: [{ contactId: "c1", fields: [{ customFieldId, value }] }],
+      })
+    const MULTI = {
+      id: "cf-multi",
+      name: "picks",
+      type: "multiSelect",
+      options: ["Gold", "Silver"],
+    }
+    const OPTIONLESS = {
+      id: "cf-bad",
+      name: "bad",
+      type: "select",
+      options: null,
+    }
+    mocks.customFieldFindMany.mockResolvedValue([
+      SELECT_FIELD,
+      MULTI,
+      OPTIONLESS,
+    ])
+
+    for (const [id, value] of [
+      ["cf-tier", "gold"],
+      ["cf-tier", "Platinum"],
+      ["cf-multi", "Gold, Silver"],
+      ["cf-multi", '["Silver","Gold"]'],
+      ["cf-bad", "anything"],
+    ] as const) {
+      await expect(insertOne(id, value)).rejects.toMatchObject({
+        code: "invalidCustomFieldValue",
+      })
+    }
+    expect(mocks.insertValues).not.toHaveBeenCalled()
+
+    await insertOne("cf-tier", "Gold")
+    await insertOne("cf-multi", '["Gold","Silver"]')
+    expect(mocks.insertValues).toHaveBeenCalledTimes(2)
+  })
+})

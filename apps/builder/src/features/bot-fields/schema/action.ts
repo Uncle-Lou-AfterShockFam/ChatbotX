@@ -1,4 +1,4 @@
-import { customFieldTypes } from "@chatbotx.io/database/partials"
+import { botFieldTypes } from "@chatbotx.io/database/partials"
 import { zodFieldName } from "@chatbotx.io/flow-config"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import { z } from "zod"
@@ -7,7 +7,7 @@ export const createBotFieldRequest = z.object({
   name: zodFieldName().describe(
     "Bot field name, used to reference it in flows.",
   ),
-  type: customFieldTypes.describe("Bot field data type."),
+  type: botFieldTypes.describe("Bot field data type."),
   value: z
     .string()
     .trim()

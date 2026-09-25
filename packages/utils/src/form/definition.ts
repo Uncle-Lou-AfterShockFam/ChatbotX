@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { isOptionFieldType } from "../custom-field"
 
 /**
  * Web form definition (roadmap forms, s200). Lives in the generic-utils
@@ -542,4 +543,38 @@ export function formIdentifiesContact(def: FormDefinition): boolean {
       f.mapTo?.kind === "system" &&
       (f.mapTo.key === "email" || f.mapTo.key === "phoneNumber"),
   )
+}
+
+/** Why a form field cannot write to a typed custom field (s201). */
+export type FormMappingIssue =
+  | { reason: "optionFieldRequired" }
+  | { reason: "cardinalityMismatch" }
+  | { reason: "unknownOptions"; unknown: string[] }
+
+/**
+ * Can this form field write to a custom field of `target.type`? Only an
+ * option target is constrained: `select` takes a single-choice form field
+ * (select / radio), `multiSelect` takes a checkbox group, and every form
+ * option VALUE must be one of the target's options (case-insensitive), so a
+ * published form can never submit an answer the field would refuse.
+ */
+export function formMappingIssue(
+  field: Pick<FormField, "type" | "options">,
+  target: { type: string; options?: readonly string[] | null },
+): FormMappingIssue | null {
+  if (!isOptionFieldType(target.type)) {
+    return null
+  }
+  if (!FORM_OPTION_FIELD_TYPES.has(field.type)) {
+    return { reason: "optionFieldRequired" }
+  }
+  const isList = FORM_LIST_FIELD_TYPES.has(field.type)
+  if (isList !== (target.type === "multiSelect")) {
+    return { reason: "cardinalityMismatch" }
+  }
+  const known = new Set((target.options ?? []).map((o) => o.toLowerCase()))
+  const unknown = (field.options ?? [])
+    .map((o) => o.value)
+    .filter((v) => !known.has(v.trim().toLowerCase()))
+  return unknown.length > 0 ? { reason: "unknownOptions", unknown } : null
 }

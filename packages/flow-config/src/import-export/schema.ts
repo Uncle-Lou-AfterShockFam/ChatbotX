@@ -1,4 +1,8 @@
-import { customFieldTypes } from "@chatbotx.io/utils/custom-field"
+import {
+  customFieldOptionsSchema,
+  customFieldTypes,
+  refineCustomFieldOptions,
+} from "@chatbotx.io/utils/custom-field"
 import { z } from "zod"
 import { refineStepsByChannel } from "../channel-rules/channel-step-refinement"
 import { zodFieldName } from "../field-reference"
@@ -13,10 +17,15 @@ export const FLOW_EXPORT_FORMAT_VERSION = 2
 // hygiene issue into a hard import failure for an otherwise-valid export.
 // The rollout audit (scripts/audit-bot-field-reserved-names.mts) is how that
 // pre-existing risk gets surfaced and cleaned up instead.
-export const flowExportCustomFieldSchema = z.object({
-  name: z.string().trim().min(1),
-  type: customFieldTypes,
-})
+// `options` (s201) travels with a select / multiSelect field so the import
+// can create it complete; the pairing rule is the same as on create.
+export const flowExportCustomFieldSchema = z
+  .object({
+    name: z.string().trim().min(1),
+    type: customFieldTypes,
+    options: customFieldOptionsSchema.optional(),
+  })
+  .superRefine(refineCustomFieldOptions)
 export type FlowExportCustomField = z.infer<typeof flowExportCustomFieldSchema>
 
 // Mirrors `flowExportCustomFieldSchema` except for `name`: `BotField` is a

@@ -13,6 +13,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@chatbotx.io/ui/components/ui/tabs"
+import { formatMultiSelectText } from "@chatbotx.io/utils/custom-field"
 import { useQuery } from "@tanstack/react-query"
 import {
   AtSignIcon,
@@ -240,7 +241,11 @@ export function ContactView({
               {data.customFields.map((cf) => (
                 <div className="min-w-0" key={cf.id}>
                   <dt className="text-muted-foreground text-xs">{cf.name}</dt>
-                  <dd className="truncate">{cf.value ?? "-"}</dd>
+                  <dd className="truncate">
+                    {(cf.type === "multiSelect"
+                      ? formatMultiSelectText(cf.value ?? "")
+                      : cf.value) || "-"}
+                  </dd>
                 </div>
               ))}
             </dl>

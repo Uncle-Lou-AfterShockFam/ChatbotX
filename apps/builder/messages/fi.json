@@ -1716,6 +1716,18 @@
     "longText": {
       "label": "Pitkä teksti"
     },
+    "select": {
+      "label": "Valinta"
+    },
+    "multiSelect": {
+      "label": "Monivalinta"
+    },
+    "customFieldOptions": {
+      "label": "Vaihtoehdot",
+      "description": "Yksi vaihtoehto riviä kohden (enintään 100). Yhteystiedoilla voi olla vain nämä arvot.",
+      "placeholder": "Kulta\nHopea\nPronssi",
+      "editHint": "Vaihtoehdon poistaminen säilyttää yhteystietojen nykyiset arvot; ne näytetään sellaisenaan."
+    },
     "replyFormat": {
       "label": "Vastausmuoto",
       "number": "Numero",
@@ -4760,6 +4772,7 @@
       "mapSystem": "Contact",
       "mapCustom": "Custom field",
       "mapSelectHint": "Choice answers are written as text; a multiple choice as a comma-separated list.",
+      "mapOptionsMissing": "Liitetyssä kentässä ei ole vaihtoehtoa {options}: lisää se sinne tai muuta tätä vaihtoehtoa, muuten julkaisu hylätään.",
       "mapped": "mapped",
       "conditional": "conditional",
       "visibleWhen": "Show this field only when",

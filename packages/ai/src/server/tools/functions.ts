@@ -94,6 +94,7 @@ export async function getAIFunctionTools(
                     workspaceId,
                     contactId: context.contactId,
                     fields: fieldsToSave,
+                    skipInvalidOptions: true,
                   })
                 }
 

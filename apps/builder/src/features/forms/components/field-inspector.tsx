@@ -12,6 +12,7 @@ import {
 } from "@chatbotx.io/ui/components/ui/select"
 import { Switch } from "@chatbotx.io/ui/components/ui/switch"
 import { Textarea } from "@chatbotx.io/ui/components/ui/textarea"
+import { isOptionFieldType } from "@chatbotx.io/utils/custom-field"
 import type {
   FormDefinition,
   FormField,
@@ -19,6 +20,7 @@ import type {
 } from "@chatbotx.io/utils/form"
 import {
   FORM_OPTION_FIELD_TYPES,
+  formMappingIssue,
   formSystemFieldKeys,
   isFormInputFieldType,
   MAX_FORM_OPTIONS,
@@ -35,7 +37,7 @@ import {
 import { ConditionGroupEditor } from "./condition-group-editor"
 
 const MAP_NONE = "__none__"
-/** Custom-field types a text-shaped answer may be written to (PR3 adds select). */
+/** Custom-field types any answer may be written to as text. */
 const MAPPABLE_TYPES = new Set([
   "shortText",
   "longText",
@@ -71,6 +73,14 @@ export function FieldInspector(props: {
   const patch = (p: Partial<Omit<FormField, "key">>) =>
     onChange(updateField(definition, field.key, p))
   const mapValue = mapToValue(field.mapTo)
+  const mapTo = field.mapTo
+  const mappedCustom =
+    mapTo?.kind === "custom"
+      ? customFields.find((cf) => cf.id === mapTo.customFieldId)
+      : undefined
+  const mappingIssue = mappedCustom
+    ? formMappingIssue(field, mappedCustom)
+    : null
   const mapItems = [
     { value: MAP_NONE, label: t("forms.editor.mapNone") },
     ...formSystemFieldKeys.options.map((k) => ({
@@ -78,7 +88,19 @@ export function FieldInspector(props: {
       label: `${t("forms.editor.mapSystem")}: ${t(`forms.systemKeys.${k}`)}`,
     })),
     ...customFields
-      .filter((cf) => MAPPABLE_TYPES.has(cf.type))
+      .filter((cf) => {
+        if (MAPPABLE_TYPES.has(cf.type)) {
+          return true
+        }
+        // s201: a select / multiSelect field is offered to a choice field of
+        // matching cardinality; missing options are flagged below the picker.
+        const reason = formMappingIssue(field, cf)?.reason
+        return (
+          isOptionFieldType(cf.type) &&
+          reason !== "optionFieldRequired" &&
+          reason !== "cardinalityMismatch"
+        )
+      })
       .map((cf) => ({
         value: `custom:${cf.id}`,
         label: `${t("forms.editor.mapCustom")}: ${cf.name}`,
@@ -258,7 +280,19 @@ export function FieldInspector(props: {
                 ))}
               </SelectContent>
             </Select>
-            {FORM_OPTION_FIELD_TYPES.has(field.type) && field.mapTo ? (
+            {mappingIssue?.reason === "unknownOptions" ? (
+              <span
+                className="text-destructive text-xs"
+                data-testid="fi-map-options-missing"
+              >
+                {t("forms.editor.mapOptionsMissing", {
+                  options: mappingIssue.unknown.join(", "),
+                })}
+              </span>
+            ) : null}
+            {FORM_OPTION_FIELD_TYPES.has(field.type) &&
+            field.mapTo &&
+            !(mappedCustom && isOptionFieldType(mappedCustom.type)) ? (
               <span className="text-muted-foreground text-xs">
                 {t("forms.editor.mapSelectHint")}
               </span>

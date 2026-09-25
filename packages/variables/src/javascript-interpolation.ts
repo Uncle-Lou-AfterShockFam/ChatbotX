@@ -7,6 +7,7 @@ import {
   FieldReferenceKind,
   parseFieldReference,
 } from "@chatbotx.io/flow-config"
+import { multiSelectItems } from "@chatbotx.io/utils/custom-field"
 import { isCouponVariable, resolveCouponVariable } from "./coupon-variable"
 import type { ReplaceVariableProps } from "./schema"
 import {
@@ -386,6 +387,8 @@ export const interpolateIntoJavascript = (
  * number in an Execute JavaScript step (`{{age}} + 5` adds numerically)
  * instead of always behaving like a string (`"30" + 5` === `"305"`).
  *
+ * A `multiSelect` becomes its item array (`["Gold","Silver"]`).
+ *
  * `date`/`datetime` are deliberately left as their raw ISO string rather
  * than coerced to a JS `Date` — a `Date` changes semantics more than a
  * number/boolean coercion does (equality, serialization, `+` behavior all
@@ -393,10 +396,17 @@ export const interpolateIntoJavascript = (
  * faithfully across the sandbox boundary. Authors who need date math can
  * still do `new Date({{signedUpAt}})` themselves.
  */
+/** A value handed to an Execute JavaScript step's `input`. */
+export type JavascriptInputValue = string | number | boolean | string[] | null
+
 export const coerceCustomFieldValueForJavascript = (
   value: string,
   type: CustomFieldType,
-): string | number | boolean | null => {
+): JavascriptInputValue => {
+  if (type === "multiSelect") {
+    // s201: stored as JSON-array text; the JS step sees the item list.
+    return multiSelectItems(value)
+  }
   if (type === "number") {
     const numberValue = Number(value)
     return Number.isFinite(numberValue) ? numberValue : null
@@ -420,7 +430,7 @@ export const coerceCustomFieldValueForJavascript = (
 const resolveJavascriptInputValue = async (
   name: string,
   context: ReplaceVariableProps,
-): Promise<string | number | boolean | null | undefined> => {
+): Promise<JavascriptInputValue | undefined> => {
   if (Object.values(systemFieldTypes.enum).includes(name as SystemFieldType)) {
     return await getSystemFieldValue(context, name as SystemFieldType)
   }
@@ -465,13 +475,13 @@ const resolveJavascriptInputValue = async (
 export const resolveJavascriptInput = async (
   code: string,
   context: ReplaceVariableProps,
-): Promise<Map<string, string | number | boolean | null>> => {
+): Promise<Map<string, JavascriptInputValue>> => {
   const names = extractVariables(code)
   const values = await Promise.all(
     names.map((name) => resolveJavascriptInputValue(name, context)),
   )
 
-  const resolved = new Map<string, string | number | boolean | null>()
+  const resolved = new Map<string, JavascriptInputValue>()
   names.forEach((name, index) => {
     const value = values[index]
     if (value !== undefined) {

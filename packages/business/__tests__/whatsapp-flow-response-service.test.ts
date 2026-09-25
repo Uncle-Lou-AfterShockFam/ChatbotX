@@ -77,6 +77,7 @@ describe("whatsappFlowResponseService.applyResponse", () => {
         { customFieldId: "cf-1", value: "Alice" },
         { customFieldId: "cf-2", value: "3" },
       ],
+      skipInvalidOptions: true,
     })
   })
 

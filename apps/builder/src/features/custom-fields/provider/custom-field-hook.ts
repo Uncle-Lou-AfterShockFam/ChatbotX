@@ -11,6 +11,8 @@ import {
   CalendarDaysIcon,
   CheckIcon,
   HashIcon,
+  ListChecksIcon,
+  ListIcon,
   type LucideIcon,
   MailIcon,
   PhoneIcon,
@@ -29,6 +31,8 @@ export const customFieldIconsMap: Record<CustomFieldType, LucideIcon> = {
   boolean: CheckIcon,
   email: MailIcon,
   phoneNumber: PhoneIcon,
+  select: ListIcon,
+  multiSelect: ListChecksIcon,
 }
 
 export const reservedCustomFieldIds: {

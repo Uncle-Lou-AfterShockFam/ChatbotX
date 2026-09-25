@@ -2347,6 +2347,18 @@
     "longText": {
       "label": "Lång text"
     },
+    "select": {
+      "label": "Val"
+    },
+    "multiSelect": {
+      "label": "Flerval"
+    },
+    "customFieldOptions": {
+      "label": "Alternativ",
+      "description": "Ett alternativ per rad (upp till 100). Kontakter kan bara ha dessa värden.",
+      "placeholder": "Guld\nSilver\nBrons",
+      "editHint": "Att ta bort ett alternativ behåller värden som kontakter redan har; de visas som de är."
+    },
     "magicLink": {
       "label": "Magisk länk",
       "nameHint": "Läggs till efter /r/{workspaceId}/ i den offentliga spårnings-URL:en. Använd endast bokstäver, siffror, understreck och bindestreck.",
@@ -4898,6 +4910,7 @@
       "mapSystem": "Contact",
       "mapCustom": "Custom field",
       "mapSelectHint": "Choice answers are written as text; a multiple choice as a comma-separated list.",
+      "mapOptionsMissing": "Det mappade fältet saknar alternativet {options}: lägg till det där eller ändra detta alternativ, annars nekas publicering.",
       "mapped": "mapped",
       "conditional": "conditional",
       "visibleWhen": "Show this field only when",

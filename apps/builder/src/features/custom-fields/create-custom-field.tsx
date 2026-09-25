@@ -16,6 +16,7 @@ import {
   DialogTrigger,
 } from "@chatbotx.io/ui/components/ui/dialog"
 import { Form } from "@chatbotx.io/ui/components/ui/form"
+import { isOptionFieldType } from "@chatbotx.io/utils/custom-field"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useHookFormAction } from "@next-safe-action/adapter-react-hook-form/hooks"
 import { Loader2Icon, PlusIcon } from "lucide-react"
@@ -24,6 +25,7 @@ import { useTranslations } from "next-intl"
 import { type ReactElement, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { createCustomFieldAction } from "./actions/create-custom-field.action"
+import { CustomFieldOptionsField } from "./components/custom-field-options-field"
 import { createCustomFieldRequest } from "./schema/action"
 
 type CreateCustomFieldDialogProps = {
@@ -132,6 +134,14 @@ function CreateCustomFieldForm({
         value: "longText",
         label: t("fields.longText.label"),
       },
+      {
+        value: "select",
+        label: t("fields.select.label"),
+      },
+      {
+        value: "multiSelect",
+        label: t("fields.multiSelect.label"),
+      },
     ],
     [t],
   )
@@ -172,12 +182,20 @@ function CreateCustomFieldForm({
     )
 
   const { setValue } = form
+  const type = form.watch("type")
 
   useEffect(() => {
     if (folderId && folderId !== rootFolderId) {
       setValue("folderId", folderId)
     }
   }, [folderId, setValue])
+
+  // Options belong to the option types only; drop them when the type moves away.
+  useEffect(() => {
+    if (!isOptionFieldType(type)) {
+      setValue("options", undefined, { shouldValidate: true })
+    }
+  }, [type, setValue])
 
   return (
     <Form {...form}>
@@ -201,6 +219,8 @@ function CreateCustomFieldForm({
           options={customFieldTypeOptions}
           required
         />
+
+        {isOptionFieldType(type) ? <CustomFieldOptionsField /> : null}
 
         <TextareaField
           label={t("fields.description.label")}

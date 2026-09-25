@@ -37,6 +37,8 @@ import {
 
 type ContactDeps = {
   customFieldTypes: Map<string, CustomFieldType>
+  /** s201: option lists of the mapped select / multiSelect fields. */
+  customFieldOptions: Map<string, string[]>
   inbox: typeof inboxModel.$inferSelect
   ownerId: string
   /** `fieldMapping` entries targeting contact custom fields (per-row). */
@@ -125,8 +127,12 @@ const prepareContacts = async ({
   }
 
   const customFieldTypes = new Map<string, CustomFieldType>()
+  const customFieldOptions = new Map<string, string[]>()
   for (const field of fields) {
     customFieldTypes.set(field.id, field.type)
+    if (field.options) {
+      customFieldOptions.set(field.id, field.options)
+    }
   }
 
   const botFieldTypes = new Map<string, CustomFieldType>()
@@ -138,6 +144,7 @@ const prepareContacts = async ({
     ok: true,
     deps: {
       customFieldTypes,
+      customFieldOptions,
       inbox,
       ownerId: workspace.ownerId,
       customMappings,
@@ -194,6 +201,7 @@ const processContactRow = (
       type,
       field.value,
       meta.timezone,
+      deps.customFieldOptions.get(field.customFieldId) ?? null,
     )
     if (normalized === null) {
       return []

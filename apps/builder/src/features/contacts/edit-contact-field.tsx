@@ -145,6 +145,7 @@ export function EditContactField(props: EditContactField) {
             ) : (
               <BotFieldValueInput
                 name={targetField?.key ?? ""}
+                options={targetField?.choices}
                 saveFormat={resolveTemporalCustomFieldSaveFormat(
                   targetField?.type ?? "",
                 )}

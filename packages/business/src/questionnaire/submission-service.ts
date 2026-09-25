@@ -645,6 +645,7 @@ class QuestionnaireSubmissionService extends BaseService {
                 value: this.answerValueToString(parsed.value),
               },
             ],
+            skipInvalidOptions: true,
           },
           tx,
         )

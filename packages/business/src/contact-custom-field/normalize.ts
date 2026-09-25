@@ -1,7 +1,9 @@
 import { type DatabaseClient, db } from "@chatbotx.io/database/client"
 import type { CustomFieldType } from "@chatbotx.io/database/partials"
 import {
+  canonicalMultiSelectValue,
   canonicalNumberLiteral,
+  canonicalSelectValue,
   coerceBooleanLiteral,
 } from "@chatbotx.io/utils/custom-field"
 import {
@@ -34,6 +36,30 @@ const invalidNumberException = (value: string): ChatbotXException =>
     400,
   )
 
+const invalidOptionException = (
+  value: string,
+  options: readonly string[],
+): ChatbotXException =>
+  new ChatbotXException(
+    `"${previewValue(value)}" is not one of this field's options (${previewValue(options.join(", "))}).`,
+    "invalidCustomFieldValue",
+    400,
+  )
+
+/** An option field must carry its list; a missing one is a server-side bug. */
+const requireOptions = (
+  options: readonly string[] | null | undefined,
+): readonly string[] => {
+  if (!options || options.length === 0) {
+    throw new ChatbotXException(
+      "This select field has no options configured.",
+      "invalidCustomFieldValue",
+      400,
+    )
+  }
+  return options
+}
+
 type NonTemporalCustomFieldType = Exclude<
   CustomFieldType,
   TemporalCustomFieldType
@@ -51,6 +77,11 @@ type NonTemporalCustomFieldType = Exclude<
  * - `shortText`/`longText`/`email`/`phoneNumber` pass through byte-identical:
  *   trimming/lowercasing here would change existing flow/tool/API behavior
  *   for callers that bypass zod, which is explicitly out of scope this phase.
+ *
+ * - `select` / `multiSelect` (s201) accept only the field's own options
+ *   (case-insensitive, stored in the option's canonical spelling); an unknown
+ *   option throws a typed exception, never a silent drop. A multiSelect is
+ *   stored as canonical JSON-array text in option order.
  *
  * Registry, not an if-else ladder, so a new type only means adding one row.
  */
@@ -78,9 +109,34 @@ const RUNTIME_COERCE_HANDLERS = {
   longText: (value: string): string => value,
   email: (value: string): string => value,
   phoneNumber: (value: string): string => value,
+  select: (value: string, options?: readonly string[] | null): string => {
+    const known = requireOptions(options)
+    const canonical = canonicalSelectValue(value, known)
+    if (canonical === null) {
+      throw invalidOptionException(value, known)
+    }
+    return canonical
+  },
+  multiSelect: (value: string, options?: readonly string[] | null): string => {
+    const known = requireOptions(options)
+    const result = canonicalMultiSelectValue(value, known)
+    if (result.ok) {
+      return result.value
+    }
+    if (result.reason === "unknownOption") {
+      throw invalidOptionException(result.unknown.join(", "), known)
+    }
+    throw new ChatbotXException(
+      result.reason === "tooManyItems"
+        ? "Too many items for this multi-select field."
+        : "A multi-select value must be a list of option names.",
+      "invalidCustomFieldValue",
+      400,
+    )
+  },
 } as const satisfies Record<
   NonTemporalCustomFieldType,
-  (value: string) => string
+  (value: string, options?: readonly string[] | null) => string
 >
 
 const TEMPORAL_SOURCE_TIMEZONE_REQUIRED = {
@@ -202,6 +258,8 @@ const resolveTemporalSourceTimezone = async (input: {
 export const normalizeCustomFieldValueForStorage = async (input: {
   type: CustomFieldType
   value: string
+  /** The field's option list; required for `select` / `multiSelect`. */
+  options?: readonly string[] | null
   resolveSourceTimezone: SourceTimezoneResolver
   /**
    * Browser zone captured at form submit. Honored only by `date` (see
@@ -225,6 +283,7 @@ export const normalizeCustomFieldValueForStorage = async (input: {
   const {
     type,
     value,
+    options,
     resolveSourceTimezone,
     explicitTimezone,
     temporalInputParsing = TemporalInputParsing.Strict,
@@ -232,7 +291,7 @@ export const normalizeCustomFieldValueForStorage = async (input: {
   } = input
 
   if (!isTemporalCustomFieldType(type)) {
-    return RUNTIME_COERCE_HANDLERS[type](value)
+    return RUNTIME_COERCE_HANDLERS[type](value, options)
   }
 
   const isEmpty = value.length === 0

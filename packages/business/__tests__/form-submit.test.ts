@@ -5,20 +5,32 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
  * is a spy, the db is the queue-driven query-builder mock, so each stage's
  * ORDER and its refusal are asserted, not just the happy path.
  */
+const CUSTOM_FIELD_TABLE = vi.hoisted(() => ({ table: "CustomField" }))
+
 const m = vi.hoisted(() => {
   const state = {
     selects: [] as unknown[][],
     inserted: [] as Record<string, unknown>[],
     calls: [] as string[],
     txFails: false,
+    /** s201: rows the option-target lookup (`from(CustomField)`) returns. */
+    optionTargets: [] as unknown[],
   }
   const chain = () => {
     const self: Record<string, unknown> = {}
-    for (const k of ["from", "where", "limit"]) {
+    let fromCustomField = false
+    for (const k of ["where", "limit"]) {
       self[k] = () => self
+    }
+    self.from = (table: unknown) => {
+      fromCustomField = table === CUSTOM_FIELD_TABLE
+      return self
     }
     // biome-ignore lint/suspicious/noThenProperty: awaitable like a drizzle query
     self.then = (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => {
+      if (fromCustomField) {
+        return Promise.resolve(state.optionTargets).then(ok, ko)
+      }
       const next = state.selects.shift()
       return next === undefined
         ? Promise.reject(
@@ -109,6 +121,7 @@ vi.mock("@chatbotx.io/database/client", () => ({
 }))
 vi.mock("@chatbotx.io/database/schema", () => ({
   contactModel: { id: "id" },
+  customFieldModel: CUSTOM_FIELD_TABLE,
   contactCustomFieldModel: {
     contactId: "contactId",
     customFieldId: "customFieldId",
@@ -288,6 +301,7 @@ beforeEach(() => {
   m.state.inserted.length = 0
   m.state.calls.length = 0
   m.state.txFails = false
+  m.state.optionTargets = []
   m.findPublishedBySlug.mockResolvedValue(FORM())
   m.findByPhone.mockResolvedValue(undefined)
   m.tx.query.contactModel.findFirst.mockResolvedValue(undefined)
@@ -648,6 +662,77 @@ describe("formSubmitService.submit (s200)", () => {
     expect(m.state.calls).toContain("execute")
     expect(m.state.inserted).toHaveLength(0)
     expect(m.emitFormSubmitted).not.toHaveBeenCalled()
+  })
+
+  describe("typed select targets (s201)", () => {
+    test("a select answer is stored in the field's canonical spelling", async () => {
+      m.state.optionTargets = [
+        { id: "77", type: "select", options: ["l", "M"] },
+      ]
+      queueClean()
+      await submit({ phone: "(215) 407-5123", size: "L" })
+      expect(m.setValuesInTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fields: [{ customFieldId: "77", value: "l" }],
+        }),
+        m.tx,
+      )
+    })
+
+    test("an answer the field no longer offers is skipped (logged), the submission still lands", async () => {
+      m.state.optionTargets = [{ id: "77", type: "select", options: ["S"] }]
+      queueClean()
+      const r = await submit({ phone: "(215) 407-5123", size: "L" })
+      expect(r).toMatchObject({ kind: "ok" })
+      expect(m.setValuesInTransaction).not.toHaveBeenCalled()
+      expect(m.state.inserted).toHaveLength(1)
+    })
+
+    test("a list answer into a multiSelect field is canonical JSON", async () => {
+      m.findPublishedBySlug.mockResolvedValue(
+        FORM({
+          publishedDefinition: {
+            steps: [
+              {
+                id: "s1",
+                fields: [
+                  {
+                    key: "phone",
+                    type: "phone",
+                    required: false,
+                    label: "",
+                    mapTo: { kind: "system", key: "phoneNumber" },
+                  },
+                  {
+                    key: "picks",
+                    type: "checkboxGroup",
+                    required: false,
+                    label: "",
+                    options: [
+                      { value: "Red, White", label: "RW" },
+                      { value: "Blue", label: "B" },
+                    ],
+                    mapTo: { kind: "custom", customFieldId: "88" },
+                  },
+                ],
+              },
+            ],
+            rules: [],
+          },
+        }),
+      )
+      m.state.optionTargets = [
+        { id: "88", type: "multiSelect", options: ["Blue", "Red, White"] },
+      ]
+      queueClean()
+      await submit({ phone: "(215) 407-5123", picks: ["Red, White", "Blue"] })
+      expect(m.setValuesInTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fields: [{ customFieldId: "88", value: '["Blue","Red, White"]' }],
+        }),
+        m.tx,
+      )
+    })
   })
 
   test("the same answers from another ip are NOT a duplicate (ip is in the hash)", () => {

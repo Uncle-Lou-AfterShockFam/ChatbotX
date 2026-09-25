@@ -1716,6 +1716,18 @@
     "longText": {
       "label": "Texto longo"
     },
+    "select": {
+      "label": "Seleção"
+    },
+    "multiSelect": {
+      "label": "Seleção múltipla"
+    },
+    "customFieldOptions": {
+      "label": "Opções",
+      "description": "Uma opção por linha (até 100). Os contactos só podem ter estes valores.",
+      "placeholder": "Ouro\nPrata\nBronze",
+      "editHint": "Remover uma opção mantém os valores que os contactos já têm; são mostrados tal como estão."
+    },
     "replyFormat": {
       "label": "Formato da resposta",
       "number": "Número",
@@ -4756,6 +4768,7 @@
       "mapSystem": "Contact",
       "mapCustom": "Custom field",
       "mapSelectHint": "Choice answers are written as text; a multiple choice as a comma-separated list.",
+      "mapOptionsMissing": "O campo mapeado não tem a opção {options}: adicione-a lá ou altere esta opção, caso contrário a publicação é recusada.",
       "mapped": "mapped",
       "conditional": "conditional",
       "visibleWhen": "Show this field only when",

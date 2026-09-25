@@ -448,14 +448,18 @@ export const getFieldConfigs = ({
   // Each workspace custom field becomes its own filter field, value-typed by the
   // custom field's type. Encoded as `customField:<id>` so the form/row can map
   // back to a `{ field: "customField", customFieldId }` condition.
-  const customFieldConfigs: FieldConfig[] = customFields.map((field) => ({
-    name: `customField:${field.id}`,
-    customFieldId: field.id,
-    customFieldType: field.type,
-    label: field.name,
-    formField: convertCustomFieldTypeToConditionType(field.type),
-    group: "customFields",
-  }))
+  // s201: a multiSelect stores JSON-array text; its in / notIn operators land
+  // in part 2, until then it is not offered (text operators would mis-match).
+  const customFieldConfigs: FieldConfig[] = customFields
+    .filter((field) => field.type !== "multiSelect")
+    .map((field) => ({
+      name: `customField:${field.id}`,
+      customFieldId: field.id,
+      customFieldType: field.type,
+      label: field.name,
+      formField: convertCustomFieldTypeToConditionType(field.type),
+      group: "customFields",
+    }))
 
   // Each workspace coupon topic becomes its own filter field (replaces the
   // old static "Coupon issued"/"Coupon usage" pair). Encoded as

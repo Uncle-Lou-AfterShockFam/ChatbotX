@@ -515,6 +515,86 @@ describe("formService.publish", () => {
     expect(e.httpStatusCode).toBe(409)
   })
 
+  describe("typed select targets (s201)", () => {
+    const choiceDef = (type: string, options: string[]) => ({
+      steps: [
+        {
+          id: "s1",
+          fields: [
+            {
+              key: "phone",
+              type: "phone",
+              mapTo: { kind: "system", key: "phoneNumber" },
+            },
+            {
+              key: "tier",
+              type,
+              options: options.map((o) => ({ value: o, label: o })),
+              mapTo: { kind: "custom", customFieldId: "77" },
+            },
+          ],
+        },
+      ],
+      rules: [],
+    })
+    const publishWith = async (def: unknown, target: unknown) => {
+      m.state.selects.push(
+        [draft({ definition: def, inboxId: "9" })],
+        [{ id: "9", channel: "api" }],
+        [target],
+      )
+      return await field(formService.publish({ workspaceId: WS, id: "f1" }))
+    }
+    const select = { id: "77", type: "select", options: ["Gold", "Silver"] }
+    const multi = { id: "77", type: "multiSelect", options: ["Gold", "Silver"] }
+
+    test("a form option the field does not know is refused", async () => {
+      const e = await publishWith(
+        choiceDef("radio", ["gold", "Platinum"]),
+        select,
+      )
+      expect(e.data).toMatchObject({
+        reason: "mappedOptionsMismatch",
+        fieldKey: "tier",
+        detail: "unknownOptions",
+      })
+    })
+
+    test("cardinality must match: radio -> select, checkbox group -> multiSelect", async () => {
+      expect(
+        (await publishWith(choiceDef("checkboxGroup", ["Gold"]), select)).data,
+      ).toMatchObject({ detail: "cardinalityMismatch" })
+      expect(
+        (await publishWith(choiceDef("radio", ["Gold"]), multi)).data,
+      ).toMatchObject({ detail: "cardinalityMismatch" })
+    })
+
+    test("a free-text field cannot write to a select field", async () => {
+      expect((await publishWith(mappedDefinition, select)).data).toMatchObject({
+        reason: "mappedOptionsMismatch",
+        detail: "optionFieldRequired",
+      })
+    })
+
+    test("matching options (case-insensitive) publish", async () => {
+      const def = choiceDef("checkboxGroup", ["gold", "SILVER"])
+      m.state.selects.push(
+        [draft({ definition: def, inboxId: "9" })],
+        [{ id: "9", channel: "api" }],
+        [multi],
+      )
+      m.state.updates.push([
+        draft({
+          status: "published",
+          definition: def,
+          publishedDefinition: def,
+        }),
+      ])
+      const row = await formService.publish({ workspaceId: WS, id: "f1" })
+      expect(row.status).toBe("published")
+    })
+  })
+
   test("an anonymous form (no mapping) publishes without an inbox", async () => {
     const anon = {
       steps: [{ id: "s1", fields: [{ key: "q", type: "text" }] }],

@@ -1,4 +1,8 @@
-import { customFieldTypes } from "@chatbotx.io/utils/custom-field"
+import {
+  customFieldOptionsSchema,
+  customFieldTypes,
+  refineCustomFieldOptions,
+} from "@chatbotx.io/utils/custom-field"
 import { z } from "zod"
 import { flowExportedFlowSchema } from "./schema"
 
@@ -11,10 +15,13 @@ export const TEMPLATE_EXPORT_FORMAT_VERSION = 1
  * the remapper's `idMaps` can be built directly from
  * `Object.entries(manifest)`.
  */
-export const templateCustomFieldManifestEntrySchema = z.object({
-  name: z.string().trim().min(1),
-  type: customFieldTypes,
-})
+export const templateCustomFieldManifestEntrySchema = z
+  .object({
+    name: z.string().trim().min(1),
+    type: customFieldTypes,
+    options: customFieldOptionsSchema.optional(),
+  })
+  .superRefine(refineCustomFieldOptions)
 export type TemplateCustomFieldManifestEntry = z.infer<
   typeof templateCustomFieldManifestEntrySchema
 >

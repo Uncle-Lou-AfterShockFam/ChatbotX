@@ -16,7 +16,10 @@ import {
 import { createId, isNumericId } from "@chatbotx.io/utils"
 import {
   canonicalBooleanLiteral,
+  canonicalMultiSelectValue,
   canonicalNumberLiteral,
+  canonicalSelectValue,
+  isOptionFieldType,
 } from "@chatbotx.io/utils/custom-field"
 import {
   type SourceTimezoneStrategy,
@@ -70,6 +73,13 @@ type SetValuesInput = {
    * inbox instead of the contact's most-recently-active one.
    */
   contactInboxId?: string
+  /**
+   * s201: an automated source (questionnaire, AI tool, spreadsheet, external
+   * request, WhatsApp flow) whose value is not one of a select / multiSelect
+   * field's options SKIPS that field (logged) instead of failing the whole
+   * batch. Direct user and API writes leave this off and get the typed 400.
+   */
+  skipInvalidOptions?: boolean
 }
 
 /**
@@ -171,6 +181,14 @@ const contactCacheTags = (
   `contacts:${workspaceId}`,
   ...contactIds.map((contactId) => `contacts:${contactId}`),
 ]
+
+const isCanonicalMultiSelect = (
+  value: string,
+  options: readonly string[],
+): boolean => {
+  const result = canonicalMultiSelectValue(value, options)
+  return result.ok && result.value === value
+}
 
 const computeUpdatedFieldValue = ({
   currentValue,
@@ -484,6 +502,7 @@ class ContactCustomFieldService extends BaseService {
       sourceTimezoneStrategy,
       sourceTimezoneOverride,
       fillEmptyTemporalWithNow,
+      skipInvalidOptions = false,
     } = input
     const customFieldIds = fields.map((f) => f.customFieldId)
     const fieldById = new Map(
@@ -492,7 +511,7 @@ class ContactCustomFieldService extends BaseService {
 
     const customFields = await client.query.customFieldModel.findMany({
       where: { workspaceId, id: { in: customFieldIds } },
-      columns: { id: true, name: true, type: true },
+      columns: { id: true, name: true, type: true, options: true },
     })
 
     if (customFields.length === 0) {
@@ -520,14 +539,32 @@ class ContactCustomFieldService extends BaseService {
           return null
         }
 
-        const normalizedValue = await normalizeCustomFieldValueForStorage({
-          type: customField.type,
-          value: field.value,
-          resolveSourceTimezone,
-          explicitTimezone: sourceTimezone,
-          temporalInputParsing,
-          fillEmptyTemporalWithNow,
-        })
+        let normalizedValue: string | null
+        try {
+          normalizedValue = await normalizeCustomFieldValueForStorage({
+            type: customField.type,
+            value: field.value,
+            options: customField.options,
+            resolveSourceTimezone,
+            explicitTimezone: sourceTimezone,
+            temporalInputParsing,
+            fillEmptyTemporalWithNow,
+          })
+        } catch (error) {
+          if (!(skipInvalidOptions && isOptionFieldType(customField.type))) {
+            throw error
+          }
+          logger.warn(
+            {
+              workspaceId,
+              contactId,
+              customFieldId: customField.id,
+              type: customField.type,
+            },
+            "Skipped a value that is not an option of the select field (automated source)",
+          )
+          return null
+        }
         // Un-normalizable temporal value: skip rather than persist garbage.
         if (normalizedValue === null) {
           if (temporalInputParsing === TemporalInputParsing.Lenient) {
@@ -744,27 +781,39 @@ class ContactCustomFieldService extends BaseService {
     tx: DatabaseClient
   }): Promise<void> {
     const { workspaceId, values, tx } = props
-    const typeById = new Map(
+    const fieldById = new Map(
       (
         await tx.query.customFieldModel.findMany({
           where: {
             workspaceId,
             id: { in: [...new Set(values.map((v) => v.customFieldId))] },
           },
-          columns: { id: true, type: true },
+          columns: { id: true, type: true, options: true },
         })
-      ).map((field) => [field.id, field.type] as const),
+      ).map((field) => [field.id, field] as const),
     )
 
     for (const { customFieldId, value } of values) {
       if (value.length === 0) {
         continue
       }
-      const type = typeById.get(customFieldId)
+      const field = fieldById.get(customFieldId)
+      const type = field?.type
+      const options = field?.options ?? []
+      // s201: an option field's value must already be its canonical option
+      // text; a field with no options accepts nothing (fail closed).
       const isCanonical =
         (type === "boolean" && canonicalBooleanLiteral(value) === value) ||
-        (type === "number" && canonicalNumberLiteral(value) === value)
-      if ((type === "boolean" || type === "number") && !isCanonical) {
+        (type === "number" && canonicalNumberLiteral(value) === value) ||
+        (type === "select" && canonicalSelectValue(value, options) === value) ||
+        (type === "multiSelect" && isCanonicalMultiSelect(value, options))
+      if (
+        (type === "boolean" ||
+          type === "number" ||
+          type === "select" ||
+          type === "multiSelect") &&
+        !isCanonical
+      ) {
         throw new ChatbotXException(
           `Non-canonical ${type} value for custom field ${customFieldId}; normalize before calling insertNormalizedValuesForNewContacts.`,
           "invalidCustomFieldValue",
