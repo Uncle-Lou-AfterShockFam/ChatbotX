@@ -52,3 +52,12 @@ export const dealTaskTemplateResource = createSelectSchema(
   dependsOn: z.array(z.string()),
 })
 export type DealTaskTemplateResource = z.infer<typeof dealTaskTemplateResource>
+
+/** A task on the workspace calendar: where it lives + open tasks waiting on it. */
+export const dealTaskCalendarResource = dealTaskResource.extend({
+  dealTitle: z.string(),
+  pipelineId: z.string(),
+  pipelineName: z.string(),
+  openSuccessors: z.number().int(),
+})
+export type DealTaskCalendarResource = z.infer<typeof dealTaskCalendarResource>

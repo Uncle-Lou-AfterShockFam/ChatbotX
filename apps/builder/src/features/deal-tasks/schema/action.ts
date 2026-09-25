@@ -105,3 +105,17 @@ export const addTaskTemplateDependencyRequest = z.object({
     "Template of the same stage whose task must be completed first.",
   ),
 })
+
+/** `GET /workspaces/{workspaceId}/tasks` (the task calendar, s197). */
+export const listTasksInRangeQuery = z.object({
+  from: z.coerce.date().describe("Start of the range (inclusive, on dueAt)."),
+  to: z.coerce
+    .date()
+    .describe("End of the range (exclusive); at most 62 days after `from`."),
+  assignee: z
+    .enum(["me", "any"])
+    .optional()
+    .describe("`me` = only tasks assigned to the caller (default any)."),
+  status: z.enum(["open", "done"]).optional(),
+  pipelineId: zodBigintAsString().optional(),
+})

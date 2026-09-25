@@ -11,6 +11,7 @@ import {
   AtomIcon,
   BrainIcon,
   Building2Icon,
+  CalendarCheckIcon,
   ChartPieIcon,
   ChevronsRight,
   HandshakeIcon,
@@ -126,6 +127,12 @@ export function AppSidebar({
         title: t("deals.title"),
         url: `/space/${workspaceId}/deals`,
         icon: HandshakeIcon,
+        permission: PERMISSION_NAV.deals,
+      },
+      {
+        title: t("tasks.calendar.title"),
+        url: `/space/${workspaceId}/tasks`,
+        icon: CalendarCheckIcon,
         permission: PERMISSION_NAV.deals,
       },
       {

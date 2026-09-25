@@ -3,7 +3,10 @@ import {
   type DatabaseClient,
   db,
   eq,
+  gte,
   inArray,
+  lt,
+  type SQL,
   sql,
 } from "@chatbotx.io/database/client"
 import {
@@ -15,7 +18,9 @@ import {
 import {
   dealActivityModel,
   dealDependencyModel,
+  dealModel,
   dealTaskModel,
+  pipelineModel,
 } from "@chatbotx.io/database/schema"
 import type {
   DealDependencyModel,
@@ -42,7 +47,8 @@ import {
 import { notFoundException, validationException } from "../errors"
 import { logger } from "../logger"
 import { notificationService } from "../notification/service"
-import type { DealViewer } from "../pipeline/access"
+import { type DealViewer, viewerOwnerFilter } from "../pipeline/access"
+import { pipelineService } from "../pipeline/service"
 import {
   assertStartNotAfterDue,
   downstreamOpen,
@@ -56,6 +62,8 @@ export { DEPENDENCY_WALK_STEP_CAP } from "./schedule"
 
 const TASK_NOT_FOUND = "Task not found"
 const DAY_MS = 86_400_000
+export const MAX_TASK_CALENDAR_RANGE_DAYS = 62
+export const MAX_TASK_CALENDAR_ROWS = 500
 const EDGE_REFUSAL_MESSAGES = {
   tooManyDependencies: `A task waits on at most ${MAX_DEAL_TASK_DEPENDENCIES_PER_TASK} tasks.`,
   dependencyExists: "That dependency already exists.",
@@ -94,6 +102,13 @@ export type DealTaskWithBlockers = DealTaskModel & {
   effectiveStart: Date
   /** Tasks it waits on whose due date falls after this task's start. */
   conflicts: string[]
+}
+/** A calendar row: the task + where it lives + how many open tasks wait on it. */
+export type DealTaskCalendarRow = DealTaskModel & {
+  dealTitle: string
+  pipelineId: string
+  pipelineName: string
+  openSuccessors: number
 }
 /** A stage template being instantiated (the `listForStage` row shape). */
 export type InstantiableTemplate = {
@@ -177,9 +192,11 @@ export class DealTaskService extends BaseService {
   }
 
   /**
-   * Tasks across several deals (s195 Contact / Company 360): only the deals
-   * the viewer may read are consulted (`dealService.list` semantics), newest
-   * due first, open before done. No blocker graph: the drawer owns that.
+   * Tasks across several deals (s195 Contact / Company 360), newest due
+   * first, open before done. Visibility is checked IN the query (the deal's
+   * pipeline among the viewer's visible pipelines, the assigned-only owner
+   * filter), so every requested deal the viewer may read is consulted (s197:
+   * the old page-of-newest-deals intersection dropped older deals).
    */
   async listByDealIds(props: {
     workspaceId: string
@@ -193,24 +210,19 @@ export class DealTaskService extends BaseService {
     if (props.dealIds.length === 0) {
       return []
     }
-    const visible = await dealService.list({
-      workspaceId,
-      viewer,
-      perPage: props.dealIds.length,
-      page: 1,
-    })
-    const allowed = new Set(visible.data.map((d) => d.id))
-    const dealIds = props.dealIds.filter((id) => allowed.has(id))
-    if (dealIds.length === 0) {
+    const scope = await this.dealScope({ workspaceId, viewer, tx })
+    if (!scope) {
       return []
     }
-    return await tx
-      .select()
+    const rows = await tx
+      .select({ task: dealTaskModel })
       .from(dealTaskModel)
+      .innerJoin(dealModel, eq(dealModel.id, dealTaskModel.dealId))
       .where(
         and(
           eq(dealTaskModel.workspaceId, workspaceId),
-          inArray(dealTaskModel.dealId, dealIds),
+          inArray(dealTaskModel.dealId, props.dealIds),
+          ...scope,
         ),
       )
       .orderBy(
@@ -219,6 +231,124 @@ export class DealTaskService extends BaseService {
         dealTaskModel.createdAt,
       )
       .limit(limit)
+    return rows.map((r) => r.task)
+  }
+
+  /**
+   * The workspace task calendar (s197): tasks DUE in `[from, to)` on deals
+   * the viewer may read, with their deal and pipeline names and how many
+   * open tasks wait on each (the reschedule dialog's question). The range
+   * is capped at MAX_TASK_CALENDAR_RANGE_DAYS and the rows at
+   * MAX_TASK_CALENDAR_ROWS; `truncated` says the cap was hit.
+   */
+  async listInRange(props: {
+    workspaceId: string
+    from: Date
+    to: Date
+    viewer?: DealViewer | null
+    assigneeId?: string | null
+    status?: "open" | "done" | null
+    pipelineId?: string | null
+    tx?: DatabaseClient
+  }): Promise<{ data: DealTaskCalendarRow[]; truncated: boolean }> {
+    const { workspaceId, from, to, viewer, tx = db } = props
+    if (
+      !(from instanceof Date && to instanceof Date) ||
+      Number.isNaN(from.getTime()) ||
+      Number.isNaN(to.getTime()) ||
+      to.getTime() <= from.getTime()
+    ) {
+      throw validationException("to", "`to` must be after `from`.", {
+        reason: "invalidRange",
+      })
+    }
+    if (to.getTime() - from.getTime() > MAX_TASK_CALENDAR_RANGE_DAYS * DAY_MS) {
+      throw validationException(
+        "to",
+        `The range spans at most ${MAX_TASK_CALENDAR_RANGE_DAYS} days.`,
+        { reason: "rangeTooLong" },
+      )
+    }
+    const scope = await this.dealScope({ workspaceId, viewer, tx })
+    if (!scope) {
+      return { data: [], truncated: false }
+    }
+    const rows = await tx
+      .select({
+        task: dealTaskModel,
+        dealTitle: dealModel.title,
+        pipelineId: dealModel.pipelineId,
+        pipelineName: pipelineModel.name,
+        openSuccessors: sql<number>`(
+          select count(*)::int from "DealDependency" dd
+          join "DealTask" s on s."id" = dd."taskId" and s."status" = 'open'
+          where dd."dependsOnTaskId" = ${dealTaskModel.id}
+        )`,
+      })
+      .from(dealTaskModel)
+      .innerJoin(dealModel, eq(dealModel.id, dealTaskModel.dealId))
+      .innerJoin(pipelineModel, eq(pipelineModel.id, dealModel.pipelineId))
+      .where(
+        and(
+          eq(dealTaskModel.workspaceId, workspaceId),
+          gte(dealTaskModel.dueAt, from),
+          lt(dealTaskModel.dueAt, to),
+          props.assigneeId
+            ? eq(dealTaskModel.assigneeId, props.assigneeId)
+            : undefined,
+          props.status ? eq(dealTaskModel.status, props.status) : undefined,
+          props.pipelineId
+            ? eq(dealModel.pipelineId, props.pipelineId)
+            : undefined,
+          ...scope,
+        ),
+      )
+      .orderBy(dealTaskModel.dueAt, dealTaskModel.id)
+      .limit(MAX_TASK_CALENDAR_ROWS + 1)
+    const truncated = rows.length > MAX_TASK_CALENDAR_ROWS
+    return {
+      data: rows.slice(0, MAX_TASK_CALENDAR_ROWS).map((r) => ({
+        ...r.task,
+        dealTitle: r.dealTitle,
+        pipelineId: r.pipelineId,
+        pipelineName: r.pipelineName,
+        openSuccessors: Number(r.openSuccessors),
+      })),
+      truncated,
+    }
+  }
+
+  /**
+   * The Deal-row predicates a viewer's read is limited to (visible
+   * pipelines + the assigned-only owner), or null = nothing visible. No
+   * viewer (the public API, workers) = unscoped.
+   */
+  private async dealScope(props: {
+    workspaceId: string
+    viewer?: DealViewer | null
+    tx: DatabaseClient
+  }): Promise<SQL[] | null> {
+    const { workspaceId, viewer, tx } = props
+    const predicates: SQL[] = [eq(dealModel.workspaceId, workspaceId)]
+    if (!viewer) {
+      return predicates
+    }
+    const visible = await pipelineService.visibleIds({
+      workspaceId,
+      viewer,
+      tx,
+    })
+    if (visible !== null) {
+      if (visible.length === 0) {
+        return null
+      }
+      predicates.push(inArray(dealModel.pipelineId, visible))
+    }
+    const owner = viewerOwnerFilter(viewer)
+    if (owner !== undefined) {
+      predicates.push(eq(dealModel.ownerId, owner))
+    }
+    return predicates
   }
 
   async create(props: {

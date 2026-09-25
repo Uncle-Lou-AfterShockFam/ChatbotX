@@ -147,6 +147,8 @@ vi.mock("@chatbotx.io/database/client", () => ({
   and: vi.fn((...c: unknown[]) => ({ c })),
   eq: vi.fn((f: unknown, v: unknown) => ({ f, v })),
   inArray: vi.fn((f: unknown, v: unknown) => ({ f, v })),
+  gte: vi.fn((f: unknown, v: unknown) => ({ gte: f, v })),
+  lt: vi.fn((f: unknown, v: unknown) => ({ lt: f, v })),
   sql: Object.assign(
     vi.fn((s: TemplateStringsArray, ...v: unknown[]) => ({ s, v })),
     {},
@@ -154,6 +156,19 @@ vi.mock("@chatbotx.io/database/client", () => ({
 }))
 vi.mock("@chatbotx.io/database/schema", () => ({
   dealActivityModel: { _name: "DealActivity" },
+  dealModel: {
+    _name: "Deal",
+    id: "deal.id",
+    workspaceId: "deal.ws",
+    pipelineId: "deal.pipelineId",
+    ownerId: "deal.ownerId",
+    title: "deal.title",
+  },
+  pipelineModel: {
+    _name: "Pipeline",
+    id: "pipeline.id",
+    name: "pipeline.name",
+  },
   dealDependencyModel: {
     _name: "DealDependency",
     taskId: "taskId",
@@ -207,11 +222,24 @@ vi.mock("../src/deal/service", () => ({
     list: (...a: unknown[]) => m.dealList(...a),
   },
 }))
+const visibleIds = vi.fn(async () => null as string[] | null)
 vi.mock("../src/pipeline/service", () => ({
   pipelineService: {
     resolveStage: (...a: unknown[]) => m.resolveStage(...a),
     findOrFail: (...a: unknown[]) => m.pipelineFindOrFail(...a),
+    visibleIds: (...a: unknown[]) => visibleIds(...a),
   },
+}))
+// the real module loads the pipeline-member service (a DB import chain);
+// the owner rule is the same one-liner as assignedOnlyUserId
+vi.mock("../src/pipeline/access", () => ({
+  viewerOwnerFilter: (viewer: {
+    userId: string
+    permissions: Record<string, boolean>
+  }) =>
+    !viewer.permissions.superAdmin && viewer.permissions.onlyAssignedContacts
+      ? viewer.userId
+      : undefined,
 }))
 vi.mock("../src/audit/dispatcher", () => ({ dispatchAuditRecord: vi.fn() }))
 const logInfo = vi.fn()
@@ -790,36 +818,115 @@ describe("dealTaskService.claimOverdue + instantiateForStage", () => {
   })
 })
 
-describe("dealTaskService.listByDealIds (s195)", () => {
-  test("empty input = no query; only the viewer-visible deals are consulted; the page is capped", async () => {
-    const listSpy = m.dealList.mockResolvedValue({
-      data: [{ id: "d-1" }],
-      pageCount: 1,
-    })
-    expect(
-      await dealTaskService.listByDealIds({ workspaceId: "ws-1", dealIds: [] }),
-    ).toEqual([])
-    expect(listSpy).not.toHaveBeenCalled()
+describe("dealTaskService.listByDealIds (s195, scoped in SQL s197)", () => {
+  const client = () =>
+    import("@chatbotx.io/database/client") as unknown as Promise<{
+      inArray: ReturnType<typeof vi.fn>
+      eq: ReturnType<typeof vi.fn>
+    }>
 
-    m.state.selects.push([{ id: "t-1", dealId: "d-1" }])
+  test("empty input = no query; the requested ids are filtered IN the query, never against a page of newest deals", async () => {
+    expect(
+      await dealTaskService.listByDealIds({ workspaceId: WS, dealIds: [] }),
+    ).toEqual([])
+    expect(m.state.calls).toEqual([])
+    // three deals asked for, the oldest among them: all reach the query
+    m.state.selects.push([{ task: { id: "t-old", dealId: "d-old" } }])
     const rows = await dealTaskService.listByDealIds({
-      workspaceId: "ws-1",
-      dealIds: ["d-1", "d-hidden"],
-      viewer: { userId: "u-1", permissions: {} },
+      workspaceId: WS,
+      dealIds: ["d-new", "d-mid", "d-old"],
       limit: 9999,
     })
-    expect(rows).toEqual([{ id: "t-1", dealId: "d-1" }])
-    expect(listSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceId: "ws-1", perPage: 2 }),
-    )
-    listSpy.mockResolvedValueOnce({ data: [], pageCount: 1 })
+    expect(rows).toEqual([{ id: "t-old", dealId: "d-old" }])
+    const { inArray } = await client()
+    expect(inArray).toHaveBeenCalledWith("dealId", ["d-new", "d-mid", "d-old"])
+    expect(m.dealList).not.toHaveBeenCalled()
+  })
+
+  test("a scoped viewer: visible pipelines + the assigned-only owner go into the WHERE; nothing visible = no query", async () => {
+    visibleIds.mockResolvedValueOnce(["p-1"])
+    m.state.selects.push([])
+    await dealTaskService.listByDealIds({
+      workspaceId: WS,
+      dealIds: ["d-1"],
+      viewer: { userId: "u-1", permissions: { onlyAssignedContacts: true } },
+    })
+    const { inArray, eq } = await client()
+    expect(inArray).toHaveBeenCalledWith("deal.pipelineId", ["p-1"])
+    expect(eq).toHaveBeenCalledWith("deal.ownerId", "u-1")
+    visibleIds.mockResolvedValueOnce([])
+    const calls = m.state.calls.length
     expect(
       await dealTaskService.listByDealIds({
-        workspaceId: "ws-1",
-        dealIds: ["d-hidden"],
+        workspaceId: WS,
+        dealIds: ["d-1"],
         viewer: { userId: "u-1", permissions: {} },
       }),
     ).toEqual([])
+    expect(m.state.calls.length).toBe(calls)
+  })
+})
+
+describe("s197 dealTaskService.listInRange (task calendar)", () => {
+  const FROM = D("2026-10-01")
+  const client = () =>
+    import("@chatbotx.io/database/client") as unknown as Promise<{
+      eq: ReturnType<typeof vi.fn>
+    }>
+  test("a backwards, empty or > 62-day range is a typed 422 before any query", async () => {
+    for (const to of [FROM, D("2026-09-30"), D("2026-12-03")]) {
+      await expect(
+        dealTaskService.listInRange({ workspaceId: WS, from: FROM, to }),
+      ).rejects.toMatchObject({ code: "validation" })
+    }
+    await expect(
+      dealTaskService.listInRange({
+        workspaceId: WS,
+        from: new Date("nope"),
+        to: FROM,
+      }),
+    ).rejects.toMatchObject({ data: { reason: "invalidRange" } })
+    expect(m.state.calls).toEqual([])
+  })
+
+  test("rows carry deal + pipeline names and the open-successor count; 501 rows = 500 + truncated", async () => {
+    const row = (i: number) => ({
+      task: TASK({ id: `t-${i}`, dueAt: D("2026-10-02") }),
+      dealTitle: "Roof",
+      pipelineId: "p-1",
+      pipelineName: "S197",
+      openSuccessors: "2",
+    })
+    m.state.selects.push(Array.from({ length: 501 }, (_, i) => row(i)))
+    const out = await dealTaskService.listInRange({
+      workspaceId: WS,
+      from: FROM,
+      to: D("2026-11-01"),
+      assigneeId: "u-1",
+    })
+    expect(out.truncated).toBe(true)
+    expect(out.data).toHaveLength(500)
+    expect(out.data[0]).toMatchObject({
+      id: "t-0",
+      dealTitle: "Roof",
+      pipelineName: "S197",
+      openSuccessors: 2,
+    })
+    const { eq } = await client()
+    expect(eq).toHaveBeenCalledWith("assigneeId", "u-1")
+  })
+
+  test("a viewer who can see no pipeline gets nothing, without a query", async () => {
+    visibleIds.mockResolvedValueOnce([])
+    expect(
+      await dealTaskService.listInRange({
+        workspaceId: WS,
+        from: FROM,
+        to: D("2026-10-08"),
+        viewer: { userId: "u-1", permissions: {} },
+      }),
+    ).toEqual({ data: [], truncated: false })
+    expect(m.state.calls).toEqual([])
   })
 })
 

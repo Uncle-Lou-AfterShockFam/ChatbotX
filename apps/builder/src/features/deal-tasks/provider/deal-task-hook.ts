@@ -14,6 +14,22 @@ export const useDealTasks = (
     }),
   )
 
+/** The task calendar's rows for `[from, to)` (s197). */
+export const useTasksInRange = (
+  workspaceId: string,
+  query: {
+    from: Date
+    to: Date
+    assignee: "me" | "any"
+    status?: "open" | "done"
+  },
+) =>
+  useQuery(
+    orpc.dealTasksAPI.privateListTasksInRangeAPI.queryOptions({
+      input: { workspaceId, ...query },
+    }),
+  )
+
 export const usePipelineTaskTemplates = (
   workspaceId: string,
   pipelineId: string | null | undefined,

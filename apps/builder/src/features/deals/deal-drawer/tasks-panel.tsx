@@ -33,6 +33,7 @@ import { dealDependencyAction } from "@/features/deal-tasks/actions/deal-depende
 import { deleteDealTaskAction } from "@/features/deal-tasks/actions/delete-deal-task-action"
 import { TasksTimeline } from "@/features/deal-tasks/components/tasks-timeline"
 import { useRescheduleTask } from "@/features/deal-tasks/components/use-reschedule-task"
+import { openSuccessors } from "@/features/deal-tasks/lib/timeline-layout"
 import { useDealTasks } from "@/features/deal-tasks/provider/deal-task-hook"
 import type { DealTaskWithBlockersResource } from "@/features/deal-tasks/schema/resource"
 import { isOverdue } from "../deal-card"
@@ -91,12 +92,24 @@ export function DealTasksPanel({
     onError: onActionError,
   })
   const rows = tasks.data ?? []
-  const reschedule = useRescheduleTask({
-    workspaceId,
-    dealId,
-    tasks: rows,
-    onSaved: refresh,
-  })
+  const rescheduler = useRescheduleTask({ workspaceId, onSaved: refresh })
+  const reschedule = {
+    ...rescheduler,
+    reschedule: (
+      taskId: string,
+      dates: { startAt?: Date | null; dueAt?: Date | null },
+    ) =>
+      rescheduler.reschedule(
+        {
+          dealId,
+          taskId,
+          dueAt: rows.find((r) => r.id === taskId)?.dueAt ?? null,
+          openSuccessors: openSuccessors(rows, taskId).length,
+        },
+        dates,
+      ),
+  }
+
   const busy =
     create.isPending ||
     toggle.isPending ||
