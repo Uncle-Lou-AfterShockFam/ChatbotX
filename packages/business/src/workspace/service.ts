@@ -18,11 +18,13 @@ import { distributedLock, withCache } from "@chatbotx.io/redis"
 import { formatInTimeZone } from "date-fns-tz"
 import { dispatchAuditRecord } from "../audit/dispatcher"
 import { BaseService } from "../base.service"
+import { workspaceDocumentsPrefix } from "../documents/paths"
 import { tenantService } from "../enterprise/tenant/service"
 import { notFoundException, workspaceLimitReachedException } from "../errors"
 import { isCommunity } from "../keys"
 import { logger } from "../logger"
 import { quotaEnforcementService } from "../quota-enforcement/service"
+import { purgeStoragePrefix } from "../storage/purge-prefix"
 import { userQuotaService } from "../user-quota/service"
 import {
   type WorkspaceTeardownIntegrations,
@@ -382,6 +384,15 @@ class WorkspaceService extends BaseService {
             "workspace-purge: workspace quota release failed",
           )
         })
+
+      // Contact documents (rendered + signed PDFs) are not rows: purge the
+      // workspace's storage prefix before the row goes, best-effort like the
+      // quota release above.
+      await purgeStoragePrefix(
+        workspaceDocumentsPrefix(workspace.id),
+        { workspaceId: workspace.id },
+        "workspace-purge",
+      )
 
       await db.delete(workspaceModel).where(eq(workspaceModel.id, workspace.id))
 

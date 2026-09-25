@@ -73,8 +73,6 @@ vi.mock("../src/tag/service", () => ({
   tagService: { attachByNamesToContacts: m.attach },
 }))
 vi.mock("../src/documents/service", () => ({
-  contactDocumentPath: (w: string, c: string, d: string) =>
-    `workspaces/${w}/documents/${c}/${d}.pdf`,
   documentService: { generateForContact: m.generateForContact },
 }))
 

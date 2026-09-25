@@ -33,14 +33,16 @@ import { emit } from "@chatbotx.io/event-bus"
 import { emitContactCreated } from "@chatbotx.io/events"
 import { uploadFileFromUrl } from "@chatbotx.io/filesystem"
 import { invalidateCacheByTags, withCache } from "@chatbotx.io/redis"
-import { createId } from "@chatbotx.io/utils"
+import { createId, mapWithConcurrency } from "@chatbotx.io/utils"
 import { dispatchAuditRecord } from "../audit/dispatcher"
 import { BaseService } from "../base.service"
 import { getContactInboxSinceTime } from "../contact-inbox/service"
+import { contactDocumentsPrefix } from "../documents/paths"
 import { ChatbotXException, notFoundException } from "../errors"
 import { logger } from "../logger"
 import { messageCleanupService } from "../message-cleanup/service"
 import { quotaEnforcementService } from "../quota-enforcement/service"
+import { purgeStoragePrefix } from "../storage/purge-prefix"
 import { userQuotaService } from "../user-quota/service"
 import { workspaceService } from "../workspace/service"
 import { workspaceUsageService } from "../workspace-usage/service"
@@ -72,6 +74,7 @@ import { parseContactIdentifier } from "./utils"
 // One DELETE per chunk keeps each statement's lock scope and cascade work
 // bounded (mirrors CONTACT_CHUNK_SIZE in tag/service.ts).
 const CONTACT_DELETE_CHUNK_SIZE = 50
+const CONTACT_DOCUMENT_PURGE_CONCURRENCY = 8
 
 type ContactWriteData = Partial<
   Pick<
@@ -630,6 +633,15 @@ class ContactService extends BaseService {
           ),
         )
       })
+
+      // ContactDocument rows cascade with the contact, but their PDFs (rendered
+      // and signed) live in storage under one per-contact prefix. Purged only
+      // AFTER the chunk committed, best-effort: a storage failure leaves an
+      // orphaned file, never a half-deleted contact.
+      await this.purgeDocumentFiles({
+        workspaceId,
+        contactIds: chunk.map((c) => c.id),
+      })
     }
 
     await this.invalidate({
@@ -640,6 +652,27 @@ class ContactService extends BaseService {
     await this.releaseQuotaForDeletedContacts({ workspaceId, contacts })
 
     return contacts
+  }
+
+  /**
+   * Bounded fan-out: each contact costs one listing plus up to a page of
+   * deletes, and the S3 client's agent has ~50 sockets shared with every
+   * other storage call in this process (downloads, media uploads).
+   */
+  private async purgeDocumentFiles(props: {
+    workspaceId: string
+    contactIds: string[]
+  }): Promise<void> {
+    await mapWithConcurrency(
+      props.contactIds,
+      CONTACT_DOCUMENT_PURGE_CONCURRENCY,
+      (contactId) =>
+        purgeStoragePrefix(
+          contactDocumentsPrefix(props.workspaceId, contactId),
+          { workspaceId: props.workspaceId, contactId },
+          "contact-delete",
+        ),
+    )
   }
 
   /**

@@ -1,6 +1,7 @@
 import { macAnalyticsService } from "@chatbotx.io/analytics"
 import { db } from "@chatbotx.io/database/client"
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { uploader } from "@chatbotx.io/filesystem"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { contactService } from "../src/contact"
 import { messageCleanupService } from "../src/message-cleanup"
 import { quotaEnforcementService } from "../src/quota-enforcement/service"
@@ -44,8 +45,69 @@ const stubConversations = (rows: { id: string; contactId: string }[]): void => {
 }
 
 describe("contactService.delete", () => {
+  // Every delete now purges the contact's document prefix in storage; stub it
+  // so no test here reaches a real S3 client.
+  beforeEach(() => {
+    vi.spyOn(uploader, "deleteByPrefix").mockResolvedValue({ deleted: 0 })
+  })
   afterEach(() => {
     vi.restoreAllMocks()
+  })
+
+  test("purges each deleted contact's document prefix AFTER its chunk committed, and a storage failure never fails the delete", async () => {
+    const contacts = Array.from({ length: 60 }, (_, i) => makeContact(i))
+    vi.spyOn(db.query.contactModel, "findMany").mockResolvedValue(
+      contacts as never,
+    )
+    stubConversations([])
+    vi.spyOn(messageCleanupService, "record").mockResolvedValue()
+    vi.spyOn(contactService, "invalidate").mockResolvedValue()
+    vi.spyOn(workspaceService, "find").mockResolvedValue(null as never)
+    const callOrder: string[] = []
+    vi.spyOn(db, "transaction").mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        await fn({
+          delete: () => ({
+            where: () => {
+              callOrder.push("tx")
+              return Promise.resolve()
+            },
+          }),
+        })
+      },
+    )
+    const purge = vi
+      .spyOn(uploader, "deleteByPrefix")
+      .mockImplementation((prefix: string) => {
+        callOrder.push(`purge:${prefix}`)
+        if (prefix.endsWith("/contact-7/")) {
+          return Promise.reject(new Error("S3 unreachable"))
+        }
+        return Promise.resolve({ deleted: 2 })
+      })
+
+    const result = await contactService.delete({
+      workspaceId: "ws-1",
+      ids: contacts.map((c) => c.id),
+    })
+
+    expect(result).toHaveLength(60)
+    expect(purge).toHaveBeenCalledTimes(60)
+    for (const contact of contacts) {
+      expect(purge).toHaveBeenCalledWith(
+        `workspaces/ws-1/documents/${contact.id}/`,
+        {},
+      )
+    }
+    // 60 contacts / 50 per chunk: chunk 1's tx, its 50 purges, chunk 2's tx,
+    // its 10 purges. No purge before the chunk's row delete committed.
+    expect(callOrder[0]).toBe("tx")
+    expect(callOrder.slice(1, 51).every((c) => c.startsWith("purge:"))).toBe(
+      true,
+    )
+    expect(callOrder[51]).toBe("tx")
+    expect(callOrder.slice(52).every((c) => c.startsWith("purge:"))).toBe(true)
+    expect(callOrder).toHaveLength(62)
   })
 
   test("chunks deletes and records tombstones atomically per chunk", async () => {
