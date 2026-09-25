@@ -4,10 +4,12 @@ import {
   db,
   desc,
   eq,
+  gte,
 } from "@chatbotx.io/database/client"
 import {
   CONTACT_DOCUMENT_LINK_TTL_DAYS,
   CONTACT_DOCUMENT_REF_REGEX,
+  DOCUMENT_GENERATE_PER_MINUTE,
   DOCUMENT_TEMPLATE_MAX_HTML_BYTES,
   DOCUMENT_TEMPLATE_MAX_NAME,
   type DocumentTemplateStatus,
@@ -22,7 +24,7 @@ import type {
   DocumentTemplateModel,
 } from "@chatbotx.io/database/types"
 import { uploader } from "@chatbotx.io/filesystem"
-import { createId } from "@chatbotx.io/utils"
+import { createId, isBase62Token, mintBase62Token } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
 import { notFoundException, validationException } from "../errors"
 import { htmlToPdf } from "./gotenberg"
@@ -30,6 +32,7 @@ import {
   DocumentMergeError,
   documentVariables,
   mergeDocumentHtml,
+  unsafeTemplateMarkup,
   wrapDocumentHtml,
 } from "./html"
 
@@ -39,31 +42,14 @@ const CONTACT_NOT_FOUND = "Contact not found"
 const DAY_MS = 86_400_000
 
 /** Base62, 22 characters = 128 random bits: the only secret in `/f/<token>`. */
-const ALPHABET =
-  "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 export const CONTACT_DOCUMENT_TOKEN_LENGTH = 22
 
 export const isContactDocumentToken = (value: unknown): value is string =>
-  typeof value === "string" &&
-  value.length === CONTACT_DOCUMENT_TOKEN_LENGTH &&
-  [...value].every((ch) => ALPHABET.includes(ch))
+  isBase62Token(value, CONTACT_DOCUMENT_TOKEN_LENGTH)
 
-/** Web Crypto (the business barrel stays Edge-Runtime safe); never createId(): sequential = guessable. */
 export const mintContactDocumentToken = (
-  random: (bytes: number) => Uint8Array = (n) =>
-    globalThis.crypto.getRandomValues(new Uint8Array(n)),
-): string => {
-  let value = 0n
-  for (const byte of random(16)) {
-    value = value * 256n + BigInt(byte)
-  }
-  let out = ""
-  for (let i = 0; i < CONTACT_DOCUMENT_TOKEN_LENGTH; i++) {
-    out = ALPHABET[Number(value % 62n)] + out
-    value /= 62n
-  }
-  return out
-}
+  random?: (bytes: number) => Uint8Array,
+): string => mintBase62Token(16, CONTACT_DOCUMENT_TOKEN_LENGTH, random)
 
 /** Private object key: never under `public/` (anonymous-read prefix). */
 export const contactDocumentPath = (
@@ -105,6 +91,13 @@ const parseTemplateData = (
     new TextEncoder().encode(bodyHtml).length > DOCUMENT_TEMPLATE_MAX_HTML_BYTES
   ) {
     throw validationException("bodyHtml", "The document is too large")
+  }
+  const unsafe = unsafeTemplateMarkup(bodyHtml)
+  if (unsafe !== null) {
+    throw validationException(
+      "bodyHtml",
+      `The document contains unsupported markup (${unsafe})`,
+    )
   }
   return { name, bodyHtml }
 }
@@ -323,6 +316,7 @@ export class DocumentService extends BaseService {
     if (!contact) {
       throw notFoundException(CONTACT_NOT_FOUND)
     }
+    await this.assertGenerateBudget({ workspaceId, now, tx })
     const template = await this.getTemplate({ workspaceId, id: templateId, tx })
     if (template.status !== "active") {
       throw validationException("templateId", "This template is archived")
@@ -353,30 +347,42 @@ export class DocumentService extends BaseService {
 
     const id = createId()
     const path = contactDocumentPath(workspaceId, contactId, id)
-    await uploader.putObject(path, rendered.pdf, {
-      ContentType: "application/pdf",
-    })
-    const [row] = await tx
-      .insert(contactDocumentModel)
-      .values({
-        id,
-        workspaceId,
-        contactId,
-        templateId,
-        title: template.name,
-        ref,
-        status: "generated",
-        path,
-        fileSize: rendered.pdf.length,
-        token: mintContactDocumentToken(),
-        tokenExpiresAt: new Date(
-          now.getTime() + CONTACT_DOCUMENT_LINK_TTL_DAYS * DAY_MS,
-        ),
+    try {
+      await uploader.putObject(path, rendered.pdf, {
+        ContentType: "application/pdf",
       })
-      .onConflictDoNothing({
-        target: [contactDocumentModel.contactId, contactDocumentModel.ref],
-      })
-      .returning()
+    } catch {
+      throw validationException("templateId", "Could not store the PDF")
+    }
+    let row: ContactDocumentModel | undefined
+    try {
+      ;[row] = await tx
+        .insert(contactDocumentModel)
+        .values({
+          id,
+          workspaceId,
+          contactId,
+          templateId,
+          title: template.name,
+          ref,
+          status: "generated",
+          path,
+          fileSize: rendered.pdf.length,
+          token: mintContactDocumentToken(),
+          tokenExpiresAt: new Date(
+            now.getTime() + CONTACT_DOCUMENT_LINK_TTL_DAYS * DAY_MS,
+          ),
+        })
+        .onConflictDoNothing({
+          target: [contactDocumentModel.contactId, contactDocumentModel.ref],
+        })
+        .returning()
+    } catch (err) {
+      // Any insert failure (a template deleted mid-render, a token collision):
+      // the stored object has no row, so it goes too.
+      await uploader.deleteObject(path).catch(() => undefined)
+      throw err
+    }
     if (row) {
       return { document: row, created: true }
     }
@@ -387,6 +393,31 @@ export class DocumentService extends BaseService {
       throw notFoundException(DOCUMENT_NOT_FOUND)
     }
     return { document: winner, created: false }
+  }
+
+  /** 429-style refusal past DOCUMENT_GENERATE_PER_MINUTE renders in this workspace. */
+  private async assertGenerateBudget(props: {
+    workspaceId: string
+    now: Date
+    tx: DatabaseClient
+  }): Promise<void> {
+    const { workspaceId, now, tx } = props
+    const recent = await tx
+      .select({ id: contactDocumentModel.id })
+      .from(contactDocumentModel)
+      .where(
+        and(
+          eq(contactDocumentModel.workspaceId, workspaceId),
+          gte(contactDocumentModel.createdAt, new Date(now.getTime() - 60_000)),
+        ),
+      )
+      .limit(DOCUMENT_GENERATE_PER_MINUTE)
+    if (recent.length >= DOCUMENT_GENERATE_PER_MINUTE) {
+      throw validationException(
+        "templateId",
+        `Too many documents generated in the last minute (limit ${DOCUMENT_GENERATE_PER_MINUTE}); try again shortly`,
+      )
+    }
   }
 
   private async findByRef(props: {
@@ -437,7 +468,7 @@ export class DocumentService extends BaseService {
       return { ok: false, reason: "expired" }
     }
     // A signed copy, once there, is the document the person should see.
-    const path = row.signedPath ?? row.path
+    const path = row.signedPath || row.path
     if (!path) {
       return { ok: false, reason: "no-file" }
     }

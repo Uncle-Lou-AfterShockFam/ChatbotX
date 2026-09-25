@@ -48,6 +48,9 @@ export const mergeDocumentHtml = (
   mapping: Record<string, string>,
 ): string => {
   for (const [key, value] of Object.entries(mapping)) {
+    if (typeof value !== "string") {
+      throw new DocumentMergeError(key, `{{${key}}} did not resolve to text`)
+    }
     if (value.length > MAX_MERGE_VALUE_LENGTH) {
       throw new DocumentMergeError(
         key,
@@ -60,8 +63,10 @@ export const mergeDocumentHtml = (
         `{{${key}}} contains a control character`,
       )
     }
-    if (value.includes("{{") || value.includes("}}")) {
-      throw new DocumentMergeError(key, `{{${key}}} may not contain {{ or }}`)
+    // ANY brace, not only `{{`: adjacent fields "{", "{signature, r2}", "}"
+    // would otherwise assemble a Documenso field across values (probe s197c).
+    if (value.includes("{") || value.includes("}")) {
+      throw new DocumentMergeError(key, `{{${key}}} may not contain { or }`)
     }
   }
   return bodyHtml.replace(PLACEHOLDER, (match, variable: string) => {
@@ -88,6 +93,22 @@ export const sizeSigningPlaceholders = (body: string): string =>
       `<span class="${kind.toLowerCase() === "signature" ? "doc-ph-sig" : "doc-ph-date"}">${match}</span>`,
   )
 
+// Markup that loads or runs something: never in a template. The editor
+// cannot produce it; a direct API call could (SSRF through the renderer).
+const ACTIVE_MARKUP =
+  /<\s*\/?\s*(script|iframe|frame|object|embed|meta|base|link|form|svg|math|style|template)\b|\son[a-z]+\s*=|javascript:/i
+
+/** The reason a template body is refused, or null when it is plain document markup. */
+export const unsafeTemplateMarkup = (bodyHtml: string): string | null => {
+  const match = ACTIVE_MARKUP.exec(bodyHtml)
+  return match ? match[0].trim().slice(0, 40) : null
+}
+
+// Second layer (with Gotenberg's own deny-IP / no-JS flags): the page may
+// load nothing and run nothing; only its inline stylesheet and data: images.
+const DOCUMENT_CSP =
+  "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:"
+
 /**
  * The full page Gotenberg renders: a fixed print stylesheet around the
  * merged body. Self-contained (no remote fonts or images): Gotenberg runs
@@ -97,7 +118,7 @@ export const wrapDocumentHtml = (
   title: string,
   body: string,
 ): string => `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+<html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${DOCUMENT_CSP}"><title>${escapeHtml(title)}</title>
 <style>
 @page { size: Letter; margin: 22mm 20mm; }
 body { font-family: Helvetica, Arial, sans-serif; font-size: 11.5pt; line-height: 1.5; color: #111; }

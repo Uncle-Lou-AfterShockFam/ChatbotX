@@ -12,6 +12,7 @@ const m = vi.hoisted(() => {
     deletes: [] as unknown[][],
     inserted: [] as Record<string, unknown>[],
     insertConflict: false,
+    insertError: null as Error | null,
     calls: [] as string[],
   }
   const chain = (kind: "select" | "update" | "delete") => {
@@ -55,6 +56,9 @@ const m = vi.hoisted(() => {
           onConflictDoNothing: () => done,
           returning: () => {
             state.calls.push("insert")
+            if (state.insertError) {
+              return Promise.reject(state.insertError)
+            }
             if (state.insertConflict) {
               return Promise.resolve([])
             }
@@ -86,6 +90,7 @@ vi.mock("@chatbotx.io/database/client", () => ({
   db: m.tx,
   and: (...c: unknown[]) => ({ c }),
   eq: (f: unknown, v: unknown) => ({ f, v }),
+  gte: (f: unknown, v: unknown) => ({ gte: [f, v] }),
   desc: (f: unknown) => ({ desc: f }),
 }))
 vi.mock("@chatbotx.io/database/schema", () => ({
@@ -121,6 +126,8 @@ import {
 const PUBLIC_PREFIX_RE = /^public\//
 const ARCHIVED_RE = /archived/
 const MAY_NOT_CONTAIN_RE = /may not contain/
+const TOO_MANY_RE = /Too many documents/
+const DUPLICATE_RE = /duplicate key/
 const RENDER_TIMEOUT_RE = /Could not render the PDF \(timeout\)/
 const WS = "11701868563365888"
 const CID = "11702341840011264"
@@ -146,6 +153,7 @@ beforeEach(() => {
   m.state.inserted.length = 0
   m.state.calls.length = 0
   m.state.insertConflict = false
+  m.state.insertError = null
   m.htmlToPdf.mockReset()
   m.htmlToPdf.mockResolvedValue({ ok: true, pdf: PDF, ms: 5 })
   m.putObject.mockClear()
@@ -156,7 +164,7 @@ beforeEach(() => {
 describe("documentService.generateForContact", () => {
   test("renders the template for the contact, escapes values, stores a private PDF and a 30-day token", async () => {
     // findByRef (none), contact, template
-    m.state.selects.push([], [{ id: CID }], [TEMPLATE])
+    m.state.selects.push([], [{ id: CID }], [], [TEMPLATE])
     const { document, created } = await documentService.generateForContact({
       workspaceId: WS,
       contactId: CID,
@@ -224,7 +232,7 @@ describe("documentService.generateForContact", () => {
 
   test("losing the ref race deletes the orphan object and answers the winner", async () => {
     const winner = { id: "d9", workspaceId: WS, contactId: CID, ref: "r" }
-    m.state.selects.push([], [{ id: CID }], [TEMPLATE], [winner])
+    m.state.selects.push([], [{ id: CID }], [], [TEMPLATE], [winner])
     m.state.insertConflict = true
     const r = await documentService.generateForContact({
       workspaceId: WS,
@@ -256,12 +264,13 @@ describe("documentService.generateForContact", () => {
     m.state.selects.push(
       [],
       [{ id: CID }],
+      [],
       [{ ...TEMPLATE, status: "archived" }],
     )
     await expect(
       documentService.generateForContact({ ...base, ref: "b" }),
     ).rejects.toThrow(ARCHIVED_RE)
-    m.state.selects.push([], [{ id: CID }], [TEMPLATE])
+    m.state.selects.push([], [{ id: CID }], [], [TEMPLATE])
     await expect(
       documentService.generateForContact({
         ...base,
@@ -269,7 +278,7 @@ describe("documentService.generateForContact", () => {
         resolveVariables: async () => ({ first_name: "{{signature, r2}}" }),
       }),
     ).rejects.toThrow(MAY_NOT_CONTAIN_RE)
-    m.state.selects.push([], [{ id: CID }], [TEMPLATE])
+    m.state.selects.push([], [{ id: CID }], [], [TEMPLATE])
     m.htmlToPdf.mockResolvedValueOnce({
       ok: false,
       status: null,
@@ -375,5 +384,88 @@ describe("documentService templates + download", () => {
     expect(contactDocumentPath("1", "2", "3")).toBe(
       "workspaces/1/documents/2/3.pdf",
     )
+  })
+})
+
+describe("documentService hardening (skeptic + blind probe s197c)", () => {
+  const base = {
+    workspaceId: WS,
+    contactId: CID,
+    templateId: "t1",
+    resolveVariables,
+  }
+
+  test("the generation budget refuses past DOCUMENT_GENERATE_PER_MINUTE renders", async () => {
+    m.state.selects.push(
+      [],
+      [{ id: CID }],
+      Array.from({ length: 30 }, (_, i) => ({ id: `d${i}` })),
+    )
+    await expect(
+      documentService.generateForContact({ ...base, ref: "busy" }),
+    ).rejects.toThrow(TOO_MANY_RE)
+    expect(m.htmlToPdf).not.toHaveBeenCalled()
+  })
+
+  test("an insert failure deletes the stored object; a storage failure is a typed 422", async () => {
+    m.state.selects.push([], [{ id: CID }], [], [TEMPLATE])
+    m.state.insertError = new Error(
+      "duplicate key value violates unique constraint",
+    )
+    await expect(
+      documentService.generateForContact({ ...base, ref: "x1" }),
+    ).rejects.toThrow(DUPLICATE_RE)
+    expect(m.state.calls).toContain("deleteObject")
+    m.state.insertError = null
+    m.state.selects.push([], [{ id: CID }], [], [TEMPLATE])
+    m.putObject.mockRejectedValueOnce(new Error("NoSuchBucket"))
+    await expect(
+      documentService.generateForContact({ ...base, ref: "x2" }),
+    ).rejects.toMatchObject({ httpStatusCode: 422 })
+  })
+
+  test("a non-string resolver value is a typed 422, never a raw TypeError", async () => {
+    m.state.selects.push([], [{ id: CID }], [], [TEMPLATE])
+    await expect(
+      documentService.generateForContact({
+        ...base,
+        ref: "x3",
+        resolveVariables: async () => ({ first_name: 5 as unknown as string }),
+      }),
+    ).rejects.toMatchObject({ httpStatusCode: 422 })
+  })
+
+  test("templates with active markup are refused at save", async () => {
+    for (const bodyHtml of [
+      "<p>x</p><script>1</script>",
+      '<img src="x" onerror="1">',
+      '<iframe src="http://169.254.169.254/"></iframe>',
+      '<meta http-equiv="refresh" content="0;url=http://x">',
+      '<a href="javascript:alert(1)">x</a>',
+      "<svg><image href=x /></svg>",
+      "<LINK rel=stylesheet href=//x>",
+    ]) {
+      await expect(
+        documentService.createTemplate({
+          workspaceId: WS,
+          data: { name: "A", bodyHtml },
+        }),
+      ).rejects.toMatchObject({ httpStatusCode: 422 })
+    }
+  })
+
+  test("an empty signedPath falls back to the generated file", async () => {
+    const token = mintContactDocumentToken()
+    m.state.selects.push([
+      {
+        token,
+        tokenExpiresAt: new Date("2026-10-01T00:00:00Z"),
+        path: "p",
+        signedPath: "",
+      },
+    ])
+    expect(
+      await documentService.resolveDownload({ token, now: NOW }),
+    ).toMatchObject({ ok: true, path: "p" })
   })
 })

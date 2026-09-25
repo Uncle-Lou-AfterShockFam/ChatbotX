@@ -23,6 +23,7 @@ import {
 import { useTranslations } from "next-intl"
 import { useEffect, useRef, useState } from "react"
 import {
+  escapeHtml,
   renderVariableMentionHTML,
   renderVariableMentionText,
   toVariableMentionAttrs,
@@ -48,12 +49,9 @@ const toolLabelKey = {
   orderedList: "toolbar.orderedList",
 } as const
 
-const escapeText = (value: string) =>
-  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-
 /** The signing block: two labelled lines carrying the Documenso placeholders. */
 export const signatureBlockHtml = (signatureLabel: string, dateLabel: string) =>
-  `<p>${escapeText(signatureLabel)}: {{signature, r1}}</p><p>${escapeText(dateLabel)}: {{date, r1}}</p>`
+  `<p>${escapeHtml(signatureLabel)}: {{signature, r1}}</p><p>${escapeHtml(dateLabel)}: {{date, r1}}</p>`
 
 export function DocumentEditor({
   initialHtml,

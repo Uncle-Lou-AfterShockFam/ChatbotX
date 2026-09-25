@@ -26,7 +26,7 @@ const isCouponMentionId = (id: unknown) =>
 const isBotFieldMentionId = (id: unknown) =>
   typeof id === "string" && id.startsWith(BOT_FIELD_VARIABLE_ID_PREFIX)
 
-const escapeHtml = (value: string) =>
+export const escapeHtml = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 
 const escapeHtmlAttribute = (value: string) =>

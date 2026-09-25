@@ -8,8 +8,9 @@ import { loadServableWorkspace } from "@/lib/workspace/load-servable-workspace"
  * Public download of a document generated for a contact (roadmap B3):
  * `/f/<token>`, texted or emailed to the person. The 22-character token
  * (128 random bits) is the only credential and expires with the row. The PDF
- * is STREAMED from private storage, never redirected: the object store is
- * docker-internal on netcup, and a presigned URL would leak its host.
+ * (at most 5 MB) is read from private storage and served from here, never
+ * redirected: the object store is docker-internal on netcup, and a presigned
+ * URL would leak its host.
  * Nothing is recorded, so a link-preview fetch has no side effect.
  */
 type RouteContext = { params: Promise<{ token: string }> }

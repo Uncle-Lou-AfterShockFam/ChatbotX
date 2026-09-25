@@ -40,6 +40,25 @@ describe("documents html", () => {
     expect(out).toContain("{{unknown_field}}")
   })
 
+  test("adjacent values can never assemble a signing field: any single brace is refused", () => {
+    expect(() =>
+      mergeDocumentHtml("{{a}}{{b}}{{c}}", {
+        a: "{",
+        b: "signature, r2",
+        c: "}",
+      }),
+    ).toThrow(DocumentMergeError)
+    expect(() =>
+      mergeDocumentHtml("{{a}}{{b}}", { a: "x", b: "{date, r1}" }),
+    ).toThrow(DocumentMergeError)
+  })
+
+  test("the rendered page carries a CSP that loads and runs nothing", () => {
+    expect(wrapDocumentHtml("T", "<p>x</p>")).toContain(
+      `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:">`,
+    )
+  })
+
   test("a value can never plant a Documenso field; control chars and oversize are refused", () => {
     for (const bad of [
       "{{signature, r2}}",
