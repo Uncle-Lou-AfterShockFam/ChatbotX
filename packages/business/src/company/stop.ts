@@ -173,6 +173,11 @@ async function cancelSmartDelays(props: {
         contactIds: props.contactIds,
         limit,
       }),
+    hasRemaining: () =>
+      smartDelayService.hasActiveForContacts({
+        workspaceId: props.workspaceId,
+        contactIds: props.contactIds,
+      }),
   })
 }
 

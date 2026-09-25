@@ -3,9 +3,9 @@ import { smartDelayService } from "../smart-delay/service"
 
 export const SMART_DELAY_CANCEL_BATCH_SIZE = 500
 // Backstop so one workspace with a runaway backlog cannot spin the freeze call
-// forever: 500 * 400 = 200k rows per call. Whatever is left is harmless — the
-// worker-side guard no-ops those wake-ups, and the purge cascade removes the
-// rows when the grace window expires.
+// forever: 500 * 400 = 200k rows per call. Past it the loop throws
+// SmartDelayCancelIncompleteError (the freeze logs it); the purge cascade
+// removes the leftover rows when the grace window expires.
 const MAX_CANCEL_BATCHES = 400
 
 /**
@@ -30,6 +30,10 @@ export async function cancelSmartDelaysForWorkspace(props: {
     fetchBatch: (limit) =>
       smartDelayService.cancelActiveForWorkspace({
         limit,
+        workspaceId: props.workspaceId,
+      }),
+    hasRemaining: () =>
+      smartDelayService.hasActiveForWorkspace({
         workspaceId: props.workspaceId,
       }),
   })

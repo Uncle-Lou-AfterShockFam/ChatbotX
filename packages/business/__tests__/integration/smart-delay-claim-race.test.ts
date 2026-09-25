@@ -25,7 +25,11 @@
 import { type DatabaseClient, db, sql } from "@chatbotx.io/database/client"
 import { afterAll, afterEach, describe, expect, test, vi } from "vitest"
 import { MAX_RESUME_CLAIMS, smartDelayService } from "../../src/smart-delay"
-import { runSmartDelayCancelLoop } from "../../src/smart-delay/cancel-loop"
+import {
+  LOCKED_ROW_RETRY_DELAYS_MS,
+  runSmartDelayCancelLoop,
+  SmartDelayCancelIncompleteError,
+} from "../../src/smart-delay/cancel-loop"
 
 // The cancel loop drops each canceled row's delayed BullMQ job; no Redis here.
 vi.mock("@chatbotx.io/worker-config", () => ({
@@ -94,6 +98,8 @@ async function insertRow(props: {
          "nodeId", "eventNodeId", type, "triggerAt", status,
          "claimGeneration", "claimedAt")
       VALUES (${id}, ${workspaceId}, 1, ${contactInboxId}, 1, 'timeout-edge',
+              -- clock_timestamp: strictly increasing, so seeding order is the
+              -- cancel's triggerAt order (the tests pick which row is first)
               'event-edge', 'waitForEvent', clock_timestamp() + interval '1 hour', ${props.status}::"ContactOnSmartDelayStatus",
               ${generation},
               ${props.status === "running" ? sql`now()` : sql`NULL`})`)
@@ -349,19 +355,25 @@ async function holdRowLock(
   return { release, done }
 }
 
-function cancelWorkspace(workspaceId: string, batchSize: number) {
+function cancelWorkspace(
+  workspaceId: string,
+  batchSize: number,
+  maxBatches = 50,
+) {
   return runSmartDelayCancelLoop({
     workspaceId,
     batchSize,
-    maxBatches: 50,
+    maxBatches,
     logLabel: "s202-test",
     fetchBatch: (limit) =>
       smartDelayService.cancelActiveForWorkspace({ workspaceId, limit }),
+    hasRemaining: () =>
+      smartDelayService.hasActiveForWorkspace({ workspaceId }),
   })
 }
 
 describe.skipIf(!databaseUrl)("smart delay cancel vs a held row lock", () => {
-  test("workspace cancel waits for a heartbeat's lock instead of skipping the row", async () => {
+  test("workspace cancel comes back for a row a heartbeat's lock made it skip", async () => {
     const workspaceId = mintId()
     const locked = await insertRow({
       status: "running",
@@ -380,7 +392,7 @@ describe.skipIf(!databaseUrl)("smart delay cancel vs a held row lock", () => {
       settled = true
     })
     await new Promise((resolve) => setTimeout(resolve, 300))
-    // Parked on the heartbeat's row lock, not done with the row skipped.
+    // Still retrying the skipped row, not done without it.
     const settledWhileLocked = settled
     holder.release()
     await holder.done
@@ -401,7 +413,7 @@ describe.skipIf(!databaseUrl)("smart delay cancel vs a held row lock", () => {
     ).toBe(false)
   })
 
-  test("company-stop cancel (contact join) waits for the lock too", async () => {
+  test("company-stop cancel (contact join) comes back for the skipped row too", async () => {
     const workspaceId = mintId()
     const contactId = mintId()
     const contactInboxId = await insertContactInbox(contactId)
@@ -434,6 +446,11 @@ describe.skipIf(!databaseUrl)("smart delay cancel vs a held row lock", () => {
           workspaceId,
           contactIds: [contactId],
           limit,
+        }),
+      hasRemaining: () =>
+        smartDelayService.hasActiveForContacts({
+          workspaceId,
+          contactIds: [contactId],
         }),
     })
     await new Promise((resolve) => setTimeout(resolve, 300))
@@ -484,6 +501,47 @@ describe.skipIf(!databaseUrl)("smart delay cancel vs a held row lock", () => {
     ])
   })
 
+  test("a lock held past the retry budget fails the cancel loudly, the rest still canceled", async () => {
+    const workspaceId = mintId()
+    const locked = await insertRow({
+      status: "running",
+      claimGeneration: 1,
+      workspaceId,
+    })
+    const other = await insertRow({ status: "pending", workspaceId })
+    const holder = await holdRowLock(locked)
+    const budgetMs = LOCKED_ROW_RETRY_DELAYS_MS.reduce((a, b) => a + b, 0)
+
+    const outcome = await cancelWorkspace(workspaceId, 10).catch(
+      (error: unknown) => error,
+    )
+    holder.release()
+    await holder.done
+    expect(outcome).toBeInstanceOf(SmartDelayCancelIncompleteError)
+    expect(outcome).toMatchObject({ reason: "locked-rows", canceled: 1 })
+    expect(await statusesOf([locked, other])).toEqual(["running", "canceled"])
+    expect(budgetMs).toBeLessThan(2000)
+  })
+
+  test("the batch cap with rows left fails the cancel instead of reporting done", async () => {
+    const workspaceId = mintId()
+    const ids = [
+      await insertRow({ status: "pending", workspaceId }),
+      await insertRow({ status: "pending", workspaceId }),
+      await insertRow({ status: "pending", workspaceId }),
+    ]
+    await expect(cancelWorkspace(workspaceId, 2, 1)).rejects.toMatchObject({
+      reason: "batch-cap",
+      canceled: 2,
+    })
+    // Exactly at the cap with nothing left is done, not a failure.
+    const exact = mintId()
+    await insertRow({ status: "pending", workspaceId: exact })
+    await insertRow({ status: "pending", workspaceId: exact })
+    expect(await cancelWorkspace(exact, 2, 1)).toBe(2)
+    expect(await statusesOf(ids)).toEqual(["canceled", "canceled", "pending"])
+  })
+
   test("two cancel loops on one workspace never deadlock and cancel every row once (30 rounds)", async () => {
     for (let round = 0; round < 30; round++) {
       const workspaceId = mintId()
@@ -506,3 +564,92 @@ describe.skipIf(!databaseUrl)("smart delay cancel vs a held row lock", () => {
     }
   })
 })
+
+/**
+ * Bulk-seeds `count` scheduled, overdue rows whose triggerAt runs OPPOSITE to
+ * their heap order: the cancel (triggerAt order) and the sweep's id-list
+ * UPDATE (heap order) then lock the same rows from opposite ends.
+ */
+async function insertInverted(workspaceId: string, count: number) {
+  const ids = Array.from({ length: count }, () => mintId())
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL session_replication_role = replica`)
+    await tx.execute(sql`
+      INSERT INTO "ContactOnSmartDelay"
+        (id, "workspaceId", "flowId", "contactInboxId", "conversationId",
+         "nodeId", type, "triggerAt", status, "claimGeneration")
+      SELECT id, ${workspaceId}, 1, 1, 1, 'timeout-edge', 'waitNode',
+             now() - interval '1 hour' - make_interval(secs => ord), 'scheduled', 0
+        FROM unnest(${sql.raw(`ARRAY[${ids.join(",")}]`)}::bigint[])
+             WITH ORDINALITY AS t(id, ord)`)
+  })
+  seeded.push(...ids)
+  return ids
+}
+
+/** Backends of this database currently waiting on a lock. */
+async function lockWaiters(): Promise<number> {
+  const result = await db.execute<{ n: number }>(sql`
+    SELECT count(*)::int AS n FROM pg_stat_activity
+     WHERE datname = current_database() AND wait_event_type = 'Lock'`)
+  return result.rows[0]?.n ?? 0
+}
+
+async function waitForLockWaiters(n: number, timeoutMs: number) {
+  const deadline = Date.now() + timeoutMs
+  while ((await lockWaiters()) < n && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+}
+
+describe.skipIf(!databaseUrl)(
+  "smart delay cancel vs the stuck-row sweep",
+  () => {
+    // Probe D3 review (s202): with a WAITING cancel this deadlocked 5-6 in 16.
+    test("a cancel and a 500-row resetToPending both meeting a held row never deadlock", async () => {
+      const workspaceId = mintId()
+      const ids = await insertInverted(workspaceId, 1000)
+      // The cancel's first batch (earliest triggerAt = last in heap order).
+      const overlap = ids.slice(500)
+      const heldId = overlap[250] as string
+
+      let release: () => void = () => undefined
+      const released = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      let locked: () => void = () => undefined
+      const hasLock = new Promise<void>((resolve) => {
+        locked = resolve
+      })
+      const holder = db.transaction(async (tx) => {
+        await tx.execute(sql`
+        SELECT id FROM "ContactOnSmartDelay" WHERE id = ${heldId} FOR UPDATE`)
+        locked()
+        await released
+      })
+      await hasLock
+
+      const reset = smartDelayService.resetToPending({
+        ids: overlap,
+        triggerAtBefore: new Date(),
+      })
+      await waitForLockWaiters(1, 2000)
+      const cancel = cancelWorkspace(workspaceId, 500)
+      // A waiting cancel parks on the held row too; a skipping one never does.
+      await waitForLockWaiters(2, 400)
+      release()
+
+      const results = await Promise.allSettled([reset, cancel, holder])
+      const errors = results.flatMap((result) =>
+        result.status === "rejected"
+          ? [String((result.reason as Error)?.cause ?? result.reason)]
+          : [],
+      )
+      expect(errors).toEqual([])
+      const left = await db.execute<{ n: number }>(sql`
+      SELECT count(*)::int AS n FROM "ContactOnSmartDelay"
+       WHERE "workspaceId" = ${workspaceId} AND status <> 'canceled'`)
+      expect(left.rows[0]?.n).toBe(0)
+    })
+  },
+)
