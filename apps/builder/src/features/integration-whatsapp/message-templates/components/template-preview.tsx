@@ -11,7 +11,7 @@ import {
 } from "@chatbotx.io/flow-config"
 import { formatDate } from "@chatbotx.io/ui/lib/format"
 import Image from "next/image"
-import { useLocale, useTranslations } from "next-intl"
+import { useLocale, useTimeZone, useTranslations } from "next-intl"
 import type { ReactNode } from "react"
 import { substituteTemplateText } from "./template-preview-utils"
 
@@ -117,8 +117,10 @@ function LimitedTimeOfferPreview({
 }) {
   const t = useTranslations()
   const locale = useLocale()
+  const timeZone = useTimeZone()
   const formatted = formatDate(expirationTimeMs, {
     locale,
+    timeZone,
     hour: "numeric",
     minute: "2-digit",
   })

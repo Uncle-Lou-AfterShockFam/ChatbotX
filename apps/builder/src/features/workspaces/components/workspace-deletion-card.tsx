@@ -16,7 +16,7 @@ import { Card, CardContent } from "@chatbotx.io/ui/components/ui/card"
 import { formatDate } from "@chatbotx.io/ui/lib/format"
 import { formatDistanceToNowStrict } from "date-fns"
 import { AlertTriangleIcon, Loader2Icon, Trash2Icon } from "lucide-react"
-import { useLocale, useTranslations } from "next-intl"
+import { useLocale, useTimeZone, useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { useEffect, useState } from "react"
 import { safeActionErrorHandler } from "@/lib/errors/safe-action-error-handler"
@@ -71,11 +71,13 @@ export function WorkspaceDeletionCard({
 }) {
   const t = useTranslations()
   const locale = useLocale()
+  const timeZone = useTimeZone()
   const countdown = useCountdown(workspace.scheduledDeletionAt)
   const deletionDate = formatDate(workspace.scheduledDeletionAt ?? undefined, {
     hour: "numeric",
     minute: "numeric",
     locale,
+    timeZone,
   })
 
   const reloadPage = () => {
