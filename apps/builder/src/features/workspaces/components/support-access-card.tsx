@@ -10,7 +10,7 @@ import {
 } from "@chatbotx.io/ui/components/ui/tooltip"
 import { formatDate } from "@chatbotx.io/ui/lib/format"
 import { useRouter } from "next/navigation"
-import { useLocale, useTranslations } from "next-intl"
+import { useLocale, useTimeZone, useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { toast } from "sonner"
 import { SettingRow } from "@/components/setting-row"
@@ -28,6 +28,7 @@ export function SupportAccessCard({
 }) {
   const t = useTranslations()
   const locale = useLocale()
+  const timeZone = useTimeZone()
   const router = useRouter()
 
   const supportAccessUntil = workspace.supportAccessUntil
@@ -60,6 +61,7 @@ export function SupportAccessCard({
             hour: "numeric",
             minute: "numeric",
             locale,
+            timeZone,
           }),
         })
       : null

@@ -22,7 +22,7 @@ import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
 import { formatDate } from "@chatbotx.io/ui/lib/format"
 import type { ColumnDef } from "@tanstack/react-table"
 import { EllipsisVerticalIcon, EyeIcon, Trash2Icon } from "lucide-react"
-import { useLocale, useTranslations } from "next-intl"
+import { useLocale, useTimeZone, useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { use, useMemo, useState } from "react"
 import { getQuestionnaireSubmissionDetailAction } from "../actions/get-questionnaire-submission-detail.action"
@@ -51,6 +51,7 @@ export function QuestionnaireApplicantsTable({
 }: Props) {
   const t = useTranslations()
   const locale = useLocale()
+  const timeZone = useTimeZone()
   const [{ data, pageCount }] = use(promises)
   const [detail, setDetail] = useState<DetailResult | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -153,7 +154,7 @@ export function QuestionnaireApplicantsTable({
         ),
         cell: ({ row }) =>
           row.original.completedAt
-            ? formatDate(row.original.completedAt, { locale })
+            ? formatDate(row.original.completedAt, { locale, timeZone })
             : "",
       },
       {
@@ -200,7 +201,7 @@ export function QuestionnaireApplicantsTable({
         enableColumnFilter: false,
       },
     ],
-    [loadDetail, locale, questionnaireId, t, workspaceId],
+    [loadDetail, locale, timeZone, questionnaireId, t, workspaceId],
   )
   const { table } = useDataTable({
     data,

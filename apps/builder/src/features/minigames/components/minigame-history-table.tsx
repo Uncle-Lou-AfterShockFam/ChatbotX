@@ -25,7 +25,7 @@ import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
 import { formatDate } from "@chatbotx.io/ui/lib/format"
 import type { ColumnDef } from "@tanstack/react-table"
 import { EllipsisVerticalIcon, Loader, ScrollTextIcon } from "lucide-react"
-import { useLocale, useTranslations } from "next-intl"
+import { useLocale, useTimeZone, useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { use, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -124,6 +124,7 @@ export function MinigameHistoryTable({
 }: Props) {
   const t = useTranslations()
   const locale = useLocale()
+  const timeZone = useTimeZone()
   const [{ data, pageCount }] = use(promises)
   const [record, setRecord] = useState<{
     contactName: string
@@ -218,7 +219,8 @@ export function MinigameHistoryTable({
             title={t("minigames.history.openedAt")}
           />
         ),
-        cell: ({ row }) => formatDate(row.original.openedAt, { locale }),
+        cell: ({ row }) =>
+          formatDate(row.original.openedAt, { locale, timeZone }),
       },
       {
         id: "lastPlayedAt",
@@ -229,7 +231,8 @@ export function MinigameHistoryTable({
             title={t("minigames.history.lastPlayedAt")}
           />
         ),
-        cell: ({ row }) => formatDate(row.original.lastPlayedAt, { locale }),
+        cell: ({ row }) =>
+          formatDate(row.original.lastPlayedAt, { locale, timeZone }),
       },
       {
         id: "actions",
@@ -268,7 +271,7 @@ export function MinigameHistoryTable({
         enableColumnFilter: false,
       },
     ],
-    [loadPlays, locale, minigameId, t, workspaceId],
+    [loadPlays, locale, timeZone, minigameId, t, workspaceId],
   )
   const { table } = useDataTable({
     data,

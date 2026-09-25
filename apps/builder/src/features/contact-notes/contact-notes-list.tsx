@@ -7,7 +7,7 @@ import {
 } from "@chatbotx.io/ui/components/ui/tooltip"
 import { formatDate } from "@chatbotx.io/ui/lib/format"
 import { CircleUserRound, PencilIcon, TrashIcon } from "lucide-react"
-import { useLocale } from "next-intl"
+import { useLocale, useTimeZone } from "next-intl"
 import type { ContactNoteResource } from "./schema/resource"
 
 export function ContactNoteList({
@@ -20,6 +20,7 @@ export function ContactNoteList({
   onDelete: (contactNote: ContactNoteResource) => void
 }) {
   const locale = useLocale()
+  const timeZone = useTimeZone()
 
   return (
     <div className="flex w-full flex-col">
@@ -36,6 +37,7 @@ export function ContactNoteList({
                         {formatDate(contactNote.updatedAt, {
                           month: "short",
                           locale,
+                          timeZone,
                         })}
                       </div>
                     </div>

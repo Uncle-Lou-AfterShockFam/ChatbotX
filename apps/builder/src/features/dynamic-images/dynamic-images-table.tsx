@@ -30,7 +30,7 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { MoreHorizontalIcon, PencilIcon, Trash2Icon } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useLocale, useTranslations } from "next-intl"
+import { useLocale, useTimeZone, useTranslations } from "next-intl"
 import React, { use, useMemo } from "react"
 import { EnabledSwitchCell } from "@/components/data-table/enabled-switch-cell"
 import { useTenantSettings } from "@/features/tenant"
@@ -81,6 +81,7 @@ export function DynamicImagesTable({
   const t = useTranslations()
   const router = useRouter()
   const locale = useLocale()
+  const timeZone = useTimeZone()
   const [{ data, pageCount }] = use(promises)
 
   const [rowAction, setRowAction] =
@@ -198,7 +199,9 @@ export function DynamicImagesTable({
           />
         ),
         cell: ({ row }) => (
-          <span>{formatDate(row.original.createdAt, { locale })}</span>
+          <span>
+            {formatDate(row.original.createdAt, { locale, timeZone })}
+          </span>
         ),
         enableSorting: true,
       },
@@ -244,7 +247,7 @@ export function DynamicImagesTable({
         enableHiding: false,
       },
     ],
-    [t, router, workspaceId, locale],
+    [t, router, workspaceId, locale, timeZone],
   )
 
   const { table } = useDataTable({

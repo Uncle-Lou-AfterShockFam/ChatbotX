@@ -5,7 +5,7 @@ import type { ChannelType } from "@chatbotx.io/database/partials"
 import { formatDate } from "@chatbotx.io/ui/lib/format"
 import Image from "next/image"
 import Link from "next/link"
-import { useLocale, useTranslations } from "next-intl"
+import { useLocale, useTimeZone, useTranslations } from "next-intl"
 import { useEffect } from "react"
 import { useChatStore } from "@/features/chat/store/chat-store-provider"
 import { useWorkspaceId } from "@/hooks/routing"
@@ -13,6 +13,7 @@ import { useWorkspaceId } from "@/hooks/routing"
 export function ConversationInfo() {
   const t = useTranslations()
   const locale = useLocale()
+  const timeZone = useTimeZone()
   const workspaceId = useWorkspaceId()
   const { activePost, loadActivePost, activeConversationId, conversations } =
     useChatStore((state) => state)
@@ -69,6 +70,7 @@ export function ConversationInfo() {
             month: "2-digit",
             year: "numeric",
             locale,
+            timeZone,
           })}
         </span>
         {postLink && (

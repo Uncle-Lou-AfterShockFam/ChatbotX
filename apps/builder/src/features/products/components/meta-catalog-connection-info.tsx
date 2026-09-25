@@ -1,7 +1,7 @@
 import { Badge } from "@chatbotx.io/ui/components/ui/badge"
 import { cn } from "@chatbotx.io/ui/lib/utils"
 import { SiFacebook } from "@icons-pack/react-simple-icons"
-import { useTranslations } from "next-intl"
+import { useLocale, useTimeZone, useTranslations } from "next-intl"
 import { META_BLUE_SURFACE, META_BLUE_TEXT } from "../lib/meta-catalog-brand"
 import type { MetaCatalogConnection } from "./meta-catalog-types"
 
@@ -11,8 +11,13 @@ const STATUS_STYLES: Record<MetaCatalogConnection["status"], string> = {
   invalid: "border-destructive/40 bg-destructive/10 text-destructive",
 }
 
-const formatDate = (value: Date | string | null): string | null =>
-  value ? new Date(value).toLocaleString() : null
+// In the user's locale and zone (next-intl's), never the runtime's: the
+// server renders in UTC and a bare toLocaleString() differs on hydration.
+const formatDate = (
+  value: Date | string | null,
+  { locale, timeZone }: { locale: string; timeZone: string | undefined },
+): string | null =>
+  value ? new Date(value).toLocaleString(locale, { timeZone }) : null
 
 /**
  * Read-only identity of the linked Meta account. Everything here is decided
@@ -25,6 +30,8 @@ export function MetaCatalogConnectionInfo({
   connection: MetaCatalogConnection
 }) {
   const t = useTranslations("metaCatalog")
+  const locale = useLocale()
+  const timeZone = useTimeZone()
 
   const rows: Array<{ key: string; label: string; value: string }> = [
     {
@@ -48,7 +55,8 @@ export function MetaCatalogConnectionInfo({
       key: "tokenExpiresAt",
       label: t("connectionInfo.tokenExpiresAt"),
       value:
-        formatDate(connection.tokenExpiresAt) ?? t("connectionInfo.noExpiry"),
+        formatDate(connection.tokenExpiresAt, { locale, timeZone }) ??
+        t("connectionInfo.noExpiry"),
     },
     {
       // Kept even though the Import tab dates its result too: that callout is
@@ -56,7 +64,9 @@ export function MetaCatalogConnectionInfo({
       // always answers "when was this account last pulled from?".
       key: "lastImportedAt",
       label: t("connectionInfo.lastImportedAt"),
-      value: formatDate(connection.lastImportedAt) ?? t("connectionInfo.never"),
+      value:
+        formatDate(connection.lastImportedAt, { locale, timeZone }) ??
+        t("connectionInfo.never"),
     },
   ]
 

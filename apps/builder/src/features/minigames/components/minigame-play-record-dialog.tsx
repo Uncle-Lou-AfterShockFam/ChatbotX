@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@chatbotx.io/ui/components/ui/dialog"
 import { formatDate } from "@chatbotx.io/ui/lib/format"
-import { useLocale, useTranslations } from "next-intl"
+import { useLocale, useTimeZone, useTranslations } from "next-intl"
 import type { getMinigamePlaysAction } from "../actions/get-minigame-plays.action"
 
 type Plays = NonNullable<
@@ -28,6 +28,7 @@ export function MinigamePlayRecordDialog({
 }) {
   const t = useTranslations()
   const locale = useLocale()
+  const timeZone = useTimeZone()
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -59,6 +60,7 @@ export function MinigamePlayRecordDialog({
               <span className="text-muted-foreground text-sm">
                 {formatDate(play.createdAt, {
                   locale,
+                  timeZone,
                   hour: "2-digit",
                   minute: "2-digit",
                   second: "2-digit",
