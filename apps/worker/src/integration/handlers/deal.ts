@@ -242,7 +242,14 @@ export async function createTask({
         data: {
           title: title.trim().length > 0 ? title : `Task for ${contactId}`,
           description: step.description || null,
-          startAt: daysFromNow(step.startInDays),
+          // a start after the due date is clamped, never refused: a refused
+          // step would log and skip on every run (skeptic HIGH, s197)
+          startAt: daysFromNow(
+            typeof step.dueInDays === "number" &&
+              typeof step.startInDays === "number"
+              ? Math.min(step.startInDays, step.dueInDays)
+              : step.startInDays,
+          ),
           dueAt: daysFromNow(step.dueInDays),
           assigneeId: assignee,
         },

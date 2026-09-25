@@ -47,7 +47,7 @@ describe("deal task steps (s192)", () => {
     ).toMatchObject({ assigneeId: "u1", dueInDays: 3 })
   })
 
-  test("createTask startInDays (s197): bounded like dueInDays, never after it", () => {
+  test("createTask startInDays (s197): bounded like dueInDays (after it = clamped by the worker)", () => {
     const step = createTaskStepDefaultFn()
     expect(step.startInDays).toBeNull()
     for (const bad of [-1, 366, 1.5]) {
@@ -55,13 +55,6 @@ describe("deal task steps (s192)", () => {
         createTaskStepSchema.safeParse({ ...step, startInDays: bad }).success,
       ).toBe(false)
     }
-    const after = createTaskStepSchema.safeParse({
-      ...step,
-      startInDays: 5,
-      dueInDays: 2,
-    })
-    expect(after.success).toBe(false)
-    expect(after.error?.issues[0]?.path).toEqual(["startInDays"])
     expect(
       createTaskStepSchema.parse({ ...step, startInDays: 2, dueInDays: 2 }),
     ).toMatchObject({ startInDays: 2, dueInDays: 2 })
@@ -69,7 +62,6 @@ describe("deal task steps (s192)", () => {
     expect(
       createTaskStepSchema.safeParse({ ...step, startInDays: 9 }).success,
     ).toBe(true)
-    // still a registered action step after the refinement
     expect(
       actionSteps.some((s) => s.safeParse({ ...step, startInDays: 1 }).success),
     ).toBe(true)

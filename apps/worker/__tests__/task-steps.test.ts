@@ -90,6 +90,19 @@ describe("createTask step", () => {
     })
   })
 
+  test("a start after the due date is clamped to the due date: the task is still created", async () => {
+    vi.useFakeTimers({ now: new Date("2026-09-24T00:00:00Z") })
+    try {
+      await createTask(props({ ...step, startInDays: 9, dueInDays: 2 }))
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(m.taskCreate.mock.calls[0][0].data).toMatchObject({
+      startAt: new Date("2026-09-26T00:00:00Z"),
+      dueAt: new Date("2026-09-26T00:00:00Z"),
+    })
+  })
+
   test("no open deal -> logs and skips; no pipeline -> warns and skips", async () => {
     m.findOpen.mockResolvedValue(undefined)
     await createTask(props(step))
