@@ -4532,6 +4532,8 @@
     },
     "outputCustomField": {
       "label": "שדה פלט מותאם אישית",
+      "errorLabel": "On error (status 400 or higher)",
+      "errorHelp": "Optional. Written from the JSON body of a failed response, for example a refusal code, before the error path runs.",
       "javascriptOptional": "אופציונלי. שומר את כל ערך ההחזרה. השתמשו במיפוי נתיבי JSON למעלה כדי לכתוב שדות בודדים.",
       "javascriptDumpLabel": "פלט JSON מלא (אופציונלי)"
     },

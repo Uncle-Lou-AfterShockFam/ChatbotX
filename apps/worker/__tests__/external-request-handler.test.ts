@@ -132,6 +132,24 @@ describe("externalRequest step handler", () => {
     expect(result.errorMessage).toContain("500")
   })
 
+  test("passes errorMapping through and still takes the error edge on >= 400", async () => {
+    mocks.executeAndMap.mockResolvedValue({
+      statusCode: 400,
+      durationMs: 10,
+      responseBody: '{"code":"bad-args"}',
+      responseHeaders: {},
+    })
+    const props = createProps()
+    props.step.errorMapping = [{ jsonPath: "code", outputFieldId: "field-err" }]
+    const result = await externalRequest(props)
+    expect(result).toMatchObject({ status: "error" })
+    expect(mocks.executeAndMap).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorMapping: [{ jsonPath: "code", outputFieldId: "field-err" }],
+      }),
+    )
+  })
+
   test("returns an error result when the request throws", async () => {
     mocks.executeAndMap.mockRejectedValue(new Error("network failure"))
 

@@ -1331,6 +1331,8 @@
     },
     "outputCustomField": {
       "label": "Output Kustom Field",
+      "errorLabel": "On error (status 400 or higher)",
+      "errorHelp": "Optional. Written from the JSON body of a failed response, for example a refusal code, before the error path runs.",
       "javascriptOptional": "Opsional. Menyimpan seluruh nilai kembalian. Gunakan pemetaan jalur JSON di atas untuk menulis field individu.",
       "javascriptDumpLabel": "Output JSON lengkap (opsional)"
     },

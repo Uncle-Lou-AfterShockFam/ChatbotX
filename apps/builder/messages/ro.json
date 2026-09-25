@@ -2179,6 +2179,8 @@
     },
     "outputCustomField": {
       "label": "Câmp personalizat de ieșire",
+      "errorLabel": "On error (status 400 or higher)",
+      "errorHelp": "Optional. Written from the JSON body of a failed response, for example a refusal code, before the error path runs.",
       "javascriptOptional": "Opțional. Salvează întreaga valoare returnată. Folosește maparea căilor JSON de mai sus pentru a scrie câmpuri individuale.",
       "javascriptDumpLabel": "Ieșire JSON completă (opțional)"
     },

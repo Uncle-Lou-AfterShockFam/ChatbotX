@@ -1331,6 +1331,8 @@
     },
     "outputCustomField": {
       "label": "Benutzerdefiniertes Ausgabefeld",
+      "errorLabel": "On error (status 400 or higher)",
+      "errorHelp": "Optional. Written from the JSON body of a failed response, for example a refusal code, before the error path runs.",
       "javascriptOptional": "Optional. Speichert den gesamten Rückgabewert. Über die JSON-Pfadzuordnung oben einzelne Felder schreiben.",
       "javascriptDumpLabel": "Vollständige JSON-Ausgabe (optional)"
     },

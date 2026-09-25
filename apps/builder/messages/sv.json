@@ -2506,6 +2506,8 @@
     },
     "outputCustomField": {
       "label": "Anpassat utdatafält",
+      "errorLabel": "On error (status 400 or higher)",
+      "errorHelp": "Optional. Written from the JSON body of a failed response, for example a refusal code, before the error path runs.",
       "javascriptOptional": "Valfritt. Sparar hela returvärdet. Använd JSON-sökvägsmappningen ovan för att skriva enskilda fält.",
       "javascriptDumpLabel": "Fullständig JSON-utdata (valfritt)"
     },

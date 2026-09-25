@@ -613,6 +613,8 @@
     },
     "outputCustomField": {
       "label": "輸出自訂欄位",
+      "errorLabel": "On error (status 400 or higher)",
+      "errorHelp": "Optional. Written from the JSON body of a failed response, for example a refusal code, before the error path runs.",
       "javascriptOptional": "選用。儲存整個回傳值。使用上方的 JSON 路徑對應來寫入個別欄位。",
       "javascriptDumpLabel": "完整 JSON 輸出（選用）"
     },

@@ -96,6 +96,11 @@ const ExternalRequestDialog = ({ parentName }: { parentName: string }) => {
     name: "mapping",
   })
 
+  const errorRows = useFieldArray({
+    control: form.control,
+    name: "errorMapping",
+  })
+
   const { activeTargetIndex, setActiveTargetIndex } = useJsonSourceContext()
 
   useEffect(() => {
@@ -108,6 +113,9 @@ const ExternalRequestDialog = ({ parentName }: { parentName: string }) => {
     append({ jsonPath: "", outputFieldId: "" })
     setActiveTargetIndex(fields.length)
   }
+
+  const handleAppendErrorMapping = () =>
+    errorRows.append({ jsonPath: "", outputFieldId: "" })
 
   const handleRemoveMapping = (index: number) => {
     remove(index)
@@ -135,6 +143,7 @@ const ExternalRequestDialog = ({ parentName }: { parentName: string }) => {
       headers: data.headers,
       body: data.body,
       mapping: data.mapping,
+      errorMapping: data.errorMapping,
     })
     setOpen(false)
   }
@@ -248,63 +257,29 @@ const ExternalRequestDialog = ({ parentName }: { parentName: string }) => {
               <Label className="mb-2">
                 {t("fields.outputCustomField.label")}
               </Label>
-              <div className="flex w-full flex-col gap-y-4">
-                {fields.map((field, index) => (
-                  <div
-                    className="flex w-full items-center gap-x-2"
-                    key={field.id}
-                  >
-                    <Button
-                      aria-label={t("fields.jsonPath.targetThisRow")}
-                      className={cn(
-                        "text-muted-foreground",
-                        activeTargetIndex === index && "text-primary",
-                      )}
-                      onClick={() => setActiveTargetIndex(index)}
-                      size="icon"
-                      title={t("fields.jsonPath.targetThisRow")}
-                      type="button"
-                      variant="ghost"
-                    >
-                      <CrosshairIcon className="h-4 w-4" />
-                    </Button>
-                    <div className="w-[40%]">
-                      <InputField
-                        name={`mapping.${index}.jsonPath`}
-                        onFocus={() => setActiveTargetIndex(index)}
-                        placeholder={t("fields.jsonPath.placeholder")}
-                      />
-                    </div>
-                    <div className="flex h-[36px] items-center justify-center">
-                      <ArrowRight className="rtl:rotate-180" size={24} />
-                    </div>
-                    <div className="w-[40%]">
-                      <CustomFieldSelect
-                        label=""
-                        name={`mapping.${index}.outputFieldId`}
-                      />
-                    </div>
-                    <Button
-                      className="text-destructive text-sm"
-                      onClick={() => handleRemoveMapping(index)}
-                      size="icon"
-                      type="button"
-                      variant="ghost"
-                    >
-                      <XIcon className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  className="w-full"
-                  onClick={handleAppendMapping}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  {t("actions.add")}
-                </Button>
-              </div>
+              <MappingRows
+                activeTargetIndex={activeTargetIndex}
+                name="mapping"
+                onAppend={handleAppendMapping}
+                onRemove={handleRemoveMapping}
+                onTarget={setActiveTargetIndex}
+                rowIds={fields.map((field) => field.id)}
+              />
+            </div>
+
+            <div>
+              <Label className="mb-1">
+                {t("fields.outputCustomField.errorLabel")}
+              </Label>
+              <p className="mb-2 text-muted-foreground text-xs">
+                {t("fields.outputCustomField.errorHelp")}
+              </p>
+              <MappingRows
+                name="errorMapping"
+                onAppend={handleAppendErrorMapping}
+                onRemove={errorRows.remove}
+                rowIds={errorRows.fields.map((field) => field.id)}
+              />
             </div>
 
             <DialogFooter>
@@ -330,6 +305,86 @@ const ExternalRequestDialog = ({ parentName }: { parentName: string }) => {
         </Form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+type MappingRowsProps = {
+  name: "mapping" | "errorMapping"
+  rowIds: string[]
+  onAppend: () => void
+  onRemove: (index: number) => void
+  /** The success mapping can fill a row from the Test Now JSON; the error one cannot. */
+  onTarget?: (index: number) => void
+  activeTargetIndex?: number | null
+}
+
+/** JSON path -> custom field rows, shared by the success and error mappings. */
+const MappingRows = ({
+  name,
+  rowIds,
+  onAppend,
+  onRemove,
+  onTarget,
+  activeTargetIndex,
+}: MappingRowsProps) => {
+  const t = useTranslations()
+  return (
+    <div className="flex w-full flex-col gap-y-4">
+      {rowIds.map((rowId, index) => (
+        <div className="flex w-full items-center gap-x-2" key={rowId}>
+          {onTarget && (
+            <Button
+              aria-label={t("fields.jsonPath.targetThisRow")}
+              className={cn(
+                "text-muted-foreground",
+                activeTargetIndex === index && "text-primary",
+              )}
+              onClick={() => onTarget(index)}
+              size="icon"
+              title={t("fields.jsonPath.targetThisRow")}
+              type="button"
+              variant="ghost"
+            >
+              <CrosshairIcon className="h-4 w-4" />
+            </Button>
+          )}
+          <div className={onTarget ? "w-[40%]" : "w-[45%]"}>
+            <InputField
+              name={`${name}.${index}.jsonPath`}
+              onFocus={onTarget ? () => onTarget(index) : undefined}
+              placeholder={t("fields.jsonPath.placeholder")}
+            />
+          </div>
+          <div className="flex h-[36px] items-center justify-center">
+            <ArrowRight className="rtl:rotate-180" size={24} />
+          </div>
+          <div className={onTarget ? "w-[40%]" : "w-[45%]"}>
+            <CustomFieldSelect
+              label=""
+              name={`${name}.${index}.outputFieldId`}
+            />
+          </div>
+          <Button
+            className="text-destructive text-sm"
+            onClick={() => onRemove(index)}
+            size="icon"
+            type="button"
+            variant="ghost"
+          >
+            <XIcon className="h-4 w-4" />
+          </Button>
+        </div>
+      ))}
+      <Button
+        className="w-full"
+        onClick={onAppend}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        {t("actions.add")}
+      </Button>
+    </div>
   )
 }
 

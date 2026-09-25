@@ -1331,6 +1331,8 @@
     },
     "outputCustomField": {
       "label": "Output Brugerdefineret Felt",
+      "errorLabel": "On error (status 400 or higher)",
+      "errorHelp": "Optional. Written from the JSON body of a failed response, for example a refusal code, before the error path runs.",
       "javascriptOptional": "Valgfri. Gemmer hele returværdien. Brug JSON-stikortlægningen ovenfor til at skrive enkelte felter.",
       "javascriptDumpLabel": "Fuld JSON-output (valgfri)"
     },

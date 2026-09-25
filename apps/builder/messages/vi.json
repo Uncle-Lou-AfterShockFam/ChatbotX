@@ -1446,6 +1446,8 @@
     },
     "outputCustomField": {
       "label": "Trường tùy chỉnh đầu ra",
+      "errorLabel": "On error (status 400 or higher)",
+      "errorHelp": "Optional. Written from the JSON body of a failed response, for example a refusal code, before the error path runs.",
       "javascriptOptional": "Tùy chọn. Lưu toàn bộ giá trị trả về. Dùng ánh xạ đường dẫn JSON ở trên để ghi từng trường.",
       "javascriptDumpLabel": "Toàn bộ JSON đầu ra (tùy chọn)"
     },
