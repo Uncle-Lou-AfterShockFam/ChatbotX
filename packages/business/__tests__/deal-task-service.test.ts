@@ -189,6 +189,7 @@ vi.mock("@chatbotx.io/database/schema", () => ({
     assigneeId: "assigneeId",
     createdAt: "createdAt",
     dueAt: "dueAt",
+    completedAt: "completedAt",
     templateId: "templateId",
   },
   dealTaskTemplateModel: {
@@ -257,9 +258,12 @@ vi.mock("../src/notification/service", () => ({
   notificationService: { notify: (...a: unknown[]) => notify(...a) },
 }))
 
-const { dealTaskService, DEPENDENCY_WALK_STEP_CAP } = await import(
-  "../src/deal-task/service"
-)
+const {
+  dealTaskService,
+  DEPENDENCY_WALK_STEP_CAP,
+  decodeMyTasksCursor,
+  encodeMyTasksCursor,
+} = await import("../src/deal-task/service")
 const { dealTaskTemplateService } = await import("../src/deal-task/templates")
 const { withSchedule, downstreamOpen } = await import(
   "../src/deal-task/schedule"
@@ -944,6 +948,157 @@ describe("s197 dealTaskService.listInRange (task calendar)", () => {
         viewer: { userId: "u-1", permissions: {} },
       }),
     ).toEqual({ data: [], truncated: false })
+    expect(m.state.calls).toEqual([])
+  })
+})
+
+describe("s198 dealTaskService.listMine (My tasks)", () => {
+  const ME = { userId: "u-1", permissions: {} }
+  const KEY = "2026-10-02 00:00:00.123456+00"
+  const client = () =>
+    import("@chatbotx.io/database/client") as unknown as Promise<{
+      eq: ReturnType<typeof vi.fn>
+      sql: ReturnType<typeof vi.fn>
+    }>
+  const row = (i: number, sortKey: string | null = KEY) => ({
+    task: TASK({ id: String(1000 + i), assigneeId: "u-1" }),
+    dealTitle: "Roof",
+    pipelineId: "p-1",
+    pipelineName: "S197",
+    openSuccessors: 0,
+    sortKey,
+  })
+  const b64 = (v: unknown) =>
+    Buffer.from(JSON.stringify(v)).toString("base64url")
+
+  test("no signed-in user is a 422 before any query (never everyone's tasks)", async () => {
+    for (const viewer of [
+      null,
+      undefined,
+      { userId: "", permissions: {} },
+      { userId: 7, permissions: {} },
+    ]) {
+      await expect(
+        dealTaskService.listMine({ workspaceId: WS, viewer: viewer as never }),
+      ).rejects.toMatchObject({ code: "validation", field: "viewer" })
+    }
+    expect(m.state.calls).toEqual([])
+  })
+
+  test("the assignee is always the viewer; limit+1 rows = a page + a cursor bound to the status", async () => {
+    m.state.selects.push(Array.from({ length: 3 }, (_, i) => row(i)))
+    const out = await dealTaskService.listMine({
+      workspaceId: WS,
+      viewer: ME,
+      limit: 2,
+    })
+    expect(out.data.map((r) => r.id)).toEqual(["1000", "1001"])
+    expect(out.data[0]).toMatchObject({ dealTitle: "Roof", openSuccessors: 0 })
+    expect(out.data[0]).not.toHaveProperty("sortKey")
+    expect(decodeMyTasksCursor(out.nextCursor as string, "open")).toEqual({
+      s: "open",
+      k: KEY,
+      i: "1001",
+    })
+    const { eq } = await client()
+    expect(eq).toHaveBeenCalledWith("assigneeId", "u-1")
+    expect(eq).toHaveBeenCalledWith("status", "open")
+  })
+
+  test("the last page has no cursor; done filters on done", async () => {
+    m.state.selects.push([row(0)])
+    const out = await dealTaskService.listMine({
+      workspaceId: WS,
+      viewer: ME,
+      status: "done",
+    })
+    expect(out.nextCursor).toBeNull()
+    const { eq } = await client()
+    expect(eq).toHaveBeenCalledWith("status", "done")
+  })
+
+  test("a cursor round-trips into the keyset predicate, microseconds intact; an undated cursor too", async () => {
+    const { sql } = await client()
+    for (const k of [KEY, null]) {
+      sql.mockClear()
+      m.state.selects.push([row(5, k)])
+      const cursor = encodeMyTasksCursor({ s: "open", k, i: "1004" })
+      await dealTaskService.listMine({ workspaceId: WS, viewer: ME, cursor })
+      const bound = sql.mock.calls.flatMap((c) => c.slice(1))
+      expect(bound).toContain("1004")
+      if (k) {
+        expect(bound).toContain(k)
+      }
+    }
+  })
+
+  test("limit is clamped to 1..100", async () => {
+    m.state.selects.push(Array.from({ length: 150 }, (_, i) => row(i)))
+    const big = await dealTaskService.listMine({
+      workspaceId: WS,
+      viewer: ME,
+      limit: 1000,
+    })
+    expect(big.data).toHaveLength(100)
+    m.state.selects.push([row(0), row(1)])
+    const tiny = await dealTaskService.listMine({
+      workspaceId: WS,
+      viewer: ME,
+      limit: 0,
+    })
+    expect(tiny.data).toHaveLength(1)
+    expect(tiny.nextCursor).not.toBeNull()
+  })
+
+  test("a forged, foreign-status or malformed cursor is a typed 422 before any query", async () => {
+    const bad = [
+      "!!!",
+      b64([]),
+      b64(null),
+      b64("x"),
+      b64({ s: "done", k: KEY, i: "1" }),
+      b64({ s: "open", k: KEY, i: "1", extra: 1 }),
+      b64({ s: "open", k: "yesterday", i: "1" }),
+      b64({ s: "open", k: "2026-10-02'; drop table", i: "1" }),
+      b64({ s: "open", k: KEY, i: "1 or 1=1" }),
+      b64({ s: "open", k: KEY, i: 1 }),
+      b64({ s: "open", k: KEY }),
+      "a".repeat(300),
+    ]
+    for (const cursor of bad) {
+      await expect(
+        dealTaskService.listMine({ workspaceId: WS, viewer: ME, cursor }),
+      ).rejects.toMatchObject({ data: { reason: "invalidCursor" } })
+    }
+    expect(m.state.calls).toEqual([])
+  })
+
+  test("fuzz: random cursor strings never reach the query", async () => {
+    const alphabet =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+    let seed = 198
+    const rand = () => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648
+      return seed / 2_147_483_648
+    }
+    for (let n = 0; n < 200; n++) {
+      const len = 1 + Math.floor(rand() * 80)
+      const cursor = Array.from(
+        { length: len },
+        () => alphabet[Math.floor(rand() * alphabet.length)],
+      ).join("")
+      await expect(
+        dealTaskService.listMine({ workspaceId: WS, viewer: ME, cursor }),
+      ).rejects.toMatchObject({ data: { reason: "invalidCursor" } })
+    }
+    expect(m.state.calls).toEqual([])
+  })
+
+  test("a viewer who can see no pipeline gets nothing, without a query", async () => {
+    visibleIds.mockResolvedValueOnce([])
+    expect(
+      await dealTaskService.listMine({ workspaceId: WS, viewer: ME }),
+    ).toEqual({ data: [], nextCursor: null })
     expect(m.state.calls).toEqual([])
   })
 })

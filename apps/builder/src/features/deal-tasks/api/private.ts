@@ -13,6 +13,7 @@ import {
   addTaskTemplateDependencyRequest,
   completeDealTaskRequest,
   createDealTaskRequest,
+  listMyTasksQuery,
   listTasksInRangeQuery,
   updateDealTaskRequest,
   upsertDealTaskTemplateRequest,
@@ -334,7 +335,34 @@ const privateListTasksInRangeAPI = authorizedAPI
       }),
   )
 
+const privateListMyTasksAPI = authorizedAPI
+  .route({
+    method: "GET",
+    path: "/workspaces/{workspaceId}/tasks/mine",
+    summary: "Tasks assigned to the caller, any date, keyset-paged",
+    tags: ["Deals"],
+  })
+  .input(listMyTasksQuery)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
+  .output(
+    z.object({
+      data: z.array(dealTaskCalendarResource),
+      nextCursor: z.string().nullable(),
+    }),
+  )
+  .handler(
+    async ({ input, context }) =>
+      await dealTaskService.listMine({
+        workspaceId: input.workspaceId,
+        status: input.status ?? null,
+        cursor: input.cursor ?? null,
+        limit: input.limit,
+        viewer: viewerFromContext(context),
+      }),
+  )
+
 export const privateDealTasksAPI = {
+  privateListMyTasksAPI,
   privateListTasksInRangeAPI,
   privateListDealTasksAPI,
   privateCreateDealTaskAPI,

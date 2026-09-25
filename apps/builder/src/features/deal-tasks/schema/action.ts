@@ -119,3 +119,26 @@ export const listTasksInRangeQuery = z.object({
   status: z.enum(["open", "done"]).optional(),
   pipelineId: zodBigintAsString().optional(),
 })
+
+/**
+ * `GET /workspaces/{workspaceId}/tasks/mine` ("My tasks", s198). Closed:
+ * the assignee is always the caller, so an `assigneeId` is a 400, not a
+ * silently ignored key.
+ */
+export const listMyTasksQuery = z
+  .object({
+    workspaceId: zodBigintAsString(),
+    status: z
+      .enum(["open", "done"])
+      .optional()
+      .describe(
+        "`open` (default) = soonest due first; `done` = latest completed first.",
+      ),
+    cursor: z
+      .string()
+      .max(256)
+      .optional()
+      .describe("`nextCursor` of the previous page."),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .strict()

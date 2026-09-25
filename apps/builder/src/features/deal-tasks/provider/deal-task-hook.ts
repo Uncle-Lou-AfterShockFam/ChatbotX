@@ -1,4 +1,8 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query"
 import { useMemo } from "react"
 import { orpc } from "@/lib/orpc/query"
 
@@ -27,6 +31,20 @@ export const useTasksInRange = (
   useQuery(
     orpc.dealTasksAPI.privateListTasksInRangeAPI.queryOptions({
       input: { workspaceId, ...query },
+    }),
+  )
+
+/** "My tasks" (s198): the caller's tasks, keyset-paged. */
+export const useMyTasks = (workspaceId: string, status: "open" | "done") =>
+  useInfiniteQuery(
+    orpc.dealTasksAPI.privateListMyTasksAPI.infiniteOptions({
+      input: (cursor: string | null) => ({
+        workspaceId,
+        status,
+        cursor: cursor ?? undefined,
+      }),
+      initialPageParam: null,
+      getNextPageParam: (last) => last.nextCursor,
     }),
   )
 
