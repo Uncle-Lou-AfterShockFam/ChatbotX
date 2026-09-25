@@ -1715,13 +1715,11 @@ describe("dealService.listBoard card counts (s198)", () => {
     expect(m.state.groupByCalls).toBe(0)
   })
 
-  test("the count queries carry the board's own Deal predicates, incl. the assigned-only owner", async () => {
-    const { eq } = (await import(
+  test("the count queries use the board's own filter (one source), incl. the assigned-only owner", async () => {
+    const { relationsFilterToSQL } = (await import(
       "@chatbotx.io/database/client"
-    )) as unknown as {
-      eq: ReturnType<typeof vi.fn>
-    }
-    eq.mockClear()
+    )) as unknown as { relationsFilterToSQL: ReturnType<typeof vi.fn> }
+    relationsFilterToSQL.mockClear()
     m.state.boardDeals = [deal("d-1", "s-1")]
     await dealService.listBoard({
       workspaceId: WS,
@@ -1736,13 +1734,30 @@ describe("dealService.listBoard card counts (s198)", () => {
         },
       } as never,
     })
-    const bound = eq.mock.calls.map((c) => c[1])
-    expect(bound).toEqual(
-      expect.arrayContaining([WS, "pipe-1", "open", "user-1"]),
-    )
-    expect(m.state.lastListWhere).toMatchObject({
-      ownerId: "user-1",
+    expect(m.state.lastListWhere).toEqual({
+      workspaceId: WS,
+      pipelineId: "pipe-1",
       status: "open",
+      ownerId: "user-1",
     })
+    // the SAME object the card list was filtered by
+    expect(relationsFilterToSQL.mock.calls.at(-1)?.[1]).toBe(
+      m.state.lastListWhere,
+    )
+  })
+
+  test("without a caller tx the board reads one read-only repeatable-read snapshot", async () => {
+    const { db } = (await import(
+      "@chatbotx.io/database/client"
+    )) as unknown as {
+      db: { transaction: (...a: unknown[]) => unknown }
+    }
+    const spy = vi.spyOn(db, "transaction")
+    await dealService.listBoard({ workspaceId: WS, pipelineId: "pipe-1" })
+    expect(spy).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: "repeatable read",
+      accessMode: "read only",
+    })
+    spy.mockRestore()
   })
 })

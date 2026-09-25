@@ -8,7 +8,7 @@ import {
   UserIcon,
 } from "lucide-react"
 import { useFormatter, useTranslations } from "next-intl"
-import type { BoardDealResource, DealResource } from "./schema/resource"
+import type { BoardDealResource } from "./schema/resource"
 
 export function formatDealValue(
   value: string | null,
@@ -48,7 +48,7 @@ export function DealCardContent({
   deal,
   ownerName,
 }: {
-  deal: DealResource & Partial<DealCardCounts>
+  deal: BoardDealResource
   ownerName?: string | null
 }) {
   const t = useTranslations()
@@ -106,11 +106,11 @@ type DealCardCounts = Pick<
 >
 
 /** Open tasks (red when any is overdue) and comments; a zero count shows nothing (s198). */
-function DealCountChips({ deal }: { deal: Partial<DealCardCounts> }) {
+function DealCountChips({ deal }: { deal: DealCardCounts }) {
   const t = useTranslations()
-  const open = deal.openTaskCount ?? 0
-  const overdue = deal.overdueTaskCount ?? 0
-  const comments = deal.commentCount ?? 0
+  const open = deal.openTaskCount
+  const overdue = deal.overdueTaskCount
+  const comments = deal.commentCount
   const tasksLabel =
     overdue > 0
       ? t("deals.card.tasksOverdue", { count: open, overdue })

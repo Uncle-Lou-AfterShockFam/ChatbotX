@@ -257,7 +257,12 @@ class DealService extends BaseService {
     return { data, pageCount }
   }
 
-  /** Every stage of the pipeline with its deals ordered by `position`. */
+  /**
+   * Every stage of the pipeline with its deals ordered by `position`, each
+   * with its card counts. Without a caller `tx` it reads ONE repeatable-read
+   * snapshot, so a deal changing between the list and the counts can never
+   * show a card with zeroed counts (s198 review).
+   */
   async listBoard(props: {
     workspaceId: string
     pipelineId: string
@@ -265,7 +270,13 @@ class DealService extends BaseService {
     viewer?: DealViewer | null
     tx?: DatabaseClient
   }): Promise<BoardColumn[]> {
-    const { workspaceId, pipelineId, viewer, tx = db } = props
+    if (!props.tx) {
+      return await db.transaction(
+        async (tx) => await this.listBoard({ ...props, tx }),
+        { isolationLevel: "repeatable read", accessMode: "read only" },
+      )
+    }
+    const { workspaceId, pipelineId, viewer, tx } = props
     const status = props.status ?? "all"
     const pipeline = await pipelineService.find({
       workspaceId,
@@ -273,29 +284,22 @@ class DealService extends BaseService {
       viewer,
       tx,
     })
-    const ownerId = viewer ? viewerOwnerFilter(viewer) : undefined
+    const where = {
+      workspaceId,
+      pipelineId,
+      status: status === "all" ? undefined : status,
+      ownerId: viewer ? viewerOwnerFilter(viewer) : undefined,
+    }
     const deals = await tx.query.dealModel.findMany({
-      where: {
-        workspaceId,
-        pipelineId,
-        status: status === "all" ? undefined : status,
-        ownerId,
-      },
+      where,
       orderBy: { position: "asc", createdAt: "asc" },
     })
     const counts =
       deals.length > 0
         ? await this.boardCounts({
             tx,
-            // the same Deal predicates as the board query above
-            dealWhere: and(
-              eq(dealModel.workspaceId, workspaceId),
-              eq(dealModel.pipelineId, pipelineId),
-              status === "all" ? undefined : eq(dealModel.status, status),
-              ownerId === undefined
-                ? undefined
-                : eq(dealModel.ownerId, ownerId),
-            ),
+            // the board's own filter, as SQL (one source for both reads)
+            dealWhere: relationsFilterToSQL(dealModel, where),
           })
         : new Map<string, DealCardCounts>()
     const byStage = new Map<string, BoardDeal[]>()
