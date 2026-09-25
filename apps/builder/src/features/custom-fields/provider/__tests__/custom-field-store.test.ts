@@ -105,7 +105,7 @@ describe("ensureBotFieldsLoaded", () => {
 })
 
 describe("getAllCustomFields", () => {
-  test("fetches custom fields for the store's workspaceId with maxPerPage", async () => {
+  test("fetches custom fields for the store's workspaceId, one id-ordered page", async () => {
     mocks.privateListCustomFieldsAPI.mockResolvedValueOnce({
       data: [{ id: "1", name: "Loyalty Points" }],
     })
@@ -116,7 +116,9 @@ describe("getAllCustomFields", () => {
 
     expect(mocks.privateListCustomFieldsAPI).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
-      perPage: 999_999_999,
+      page: 1,
+      perPage: 50,
+      sort: [{ id: "id", desc: false }],
     })
     expect(store.getState().customFields).toEqual([
       { id: "1", name: "Loyalty Points" },
@@ -203,5 +205,70 @@ describe("initialize", () => {
     await store.getState().initialize()
 
     expect(store.getState().initialized).toBe(true)
+  })
+})
+
+describe("paging past the server's 50-row cap (s201)", () => {
+  const rows = (from: number, to: number) =>
+    Array.from({ length: to - from }, (_, i) => ({
+      id: String(from + i),
+      name: `f${from + i}`,
+    }))
+  // The server caps a page at 50, whatever perPage asks for.
+  const pagedServer = (all: { id: string; name: string }[]) =>
+    vi.fn((input: { page?: number; perPage?: number }) => {
+      const size = Math.min(50, input.perPage ?? 50)
+      const start = ((input.page ?? 1) - 1) * size
+      return Promise.resolve({ data: all.slice(start, start + size) })
+    })
+
+  test("custom fields: all 120 rows land, not just the first 50", async () => {
+    const all = rows(1, 121)
+    mocks.privateListCustomFieldsAPI.mockImplementation(pagedServer(all))
+    const store = createCustomFieldStore({ workspaceId: "workspace-1" })
+
+    await store.getState().getAllCustomFields()
+
+    expect(store.getState().customFields).toHaveLength(120)
+    expect(store.getState().customFields.at(-1)?.id).toBe("120")
+    expect(mocks.privateListCustomFieldsAPI).toHaveBeenCalledTimes(3)
+  })
+
+  test("exactly 100 rows: stops on the empty third page", async () => {
+    mocks.privateListCustomFieldsAPI.mockImplementation(
+      pagedServer(rows(1, 101)),
+    )
+    const store = createCustomFieldStore({ workspaceId: "workspace-1" })
+
+    await store.getState().getAllCustomFields()
+
+    expect(store.getState().customFields).toHaveLength(100)
+    expect(mocks.privateListCustomFieldsAPI).toHaveBeenCalledTimes(3)
+  })
+
+  test("bot fields page the same way; a row repeated across pages is kept once", async () => {
+    const all = rows(1, 61)
+    const server = pagedServer(all)
+    mocks.privateListBotFieldsAPI.mockImplementation(async (input) => {
+      const page = await server(input)
+      // A row shifting between pages must not appear twice.
+      return input.page === 2 ? { data: [all[49], ...page.data] } : page
+    })
+    const store = createCustomFieldStore({ workspaceId: "workspace-1" })
+
+    await store.getState().ensureBotFieldsLoaded()
+
+    expect(store.getState().botFields).toHaveLength(60)
+  })
+
+  test("a runaway server is bounded by the page cap", async () => {
+    mocks.privateListCustomFieldsAPI.mockImplementation(async (input) => ({
+      data: rows((input.page - 1) * 50 + 1, input.page * 50 + 1),
+    }))
+    const store = createCustomFieldStore({ workspaceId: "workspace-1" })
+
+    await store.getState().getAllCustomFields()
+
+    expect(mocks.privateListCustomFieldsAPI).toHaveBeenCalledTimes(40)
   })
 })
