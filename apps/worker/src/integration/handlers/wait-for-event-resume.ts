@@ -84,18 +84,28 @@ async function resumeOnTimeout(
  * A retried event job must never resume a wait CREATED AFTER the event fired:
  * the contact-wide lookup runs fresh on every attempt, so without this a
  * BullMQ retry of an old `tagApplied` would satisfy a brand-new wait for the
- * same tag. Fails closed on a job enqueued before `emittedAt` was carried.
+ * same tag. The instant is the emitter's `emittedAt`; a job enqueued by a
+ * pre-deploy emitter has none, so its BullMQ enqueue timestamp (kept across
+ * retries) stands in. Neither = no usable instant (null) = fail closed.
  */
-export const eventPrecedesRow = (
+export const eventInstant = (
   event: Pick<EventPayload, "emittedAt">,
-  row: Pick<SmartDelayRow, "createdAt">,
-): boolean => {
-  if (typeof event.emittedAt !== "string") {
-    return false
+  parentJob?: Pick<Job, "timestamp">,
+): number | null => {
+  if (typeof event.emittedAt === "string") {
+    const emittedAt = Date.parse(event.emittedAt)
+    return Number.isFinite(emittedAt) ? emittedAt : null
   }
-  const emittedAt = Date.parse(event.emittedAt)
-  return Number.isFinite(emittedAt) && row.createdAt.getTime() <= emittedAt
+  const enqueuedAt = parentJob?.timestamp
+  return typeof enqueuedAt === "number" && Number.isFinite(enqueuedAt)
+    ? enqueuedAt
+    : null
 }
+
+export const eventPrecedesRow = (
+  instant: number | null,
+  row: Pick<SmartDelayRow, "createdAt">,
+): boolean => instant !== null && row.createdAt.getTime() <= instant
 
 /** Does this row wait for the event that just landed? */
 export const eventMatchesSpec = (
@@ -131,15 +141,18 @@ async function resumeOnEvent(
     workspaceId: event.workspaceId,
     contactId: event.contactId,
   })
+  const instant = eventInstant(event, parentJob)
   for (const row of rows) {
     const spec = waitForEventSpecSchema.safeParse(row.eventSpec)
-    if (
-      !(
-        spec.success &&
-        eventMatchesSpec(spec.data, event) &&
-        eventPrecedesRow(event, row)
+    if (!(spec.success && eventMatchesSpec(spec.data, event))) {
+      continue
+    }
+    if (!eventPrecedesRow(instant, row)) {
+      // Silent drops hide a cutover gap: say which wait was left to its timeout.
+      logger.warn(
+        { smartDelayId: row.id, instant, createdAt: row.createdAt },
+        "waitForEvent: event predates the wait (or carries no instant); left to its timeout",
       )
-    ) {
       continue
     }
     const wasScheduled = row.status === smartDelayStatuses.enum.scheduled

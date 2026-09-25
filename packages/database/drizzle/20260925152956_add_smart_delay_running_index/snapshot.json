@@ -1,9 +1,9 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "c0d27a32-e204-48bb-bfd7-11f14ac3bb0e",
+  "id": "cb0baa23-6e9b-4b84-9e60-27c23a5a12bf",
   "prevIds": [
-    "6117689b-de6b-4ff3-acdb-3363c7b0525e"
+    "19f9f875-a05e-468e-abe9-b3b534316bbb"
   ],
   "ddl": [
     {
@@ -34489,13 +34489,6 @@
       "nameExplicit": true,
       "columns": [
         {
-          "value": "status",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
           "value": "claimedAt",
           "isExpression": false,
           "asc": true,
@@ -34504,11 +34497,11 @@
         }
       ],
       "isUnique": false,
-      "where": null,
+      "where": "\"status\" = 'running'",
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "ContactOnSmartDelay_status_claimedAt_idx",
+      "name": "ContactOnSmartDelay_running_claimedAt_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "ContactOnSmartDelay"

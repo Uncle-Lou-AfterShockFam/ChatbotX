@@ -90,12 +90,13 @@ export const contactOnSmartDelayModel = pgTable(
       table.status,
       table.triggerAt,
     ),
-    // Stuck-running sweep.
-    index("ContactOnSmartDelay_status_claimedAt_idx").using(
-      "btree",
-      table.status,
-      table.claimedAt,
-    ),
+    // Stuck-running sweep: only the (few) claimed rows. Partial, so it is
+    // tiny and its build never scans the table; it lives in its own
+    // migration because a new enum value cannot be used in the transaction
+    // that adds it.
+    index("ContactOnSmartDelay_running_claimedAt_idx")
+      .using("btree", table.claimedAt)
+      .where(sql`${table.status} = 'running'`),
     // waitForEvent lookup on an incoming tag / custom-field event.
     index(
       "ContactOnSmartDelay_workspaceId_type_status_contactInboxId_idx",

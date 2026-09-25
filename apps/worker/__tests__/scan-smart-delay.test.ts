@@ -121,6 +121,8 @@ describe("scanSmartDelay", () => {
       {
         id: "dead-worker-row",
         triggerAt: new Date("2026-07-15T23:30:00.000Z"),
+        nodeId: "event-node",
+        claimGeneration: 3,
       },
     ])
     smartDelayService.claimDueRows.mockResolvedValueOnce([])
@@ -142,6 +144,14 @@ describe("scanSmartDelay", () => {
     })
     expect(integrationQueueRemove.mock.invocationCallOrder[0]).toBeLessThan(
       smartDelayService.resetStuckRunning.mock.invocationCallOrder[0],
+    )
+    expect(loggerWarn).toHaveBeenCalledWith(
+      {
+        rows: [
+          { id: "dead-worker-row", nodeId: "event-node", claimGeneration: 3 },
+        ],
+      },
+      "Stuck running smart delay rows reset (claimed, never finished)",
     )
     expect(loggerWarn).toHaveBeenCalledWith(
       { count: 1 },

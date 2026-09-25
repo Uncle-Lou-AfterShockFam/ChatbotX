@@ -101,10 +101,24 @@ const sweepStuckRunning = async (olderThan: Date): Promise<void> => {
       ),
     )
 
-    swept += await smartDelayService.resetStuckRunning({
+    const reset = await smartDelayService.resetStuckRunning({
       ids: stuckRows.map((row) => row.id),
       claimedAtBefore: olderThan,
     })
+    swept += reset
+    if (reset > 0) {
+      // Enough to reconstruct an incident: which rows, which edge, which claim.
+      logger.warn(
+        {
+          rows: stuckRows.map(({ id, nodeId, claimGeneration }) => ({
+            id,
+            nodeId,
+            claimGeneration,
+          })),
+        },
+        "Stuck running smart delay rows reset (claimed, never finished)",
+      )
+    }
 
     if (stuckRows.length < SCAN_BATCH_SIZE) {
       break

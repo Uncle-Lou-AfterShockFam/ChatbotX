@@ -446,12 +446,17 @@ class SmartDelayService extends BaseService {
     tx?: DatabaseClient
     olderThan: Date
     limit: number
-  }): Promise<Pick<SmartDelayRow, "id" | "triggerAt">[]> {
+  }): Promise<
+    Pick<SmartDelayRow, "id" | "triggerAt" | "nodeId" | "claimGeneration">[]
+  > {
     const { tx = db, olderThan, limit } = props
     return await tx
       .select({
         id: contactOnSmartDelayModel.id,
         triggerAt: contactOnSmartDelayModel.triggerAt,
+        // For the sweep log: which edge the recovered row will resume on.
+        nodeId: contactOnSmartDelayModel.nodeId,
+        claimGeneration: contactOnSmartDelayModel.claimGeneration,
       })
       .from(contactOnSmartDelayModel)
       .where(
@@ -586,9 +591,13 @@ class SmartDelayService extends BaseService {
       .where(
         and(
           eq(contactOnSmartDelayModel.workspaceId, workspaceId),
+          // running too: a freeze / stop must also cancel a claimed row, or
+          // the stuck-running sweep would later resurrect it for a stopped
+          // contact. The in-flight run's finishClaimedRun CAS then just fails.
           inArray(contactOnSmartDelayModel.status, [
             smartDelayStatuses.enum.pending,
             smartDelayStatuses.enum.scheduled,
+            smartDelayStatuses.enum.running,
           ]),
         ),
       )
@@ -635,6 +644,7 @@ class SmartDelayService extends BaseService {
           inArray(contactOnSmartDelayModel.status, [
             smartDelayStatuses.enum.pending,
             smartDelayStatuses.enum.scheduled,
+            smartDelayStatuses.enum.running, // see cancelActiveForWorkspace
           ]),
           inArray(contactInboxModel.contactId, contactIds),
         ),

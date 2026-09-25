@@ -531,6 +531,7 @@ describe("smartDelayService", () => {
     expect(mockInArray).toHaveBeenCalledWith(expect.anything(), [
       "pending",
       "scheduled",
+      "running",
     ])
     // Bounded claim so a workspace with a huge backlog cannot lock the table.
     expect(mockDbLimit).toHaveBeenCalledWith(500)

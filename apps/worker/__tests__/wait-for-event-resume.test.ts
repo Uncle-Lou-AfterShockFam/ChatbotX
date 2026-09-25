@@ -31,8 +31,12 @@ vi.mock("@chatbotx.io/worker-config", () => ({
 
 vi.mock("../src/integration/handlers/flow", () => ({ runFlowNode }))
 
-const { eventMatchesSpec, eventPrecedesRow, runWaitForEventResume } =
-  await import("../src/integration/handlers/wait-for-event-resume")
+const {
+  eventInstant,
+  eventMatchesSpec,
+  eventPrecedesRow,
+  runWaitForEventResume,
+} = await import("../src/integration/handlers/wait-for-event-resume")
 
 const NOW = new Date("2026-09-23T18:02:00.000Z")
 
@@ -327,12 +331,22 @@ describe("runWaitForEventResume", () => {
     })
   })
 
-  test("HOSTILE #3b: an event job without emittedAt (pre-deploy) fails closed", async () => {
+  test("HOSTILE #3b: an event job without emittedAt (pre-deploy) falls back to its enqueue timestamp, else fails closed", async () => {
     const { emittedAt: _dropped, ...legacyEvent } = tagEvent
     await runWaitForEventResume(legacyEvent)
     expect(smartDelayService.claimForEvent).not.toHaveBeenCalled()
     await runWaitForEventResume({ ...tagEvent, emittedAt: "not a date" })
     expect(smartDelayService.claimForEvent).not.toHaveBeenCalled()
+    // Enqueued (by an old emitter) after the wait existed: resumes it.
+    await runWaitForEventResume(legacyEvent, {
+      timestamp: NOW.getTime(),
+    } as never)
+    expect(smartDelayService.claimForEvent).toHaveBeenCalledTimes(1)
+    // Enqueued before the wait existed: a retry of an old event, ignored.
+    await runWaitForEventResume(legacyEvent, {
+      timestamp: row.createdAt.getTime() - 1,
+    } as never)
+    expect(smartDelayService.claimForEvent).toHaveBeenCalledTimes(1)
   })
 
   test("a finish whose claim is no longer current is logged, never retried into a resurrect", async () => {
@@ -393,37 +407,35 @@ describe("runWaitForEventResume", () => {
   })
 })
 
-describe("eventPrecedesRow", () => {
+describe("eventInstant / eventPrecedesRow", () => {
   const createdAt = new Date("2026-09-25T15:00:00.000Z")
+  const at = (iso: string) => eventInstant({ emittedAt: iso })
   test("true only when the event fired at or after the wait was created", () => {
     expect(
-      eventPrecedesRow(
-        { emittedAt: "2026-09-25T15:00:00.000Z" },
-        { createdAt },
-      ),
+      eventPrecedesRow(at("2026-09-25T15:00:00.000Z"), { createdAt }),
     ).toBe(true)
     expect(
-      eventPrecedesRow(
-        { emittedAt: "2026-09-25T15:00:01.000Z" },
-        { createdAt },
-      ),
+      eventPrecedesRow(at("2026-09-25T15:00:01.000Z"), { createdAt }),
     ).toBe(true)
     expect(
-      eventPrecedesRow(
-        { emittedAt: "2026-09-25T14:59:59.999Z" },
-        { createdAt },
-      ),
+      eventPrecedesRow(at("2026-09-25T14:59:59.999Z"), { createdAt }),
     ).toBe(false)
   })
-  test("fails closed on a missing or malformed instant", () => {
-    expect(eventPrecedesRow({}, { createdAt })).toBe(false)
-    expect(eventPrecedesRow({ emittedAt: "" }, { createdAt })).toBe(false)
-    expect(eventPrecedesRow({ emittedAt: "yesterday" }, { createdAt })).toBe(
-      false,
+  test("a job without emittedAt (pre-deploy emitter) uses its BullMQ enqueue timestamp", () => {
+    expect(eventInstant({}, { timestamp: 1_790_000_000_000 })).toBe(
+      1_790_000_000_000,
     )
     expect(
-      eventPrecedesRow({ emittedAt: 1 as unknown as string }, { createdAt }),
-    ).toBe(false)
+      eventInstant({ emittedAt: "2026-09-25T15:00:00.000Z" }, { timestamp: 1 }),
+    ).toBe(createdAt.getTime())
+  })
+  test("fails closed on a missing or malformed instant", () => {
+    expect(eventInstant({})).toBeNull()
+    expect(eventInstant({}, {} as never)).toBeNull()
+    expect(eventInstant({ emittedAt: "" })).toBeNull()
+    expect(eventInstant({ emittedAt: "yesterday" })).toBeNull()
+    expect(eventInstant({ emittedAt: 1 as unknown as string })).toBeNull()
+    expect(eventPrecedesRow(null, { createdAt })).toBe(false)
   })
 })
 
