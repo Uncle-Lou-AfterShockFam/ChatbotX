@@ -9,6 +9,7 @@ import { useTranslations } from "next-intl"
 import { useMemo } from "react"
 import { useFormContext } from "react-hook-form"
 import { getContactInfoTypeOptions } from "@/features/contact-filter/components/contact-filter-config"
+import { useFormOptions } from "@/features/forms/provider/form-hooks"
 import {
   usePipelineOptions,
   useStageOptionsGroupedByPipeline,
@@ -41,6 +42,7 @@ export const ConditionEditor = ({
     [sequences],
   )
   const pipelineOptions = usePipelineOptions()
+  const formOptions = useFormOptions()
   const stageOptions = useStageOptionsGroupedByPipeline()
   const form = useFormContext()
 
@@ -91,6 +93,16 @@ export const ConditionEditor = ({
           name={`${parentName}.sourceId`}
           options={pipelineOptions}
           placeholder={t("deals.pipeline")}
+          popoverClassName="w-[var(--anchor-width)]"
+        />
+      )
+    case triggerEventTypes.enum.formSubmitted:
+      return (
+        <ComboboxField
+          emptyText={t("forms.empty")}
+          name={`${parentName}.sourceId`}
+          options={formOptions}
+          placeholder={t("forms.singular")}
           popoverClassName="w-[var(--anchor-width)]"
         />
       )

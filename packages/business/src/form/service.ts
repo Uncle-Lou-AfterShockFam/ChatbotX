@@ -266,6 +266,19 @@ export class FormService extends BaseService {
     return form
   }
 
+  /**
+   * The `embedOrigins` of a PUBLISHED form, for the `frame-ancestors` CSP the
+   * proxy sets on `/forms/<ws>/<slug>`; null when there is no such form.
+   */
+  async getEmbedOrigins(props: {
+    workspaceId: string
+    slug: string
+    tx?: DatabaseClient
+  }): Promise<string[] | null> {
+    const form = await this.findPublishedBySlug(props)
+    return form ? form.settings.embedOrigins : null
+  }
+
   async create(props: {
     workspaceId: string
     userId?: string | null

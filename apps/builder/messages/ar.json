@@ -4429,7 +4429,8 @@
       "taskCompleted": "Task completed",
       "taskOverdue": "Task overdue",
       "taskAssigned": "Task assigned",
-      "dealMentioned": "Teammate mentioned on a deal"
+      "dealMentioned": "Teammate mentioned on a deal",
+      "formSubmitted": "Web form submitted"
     },
     "actions": {
       "addTag": "إضافة وسم",
@@ -4851,7 +4852,15 @@
       "embedOrigins": "Sites allowed to embed this form",
       "embedOriginsHint": "One origin per line, https://host only. Empty = the form cannot be embedded elsewhere.",
       "prefillKeys": "Fields a link may prefill",
-      "prefillKeysHint": "Field keys that accept a value from the URL, e.g. ?first_name=Ada."
+      "prefillKeysHint": "Field keys that accept a value from the URL, e.g. ?first_name=Ada.",
+      "embedSnippet": "Embed on another site",
+      "embedUnpublished": "Publish the form to get its link and embed code.",
+      "publicUrl": "Public link"
+    },
+    "public": {
+      "submit": "Submit",
+      "failed": "Your answers could not be sent. Please try again.",
+      "tooMany": "Too many submissions from your connection. Please try again later."
     },
     "submissions": {
       "title": "Submissions",

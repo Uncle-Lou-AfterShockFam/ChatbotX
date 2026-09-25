@@ -4,7 +4,8 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query"
-import { useCallback } from "react"
+import { useCallback, useMemo } from "react"
+import { useWorkspaceId } from "@/hooks/routing"
 import { orpc } from "@/lib/orpc/query"
 
 /** Forms data (s200): list, one form, submissions, and the editor's mutations. */
@@ -106,5 +107,19 @@ export const useDeleteFormSubmission = () => {
     orpc.formsAPI.privateDeleteFormSubmissionAPI.mutationOptions({
       onSettled: () => invalidate(),
     }),
+  )
+}
+
+/** Published-or-draft forms as combobox options (trigger / webhook conditions). */
+export const useFormOptions = (): { label: string; value: string }[] => {
+  const workspaceId = useWorkspaceId()
+  const { data } = useForms(workspaceId, true)
+  return useMemo(
+    () =>
+      (data ?? []).map((f) => ({
+        label: `${f.title} (${f.slug})`,
+        value: f.id,
+      })),
+    [data],
   )
 }

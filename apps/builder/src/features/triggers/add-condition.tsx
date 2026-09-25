@@ -18,6 +18,7 @@ import { PlusIcon } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useMemo } from "react"
 import { dealConditionOptionGroup } from "../conditions/deal-condition-options"
+import { formConditionOptionGroup } from "../conditions/form-condition-options"
 import { defaultFn as addContactInfoUpdatedCondition } from "../conditions/schema/contact-info-updated"
 import { defaultFn as addCustomFieldValueChangedCondition } from "../conditions/schema/custom-field-value-changed"
 import { defaultFn as addDateTimeBaseTriggerCondition } from "../conditions/schema/date-time-based-trigger"
@@ -160,6 +161,7 @@ export function AddCondition({
       },
 
       dealConditionOptionGroup(t),
+      formConditionOptionGroup(t),
 
       {
         label: t("fields.sequences.label"),

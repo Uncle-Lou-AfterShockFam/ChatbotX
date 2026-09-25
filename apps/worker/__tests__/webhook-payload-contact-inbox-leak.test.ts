@@ -165,6 +165,14 @@ const EVENT_DATA_BY_TYPE: Record<string, Record<string, unknown>> = {
     mentionedUserId: "user-2",
     excerpt: "@Demo please review",
   },
+  [triggerEventTypes.enum.formSubmitted]: {
+    formId: "form-1",
+    formSlug: "demo-intake",
+    submissionId: "sub-1",
+    definitionVersion: 1,
+    sourceId: "form-1",
+    values: { first_name: "Ada" },
+  },
 }
 
 // Every MatchableEventType EXCEPT dateTimeBasedTrigger (documented exception

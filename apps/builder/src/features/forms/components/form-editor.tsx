@@ -376,6 +376,11 @@ export function FormEditor(props: { workspaceId: string; id: string }) {
             }
             onSlug={(slug) => setDraft((d) => (d ? { ...d, slug } : d))}
             onTitle={(title) => setDraft((d) => (d ? { ...d, title } : d))}
+            publicUrl={
+              form.status === "published" && typeof window !== "undefined"
+                ? `${window.location.origin}/forms/${workspaceId}/${form.slug}`
+                : null
+            }
             published={form.status === "published"}
             settings={draft.settings}
             slug={draft.slug}
@@ -391,7 +396,6 @@ export function FormEditor(props: { workspaceId: string; id: string }) {
               key={JSON.stringify(def)}
               onSubmit={(values) => {
                 toast.success(t("forms.editor.previewSubmitted"))
-                // biome-ignore lint/suspicious/noConsole: the preview shows what a submit would carry
                 console.info("[form preview]", values)
               }}
               submitLabel={t("forms.editor.previewSubmit")}

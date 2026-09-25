@@ -17,6 +17,27 @@ import { useTranslations } from "next-intl"
 import { orpc } from "@/lib/orpc/query"
 
 const NO_INBOX = "__none__"
+
+/**
+ * The iframe + resize listener a host page pastes (s200). The listener
+ * checks `event.origin` against the form's own origin, and the form only
+ * posts to origins in its `embedOrigins`: both halves are pinned.
+ */
+export const embedSnippet = (publicUrl: string, slug: string): string => {
+  const origin = new URL(publicUrl).origin
+  const id = `chatbotx-form-${slug}`
+  return [
+    `<iframe id="${id}" src="${publicUrl}?embed=1" style="border:0;width:100%;min-height:480px" loading="lazy" title="Form"></iframe>`,
+    "<script>",
+    "(function(){window.addEventListener('message',function(e){",
+    `  if(e.origin!=='${origin}'||!e.data||e.data.slug!=='${slug}')return;`,
+    `  var f=document.getElementById('${id}');`,
+    "  if(e.data.type==='chatbotx-form-resize'&&f&&e.data.height)f.style.height=e.data.height+'px';",
+    "  if(e.data.type==='chatbotx-form-submitted'&&e.data.redirectUrl)window.location.assign(e.data.redirectUrl);",
+    "});})();",
+    "</script>",
+  ].join("\n")
+}
 const LIST_SEPARATOR = /[\n,]+/
 
 /** Title, slug, inbox and the settings jsonb of a form (s200). */
@@ -24,6 +45,8 @@ export function FormSettingsPanel(props: {
   workspaceId: string
   title: string
   slug: string
+  /** The published URL (null until published); the embed snippet is derived from it. */
+  publicUrl: string | null
   inboxId: string | null
   settings: FormSettings
   mapsToContact: boolean
@@ -172,6 +195,34 @@ export function FormSettingsPanel(props: {
         <span className="text-muted-foreground text-xs">
           {t("forms.settings.embedOriginsHint")}
         </span>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="fs-embed">{t("forms.settings.embedSnippet")}</Label>
+        <Textarea
+          className="font-mono text-xs"
+          data-testid="fs-embed"
+          id="fs-embed"
+          readOnly
+          rows={6}
+          value={
+            props.publicUrl
+              ? embedSnippet(props.publicUrl, props.slug)
+              : t("forms.settings.embedUnpublished")
+          }
+        />
+        {props.publicUrl ? (
+          <span className="text-muted-foreground text-xs">
+            {t("forms.settings.publicUrl")}:{" "}
+            <a
+              className="underline"
+              href={props.publicUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {props.publicUrl}
+            </a>
+          </span>
+        ) : null}
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="fs-prefill">{t("forms.settings.prefillKeys")}</Label>

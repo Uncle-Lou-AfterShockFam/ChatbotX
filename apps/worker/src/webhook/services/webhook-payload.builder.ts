@@ -58,6 +58,7 @@ const EVENT_NAMES = {
   [triggerEventTypes.enum.taskOverdue]: "deal_task_overdue",
   [triggerEventTypes.enum.taskAssigned]: "deal_task_assigned",
   [triggerEventTypes.enum.dealMentioned]: "deal_mentioned",
+  [triggerEventTypes.enum.formSubmitted]: "form_submitted",
 } satisfies Record<MatchableEventType, string>
 
 async function buildTagPayload(
@@ -148,6 +149,9 @@ async function buildNewContactPayload(
  * internal `sourceId` (and may carry a contactInboxId), neither of which is a
  * documented public field.
  */
+const isPlainRecord = (v: unknown): v is Record<string, unknown> =>
+  v !== null && typeof v === "object" && !Array.isArray(v)
+
 function buildDealPayload(
   basePayload: WebhookPayloadBase,
   data: Record<string, unknown>,
@@ -303,6 +307,17 @@ const PAYLOAD_BUILDERS = {
       author_id: (data.authorId as string | null) ?? null,
       mentioned_user_id: data.mentionedUserId as string,
       excerpt: (data.excerpt as string) ?? "",
+    },
+  }),
+  // Web forms (s200): the answers only; ipHash / dedupHash never leave the row.
+  [triggerEventTypes.enum.formSubmitted]: (basePayload, data) => ({
+    ...basePayload,
+    form: {
+      id: data.formId as string,
+      slug: data.formSlug as string,
+      submission_id: data.submissionId as string,
+      version: Number(data.definitionVersion ?? 0),
+      values: isPlainRecord(data.values) ? data.values : {},
     },
   }),
 } satisfies Record<MatchableEventType, PayloadBuilder>

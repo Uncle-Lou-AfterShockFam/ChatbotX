@@ -7,6 +7,7 @@ import { getSessionCookie } from "better-auth/cookies"
 import { headers } from "next/headers"
 import { type NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth/auth"
+import { formFrameAncestors } from "@/lib/forms/frame-ancestors"
 import { isPublicRoute } from "@/lib/public-routes"
 import { httpLogger } from "./lib/log"
 
@@ -41,7 +42,13 @@ export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl
 
   if (isPublicRoute(pathname)) {
-    return attachProxyUrl(request)
+    const response = attachProxyUrl(request)
+    // Public forms may be framed only by the origins the form allows (s200).
+    const csp = await formFrameAncestors(pathname)
+    if (csp) {
+      response.headers.set("Content-Security-Policy", csp)
+    }
+    return response
   }
 
   const cookies = getSessionCookie(request)
