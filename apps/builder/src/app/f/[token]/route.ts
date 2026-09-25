@@ -37,13 +37,19 @@ export async function GET(_request: Request, context: RouteContext) {
   }
   const { servable } = await loadServableWorkspace(found.document.workspaceId)
   if (!servable) {
-    return NextResponse.json({ code: "workspaceScheduledDeletion" }, { status: 410 })
+    return NextResponse.json(
+      { code: "workspaceScheduledDeletion" },
+      { status: 410 },
+    )
   }
   let pdf: Buffer
   try {
     pdf = await uploader.getObject(found.path)
   } catch (error) {
-    logger.error(error, `document file missing for token ${token.slice(0, 4)}...`)
+    logger.error(
+      error,
+      `document file missing for token ${token.slice(0, 4)}...`,
+    )
     return notFound()
   }
   return new NextResponse(new Uint8Array(pdf), {

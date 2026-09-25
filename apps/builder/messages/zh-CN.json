@@ -6940,7 +6940,8 @@
       "timeline": "Timeline",
       "contacts": "Contacts",
       "activity": "Change log",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "documents": "文档"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7020,5 +7021,46 @@
     "changeCompany": "Change company",
     "noCompany": "No company",
     "deleteNote": "Delete note"
+  },
+  "documents": {
+    "title": "文档",
+    "newTemplate": "新建模板",
+    "showArchived": "显示已归档",
+    "noTemplates": "还没有文档模板",
+    "archived": "已归档",
+    "pickOrCreate": "在左侧选择一个模板或新建一个。",
+    "name": "名称",
+    "namePlaceholder": "同意书",
+    "saved": "模板已保存",
+    "deleteTitle": "删除此模板？",
+    "deleteConfirm": "已由此模板生成的文档将被保留。",
+    "editorPlaceholder": "编写文档。使用“插入字段”添加联系人信息。",
+    "insertField": "插入字段",
+    "insertSignature": "签名区",
+    "signatureHint": "签名区标记联系人在文档发送签署时的签名位置。",
+    "signatureLabel": "签名",
+    "dateSignedLabel": "日期",
+    "toolbar": {
+      "bold": "粗体",
+      "italic": "斜体",
+      "heading1": "标题 1",
+      "heading2": "标题 2",
+      "bulletList": "项目符号列表",
+      "orderedList": "编号列表"
+    },
+    "status": {
+      "generated": "已生成",
+      "sent": "已发送",
+      "signed": "已签署",
+      "failed": "失败"
+    },
+    "contact": {
+      "selectTemplate": "选择模板",
+      "noTemplates": "请先在 设置 > 文档 中创建文档模板。",
+      "empty": "此联系人还没有文档",
+      "generated": "文档已生成",
+      "linkExpires": "链接有效期至 {date}",
+      "open": "打开 PDF"
+    }
   }
 }

@@ -8,8 +8,8 @@ import {
   possibleErrorsOnMutatingResource,
 } from "@/lib/orpc/orpc-error-helper"
 import { workspaceTokenAuthAPIForScope } from "@/orpc"
-import { toContactDocumentResources } from "../lib/resource"
 import { contactDocumentVariables } from "../lib/resolve-variables"
+import { toContactDocumentResources } from "../lib/resource"
 import {
   contactDocumentResource,
   documentTemplateResource,
@@ -45,7 +45,9 @@ export const documentsPublicRouter = {
     .output(z.object({ data: z.array(documentTemplateResource) }))
     .errors(possibleErrorsOnListingResource)
     .handler(async ({ context }) => ({
-      data: await documentService.listTemplates({ workspaceId: context.workspace.id }),
+      data: await documentService.listTemplates({
+        workspaceId: context.workspace.id,
+      }),
     })),
 
   listForContact: workspaceTokenAuthAPI
@@ -62,8 +64,14 @@ export const documentsPublicRouter = {
     .errors(possibleErrorsOnFindingResource)
     .handler(async ({ context, input }) => {
       const workspaceId = context.workspace.id
-      await crmTimelineService.assertContact({ workspaceId, contactId: input.id })
-      const rows = await documentService.listForContact({ workspaceId, contactId: input.id })
+      await crmTimelineService.assertContact({
+        workspaceId,
+        contactId: input.id,
+      })
+      const rows = await documentService.listForContact({
+        workspaceId,
+        contactId: input.id,
+      })
       return { data: await toContactDocumentResources(workspaceId, rows) }
     }),
 
@@ -77,7 +85,9 @@ export const documentsPublicRouter = {
       tags: ["Documents"],
     })
     .input(generateInput)
-    .output(z.object({ document: contactDocumentResource, created: z.boolean() }))
+    .output(
+      z.object({ document: contactDocumentResource, created: z.boolean() }),
+    )
     .errors(possibleErrorsOnMutatingResource)
     .handler(async ({ context, input }) => {
       const workspaceId = context.workspace.id
@@ -88,7 +98,9 @@ export const documentsPublicRouter = {
         ref: input.ref,
         resolveVariables: contactDocumentVariables(input.id),
       })
-      const [resource] = await toContactDocumentResources(workspaceId, [document])
+      const [resource] = await toContactDocumentResources(workspaceId, [
+        document,
+      ])
       return { document: resource, created }
     }),
 }

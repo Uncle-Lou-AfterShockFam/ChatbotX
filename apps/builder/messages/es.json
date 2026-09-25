@@ -6940,7 +6940,8 @@
       "timeline": "Timeline",
       "contacts": "Contacts",
       "activity": "Change log",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "documents": "Documentos"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7020,5 +7021,46 @@
     "changeCompany": "Change company",
     "noCompany": "No company",
     "deleteNote": "Delete note"
+  },
+  "documents": {
+    "title": "Documentos",
+    "newTemplate": "Nueva plantilla",
+    "showArchived": "Mostrar archivadas",
+    "noTemplates": "Aún no hay plantillas de documento",
+    "archived": "Archivada",
+    "pickOrCreate": "Elige una plantilla a la izquierda o crea una nueva.",
+    "name": "Nombre",
+    "namePlaceholder": "Formulario de consentimiento",
+    "saved": "Plantilla guardada",
+    "deleteTitle": "¿Eliminar esta plantilla?",
+    "deleteConfirm": "Los documentos ya generados con ella se conservan.",
+    "editorPlaceholder": "Escribe el documento. Usa Insertar campo para añadir datos del contacto.",
+    "insertField": "Insertar campo",
+    "insertSignature": "Bloque de firma",
+    "signatureHint": "El bloque de firma marca dónde firma el contacto cuando el documento se envía a firmar.",
+    "signatureLabel": "Firma",
+    "dateSignedLabel": "Fecha",
+    "toolbar": {
+      "bold": "Negrita",
+      "italic": "Cursiva",
+      "heading1": "Título 1",
+      "heading2": "Título 2",
+      "bulletList": "Lista con viñetas",
+      "orderedList": "Lista numerada"
+    },
+    "status": {
+      "generated": "Generado",
+      "sent": "Enviado",
+      "signed": "Firmado",
+      "failed": "Fallido"
+    },
+    "contact": {
+      "selectTemplate": "Elige una plantilla",
+      "noTemplates": "Primero crea una plantilla de documento en Configuración > Documentos.",
+      "empty": "Este contacto aún no tiene documentos",
+      "generated": "Documento generado",
+      "linkExpires": "Enlace válido hasta {date}",
+      "open": "Abrir PDF"
+    }
   }
 }

@@ -6,11 +6,16 @@ const getObject = vi.fn()
 const loadServableWorkspace = vi.fn()
 const logError = vi.fn()
 
-vi.mock("@chatbotx.io/business/documents", () => ({ documentService: { resolveDownload } }))
+vi.mock("@chatbotx.io/business/documents", () => ({
+  documentService: { resolveDownload },
+}))
 vi.mock("@chatbotx.io/filesystem", () => ({ uploader: { getObject } }))
-vi.mock("@/lib/workspace/load-servable-workspace", () => ({ loadServableWorkspace }))
+vi.mock("@/lib/workspace/load-servable-workspace", () => ({
+  loadServableWorkspace,
+}))
 vi.mock("@/lib/log", () => ({ logger: { error: logError } }))
 
+const SAFE_FILENAME_RE = /^[\w-]+\.pdf$/
 const TOKEN = "0123456789ABCDEFGHIJKL"
 const DOC = { workspaceId: "w1", title: "AfterShock consent – Ada/../x" }
 const ctx = (token: string) => ({ params: Promise.resolve({ token }) })
@@ -18,7 +23,11 @@ const req = () => new Request(`http://localhost/f/${TOKEN}`)
 
 beforeEach(() => {
   vi.clearAllMocks()
-  resolveDownload.mockResolvedValue({ ok: true, document: DOC, path: "workspaces/w1/documents/c1/d1.pdf" })
+  resolveDownload.mockResolvedValue({
+    ok: true,
+    document: DOC,
+    path: "workspaces/w1/documents/c1/d1.pdf",
+  })
   loadServableWorkspace.mockResolvedValue({ servable: true })
   getObject.mockResolvedValue(Buffer.from("%PDF-1.4 x %%EOF"))
 })
@@ -30,8 +39,12 @@ test("streams the private PDF inline with no-store, nosniff and a safe filename"
   expect(res.headers.get("content-type")).toBe("application/pdf")
   expect(res.headers.get("cache-control")).toBe("private, no-store")
   expect(res.headers.get("x-content-type-options")).toBe("nosniff")
-  expect(res.headers.get("content-disposition")).toBe('inline; filename="AfterShock-consent-Adax.pdf"')
-  expect(Buffer.from(await res.arrayBuffer()).toString()).toBe("%PDF-1.4 x %%EOF")
+  expect(res.headers.get("content-disposition")).toBe(
+    'inline; filename="AfterShock-consent-Adax.pdf"',
+  )
+  expect(Buffer.from(await res.arrayBuffer()).toString()).toBe(
+    "%PDF-1.4 x %%EOF",
+  )
   expect(getObject).toHaveBeenCalledWith("workspaces/w1/documents/c1/d1.pdf")
   expect(resolveDownload).toHaveBeenCalledWith({ token: TOKEN })
 })
@@ -57,6 +70,6 @@ test("unknown / invalid / no-file -> 404; expired -> 410; workspace being delete
 test("documentFileName never lets quotes, slashes or CRLF through", async () => {
   const { documentFileName } = await import("@/app/f/[token]/route")
   for (const t of ['a"b', "a/b\\c", "x\r\nSet-Cookie: y", "   ", "日本語"]) {
-    expect(documentFileName(t)).toMatch(/^[\w-]+\.pdf$/)
+    expect(documentFileName(t)).toMatch(SAFE_FILENAME_RE)
   }
 })

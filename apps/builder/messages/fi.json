@@ -6940,7 +6940,8 @@
       "timeline": "Timeline",
       "contacts": "Contacts",
       "activity": "Change log",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "documents": "Asiakirjat"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7020,5 +7021,46 @@
     "changeCompany": "Change company",
     "noCompany": "No company",
     "deleteNote": "Delete note"
+  },
+  "documents": {
+    "title": "Asiakirjat",
+    "newTemplate": "Uusi pohja",
+    "showArchived": "Näytä arkistoidut",
+    "noTemplates": "Ei vielä asiakirjapohjia",
+    "archived": "Arkistoitu",
+    "pickOrCreate": "Valitse pohja vasemmalta tai luo uusi.",
+    "name": "Nimi",
+    "namePlaceholder": "Suostumuslomake",
+    "saved": "Pohja tallennettu",
+    "deleteTitle": "Poistetaanko tämä pohja?",
+    "deleteConfirm": "Siitä jo luodut asiakirjat säilytetään.",
+    "editorPlaceholder": "Kirjoita asiakirja. Lisää yhteystietoja Lisää kenttä -painikkeella.",
+    "insertField": "Lisää kenttä",
+    "insertSignature": "Allekirjoituslohko",
+    "signatureHint": "Allekirjoituslohko merkitsee kohdan, johon yhteyshenkilö allekirjoittaa, kun asiakirja lähetetään allekirjoitettavaksi.",
+    "signatureLabel": "Allekirjoitus",
+    "dateSignedLabel": "Päivämäärä",
+    "toolbar": {
+      "bold": "Lihavointi",
+      "italic": "Kursiivi",
+      "heading1": "Otsikko 1",
+      "heading2": "Otsikko 2",
+      "bulletList": "Luettelomerkit",
+      "orderedList": "Numeroitu luettelo"
+    },
+    "status": {
+      "generated": "Luotu",
+      "sent": "Lähetetty",
+      "signed": "Allekirjoitettu",
+      "failed": "Epäonnistui"
+    },
+    "contact": {
+      "selectTemplate": "Valitse pohja",
+      "noTemplates": "Luo ensin asiakirjapohja kohdassa Asetukset > Asiakirjat.",
+      "empty": "Tällä yhteyshenkilöllä ei ole vielä asiakirjoja",
+      "generated": "Asiakirja luotu",
+      "linkExpires": "Linkki voimassa {date} asti",
+      "open": "Avaa PDF"
+    }
   }
 }

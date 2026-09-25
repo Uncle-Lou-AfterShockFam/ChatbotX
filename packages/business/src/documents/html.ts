@@ -49,10 +49,16 @@ export const mergeDocumentHtml = (
 ): string => {
   for (const [key, value] of Object.entries(mapping)) {
     if (value.length > MAX_MERGE_VALUE_LENGTH) {
-      throw new DocumentMergeError(key, `{{${key}}} is longer than ${MAX_MERGE_VALUE_LENGTH} characters`)
+      throw new DocumentMergeError(
+        key,
+        `{{${key}}} is longer than ${MAX_MERGE_VALUE_LENGTH} characters`,
+      )
     }
     if (CONTROL_CHARS.test(value)) {
-      throw new DocumentMergeError(key, `{{${key}}} contains a control character`)
+      throw new DocumentMergeError(
+        key,
+        `{{${key}}} contains a control character`,
+      )
     }
     if (value.includes("{{") || value.includes("}}")) {
       throw new DocumentMergeError(key, `{{${key}}} may not contain {{ or }}`)
@@ -63,16 +69,34 @@ export const mergeDocumentHtml = (
       ? mapping[variable.trim()]
       : undefined
     // Newlines in a value (a multi-line custom field) read as line breaks.
-    return value === undefined ? match : escapeHtml(value).replace(/\r?\n/g, "<br>")
+    return value === undefined
+      ? match
+      : escapeHtml(value).replace(/\r?\n/g, "<br>")
   })
 }
+
+// `{{signature, r1}}` / `{{date, r1}}` (any recipient rN, the Documenso
+// placeholder grammar). Documenso sizes a field to its placeholder text, so
+// the renderer sets them large; the editor inserts them as plain text.
+const SIGNING_PLACEHOLDER = /\{\{\s*(signature|date)\s*,\s*r\d{1,2}\s*\}\}/gi
+
+/** Wrap every Documenso signing placeholder in its sized (and hidden) span. */
+export const sizeSigningPlaceholders = (body: string): string =>
+  body.replace(
+    SIGNING_PLACEHOLDER,
+    (match, kind: string) =>
+      `<span class="${kind.toLowerCase() === "signature" ? "doc-ph-sig" : "doc-ph-date"}">${match}</span>`,
+  )
 
 /**
  * The full page Gotenberg renders: a fixed print stylesheet around the
  * merged body. Self-contained (no remote fonts or images): Gotenberg runs
  * with network fetches denied.
  */
-export const wrapDocumentHtml = (title: string, body: string): string => `<!doctype html>
+export const wrapDocumentHtml = (
+  title: string,
+  body: string,
+): string => `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
 <style>
 @page { size: Letter; margin: 22mm 20mm; }
@@ -84,4 +108,4 @@ table { border-collapse: collapse; width: 100%; } td, th { border: 1px solid #99
 .doc-sign-line { border-top: 1px solid #111; padding-top: 1.5mm; font-size: 9.5pt; color: #444; }
 .doc-ph-sig { font-size: 22pt; color: #fff; white-space: nowrap; }
 .doc-ph-date { font-size: 13pt; color: #fff; white-space: nowrap; }
-</style></head><body>${body}</body></html>`
+</style></head><body>${sizeSigningPlaceholders(body)}</body></html>`

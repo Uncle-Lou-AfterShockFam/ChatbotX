@@ -7,8 +7,8 @@ import { requireContactPermissionScope } from "@/features/contacts/permissions"
 import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
 import { contactsAccessAuthorizedMiddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
-import { toContactDocumentResources } from "../lib/resource"
 import { contactDocumentVariables } from "../lib/resolve-variables"
+import { toContactDocumentResources } from "../lib/resource"
 import {
   contactDocumentResource,
   documentTemplateData,
@@ -30,8 +30,17 @@ const withContactId = withWorkspaceIdSchema.and(
 )
 
 const privateListDocumentTemplatesAPI = authorizedAPI
-  .route({ method: "GET", path: "/workspaces/{workspaceId}/document-templates", summary: "List document templates", tags })
-  .input(withWorkspaceIdSchema.and(z.object({ includeArchived: z.coerce.boolean().optional() })))
+  .route({
+    method: "GET",
+    path: "/workspaces/{workspaceId}/document-templates",
+    summary: "List document templates",
+    tags,
+  })
+  .input(
+    withWorkspaceIdSchema.and(
+      z.object({ includeArchived: z.coerce.boolean().optional() }),
+    ),
+  )
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ data: z.array(documentTemplateResource) }))
   .handler(async ({ input }) => ({
@@ -42,14 +51,24 @@ const privateListDocumentTemplatesAPI = authorizedAPI
   }))
 
 const privateGetDocumentTemplateAPI = authorizedAPI
-  .route({ method: "GET", path: "/workspaces/{workspaceId}/document-templates/{id}", summary: "Get a document template", tags })
+  .route({
+    method: "GET",
+    path: "/workspaces/{workspaceId}/document-templates/{id}",
+    summary: "Get a document template",
+    tags,
+  })
   .input(withTemplateId)
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(documentTemplateResource)
   .handler(async ({ input }) => await documentService.getTemplate(input))
 
 const privateCreateDocumentTemplateAPI = authorizedAPI
-  .route({ method: "POST", path: "/workspaces/{workspaceId}/document-templates", summary: "Create a document template", tags })
+  .route({
+    method: "POST",
+    path: "/workspaces/{workspaceId}/document-templates",
+    summary: "Create a document template",
+    tags,
+  })
   .input(withWorkspaceIdSchema.and(documentTemplateData))
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(documentTemplateResource)
@@ -63,7 +82,12 @@ const privateCreateDocumentTemplateAPI = authorizedAPI
   )
 
 const privateUpdateDocumentTemplateAPI = authorizedAPI
-  .route({ method: "PUT", path: "/workspaces/{workspaceId}/document-templates/{id}", summary: "Update a document template", tags })
+  .route({
+    method: "PUT",
+    path: "/workspaces/{workspaceId}/document-templates/{id}",
+    summary: "Update a document template",
+    tags,
+  })
   .input(withTemplateId.and(documentTemplateData))
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(documentTemplateResource)
@@ -77,14 +101,24 @@ const privateUpdateDocumentTemplateAPI = authorizedAPI
   )
 
 const privateSetDocumentTemplateStatusAPI = authorizedAPI
-  .route({ method: "POST", path: "/workspaces/{workspaceId}/document-templates/{id}/status", summary: "Archive or restore a document template", tags })
+  .route({
+    method: "POST",
+    path: "/workspaces/{workspaceId}/document-templates/{id}/status",
+    summary: "Archive or restore a document template",
+    tags,
+  })
   .input(withTemplateId.and(z.object({ status: documentTemplateStatuses })))
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(documentTemplateResource)
   .handler(async ({ input }) => await documentService.setTemplateStatus(input))
 
 const privateDeleteDocumentTemplateAPI = authorizedAPI
-  .route({ method: "DELETE", path: "/workspaces/{workspaceId}/document-templates/{id}", summary: "Delete a document template", tags })
+  .route({
+    method: "DELETE",
+    path: "/workspaces/{workspaceId}/document-templates/{id}",
+    summary: "Delete a document template",
+    tags,
+  })
   .input(withTemplateId)
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ ok: z.literal(true) }))
@@ -94,7 +128,12 @@ const privateDeleteDocumentTemplateAPI = authorizedAPI
   })
 
 const privateListContactDocumentsAPI = authorizedAPI
-  .route({ method: "GET", path: "/workspaces/{workspaceId}/contacts/{contactId}/documents", summary: "List a contact's documents", tags })
+  .route({
+    method: "GET",
+    path: "/workspaces/{workspaceId}/contacts/{contactId}/documents",
+    summary: "List a contact's documents",
+    tags,
+  })
   .input(withContactId)
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ data: z.array(contactDocumentResource) }))
@@ -109,7 +148,12 @@ const privateListContactDocumentsAPI = authorizedAPI
   })
 
 const privateGenerateContactDocumentAPI = authorizedAPI
-  .route({ method: "POST", path: "/workspaces/{workspaceId}/contacts/{contactId}/documents", summary: "Generate a document for a contact", tags })
+  .route({
+    method: "POST",
+    path: "/workspaces/{workspaceId}/contacts/{contactId}/documents",
+    summary: "Generate a document for a contact",
+    tags,
+  })
   .input(withContactId.and(generateContactDocumentRequest))
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ document: contactDocumentResource, created: z.boolean() }))
@@ -126,7 +170,9 @@ const privateGenerateContactDocumentAPI = authorizedAPI
       ref: input.ref,
       resolveVariables: contactDocumentVariables(input.contactId),
     })
-    const [resource] = await toContactDocumentResources(input.workspaceId, [document])
+    const [resource] = await toContactDocumentResources(input.workspaceId, [
+      document,
+    ])
     return { document: resource, created }
   })
 

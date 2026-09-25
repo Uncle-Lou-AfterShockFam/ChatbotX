@@ -6940,7 +6940,8 @@
       "timeline": "Timeline",
       "contacts": "Contacts",
       "activity": "Change log",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "documents": "ドキュメント"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7020,5 +7021,46 @@
     "changeCompany": "Change company",
     "noCompany": "No company",
     "deleteNote": "Delete note"
+  },
+  "documents": {
+    "title": "ドキュメント",
+    "newTemplate": "新しいテンプレート",
+    "showArchived": "アーカイブ済みを表示",
+    "noTemplates": "ドキュメントテンプレートはまだありません",
+    "archived": "アーカイブ済み",
+    "pickOrCreate": "左でテンプレートを選ぶか、新しく作成してください。",
+    "name": "名前",
+    "namePlaceholder": "同意書",
+    "saved": "テンプレートを保存しました",
+    "deleteTitle": "このテンプレートを削除しますか？",
+    "deleteConfirm": "これから生成済みのドキュメントは保持されます。",
+    "editorPlaceholder": "ドキュメントを書きます。「フィールドを挿入」で連絡先の情報を追加できます。",
+    "insertField": "フィールドを挿入",
+    "insertSignature": "署名ブロック",
+    "signatureHint": "署名ブロックは、ドキュメントを署名に送ったときに連絡先が署名する位置を示します。",
+    "signatureLabel": "署名",
+    "dateSignedLabel": "日付",
+    "toolbar": {
+      "bold": "太字",
+      "italic": "斜体",
+      "heading1": "見出し 1",
+      "heading2": "見出し 2",
+      "bulletList": "箇条書き",
+      "orderedList": "番号付きリスト"
+    },
+    "status": {
+      "generated": "生成済み",
+      "sent": "送信済み",
+      "signed": "署名済み",
+      "failed": "失敗"
+    },
+    "contact": {
+      "selectTemplate": "テンプレートを選択",
+      "noTemplates": "先に 設定 > ドキュメント でドキュメントテンプレートを作成してください。",
+      "empty": "この連絡先のドキュメントはまだありません",
+      "generated": "ドキュメントを生成しました",
+      "linkExpires": "リンクの有効期限: {date}",
+      "open": "PDF を開く"
+    }
   }
 }

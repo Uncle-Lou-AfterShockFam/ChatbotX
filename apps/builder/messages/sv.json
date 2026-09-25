@@ -6940,7 +6940,8 @@
       "timeline": "Timeline",
       "contacts": "Contacts",
       "activity": "Change log",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "documents": "Dokument"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7020,5 +7021,46 @@
     "changeCompany": "Change company",
     "noCompany": "No company",
     "deleteNote": "Delete note"
+  },
+  "documents": {
+    "title": "Dokument",
+    "newTemplate": "Ny mall",
+    "showArchived": "Visa arkiverade",
+    "noTemplates": "Inga dokumentmallar ännu",
+    "archived": "Arkiverad",
+    "pickOrCreate": "Välj en mall till vänster eller skapa en ny.",
+    "name": "Namn",
+    "namePlaceholder": "Samtyckesformulär",
+    "saved": "Mallen sparades",
+    "deleteTitle": "Ta bort den här mallen?",
+    "deleteConfirm": "Dokument som redan skapats från den behålls.",
+    "editorPlaceholder": "Skriv dokumentet. Använd Infoga fält för att lägga till kontaktuppgifter.",
+    "insertField": "Infoga fält",
+    "insertSignature": "Signaturblock",
+    "signatureHint": "Signaturblocket markerar var kontakten skriver under när dokumentet skickas för underskrift.",
+    "signatureLabel": "Underskrift",
+    "dateSignedLabel": "Datum",
+    "toolbar": {
+      "bold": "Fet",
+      "italic": "Kursiv",
+      "heading1": "Rubrik 1",
+      "heading2": "Rubrik 2",
+      "bulletList": "Punktlista",
+      "orderedList": "Numrerad lista"
+    },
+    "status": {
+      "generated": "Skapad",
+      "sent": "Skickad",
+      "signed": "Signerad",
+      "failed": "Misslyckades"
+    },
+    "contact": {
+      "selectTemplate": "Välj en mall",
+      "noTemplates": "Skapa först en dokumentmall under Inställningar > Dokument.",
+      "empty": "Inga dokument för den här kontakten ännu",
+      "generated": "Dokument skapat",
+      "linkExpires": "Länken gäller till {date}",
+      "open": "Öppna PDF"
+    }
   }
 }

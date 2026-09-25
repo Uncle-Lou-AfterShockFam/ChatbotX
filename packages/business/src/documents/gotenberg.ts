@@ -93,10 +93,18 @@ export const htmlToPdf = async (
     }
     return { ok: true, pdf, ms: Date.now() - started }
   } catch (err) {
-    const e = err as { name?: string; cause?: { code?: string }; message?: string }
+    const e = err as {
+      name?: string
+      cause?: { code?: string }
+      message?: string
+    }
     if (e?.name === "TimeoutError" || e?.name === "AbortError") {
       return { ok: false, status: null, error: "timeout" }
     }
-    return { ok: false, status: null, error: `network: ${e?.cause?.code ?? e?.message ?? "unknown"}` }
+    return {
+      ok: false,
+      status: null,
+      error: `network: ${e?.cause?.code ?? e?.message ?? "unknown"}`,
+    }
   }
 }

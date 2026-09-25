@@ -6940,7 +6940,8 @@
       "timeline": "Timeline",
       "contacts": "Contacts",
       "activity": "Change log",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "documents": "Dokumenter"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7020,5 +7021,46 @@
     "changeCompany": "Change company",
     "noCompany": "No company",
     "deleteNote": "Delete note"
+  },
+  "documents": {
+    "title": "Dokumenter",
+    "newTemplate": "Ny skabelon",
+    "showArchived": "Vis arkiverede",
+    "noTemplates": "Ingen dokumentskabeloner endnu",
+    "archived": "Arkiveret",
+    "pickOrCreate": "Vælg en skabelon til venstre, eller opret en ny.",
+    "name": "Navn",
+    "namePlaceholder": "Samtykkeerklæring",
+    "saved": "Skabelon gemt",
+    "deleteTitle": "Slet denne skabelon?",
+    "deleteConfirm": "Dokumenter, der allerede er oprettet ud fra den, bevares.",
+    "editorPlaceholder": "Skriv dokumentet. Brug Indsæt felt til at tilføje kontaktoplysninger.",
+    "insertField": "Indsæt felt",
+    "insertSignature": "Signaturblok",
+    "signatureHint": "Signaturblokken markerer, hvor kontakten skriver under, når dokumentet sendes til underskrift.",
+    "signatureLabel": "Underskrift",
+    "dateSignedLabel": "Dato",
+    "toolbar": {
+      "bold": "Fed",
+      "italic": "Kursiv",
+      "heading1": "Overskrift 1",
+      "heading2": "Overskrift 2",
+      "bulletList": "Punktliste",
+      "orderedList": "Nummereret liste"
+    },
+    "status": {
+      "generated": "Oprettet",
+      "sent": "Sendt",
+      "signed": "Underskrevet",
+      "failed": "Mislykkedes"
+    },
+    "contact": {
+      "selectTemplate": "Vælg en skabelon",
+      "noTemplates": "Opret først en dokumentskabelon under Indstillinger > Dokumenter.",
+      "empty": "Ingen dokumenter for denne kontakt endnu",
+      "generated": "Dokument oprettet",
+      "linkExpires": "Linket er gyldigt til {date}",
+      "open": "Åbn PDF"
+    }
   }
 }

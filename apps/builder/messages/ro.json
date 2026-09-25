@@ -6940,7 +6940,8 @@
       "timeline": "Timeline",
       "contacts": "Contacts",
       "activity": "Change log",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "documents": "Documente"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7020,5 +7021,46 @@
     "changeCompany": "Change company",
     "noCompany": "No company",
     "deleteNote": "Delete note"
+  },
+  "documents": {
+    "title": "Documente",
+    "newTemplate": "Șablon nou",
+    "showArchived": "Afișează arhivatele",
+    "noTemplates": "Încă nu există șabloane de document",
+    "archived": "Arhivat",
+    "pickOrCreate": "Alege un șablon din stânga sau creează unul nou.",
+    "name": "Nume",
+    "namePlaceholder": "Formular de consimțământ",
+    "saved": "Șablon salvat",
+    "deleteTitle": "Ștergi acest șablon?",
+    "deleteConfirm": "Documentele deja generate din el se păstrează.",
+    "editorPlaceholder": "Scrie documentul. Folosește Inserează câmp pentru a adăuga datele contactului.",
+    "insertField": "Inserează câmp",
+    "insertSignature": "Bloc de semnătură",
+    "signatureHint": "Blocul de semnătură marchează locul unde semnează contactul când documentul este trimis spre semnare.",
+    "signatureLabel": "Semnătură",
+    "dateSignedLabel": "Dată",
+    "toolbar": {
+      "bold": "Aldin",
+      "italic": "Cursiv",
+      "heading1": "Titlu 1",
+      "heading2": "Titlu 2",
+      "bulletList": "Listă cu marcatori",
+      "orderedList": "Listă numerotată"
+    },
+    "status": {
+      "generated": "Generat",
+      "sent": "Trimis",
+      "signed": "Semnat",
+      "failed": "Eșuat"
+    },
+    "contact": {
+      "selectTemplate": "Alege un șablon",
+      "noTemplates": "Creează mai întâi un șablon de document în Setări > Documente.",
+      "empty": "Încă nu există documente pentru acest contact",
+      "generated": "Document generat",
+      "linkExpires": "Link valabil până la {date}",
+      "open": "Deschide PDF"
+    }
   }
 }

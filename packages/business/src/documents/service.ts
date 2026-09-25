@@ -70,7 +70,8 @@ export const contactDocumentPath = (
   workspaceId: string,
   contactId: string,
   documentId: string,
-): string => `workspaces/${workspaceId}/documents/${contactId}/${documentId}.pdf`
+): string =>
+  `workspaces/${workspaceId}/documents/${contactId}/${documentId}.pdf`
 
 /**
  * Resolves the `{{variable}}` keys of a template for one contact. Injected by
@@ -86,16 +87,23 @@ export type DocumentTemplateData = {
   bodyHtml: string
 }
 
-const parseTemplateData = (data: DocumentTemplateData): DocumentTemplateData => {
+const parseTemplateData = (
+  data: DocumentTemplateData,
+): DocumentTemplateData => {
   const name = typeof data?.name === "string" ? data.name.trim() : ""
   if (name === "" || name.length > DOCUMENT_TEMPLATE_MAX_NAME) {
-    throw validationException("name", `Name must be 1-${DOCUMENT_TEMPLATE_MAX_NAME} characters`)
+    throw validationException(
+      "name",
+      `Name must be 1-${DOCUMENT_TEMPLATE_MAX_NAME} characters`,
+    )
   }
   const bodyHtml = typeof data?.bodyHtml === "string" ? data.bodyHtml : ""
   if (bodyHtml.trim() === "") {
     throw validationException("bodyHtml", "The document is empty")
   }
-  if (new TextEncoder().encode(bodyHtml).length > DOCUMENT_TEMPLATE_MAX_HTML_BYTES) {
+  if (
+    new TextEncoder().encode(bodyHtml).length > DOCUMENT_TEMPLATE_MAX_HTML_BYTES
+  ) {
     throw validationException("bodyHtml", "The document is too large")
   }
   return { name, bodyHtml }
@@ -121,7 +129,10 @@ export class DocumentService extends BaseService {
               eq(documentTemplateModel.status, "active"),
             ),
       )
-      .orderBy(desc(documentTemplateModel.updatedAt), desc(documentTemplateModel.id))
+      .orderBy(
+        desc(documentTemplateModel.updatedAt),
+        desc(documentTemplateModel.id),
+      )
   }
 
   async getTemplate(props: {
@@ -156,7 +167,13 @@ export class DocumentService extends BaseService {
     const data = parseTemplateData(props.data)
     const [row] = await tx
       .insert(documentTemplateModel)
-      .values({ id: createId(), workspaceId, createdById: userId, status: "active", ...data })
+      .values({
+        id: createId(),
+        workspaceId,
+        createdById: userId,
+        status: "active",
+        ...data,
+      })
       .returning()
     return row
   }
@@ -247,7 +264,10 @@ export class DocumentService extends BaseService {
           eq(contactDocumentModel.contactId, contactId),
         ),
       )
-      .orderBy(desc(contactDocumentModel.createdAt), desc(contactDocumentModel.id))
+      .orderBy(
+        desc(contactDocumentModel.createdAt),
+        desc(contactDocumentModel.id),
+      )
       .limit(Math.min(Math.max(limit, 1), 500))
   }
 
@@ -268,11 +288,20 @@ export class DocumentService extends BaseService {
     now?: Date
     tx?: DatabaseClient
   }): Promise<{ document: ContactDocumentModel; created: boolean }> {
-    const { workspaceId, contactId, templateId, resolveVariables, tx = db } = props
+    const {
+      workspaceId,
+      contactId,
+      templateId,
+      resolveVariables,
+      tx = db,
+    } = props
     const now = props.now ?? new Date()
     const ref = props.ref ?? `manual:${createId()}`
     if (!CONTACT_DOCUMENT_REF_REGEX.test(ref)) {
-      throw validationException("ref", "ref must be 1-100 of A-Z a-z 0-9 . _ : -")
+      throw validationException(
+        "ref",
+        "ref must be 1-100 of A-Z a-z 0-9 . _ : -",
+      )
     }
     const existing = await this.findByRef({ contactId, ref, tx })
     if (existing) {
@@ -284,7 +313,12 @@ export class DocumentService extends BaseService {
     const [contact] = await tx
       .select({ id: contactModel.id })
       .from(contactModel)
-      .where(and(eq(contactModel.id, contactId), eq(contactModel.workspaceId, workspaceId)))
+      .where(
+        and(
+          eq(contactModel.id, contactId),
+          eq(contactModel.workspaceId, workspaceId),
+        ),
+      )
       .limit(1)
     if (!contact) {
       throw notFoundException(CONTACT_NOT_FOUND)
@@ -296,8 +330,13 @@ export class DocumentService extends BaseService {
 
     let html: string
     try {
-      const mapping = await resolveVariables(documentVariables(template.bodyHtml))
-      html = wrapDocumentHtml(template.name, mergeDocumentHtml(template.bodyHtml, mapping))
+      const mapping = await resolveVariables(
+        documentVariables(template.bodyHtml),
+      )
+      html = wrapDocumentHtml(
+        template.name,
+        mergeDocumentHtml(template.bodyHtml, mapping),
+      )
     } catch (err) {
       if (err instanceof DocumentMergeError) {
         throw validationException("templateId", err.message)
@@ -306,12 +345,17 @@ export class DocumentService extends BaseService {
     }
     const rendered = await htmlToPdf(html)
     if (!rendered.ok) {
-      throw validationException("templateId", `Could not render the PDF (${rendered.error})`)
+      throw validationException(
+        "templateId",
+        `Could not render the PDF (${rendered.error})`,
+      )
     }
 
     const id = createId()
     const path = contactDocumentPath(workspaceId, contactId, id)
-    await uploader.putObject(path, rendered.pdf, { ContentType: "application/pdf" })
+    await uploader.putObject(path, rendered.pdf, {
+      ContentType: "application/pdf",
+    })
     const [row] = await tx
       .insert(contactDocumentModel)
       .values({
@@ -325,9 +369,13 @@ export class DocumentService extends BaseService {
         path,
         fileSize: rendered.pdf.length,
         token: mintContactDocumentToken(),
-        tokenExpiresAt: new Date(now.getTime() + CONTACT_DOCUMENT_LINK_TTL_DAYS * DAY_MS),
+        tokenExpiresAt: new Date(
+          now.getTime() + CONTACT_DOCUMENT_LINK_TTL_DAYS * DAY_MS,
+        ),
       })
-      .onConflictDoNothing({ target: [contactDocumentModel.contactId, contactDocumentModel.ref] })
+      .onConflictDoNothing({
+        target: [contactDocumentModel.contactId, contactDocumentModel.ref],
+      })
       .returning()
     if (row) {
       return { document: row, created: true }
@@ -350,7 +398,12 @@ export class DocumentService extends BaseService {
     const [row] = await tx
       .select()
       .from(contactDocumentModel)
-      .where(and(eq(contactDocumentModel.contactId, contactId), eq(contactDocumentModel.ref, ref)))
+      .where(
+        and(
+          eq(contactDocumentModel.contactId, contactId),
+          eq(contactDocumentModel.ref, ref),
+        ),
+      )
       .limit(1)
     return row
   }

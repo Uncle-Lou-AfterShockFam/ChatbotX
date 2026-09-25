@@ -6940,7 +6940,8 @@
       "timeline": "Timeline",
       "contacts": "Contacts",
       "activity": "Change log",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "documents": "المستندات"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7020,5 +7021,46 @@
     "changeCompany": "Change company",
     "noCompany": "No company",
     "deleteNote": "Delete note"
+  },
+  "documents": {
+    "title": "المستندات",
+    "newTemplate": "قالب جديد",
+    "showArchived": "إظهار المؤرشف",
+    "noTemplates": "لا توجد قوالب مستندات بعد",
+    "archived": "مؤرشف",
+    "pickOrCreate": "اختر قالبًا من اليسار أو أنشئ قالبًا جديدًا.",
+    "name": "الاسم",
+    "namePlaceholder": "نموذج الموافقة",
+    "saved": "تم حفظ القالب",
+    "deleteTitle": "حذف هذا القالب؟",
+    "deleteConfirm": "يتم الاحتفاظ بالمستندات التي أُنشئت منه بالفعل.",
+    "editorPlaceholder": "اكتب المستند. استخدم إدراج حقل لإضافة بيانات جهة الاتصال.",
+    "insertField": "إدراج حقل",
+    "insertSignature": "كتلة التوقيع",
+    "signatureHint": "تحدد كتلة التوقيع مكان توقيع جهة الاتصال عند إرسال المستند للتوقيع.",
+    "signatureLabel": "التوقيع",
+    "dateSignedLabel": "التاريخ",
+    "toolbar": {
+      "bold": "غامق",
+      "italic": "مائل",
+      "heading1": "عنوان 1",
+      "heading2": "عنوان 2",
+      "bulletList": "قائمة نقطية",
+      "orderedList": "قائمة مرقمة"
+    },
+    "status": {
+      "generated": "تم الإنشاء",
+      "sent": "تم الإرسال",
+      "signed": "تم التوقيع",
+      "failed": "فشل"
+    },
+    "contact": {
+      "selectTemplate": "اختر قالبًا",
+      "noTemplates": "أنشئ قالب مستند أولاً من الإعدادات > المستندات.",
+      "empty": "لا توجد مستندات لجهة الاتصال هذه بعد",
+      "generated": "تم إنشاء المستند",
+      "linkExpires": "الرابط صالح حتى {date}",
+      "open": "فتح PDF"
+    }
   }
 }

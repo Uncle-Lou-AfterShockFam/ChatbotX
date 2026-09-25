@@ -6940,7 +6940,8 @@
       "timeline": "Timeline",
       "contacts": "Contacts",
       "activity": "Change log",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "documents": "Documents"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7020,5 +7021,46 @@
     "changeCompany": "Change company",
     "noCompany": "No company",
     "deleteNote": "Delete note"
+  },
+  "documents": {
+    "title": "Documents",
+    "newTemplate": "Nouveau modèle",
+    "showArchived": "Afficher les archivés",
+    "noTemplates": "Aucun modèle de document pour l'instant",
+    "archived": "Archivé",
+    "pickOrCreate": "Choisissez un modèle à gauche ou créez-en un nouveau.",
+    "name": "Nom",
+    "namePlaceholder": "Formulaire de consentement",
+    "saved": "Modèle enregistré",
+    "deleteTitle": "Supprimer ce modèle ?",
+    "deleteConfirm": "Les documents déjà générés à partir de celui-ci sont conservés.",
+    "editorPlaceholder": "Rédigez le document. Utilisez Insérer un champ pour ajouter les données du contact.",
+    "insertField": "Insérer un champ",
+    "insertSignature": "Bloc de signature",
+    "signatureHint": "Le bloc de signature indique où le contact signe lorsque le document est envoyé pour signature.",
+    "signatureLabel": "Signature",
+    "dateSignedLabel": "Date",
+    "toolbar": {
+      "bold": "Gras",
+      "italic": "Italique",
+      "heading1": "Titre 1",
+      "heading2": "Titre 2",
+      "bulletList": "Liste à puces",
+      "orderedList": "Liste numérotée"
+    },
+    "status": {
+      "generated": "Généré",
+      "sent": "Envoyé",
+      "signed": "Signé",
+      "failed": "Échec"
+    },
+    "contact": {
+      "selectTemplate": "Choisir un modèle",
+      "noTemplates": "Créez d'abord un modèle de document dans Paramètres > Documents.",
+      "empty": "Aucun document pour ce contact pour l'instant",
+      "generated": "Document généré",
+      "linkExpires": "Lien valable jusqu'au {date}",
+      "open": "Ouvrir le PDF"
+    }
   }
 }
