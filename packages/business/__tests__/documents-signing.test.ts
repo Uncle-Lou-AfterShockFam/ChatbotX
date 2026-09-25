@@ -129,6 +129,11 @@ const fakeClient = (over: Partial<DocumensoClient> = {}): DocumensoClient => ({
     status: 200,
     body: { recipients: [{ email: EMAIL, signingUrl: "https://sig/s/tok" }] },
   })),
+  deleteEnvelope: vi.fn(async () => ({
+    ok: true as const,
+    status: 200,
+    body: { success: true },
+  })),
   downloadSignedItem: vi.fn(async () => ({
     ok: true as const,
     status: 200,
@@ -182,6 +187,11 @@ describe("verifySignableEnvelope", () => {
     expect(v({ externalId: "cbxdoc:102" })).toBe("externalId mismatch")
     expect(v({ secondaryId: "document_0" })).toBe("no secondaryId")
     expect(v({ secondaryId: undefined })).toBe("no secondaryId")
+    // Documenso's id is an int4 column here: a larger one is refused.
+    expect(v({ secondaryId: "document_2147483648" })).toBe("no secondaryId")
+    expect(v({ secondaryId: "document_9999999999999999" })).toBe(
+      "no secondaryId",
+    )
     expect(v({ recipients: [{ id: 9, email: "x@y.z" }] })).toBe(
       "signer missing",
     )
@@ -291,6 +301,8 @@ describe("sendForSignature", () => {
     const client = fakeClient()
     expect((await send(client)).ok).toBe(true)
     expect(client.getEnvelope).toHaveBeenCalledWith("envelope_winner000")
+    // Ours is deleted, so no untracked copy of the document stays in Documenso.
+    expect(client.deleteEnvelope).toHaveBeenCalledWith(ENV_ID)
   })
 
   test("an unsignable envelope is forgotten (so a retry opens a fresh one) and the reason kept", async () => {
@@ -309,6 +321,7 @@ describe("sendForSignature", () => {
     const r = await send(client)
     expect(r).toMatchObject({ ok: false, stage: "verify" })
     expect(m.state.sets[0]).toMatchObject({ documensoEnvelopeId: null })
+    expect(client.deleteEnvelope).toHaveBeenCalledWith(ENV_ID)
     expect(String(m.state.sets[1].error)).toMatch(VERIFY_NO_SIGNATURE_REGEX)
     expect(client.distributeEnvelope).not.toHaveBeenCalled()
   })
@@ -375,6 +388,55 @@ describe("sendForSignature", () => {
   })
 })
 
+describe("sendForSignature edge cases", () => {
+  test("a COMPLETED envelope is kept (never forgotten or deleted): the webhook owns it", async () => {
+    m.generateForContact.mockResolvedValue({
+      document: row({ documensoEnvelopeId: ENV_ID }),
+      created: false,
+    })
+    m.state.updates.push([])
+    const client = fakeClient({
+      getEnvelope: vi.fn(async () => ({
+        ok: true as const,
+        status: 200,
+        body: signable({ status: "COMPLETED" }),
+      })),
+    })
+    expect(await send(client)).toMatchObject({ ok: false, stage: "verify" })
+    expect(client.deleteEnvelope).not.toHaveBeenCalled()
+    expect(m.state.sets).toHaveLength(1)
+    expect(m.state.sets[0]).not.toHaveProperty("documensoEnvelopeId")
+  })
+
+  test("a signing link is stored normalised; whitespace or control characters refuse it", async () => {
+    for (const [raw, stored] of [
+      ["https://SIG.example/s/tok", "https://sig.example/s/tok"],
+      ["https://sig/s/tok\nReply YES to win", null],
+      ["https://sig/s/tok tail", null],
+      ["\thttps://sig/s/tok", null],
+    ] as const) {
+      m.state.updates.length = 0
+      m.state.sets.length = 0
+      m.generateForContact.mockResolvedValue({ document: row(), created: true })
+      m.state.updates.push([{ envelopeId: ENV_ID }], [row({ status: "sent" })])
+      const r = await send(
+        fakeClient({
+          distributeEnvelope: vi.fn(async () => ({
+            ok: true as const,
+            status: 200,
+            body: { recipients: [{ email: EMAIL, signingUrl: raw }] },
+          })),
+        }),
+      )
+      if (stored === null) {
+        expect(r).toMatchObject({ ok: false, stage: "distribute" })
+      } else {
+        expect(r).toMatchObject({ ok: true, signingUrl: stored })
+      }
+    }
+  })
+})
+
 describe("completeFromWebhook", () => {
   const completed = (over: Record<string, unknown> = {}) => ({
     event: "DOCUMENT_COMPLETED",
@@ -424,6 +486,8 @@ describe("completeFromWebhook", () => {
       { externalId: "cbx:123" },
       { externalId: "cbxdoc:0" },
       { externalId: "cbxdoc:1 OR 1=1" },
+      { externalId: "cbxdoc:99999999999999999999" },
+      { externalId: "cbxdoc:9223372036854775808" },
       { externalId: 5 },
     ]) {
       expect(
@@ -445,7 +509,11 @@ describe("completeFromWebhook", () => {
     expect((await hook(completed())).outcome).toBe("unconfirmed")
     m.state.selects.push([sent])
     expect((await hook(completed({ id: 43 }))).outcome).toBe("unconfirmed")
-    for (const over of [{ status: "PENDING" }, { externalId: "cbxdoc:102" }]) {
+    for (const over of [
+      { status: "REJECTED" },
+      { status: "DRAFT" },
+      { externalId: "cbxdoc:102" },
+    ]) {
       m.state.selects.push([sent])
       const r = await hook(
         completed(),
@@ -527,6 +595,26 @@ describe("completeFromWebhook", () => {
     })
   })
 
+  test("Documenso still PENDING right after the event = retry (it may not have committed yet)", async () => {
+    m.state.selects.push([sent])
+    const r = await hook(
+      completed(),
+      fakeClient({ getEnvelope: completeEnvelope({ status: "PENDING" }) }),
+    )
+    expect(r.outcome).toBe("retry")
+    expect(m.putObject).not.toHaveBeenCalled()
+  })
+
+  test("a row whose Documenso id was never recorded still confirms through the envelope", async () => {
+    m.state.selects.push([{ ...sent, documensoDocumentId: null }])
+    m.state.updates.push([{ id: "101" }])
+    const r = await hook(
+      completed(),
+      fakeClient({ getEnvelope: completeEnvelope() }),
+    )
+    expect(r.outcome).toBe("signed")
+  })
+
   test("a payload without a numeric id still confirms through the envelope", async () => {
     m.state.selects.push([sent])
     m.state.updates.push([{ id: "101" }])
@@ -557,7 +645,12 @@ describe("completeFromWebhook", () => {
       fakeClient({ getEnvelope: completeEnvelope() }),
     )
     expect(r).toEqual({ outcome: "retry", detail: "tag: db gone" })
-    expect(m.state.sets[1]).toMatchObject({ status: "sent", signedAt: null })
+    expect(m.state.sets[1]).toEqual({
+      status: "sent",
+      signedPath: null,
+      signedAt: null,
+      updatedAt: expect.any(Date),
+    })
   })
 
   test("no client configured = retry, not a silent drop", async () => {

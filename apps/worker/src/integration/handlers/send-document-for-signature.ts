@@ -21,9 +21,11 @@ import type { ExecuteStepResult } from "./step"
  * a BullMQ retry of this step reuses the same document and envelope instead
  * of sending a second one. Hashed because a run key is not ref-safe.
  */
+const MAX_SIGNER_NAME = 100
+
 export const signatureRef = (flowExecutionKey: string, stepId: string) =>
   `sig:${createHash("sha256")
-    .update(`${flowExecutionKey}\u0000${stepId}`)
+    .update(JSON.stringify([flowExecutionKey, stepId]))
     .digest("hex")
     .slice(0, 40)}`
 
@@ -59,7 +61,8 @@ export async function handleSendDocumentForSignature({
       contactId,
       templateId: step.templateId,
       ref: signatureRef(flowExecutionKey, step.id),
-      signerName: contact.fullName?.trim() || "Signer",
+      signerName:
+        contact.fullName?.trim().slice(0, MAX_SIGNER_NAME) || "Signer",
       resolveVariables: contactDocumentVariables(contactId),
     })
     if (!signed.ok) {

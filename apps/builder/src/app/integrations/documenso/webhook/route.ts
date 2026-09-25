@@ -1,5 +1,6 @@
 import {
   documentSigningService,
+  readCapped,
   verifyDocumensoSecret,
 } from "@chatbotx.io/business/documents"
 import { NextResponse } from "next/server"
@@ -28,18 +29,28 @@ export async function POST(request: Request) {
   if (declared > MAX_DOCUMENSO_WEBHOOK_BYTES) {
     return NextResponse.json({ code: "payloadTooLarge" }, { status: 413 })
   }
-  const text = await request.text()
-  if (text.length > MAX_DOCUMENSO_WEBHOOK_BYTES) {
+  // Byte cap while streaming: a chunked body without content-length must
+  // not be buffered whole before it is refused.
+  const bytes = await readCapped(request, MAX_DOCUMENSO_WEBHOOK_BYTES)
+  if (bytes === null) {
     return NextResponse.json({ code: "payloadTooLarge" }, { status: 413 })
   }
   let body: unknown
   try {
-    body = JSON.parse(text)
+    body = JSON.parse(new TextDecoder().decode(bytes))
   } catch {
     return NextResponse.json({ code: "badRequest" }, { status: 400 })
   }
 
-  const result = await documentSigningService.completeFromWebhook({ body })
+  let result: Awaited<
+    ReturnType<typeof documentSigningService.completeFromWebhook>
+  >
+  try {
+    result = await documentSigningService.completeFromWebhook({ body })
+  } catch (error) {
+    logger.error(error, "documenso webhook failed; Documenso will redeliver")
+    return NextResponse.json({ code: "retry" }, { status: 503 })
+  }
   if (result.outcome === "retry") {
     logger.warn(`documenso webhook will be retried: ${result.detail}`)
     return NextResponse.json(result, { status: 503 })

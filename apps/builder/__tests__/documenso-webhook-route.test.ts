@@ -4,12 +4,18 @@ import { beforeEach, expect, test, vi } from "vitest"
 const verifyDocumensoSecret = vi.fn()
 const completeFromWebhook = vi.fn()
 const warn = vi.fn()
+const error = vi.fn()
 
 vi.mock("@chatbotx.io/business/documents", () => ({
   verifyDocumensoSecret,
   documentSigningService: { completeFromWebhook },
+  // Byte-counting stand-in for the streaming reader (tested in business).
+  readCapped: async (req: Request, max: number) => {
+    const bytes = new Uint8Array(await req.arrayBuffer())
+    return bytes.length > max ? null : bytes
+  },
 }))
-vi.mock("@/lib/log", () => ({ logger: { warn } }))
+vi.mock("@/lib/log", () => ({ logger: { warn, error } }))
 
 const BODY = JSON.stringify({ event: "DOCUMENT_COMPLETED", payload: {} })
 const post = (body: string, headers: Record<string, string> = {}) =>
@@ -77,4 +83,21 @@ test("a transient outcome answers 503 (Documenso redelivers); final outcomes ans
     expect(await res.json()).toEqual({ outcome, detail: "d" })
   }
   expect(completeFromWebhook).toHaveBeenCalledWith({ body: JSON.parse(BODY) })
+})
+
+test("the cap counts BYTES: a body under the limit in characters but over it in UTF-8 is 413", async () => {
+  const { POST, MAX_DOCUMENSO_WEBHOOK_BYTES } = await import(
+    "@/app/integrations/documenso/webhook/route"
+  )
+  const euros = "\u20ac".repeat(Math.floor(MAX_DOCUMENSO_WEBHOOK_BYTES / 2))
+  expect(euros.length).toBeLessThan(MAX_DOCUMENSO_WEBHOOK_BYTES)
+  expect((await POST(post(JSON.stringify({ e: euros })))).status).toBe(413)
+})
+
+test("a thrown service error (DB down, out-of-range id) is a logged 503, not a bare 500", async () => {
+  const { POST } = await import("@/app/integrations/documenso/webhook/route")
+  completeFromWebhook.mockRejectedValueOnce(new Error("value out of range"))
+  const res = await POST(post(BODY))
+  expect(res.status).toBe(503)
+  expect(error).toHaveBeenCalled()
 })

@@ -13,8 +13,11 @@ export type PdfResult =
   | { ok: true; pdf: Uint8Array; ms: number }
   | { ok: false; status: number | null; error: string }
 
+/** Anything with a body stream: a fetch Response or an incoming Request. */
+type BodySource = Pick<Response, "body" | "arrayBuffer">
+
 export const readCapped = async (
-  res: Response,
+  res: BodySource,
   max: number,
 ): Promise<Uint8Array | null> => {
   const reader = res.body?.getReader()
@@ -45,6 +48,29 @@ export const readCapped = async (
   }
   return out
 }
+
+/** A thrown fetch as a failure value: `timeout` or `network: <code>`. */
+export const fetchFailure = (
+  err: unknown,
+): { ok: false; status: null; error: string } => {
+  const e = err as
+    | { name?: string; cause?: { code?: string }; message?: string }
+    | null
+    | undefined
+  if (e?.name === "TimeoutError" || e?.name === "AbortError") {
+    return { ok: false, status: null, error: "timeout" }
+  }
+  return {
+    ok: false,
+    status: null,
+    error: `network: ${e?.cause?.code ?? e?.message ?? "unknown"}`,
+  }
+}
+
+/** A plain JSON object (not null, not an array). */
+export type JsonObject = Record<string, unknown>
+export const isJsonObject = (v: unknown): v is JsonObject =>
+  v !== null && typeof v === "object" && !Array.isArray(v)
 
 const latin1 = (bytes: Uint8Array): string =>
   String.fromCharCode(...Array.from(bytes))
@@ -93,18 +119,6 @@ export const htmlToPdf = async (
     }
     return { ok: true, pdf, ms: Date.now() - started }
   } catch (err) {
-    const e = err as {
-      name?: string
-      cause?: { code?: string }
-      message?: string
-    }
-    if (e?.name === "TimeoutError" || e?.name === "AbortError") {
-      return { ok: false, status: null, error: "timeout" }
-    }
-    return {
-      ok: false,
-      status: null,
-      error: `network: ${e?.cause?.code ?? e?.message ?? "unknown"}`,
-    }
+    return fetchFailure(err)
   }
 }

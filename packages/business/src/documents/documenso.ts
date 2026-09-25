@@ -1,4 +1,11 @@
-import { isPdf, MAX_DOCUMENT_PDF_BYTES, readCapped } from "./gotenberg"
+import {
+  fetchFailure,
+  isJsonObject,
+  isPdf,
+  type JsonObject,
+  MAX_DOCUMENT_PDF_BYTES,
+  readCapped,
+} from "./gotenberg"
 import { documentsEnv } from "./keys"
 
 /**
@@ -31,27 +38,6 @@ export type DocumensoConfig = {
   apiToken: string
   fetchImpl?: typeof fetch
   timeoutMs?: number
-}
-
-type JsonObject = Record<string, unknown>
-
-const isObject = (v: unknown): v is JsonObject =>
-  v !== null && typeof v === "object" && !Array.isArray(v)
-
-const failure = (err: unknown): DocumensoFailure => {
-  const e = err as {
-    name?: string
-    cause?: { code?: string }
-    message?: string
-  }
-  if (e?.name === "TimeoutError" || e?.name === "AbortError") {
-    return { ok: false, status: null, error: "timeout" }
-  }
-  return {
-    ok: false,
-    status: null,
-    error: `network: ${e?.cause?.code ?? e?.message ?? "unknown"}`,
-  }
 }
 
 /** The configured client, or null when any of URL / token is missing. */
@@ -100,22 +86,28 @@ export const createDocumensoClient = (config: DocumensoConfig) => {
             body?.json === undefined ? undefined : JSON.stringify(body.json),
             body?.json === undefined ? undefined : "application/json",
           ))
-      const text = (await res.text()).slice(0, MAX_JSON_BYTES)
       if (!res.ok) {
+        await res.body?.cancel().catch(() => undefined)
         return { ok: false, status: res.status, error: `http-${res.status}` }
+      }
+      // Capped while streaming: a hostile or broken server cannot make the
+      // worker buffer an unbounded answer.
+      const bytes = await readCapped(res, MAX_JSON_BYTES)
+      if (bytes === null) {
+        return { ok: false, status: res.status, error: "too-large" }
       }
       let parsed: unknown
       try {
-        parsed = JSON.parse(text)
+        parsed = JSON.parse(new TextDecoder().decode(bytes))
       } catch {
         return { ok: false, status: res.status, error: "bad-json" }
       }
-      if (!isObject(parsed)) {
+      if (!isJsonObject(parsed)) {
         return { ok: false, status: res.status, error: "bad-json" }
       }
       return { ok: true, status: res.status, body: parsed }
     } catch (err) {
-      return failure(err)
+      return fetchFailure(err)
     }
   }
 
@@ -179,6 +171,18 @@ export const createDocumensoClient = (config: DocumensoConfig) => {
     })
   }
 
+  /** Drop a DRAFT/PENDING envelope (Documenso refuses a COMPLETED one). */
+  const deleteEnvelope = (envelopeId: string) => {
+    if (!ENVELOPE_ID_REGEX.test(envelopeId)) {
+      return Promise.resolve<DocumensoFailure>({
+        ok: false,
+        status: null,
+        error: "bad-envelope-id",
+      })
+    }
+    return json("POST", "/api/v2/envelope/delete", { json: { envelopeId } })
+  }
+
   /** The signed PDF of one envelope item, capped and checked to be a PDF. */
   const downloadSignedItem = async (
     itemId: string,
@@ -204,11 +208,17 @@ export const createDocumensoClient = (config: DocumensoConfig) => {
       }
       return { ok: true, status: res.status, pdf }
     } catch (err) {
-      return failure(err)
+      return fetchFailure(err)
     }
   }
 
-  return { createEnvelope, getEnvelope, distributeEnvelope, downloadSignedItem }
+  return {
+    createEnvelope,
+    getEnvelope,
+    distributeEnvelope,
+    deleteEnvelope,
+    downloadSignedItem,
+  }
 }
 
 export type DocumensoClient = ReturnType<typeof createDocumensoClient>

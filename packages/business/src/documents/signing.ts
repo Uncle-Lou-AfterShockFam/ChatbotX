@@ -16,6 +16,7 @@ import {
   type DocumensoClient,
   documensoConfigFromEnv,
 } from "./documenso"
+import { isJsonObject, type JsonObject } from "./gotenberg"
 import { documentsEnv } from "./keys"
 import {
   contactDocumentPath,
@@ -38,8 +39,14 @@ export const DOCUMENT_SIGNED_TAG = "doc-signed"
 export const SIG_LINK_FIELD = "sig_link"
 export const SIG_DOC_ID_FIELD = "sig_doc_id"
 const COMPLETED_EVENT = "DOCUMENT_COMPLETED"
-const EXTERNAL_ID_REGEX = /^cbxdoc:([1-9][0-9]{0,19})$/
-const SECONDARY_ID_REGEX = /^document_([1-9][0-9]{0,15})$/
+// A ContactDocument id is a Postgres bigint; Documenso's document id an int4.
+const EXTERNAL_ID_REGEX = /^cbxdoc:([1-9][0-9]{0,18})$/
+const MAX_BIGINT = BigInt("9223372036854775807")
+const SECONDARY_ID_REGEX = /^document_([1-9][0-9]{0,9})$/
+const MAX_INT4 = 2_147_483_647
+// Whitespace or control characters in a link we text: refuse, never repair.
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching control characters is the point
+const UNSAFE_URL_CHARS_REGEX = /[\s\u0000-\u001f\u007f]/
 const MAX_ERROR = 300
 const PDF_SUFFIX_REGEX = /\.pdf$/
 
@@ -53,10 +60,6 @@ export const signedDocumentPath = (
     PDF_SUFFIX_REGEX,
     ".signed.pdf",
   )
-
-type JsonObject = Record<string, unknown>
-const isObject = (v: unknown): v is JsonObject =>
-  v !== null && typeof v === "object" && !Array.isArray(v)
 
 export type SignFailureStage =
   | "config"
@@ -92,12 +95,12 @@ export const verifySignableEnvelope = (
     return "externalId mismatch"
   }
   const m = SECONDARY_ID_REGEX.exec(String(env.secondaryId ?? ""))
-  if (m === null) {
+  if (m === null || Number(m[1]) > MAX_INT4) {
     return "no secondaryId"
   }
   const recipients = Array.isArray(env.recipients) ? env.recipients : []
   const signer = recipients.find(
-    (r): r is JsonObject => isObject(r) && r.email === email,
+    (r): r is JsonObject => isJsonObject(r) && r.email === email,
   )
   // An integer id, or `undefined === undefined` would match an id-less field.
   if (!(signer && Number.isSafeInteger(signer.id))) {
@@ -105,7 +108,8 @@ export const verifySignableEnvelope = (
   }
   const fields = Array.isArray(env.fields) ? env.fields : []
   const hasSignature = fields.some(
-    (f) => isObject(f) && f.type === "SIGNATURE" && f.recipientId === signer.id,
+    (f) =>
+      isJsonObject(f) && f.type === "SIGNATURE" && f.recipientId === signer.id,
   )
   if (!hasSignature) {
     return "no signature field (add the signature block to the template)"
@@ -113,12 +117,14 @@ export const verifySignableEnvelope = (
   return { documentId: Number(m[1]) }
 }
 
+/** The normalised https URL, or null; a raw value with whitespace is refused. */
 const httpsUrlOrNull = (value: unknown): string | null => {
-  if (typeof value !== "string") {
+  if (typeof value !== "string" || UNSAFE_URL_CHARS_REGEX.test(value)) {
     return null
   }
   try {
-    return new URL(value).protocol === "https:" ? value : null
+    const url = new URL(value)
+    return url.protocol === "https:" ? url.href : null
   } catch {
     return null
   }
@@ -249,6 +255,9 @@ export class DocumentSigningService {
       if (claimed?.envelopeId) {
         envelopeId = claimed.envelopeId
       } else {
+        // Lost to a concurrent retry: drop ours so no untracked copy of the
+        // contact's document stays in Documenso (best effort).
+        await documenso.deleteEnvelope(created.envelopeId)
         const [current] = await tx
           .select({ envelopeId: contactDocumentModel.documensoEnvelopeId })
           .from(contactDocumentModel)
@@ -267,8 +276,14 @@ export class DocumentSigningService {
     }
     const checked = verifySignableEnvelope(got.body, externalId, email)
     if (typeof checked === "string") {
+      // A COMPLETED envelope is signed already: keep it, the webhook owns it.
+      if (got.body.status === "COMPLETED") {
+        return fail("verify", checked)
+      }
       // Documenso answered and the envelope can never be signed as-is: forget
-      // it, so a retry opens a fresh one instead of re-verifying it forever.
+      // (and drop) it, so a retry opens a fresh one instead of re-verifying it
+      // forever.
+      await documenso.deleteEnvelope(envelopeId)
       await tx
         .update(contactDocumentModel)
         .set({ documensoEnvelopeId: null, updatedAt: new Date() })
@@ -289,7 +304,7 @@ export class DocumentSigningService {
       ? dist.body.recipients
       : []
     const signer = recipients.find(
-      (r): r is JsonObject => isObject(r) && r.email === email,
+      (r): r is JsonObject => isJsonObject(r) && r.email === email,
     )
     const signingUrl = httpsUrlOrNull(signer?.signingUrl)
     if (signingUrl === null) {
@@ -334,18 +349,18 @@ export class DocumentSigningService {
     tx?: DatabaseClient
   }): Promise<{ outcome: DocumensoWebhookOutcome; detail: string }> {
     const { body, tx = db } = props
-    if (!isObject(body) || typeof body.event !== "string") {
+    if (!isJsonObject(body) || typeof body.event !== "string") {
       return { outcome: "ignored", detail: "not a Documenso event" }
     }
     if (body.event !== COMPLETED_EVENT) {
       return { outcome: "ignored", detail: body.event.slice(0, 64) }
     }
-    const payload = isObject(body.payload) ? body.payload : null
+    const payload = isJsonObject(body.payload) ? body.payload : null
     const match =
       payload && typeof payload.externalId === "string"
         ? EXTERNAL_ID_REGEX.exec(payload.externalId)
         : null
-    if (!(payload && match)) {
+    if (!(payload && match) || BigInt(match[1]) > MAX_BIGINT) {
       return { outcome: "unknown", detail: "not a hub document" }
     }
     const [row] = await tx
@@ -364,6 +379,7 @@ export class DocumentSigningService {
     if (
       row.documensoEnvelopeId === null ||
       (Number.isSafeInteger(payload.id) &&
+        row.documensoDocumentId !== null &&
         row.documensoDocumentId !== payload.id)
     ) {
       return {
@@ -383,17 +399,22 @@ export class DocumentSigningService {
         : { outcome: "retry", detail: `confirm: ${got.error}` }
     }
     const env = got.body
-    if (
-      env.status !== "COMPLETED" ||
-      env.externalId !== contactDocumentExternalId(row.id)
-    ) {
+    if (env.externalId !== contactDocumentExternalId(row.id)) {
+      return { outcome: "unconfirmed", detail: "externalId mismatch" }
+    }
+    // Still PENDING right after the event: Documenso may not have committed
+    // the completion yet, so let it redeliver (its retries are bounded).
+    if (env.status === "PENDING") {
+      return { outcome: "retry", detail: "Documenso still has status PENDING" }
+    }
+    if (env.status !== "COMPLETED") {
       return {
         outcome: "unconfirmed",
         detail: `Documenso has status ${String(env.status).slice(0, 20)}`,
       }
     }
     const items = Array.isArray(env.envelopeItems) ? env.envelopeItems : []
-    const itemId = isObject(items[0]) ? items[0].id : undefined
+    const itemId = isJsonObject(items[0]) ? items[0].id : undefined
     if (typeof itemId !== "string") {
       return { outcome: "retry", detail: "envelope has no item" }
     }
@@ -444,7 +465,12 @@ export class DocumentSigningService {
       // Undo the claim so Documenso's redelivery tags the contact.
       await tx
         .update(contactDocumentModel)
-        .set({ status: "sent", signedAt: null, updatedAt: new Date() })
+        .set({
+          status: "sent",
+          signedPath: null,
+          signedAt: null,
+          updatedAt: new Date(),
+        })
         .where(
           and(
             eq(contactDocumentModel.id, row.id),

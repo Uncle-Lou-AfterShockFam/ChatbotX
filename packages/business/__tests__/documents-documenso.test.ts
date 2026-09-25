@@ -147,8 +147,51 @@ describe("documenso client", () => {
   })
 })
 
+describe("documenso client bounds", () => {
+  test("a JSON answer over 256 KB is refused while streaming, never buffered whole", async () => {
+    let pulled = 0
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += 64 * 1024
+        controller.enqueue(new Uint8Array(64 * 1024).fill(32))
+      },
+    })
+    const r = await client(() => new Response(endless)).c.getEnvelope(ENVELOPE)
+    expect(r).toEqual({ ok: false, status: 200, error: "too-large" })
+    expect(pulled).toBeLessThan(1024 * 1024)
+  })
+
+  test("a non-ok answer's body is cancelled, not read", async () => {
+    let cancelled = false
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(1024))
+      },
+      cancel() {
+        cancelled = true
+      },
+    })
+    const r = await client(
+      () => new Response(body, { status: 500 }),
+    ).c.getEnvelope(ENVELOPE)
+    expect(r).toEqual({ ok: false, status: 500, error: "http-500" })
+    expect(cancelled).toBe(true)
+  })
+
+  test("deleteEnvelope posts the id; a bad id makes no request", async () => {
+    const { c, calls } = client(() => json({ success: true }))
+    expect((await c.deleteEnvelope(ENVELOPE)).ok).toBe(true)
+    expect(calls[0].url).toBe("http://documenso:3000/api/v2/envelope/delete")
+    expect(JSON.parse(String(calls[0].init.body))).toEqual({
+      envelopeId: ENVELOPE,
+    })
+    expect((await c.deleteEnvelope("../x")).ok).toBe(false)
+    expect(calls).toHaveLength(1)
+  })
+})
+
 describe("documensoConfigFromEnv", () => {
-  test("empty env values (the compose `${X:-}` default) read as not configured", async () => {
+  test("empty env values (the compose empty-default) read as not configured", async () => {
     const { documensoConfigFromEnv } = await import(
       "../src/documents/documenso"
     )

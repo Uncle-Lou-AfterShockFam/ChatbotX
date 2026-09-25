@@ -78,8 +78,11 @@ describe("signatureRef", () => {
     expect(a).toMatch(SIG_REF_REGEX)
     expect(a).not.toBe(signatureRef("flow-run-2", "step-1"))
     expect(a).not.toBe(signatureRef("flow-run-1", "step-2"))
-    // The separator keeps ("ab","c") and ("a","bc") apart.
+    // The encoding keeps ("ab","c") and ("a","bc") apart, NUL included.
     expect(signatureRef("ab", "c")).not.toBe(signatureRef("a", "bc"))
+    expect(signatureRef("a\u0000b", "c")).not.toBe(
+      signatureRef("a", "b\u0000c"),
+    )
   })
 })
 
@@ -133,6 +136,15 @@ describe("handleSendDocumentForSignature", () => {
         contactInboxId: "ci-1",
       },
     ])
+  })
+
+  test("a huge contact name is capped before it reaches Documenso", async () => {
+    mocks.findByIdOrFail.mockResolvedValue({
+      id: "c1",
+      fullName: "x".repeat(10_000),
+    })
+    await handleSendDocumentForSignature(props())
+    expect(mocks.sendForSignature.mock.calls[0][0].signerName).toHaveLength(100)
   })
 
   test("a nameless contact signs as Signer", async () => {
