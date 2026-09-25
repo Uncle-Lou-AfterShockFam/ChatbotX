@@ -84,6 +84,7 @@ describe("handleFollowUp", () => {
     vi.setSystemTime(new Date("2026-07-16T00:00:00.000Z"))
     integrationQueueAdd.mockResolvedValue(undefined)
     smartDelayService.resetToPending.mockResolvedValue(undefined)
+    smartDelayService.markScheduled.mockResolvedValue(true)
     smartDelayService.upsertFollowUp.mockImplementation(
       async ({ data }: { data: Record<string, unknown> }) => data,
     )
@@ -119,7 +120,12 @@ describe("handleFollowUp", () => {
       },
       { delay: 60_000, jobId: `smart-delay-${rowId}-${triggerAt.getTime()}` },
     )
-    expect(smartDelayService.markScheduled).toHaveBeenCalledWith({ id: rowId })
+    // Unconditional for followUp: upsertFollowUp re-arms a scheduled row, and a
+    // pending-only CAS there could skip the re-armed row's job (skeptic HIGH).
+    expect(smartDelayService.markScheduled).toHaveBeenCalledWith({
+      id: rowId,
+      ifPending: false,
+    })
     expect(
       smartDelayService.markScheduled.mock.invocationCallOrder[0],
     ).toBeLessThan(integrationQueueAdd.mock.invocationCallOrder[0])

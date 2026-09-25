@@ -83,7 +83,6 @@ import { questionnaires } from "./questionnaires"
 import { sendEmail } from "./send-email"
 import { addSendGridContact } from "./sendgrid-handler"
 import { scheduleSmartDelayResume } from "./smart-delay"
-
 import {
   clearSpreadsheetRow,
   getSpreadsheetRandomRow,
@@ -91,7 +90,6 @@ import {
   sendSpreadsheetData,
   updateSpreadsheetRow,
 } from "./spreadsheet-handler"
-
 import {
   stepArchiveConversation,
   stepAssignConversation,
@@ -114,6 +112,7 @@ import {
   handleExecuteJavascript,
 } from "./tool-handler"
 import { handleTriggerN8nStep } from "./trigger-n8n-handler"
+import { resolveWaitMatchValue } from "./wait-match-value"
 
 export async function sendFlowMessage(
   props: ExecuteStepProps<ChatJobSendFlowStep["data"]["step"]>,
@@ -303,7 +302,10 @@ async function handleWait({
       contactInboxId,
       connectedNodeId: timeoutNodeId ?? null,
       eventNodeId: eventNodeId ?? null,
-      eventSpec: waitForEventSpecFromStep(step),
+      eventSpec: waitForEventSpecFromStep(
+        step,
+        await resolveWaitMatchValue(step, contactInbox, conversation),
+      ),
       stepId: step.id,
       metadata,
       sendFrom,

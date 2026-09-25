@@ -62,11 +62,15 @@ async function resumeOnTimeout(
   if (!claimed) {
     return
   }
-  if (!row.nodeId) {
+  // Re-read what we now own: a failed event resume requeues this row pointed
+  // at the EVENT edge (requeueClaimedRun), and the snapshot above may predate
+  // that, so running its nodeId would take the wrong edge.
+  const owned = (await smartDelayService.findById({ id: row.id })) ?? row
+  if (!owned.nodeId) {
     // No timeout edge: the wait simply ends.
     return
   }
-  await runClaimedSmartDelay(row.id, buildSendFlowResumeJob(row), parentJob)
+  await runClaimedSmartDelay(owned.id, buildSendFlowResumeJob(owned), parentJob)
 }
 
 /** Does this row wait for the event that just landed? */
@@ -80,8 +84,18 @@ export const eventMatchesSpec = (
   if (spec.eventType === waitStepEventTypes.enum.tagApplied) {
     return Boolean(spec.tagId) && spec.tagId === event.tagId
   }
+  if (!spec.customFieldId || spec.customFieldId !== event.customFieldId) {
+    return false
+  }
+  if (spec.matchValue === undefined) {
+    return true // any change
+  }
+  // Value-scoped: fail closed on an empty captured value, a cleared field, or
+  // an event enqueued before newValue was carried.
   return (
-    Boolean(spec.customFieldId) && spec.customFieldId === event.customFieldId
+    spec.matchValue !== "" &&
+    typeof event.newValue === "string" &&
+    event.newValue.trim() === spec.matchValue
   )
 }
 

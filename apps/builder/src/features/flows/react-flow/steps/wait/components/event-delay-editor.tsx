@@ -4,6 +4,7 @@ import {
   delayTypeEventDefaultFn,
   waitStepEventTypes,
 } from "@chatbotx.io/flow-config"
+import { InputField } from "@chatbotx.io/ui/components/form/input-field"
 import { InputNumberField } from "@chatbotx.io/ui/components/form/input-number-field"
 import { SelectField } from "@chatbotx.io/ui/components/form/select-field"
 import { Label } from "@chatbotx.io/ui/components/ui/label"
@@ -66,10 +67,18 @@ export function EventDelayEditor({ parentName }: EventDelayEditorProps) {
       )}
 
       {eventType === waitStepEventTypes.enum.customFieldChanged && (
-        <CustomFieldSelect
-          label={t("flows.wait.eventCustomFieldLabel")}
-          name={`${parentName}.customFieldId`}
-        />
+        <>
+          <CustomFieldSelect
+            label={t("flows.wait.eventCustomFieldLabel")}
+            name={`${parentName}.customFieldId`}
+          />
+          <InputField
+            description={t("flows.wait.eventMatchValueHelp")}
+            label={t("flows.wait.eventMatchValueLabel")}
+            name={`${parentName}.matchValue`}
+            placeholder="{{raw:order_id}}"
+          />
+        </>
       )}
 
       <div className="space-y-2">

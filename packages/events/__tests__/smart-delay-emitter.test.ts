@@ -59,8 +59,32 @@ describe("SmartDelayEventEmitter", () => {
         contactId: "contact-1",
         eventType: "customFieldChanged",
         customFieldId: "cf-1",
+        newValue: "ok",
       },
     })
+  })
+
+  test("customFieldChanged carries the new value: text as is, a clear as null, anything else as JSON", async () => {
+    await SmartDelayEventEmitter.customFieldChanged(
+      "ws-1",
+      "contact-1",
+      "cf-1",
+      "wp_paid_order_id",
+      "3634",
+      null,
+    )
+    await SmartDelayEventEmitter.customFieldChanged(
+      "ws-1",
+      "contact-1",
+      "cf-1",
+      "n",
+      null,
+      42 as unknown as string,
+    )
+    const values = mocks.enqueueIntegrationJob.mock.calls.map(
+      (call) => (call[0] as { data: { newValue?: unknown } }).data.newValue,
+    )
+    expect(values).toEqual([null, "42"])
   })
 
   test("other event types and empty ids are ignored", async () => {

@@ -62,6 +62,14 @@ const tagEvent = {
   tagId: "tag-clicked",
 }
 
+const fieldEvent = {
+  reason: "event" as const,
+  workspaceId: "ws-1",
+  contactId: "contact-1",
+  eventType: "customFieldChanged" as const,
+  customFieldId: "f",
+}
+
 describe("runWaitForEventResume", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -91,7 +99,7 @@ describe("runWaitForEventResume", () => {
   })
 
   test("timeout with no timeout edge completes the row and runs nothing", async () => {
-    smartDelayService.findById.mockResolvedValueOnce({ ...row, nodeId: null })
+    smartDelayService.findById.mockResolvedValue({ ...row, nodeId: null })
     await runWaitForEventResume({ reason: "timeout", smartDelayId: "sd-1" })
     expect(smartDelayService.claimForRun).toHaveBeenCalledTimes(1)
     expect(runFlowNode).not.toHaveBeenCalled()
@@ -183,6 +191,46 @@ describe("runWaitForEventResume", () => {
     })
   })
 
+  test("value-scoped waits: paying order B resumes only the row waiting for B", async () => {
+    const rowA = {
+      ...row,
+      id: "sd-a",
+      eventSpec: {
+        eventType: "customFieldChanged",
+        customFieldId: "cf-paid",
+        matchValue: "3635",
+      },
+    }
+    const rowB = {
+      ...rowA,
+      id: "sd-b",
+      eventSpec: { ...rowA.eventSpec, matchValue: "3636" },
+    }
+    smartDelayService.findActiveWaitForEvent.mockResolvedValueOnce([rowA, rowB])
+    await runWaitForEventResume({
+      ...fieldEvent,
+      customFieldId: "cf-paid",
+      newValue: "3636",
+    })
+    expect(smartDelayService.claimForEvent).toHaveBeenCalledTimes(1)
+    expect(smartDelayService.claimForEvent).toHaveBeenCalledWith({
+      id: "sd-b",
+    })
+    expect(runFlowNode).toHaveBeenCalledTimes(1)
+  })
+
+  test("timeout: runs the edge of the row it CLAIMED, not its pre-claim snapshot (a failed event resume re-pointed it)", async () => {
+    smartDelayService.findById
+      .mockResolvedValueOnce(row)
+      .mockResolvedValueOnce({ ...row, nodeId: "event-node" })
+    await runWaitForEventResume({ reason: "timeout", smartDelayId: "sd-1" })
+    expect(runFlowNode).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(runFlowNode.mock.calls[0])).toContain("event-node")
+    expect(JSON.stringify(runFlowNode.mock.calls[0])).not.toContain(
+      "timeout-node",
+    )
+  })
+
   test("a malformed stored spec never matches", async () => {
     smartDelayService.findActiveWaitForEvent.mockResolvedValueOnce([
       { ...row, eventSpec: { eventType: "tagApplied" } },
@@ -219,5 +267,78 @@ describe("eventMatchesSpec", () => {
       ),
     ).toBe(false)
     expect(eventMatchesSpec({ eventType: "tagApplied" }, tagEvent)).toBe(false)
+  })
+})
+
+describe("eventMatchesSpec: matchValue", () => {
+  const spec = {
+    eventType: "customFieldChanged" as const,
+    customFieldId: "f",
+    matchValue: "3635",
+  }
+
+  test("matches only when the field changed TO the captured value", () => {
+    expect(eventMatchesSpec(spec, { ...fieldEvent, newValue: "3635" })).toBe(
+      true,
+    )
+    expect(
+      eventMatchesSpec(spec, { ...fieldEvent, newValue: "  3635\n" }),
+    ).toBe(true)
+    expect(eventMatchesSpec(spec, { ...fieldEvent, newValue: "3636" })).toBe(
+      false,
+    )
+    expect(eventMatchesSpec(spec, { ...fieldEvent, newValue: "36350" })).toBe(
+      false,
+    )
+    expect(
+      eventMatchesSpec(spec, {
+        ...fieldEvent,
+        customFieldId: "other",
+        newValue: "3635",
+      }),
+    ).toBe(false)
+  })
+
+  test("fails closed: cleared field, no newValue (pre-deploy job), empty captured value", () => {
+    expect(eventMatchesSpec(spec, { ...fieldEvent, newValue: null })).toBe(
+      false,
+    )
+    expect(eventMatchesSpec(spec, fieldEvent)).toBe(false)
+    expect(
+      eventMatchesSpec(
+        { ...spec, matchValue: "" },
+        { ...fieldEvent, newValue: "" },
+      ),
+    ).toBe(false)
+  })
+
+  test("a row without matchValue still matches any change (legacy rows)", () => {
+    const { matchValue: _unused, ...legacy } = spec
+    expect(eventMatchesSpec(legacy, { ...fieldEvent, newValue: "x" })).toBe(
+      true,
+    )
+    expect(eventMatchesSpec(legacy, fieldEvent)).toBe(true)
+  })
+
+  test("adversarial: long values and unresolved placeholders compare literally", () => {
+    const long = "9".repeat(500)
+    expect(
+      eventMatchesSpec(
+        { ...spec, matchValue: long },
+        { ...fieldEvent, newValue: long },
+      ),
+    ).toBe(true)
+    expect(
+      eventMatchesSpec(
+        { ...spec, matchValue: long },
+        { ...fieldEvent, newValue: `${long}9` },
+      ),
+    ).toBe(false)
+    expect(
+      eventMatchesSpec(
+        { ...spec, matchValue: "3635" },
+        { ...fieldEvent, newValue: "{{raw:wp_order_id}}" },
+      ),
+    ).toBe(false)
   })
 })

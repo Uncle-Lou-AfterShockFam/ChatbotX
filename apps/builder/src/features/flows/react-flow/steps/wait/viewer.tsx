@@ -45,6 +45,12 @@ const WaitStepViewer = (props: WaitStepViewerProps) => {
           <span className="rounded-full py-1 font-medium text-primary text-sm">
             {target}
           </span>
+          {data.eventType === waitStepEventTypes.enum.customFieldChanged &&
+            data.matchValue && (
+              <div className="break-all text-muted-foreground">
+                {t("flows.wait.eventDetailMatchValue")} {data.matchValue}
+              </div>
+            )}
           <div className="text-muted-foreground">
             {t("flows.wait.eventDetailTimeout")} {data.timeoutValue}{" "}
             {data.timeoutUnit}

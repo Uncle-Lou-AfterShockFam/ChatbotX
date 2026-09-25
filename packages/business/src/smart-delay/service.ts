@@ -90,15 +90,37 @@ class SmartDelayService extends BaseService {
     return toSmartDelayRow(row)
   }
 
+  /**
+   * Mark a row scheduled before its immediate job is enqueued. `ifPending`
+   * makes it a pending -> scheduled CAS: a waitForEvent row can be claimed
+   * (completed) by its event between insert and this call, and an
+   * unconditional write would resurrect it so its timeout edge ran too
+   * (double resume). Other types keep the unconditional write: upsertFollowUp
+   * re-arms a SCHEDULED row back to pending, and a CAS there could skip the
+   * re-armed row's job. False = not marked: do not enqueue.
+   */
   async markScheduled(props: {
     tx?: DatabaseClient
     id: string
-  }): Promise<void> {
-    await this.markStatus({
-      tx: props.tx,
-      id: props.id,
-      status: smartDelayStatuses.enum.scheduled,
-    })
+    ifPending?: boolean
+  }): Promise<boolean> {
+    const { tx = db, id, ifPending = false } = props
+    const rows = await tx
+      .update(contactOnSmartDelayModel)
+      .set({ status: smartDelayStatuses.enum.scheduled })
+      .where(
+        ifPending
+          ? and(
+              eq(contactOnSmartDelayModel.id, id),
+              eq(
+                contactOnSmartDelayModel.status,
+                smartDelayStatuses.enum.pending,
+              ),
+            )
+          : eq(contactOnSmartDelayModel.id, id),
+      )
+      .returning({ id: contactOnSmartDelayModel.id })
+    return rows.length > 0
   }
 
   async markCompleted(props: {
