@@ -16,6 +16,7 @@ import {
   ChevronsRight,
   HandshakeIcon,
   LightbulbIcon,
+  ListTodoIcon,
   type LucideIcon,
   MessageCircleMoreIcon,
   PhoneCallIcon,
@@ -133,6 +134,12 @@ export function AppSidebar({
         title: t("tasks.calendar.title"),
         url: `/space/${workspaceId}/tasks`,
         icon: CalendarCheckIcon,
+        permission: PERMISSION_NAV.deals,
+      },
+      {
+        title: t("tasks.mine.title"),
+        url: `/space/${workspaceId}/my-tasks`,
+        icon: ListTodoIcon,
         permission: PERMISSION_NAV.deals,
       },
       {

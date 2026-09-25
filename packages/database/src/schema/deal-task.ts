@@ -121,7 +121,14 @@ export const dealTaskModel = pgTable(
   },
   (table) => [
     index("DealTask_dealId_status_idx").on(table.dealId, table.status),
-    index("DealTask_assigneeId_idx").on(table.assigneeId),
+    // "My tasks" (s198): one member's open tasks by due date (the done list
+    // uses the (assigneeId, status) prefix; its completedAt sort is not
+    // indexed); the assigneeId prefix also serves the user-delete SET NULL scan
+    index("DealTask_assigneeId_status_dueAt_idx").on(
+      table.assigneeId,
+      table.status,
+      table.dueAt,
+    ),
     // the workspace task calendar's range scan (s197)
     index("DealTask_workspaceId_dueAt_idx").on(table.workspaceId, table.dueAt),
     // The overdue scanner's candidate set: open, not yet notified.

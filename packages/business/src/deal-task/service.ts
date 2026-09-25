@@ -64,6 +64,8 @@ const TASK_NOT_FOUND = "Task not found"
 const DAY_MS = 86_400_000
 export const MAX_TASK_CALENDAR_RANGE_DAYS = 62
 export const MAX_TASK_CALENDAR_ROWS = 500
+export const MY_TASKS_PAGE_DEFAULT = 50
+export const MY_TASKS_PAGE_MAX = 100
 const EDGE_REFUSAL_MESSAGES = {
   tooManyDependencies: `A task waits on at most ${MAX_DEAL_TASK_DEPENDENCIES_PER_TASK} tasks.`,
   dependencyExists: "That dependency already exists.",
@@ -283,28 +285,7 @@ export class DealTaskService extends BaseService {
     if (!scope) {
       return { data: [], truncated: false }
     }
-    const rows = await tx
-      .select({
-        task: dealTaskModel,
-        dealTitle: dealModel.title,
-        pipelineId: dealModel.pipelineId,
-        pipelineName: pipelineModel.name,
-        openSuccessors: sql<number>`(
-          select count(*)::int from "DealDependency" dd
-          join "DealTask" s on s."id" = dd."taskId" and s."status" = 'open'
-          where dd."dependsOnTaskId" = ${dealTaskModel.id}
-            and dd."workspaceId" = ${workspaceId}
-        )`,
-      })
-      .from(dealTaskModel)
-      .innerJoin(dealModel, eq(dealModel.id, dealTaskModel.dealId))
-      .innerJoin(
-        pipelineModel,
-        and(
-          eq(pipelineModel.id, dealModel.pipelineId),
-          eq(pipelineModel.workspaceId, workspaceId),
-        ),
-      )
+    const rows = await calendarRows(tx, workspaceId)
       .where(
         and(
           eq(dealTaskModel.workspaceId, workspaceId),
@@ -324,14 +305,67 @@ export class DealTaskService extends BaseService {
       .limit(MAX_TASK_CALENDAR_ROWS + 1)
     const truncated = rows.length > MAX_TASK_CALENDAR_ROWS
     return {
-      data: rows.slice(0, MAX_TASK_CALENDAR_ROWS).map((r) => ({
-        ...r.task,
-        dealTitle: r.dealTitle,
-        pipelineId: r.pipelineId,
-        pipelineName: r.pipelineName,
-        openSuccessors: Number(r.openSuccessors),
-      })),
+      data: rows.slice(0, MAX_TASK_CALENDAR_ROWS).map(toCalendarRow),
       truncated,
+    }
+  }
+
+  /**
+   * "My tasks" (s198): every task assigned to the viewer, any date, on deals
+   * the viewer may still read. Open = soonest due first, undated last;
+   * done = most recently completed first. Keyset-paged on (sort key, id):
+   * `nextCursor` is opaque and bound to the status it was issued for.
+   */
+  async listMine(props: {
+    workspaceId: string
+    viewer: DealViewer
+    status?: "open" | "done" | null
+    cursor?: string | null
+    limit?: number
+    tx?: DatabaseClient
+  }): Promise<{ data: DealTaskCalendarRow[]; nextCursor: string | null }> {
+    const { workspaceId, viewer, tx = db } = props
+    // fail closed: "mine" without a user would be everyone's
+    if (!viewer || typeof viewer.userId !== "string" || !viewer.userId) {
+      throw validationException("viewer", "A signed-in member is required.")
+    }
+    const status = props.status ?? "open"
+    const limit = Math.min(
+      Math.max(Math.trunc(props.limit ?? MY_TASKS_PAGE_DEFAULT) || 1, 1),
+      MY_TASKS_PAGE_MAX,
+    )
+    const after = props.cursor
+      ? decodeMyTasksCursor(props.cursor, status)
+      : null
+    const scope = await this.dealScope({ workspaceId, viewer, tx })
+    if (!scope) {
+      return { data: [], nextCursor: null }
+    }
+    const done = status === "done"
+    const key = done ? dealTaskModel.completedAt : dealTaskModel.dueAt
+    const rows = await calendarRows(tx, workspaceId, epochMicros(key))
+      .where(
+        and(
+          eq(dealTaskModel.workspaceId, workspaceId),
+          eq(dealTaskModel.assigneeId, viewer.userId),
+          eq(dealTaskModel.status, status),
+          after ? afterCursor(key, after, done) : undefined,
+          ...scope,
+        ),
+      )
+      .orderBy(
+        done ? sql`${key} desc nulls last` : sql`${key} asc nulls last`,
+        done ? sql`${dealTaskModel.id} desc` : sql`${dealTaskModel.id} asc`,
+      )
+      .limit(limit + 1)
+    const page = rows.slice(0, limit)
+    const last = page.at(-1)
+    return {
+      data: page.map(toCalendarRow),
+      nextCursor:
+        rows.length > limit && last
+          ? encodeMyTasksCursor({ s: status, k: last.sortKey, i: last.task.id })
+          : null,
     }
   }
 
@@ -1368,6 +1402,143 @@ export class DealTaskService extends BaseService {
   private parseStartAt(value: unknown): Date | null {
     return parseDateOrNull(value, "startAt")
   }
+}
+
+/**
+ * The calendar-row select (task + deal + pipeline names + open successors),
+ * shared by the task calendar and "My tasks" (whose `sortKey` is the keyset
+ * column's `epochMicros`).
+ */
+function calendarRows(
+  tx: DatabaseClient,
+  workspaceId: string,
+  sortKey: SQL<string | null> = sql<null>`null`,
+) {
+  return tx
+    .select({
+      task: dealTaskModel,
+      dealTitle: dealModel.title,
+      pipelineId: dealModel.pipelineId,
+      pipelineName: pipelineModel.name,
+      openSuccessors: sql<number>`(
+        select count(*)::int from "DealDependency" dd
+        join "DealTask" s on s."id" = dd."taskId" and s."status" = 'open'
+        where dd."dependsOnTaskId" = ${dealTaskModel.id}
+          and dd."workspaceId" = ${workspaceId}
+      )`,
+      sortKey,
+    })
+    .from(dealTaskModel)
+    .innerJoin(dealModel, eq(dealModel.id, dealTaskModel.dealId))
+    .innerJoin(
+      pipelineModel,
+      and(
+        eq(pipelineModel.id, dealModel.pipelineId),
+        eq(pipelineModel.workspaceId, workspaceId),
+      ),
+    )
+}
+
+function toCalendarRow(r: {
+  task: DealTaskModel
+  dealTitle: string
+  pipelineId: string
+  pipelineName: string
+  openSuccessors: number | string
+}): DealTaskCalendarRow {
+  return {
+    ...r.task,
+    dealTitle: r.dealTitle,
+    pipelineId: r.pipelineId,
+    pipelineName: r.pipelineName,
+    openSuccessors: Number(r.openSuccessors),
+  }
+}
+
+/** `k` = the key in epoch microseconds, `i` = the task id (both int8 text). */
+type MyTasksCursor = { s: "open" | "done"; k: string | null; i: string }
+/** Mirrored by the route's `cursor` max length (apps/builder listMyTasksQuery). */
+export const MY_TASKS_CURSOR_MAX_LENGTH = 256
+const INT8_TEXT = /^-?\d{1,19}$/
+const INT8_MIN = -(2n ** 63n)
+const INT8_MAX = 2n ** 63n - 1n
+
+/**
+ * A timestamp as epoch microseconds (int8 text): exact at the column's
+ * precision and independent of the session TimeZone / DateStyle, unlike
+ * `::text` (s198 probe: an LMT offset like `-04:56:02`, or DateStyle SQL).
+ */
+function epochMicros(key: typeof dealTaskModel.dueAt): SQL<string | null> {
+  return sql<
+    string | null
+  >`(extract(epoch from ${key}) * 1000000)::bigint::text`
+}
+
+function fromEpochMicros(micros: string): SQL {
+  return sql`(timestamptz 'epoch' + ${micros}::bigint * interval '1 microsecond')`
+}
+
+function isInt8(value: unknown, min = INT8_MIN): value is string {
+  if (typeof value !== "string" || !INT8_TEXT.test(value)) {
+    return false
+  }
+  const n = BigInt(value)
+  return n >= min && n <= INT8_MAX
+}
+
+export function encodeMyTasksCursor(c: MyTasksCursor): string {
+  return Buffer.from(JSON.stringify(c)).toString("base64url")
+}
+
+/** A cursor this service issued for `status`, or a typed 422. */
+export function decodeMyTasksCursor(
+  raw: string,
+  status: "open" | "done",
+): MyTasksCursor {
+  const refuse = () =>
+    validationException("cursor", "That page cursor is not valid.", {
+      reason: "invalidCursor",
+    })
+  if (typeof raw !== "string" || raw.length > MY_TASKS_CURSOR_MAX_LENGTH) {
+    throw refuse()
+  }
+  let c: unknown
+  try {
+    c = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"))
+  } catch {
+    throw refuse()
+  }
+  if (!c || typeof c !== "object" || Array.isArray(c)) {
+    throw refuse()
+  }
+  const { s, k, i, ...rest } = c as Record<string, unknown>
+  if (
+    Object.keys(rest).length > 0 ||
+    s !== status ||
+    !(k === null || isInt8(k)) ||
+    !isInt8(i, 1n)
+  ) {
+    throw refuse()
+  }
+  return { s: status, k, i }
+}
+
+/** Rows strictly after the cursor in (key nulls last, id) order. */
+function afterCursor(
+  key: typeof dealTaskModel.dueAt,
+  c: MyTasksCursor,
+  desc: boolean,
+): SQL {
+  const id = dealTaskModel.id
+  if (c.k === null) {
+    return desc
+      ? sql`(${key} is null and ${id} < ${c.i}::bigint)`
+      : sql`(${key} is null and ${id} > ${c.i}::bigint)`
+  }
+  const at = fromEpochMicros(c.k)
+  return desc
+    ? sql`(${key} < ${at} or (${key} = ${at} and ${id} < ${c.i}::bigint) or ${key} is null)`
+    : sql`(${key} > ${at} or (${key} = ${at} and ${id} > ${c.i}::bigint) or ${key} is null)`
 }
 
 /** The Deal predicate of a 360 parent, or null when none is named. */
