@@ -26,6 +26,7 @@ import { useTranslations } from "next-intl"
 import { type ReactElement, useMemo, useState } from "react"
 import { useFormContext, useWatch } from "react-hook-form"
 import { toast } from "sonner"
+import { BotFieldValueInput } from "@/features/bot-fields/account-field-value-input"
 import {
   CustomFieldOperationSelect,
   CustomFieldSelect,
@@ -162,12 +163,18 @@ export const SetCustomField = ({
     name: getFieldName("customFieldId"),
   })
 
-  const selectedCustomFieldType = useMemo(
+  const selectedField = useMemo(
     () =>
-      findFieldByReference(watchCustomFieldId, { customFields, botFields })
-        ?.type ?? null,
+      findFieldByReference(watchCustomFieldId, { customFields, botFields }) ??
+      null,
     [watchCustomFieldId, customFields, botFields],
   )
+  const selectedCustomFieldType = selectedField?.type ?? null
+  // s201: only a custom field carries an option list (bot fields never do).
+  const selectedOptions =
+    selectedField && "options" in selectedField
+      ? (selectedField.options as string[] | null)
+      : null
 
   return (
     <>
@@ -220,6 +227,15 @@ export const SetCustomField = ({
             saveFormat={resolveTemporalCustomFieldSaveFormat(
               selectedCustomFieldType,
             )}
+          />
+        )}
+
+        {(selectedCustomFieldType === "select" ||
+          selectedCustomFieldType === "multiSelect") && (
+          <BotFieldValueInput
+            name={getFieldName("value")}
+            options={selectedOptions}
+            type={selectedCustomFieldType}
           />
         )}
       </div>

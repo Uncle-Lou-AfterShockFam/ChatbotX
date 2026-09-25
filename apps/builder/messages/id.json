@@ -1716,6 +1716,18 @@
     "longText": {
       "label": "Teks Panjang"
     },
+    "select": {
+      "label": "Pilihan"
+    },
+    "multiSelect": {
+      "label": "Pilihan ganda"
+    },
+    "customFieldOptions": {
+      "label": "Opsi",
+      "description": "Satu opsi per baris (hingga 100). Kontak hanya dapat memiliki nilai ini.",
+      "placeholder": "Emas\nPerak\nPerunggu",
+      "editHint": "Menghapus opsi tetap menyimpan nilai yang sudah dimiliki kontak; ditampilkan apa adanya."
+    },
     "replyFormat": {
       "label": "Format Balasan",
       "number": "Angka",
@@ -4760,6 +4772,7 @@
       "mapSystem": "Contact",
       "mapCustom": "Custom field",
       "mapSelectHint": "Choice answers are written as text; a multiple choice as a comma-separated list.",
+      "mapOptionsMissing": "Bidang yang dipetakan tidak memiliki opsi {options}: tambahkan di sana atau ubah opsi ini, jika tidak publikasi ditolak.",
       "mapped": "mapped",
       "conditional": "conditional",
       "visibleWhen": "Show this field only when",

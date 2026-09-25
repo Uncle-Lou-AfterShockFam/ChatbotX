@@ -8,6 +8,8 @@ import z from "zod"
  * paths resolve to the same enum. Mirrors the `channelTypes` precedent.
  */
 export {
+  type BotFieldType,
+  botFieldTypes,
   type CustomFieldType,
   customFieldTypes,
   type OperatorType,

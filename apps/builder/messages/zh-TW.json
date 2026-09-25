@@ -990,6 +990,18 @@
     "longText": {
       "label": "長文字"
     },
+    "select": {
+      "label": "單選"
+    },
+    "multiSelect": {
+      "label": "多選"
+    },
+    "customFieldOptions": {
+      "label": "選項",
+      "description": "每行一個選項（最多 100 個）。聯絡人只能使用這些值。",
+      "placeholder": "金\n銀\n銅",
+      "editHint": "刪除選項會保留聯絡人已有的值，並按原樣顯示。"
+    },
     "replyFormat": {
       "label": "回覆格式",
       "number": "號碼",
@@ -4793,6 +4805,7 @@
       "mapSystem": "Contact",
       "mapCustom": "Custom field",
       "mapSelectHint": "Choice answers are written as text; a multiple choice as a comma-separated list.",
+      "mapOptionsMissing": "對應的欄位沒有選項 {options}：請在那裡新增或修改此選項，否則無法發布。",
       "mapped": "mapped",
       "conditional": "conditional",
       "visibleWhen": "Show this field only when",

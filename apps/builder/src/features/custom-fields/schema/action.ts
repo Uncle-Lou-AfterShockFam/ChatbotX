@@ -1,23 +1,55 @@
 import { customFieldTypes } from "@chatbotx.io/database/partials"
 import { zodFieldName } from "@chatbotx.io/flow-config"
 import { zodBigintAsString } from "@chatbotx.io/utils"
+import {
+  customFieldOptionsIssue,
+  customFieldOptionsSchema,
+} from "@chatbotx.io/utils/custom-field"
 import { z } from "zod"
 
-export const createCustomFieldRequest = z.object({
+const optionsField = customFieldOptionsSchema.describe(
+  "Option labels of a select / multiSelect field (1-100 unique labels, max 60 characters each). Required for those types, refused for every other type.",
+)
+
+const createCustomFieldObject = z.object({
   name: zodFieldName().describe(
     "Custom field name, used to reference it in flows.",
   ),
   type: customFieldTypes.describe("Custom field data type."),
+  options: optionsField.optional(),
   folderId: zodBigintAsString()
     .nullish()
     .describe("Folder to place the field in, or null for root-level."),
   description: z.string().nullish().describe("Optional internal description."),
 })
+
+const refineOptionsPairing = (
+  value: { type: string; options?: string[] },
+  ctx: z.RefinementCtx,
+) => {
+  const issue = customFieldOptionsIssue(value.type, value.options)
+  if (issue) {
+    ctx.addIssue({ code: "custom", path: ["options"], message: issue })
+  }
+}
+
+export const createCustomFieldRequest =
+  createCustomFieldObject.superRefine(refineOptionsPairing)
+
+/** The public API's create body: name, type and (for option types) options. */
+export const publicCreateCustomFieldRequest = createCustomFieldObject
+  .pick({ name: true, type: true, options: true })
+  .superRefine(refineOptionsPairing)
 export type CreateCustomFieldRequest = z.infer<typeof createCustomFieldRequest>
 
 export const updateCustomFieldRequest = z.object({
   name: zodFieldName().describe("New custom field name."),
   description: z.string().optional().describe("Optional internal description."),
+  options: optionsField
+    .optional()
+    .describe(
+      "Replaces the option list of a select / multiSelect field. Values contacts already hold are kept as-is.",
+    ),
   folderId: zodBigintAsString()
     .nullish()
     .describe("Folder to place the field in, or null for root-level."),

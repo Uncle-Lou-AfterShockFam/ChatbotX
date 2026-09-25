@@ -1858,6 +1858,18 @@
     "longText": {
       "label": "Uzun Metin"
     },
+    "select": {
+      "label": "Seçim"
+    },
+    "multiSelect": {
+      "label": "Çoklu seçim"
+    },
+    "customFieldOptions": {
+      "label": "Seçenekler",
+      "description": "Her satıra bir seçenek (en fazla 100). Kişiler yalnızca bu değerleri taşıyabilir.",
+      "placeholder": "Altın\nGümüş\nBronz",
+      "editHint": "Bir seçeneği kaldırmak kişilerin zaten sahip olduğu değerleri korur; olduğu gibi gösterilir."
+    },
     "replyFormat": {
       "label": "Yanıt Biçimi",
       "number": "Sayı",
@@ -4760,6 +4772,7 @@
       "mapSystem": "Contact",
       "mapCustom": "Custom field",
       "mapSelectHint": "Choice answers are written as text; a multiple choice as a comma-separated list.",
+      "mapOptionsMissing": "Eşlenen alanda {options} seçeneği yok: oraya ekleyin veya bu seçeneği değiştirin, aksi halde yayınlama reddedilir.",
       "mapped": "mapped",
       "conditional": "conditional",
       "visibleWhen": "Show this field only when",

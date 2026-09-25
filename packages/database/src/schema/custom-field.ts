@@ -1,5 +1,6 @@
 import {
   boolean,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -27,6 +28,8 @@ export const customFieldModel = pgTable(
       onUpdate: "cascade",
     }),
     showInInbox: boolean().default(false).notNull(),
+    /** s201: the option list of a `select` / `multiSelect` field; null for every other type. */
+    options: jsonb().$type<string[]>(),
     workspaceId: bigintAsString()
       .notNull()
       .references(() => workspaceModel.id, {

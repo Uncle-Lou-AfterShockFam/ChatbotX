@@ -18,6 +18,8 @@ export type ContactEditableField = {
   formValue?: string | null | undefined
   contactInboxId?: string | null | undefined
   options?: SelectOption[]
+  /** s201: the option list of a select / multiSelect custom field. */
+  choices?: string[] | null
   type: CustomFieldType
   readOnly?: boolean
   // When set, the read-only value renders as an external link (e.g. an ad

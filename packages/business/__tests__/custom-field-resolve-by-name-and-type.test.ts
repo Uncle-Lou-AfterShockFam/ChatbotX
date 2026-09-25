@@ -15,6 +15,7 @@ const {
   const mockOnConflictDoNothing = vi.fn(() => ({ returning: mockReturning }))
   const mockInsertValues = vi.fn(() => ({
     onConflictDoNothing: mockOnConflictDoNothing,
+    returning: mockReturning,
   }))
   const mockInsert = vi.fn(() => ({ values: mockInsertValues }))
   const mockFindMany = vi.fn()
@@ -67,7 +68,8 @@ vi.mock("@chatbotx.io/utils", () => ({
   isNumericId: (value: string) => NUMERIC_ID_PATTERN.test(value),
 }))
 
-vi.mock("@chatbotx.io/utils/custom-field", () => ({
+vi.mock("@chatbotx.io/utils/custom-field", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   customFieldResolutionKey: (field: { name: string; type: string }) =>
     `${field.type}:${field.name.trim().toLowerCase()}`,
 }))
@@ -82,6 +84,8 @@ vi.mock("../src/base.service", () => ({
 
 vi.mock("../src/errors", () => ({
   notFoundException: (message: string) => new Error(message),
+  validationException: (field: string, message: string) =>
+    Object.assign(new Error(message), { field }),
 }))
 
 vi.mock("../src/folder/service", () => ({
@@ -390,5 +394,77 @@ describe("customFieldService.resolveByNameAndType case collisions", () => {
     })
 
     expect(idMap.get("shortText:email")).toBe("10")
+  })
+
+  test("s201: a created select field takes the manifest's options; a non-option field stores null", async () => {
+    mockFindMany.mockResolvedValue([])
+    mockCreateId.mockReturnValueOnce("n1").mockReturnValueOnce("n2")
+    mockReturning.mockResolvedValue([
+      { id: "n1", workspaceId: "ws-1", name: "Tier", type: "select" },
+      { id: "n2", workspaceId: "ws-1", name: "Note", type: "shortText" },
+    ])
+
+    await customFieldService.resolveByNameAndType({
+      workspaceId: "ws-1",
+      fields: [
+        { name: "Tier", type: "select", options: [" Gold ", "Silver"] },
+        { name: "Note", type: "shortText" },
+      ],
+    })
+
+    expect(mockInsertValues).toHaveBeenCalledWith([
+      expect.objectContaining({ name: "Tier", options: ["Gold", "Silver"] }),
+      expect.objectContaining({ name: "Note", options: null }),
+    ])
+  })
+
+  test("s201: a select field with no options is refused before any insert", async () => {
+    mockFindMany.mockResolvedValue([])
+    await expect(
+      customFieldService.resolveByNameAndType({
+        workspaceId: "ws-1",
+        fields: [{ name: "Tier", type: "select" }],
+      }),
+    ).rejects.toMatchObject({ field: "options" })
+    expect(mockReturning).not.toHaveBeenCalled()
+  })
+
+  describe("s201 create: the (type, options) pairing", () => {
+    test("select needs options; a non-option type refuses them; neither inserts", async () => {
+      await expect(
+        customFieldService.create({
+          workspaceId: "ws-1",
+          data: { name: "Tier", type: "select" },
+        }),
+      ).rejects.toMatchObject({ field: "options" })
+      await expect(
+        customFieldService.create({
+          workspaceId: "ws-1",
+          data: { name: "Tier", type: "multiSelect", options: ["A", "a"] },
+        }),
+      ).rejects.toMatchObject({ field: "options" })
+      await expect(
+        customFieldService.create({
+          workspaceId: "ws-1",
+          data: { name: "Note", type: "shortText", options: ["A"] },
+        }),
+      ).rejects.toMatchObject({ field: "options" })
+      expect(mockInsert).not.toHaveBeenCalled()
+    })
+
+    test("a valid select stores trimmed options", async () => {
+      mockCreateId.mockReturnValue("c1")
+      mockReturning.mockResolvedValue([{ id: "c1" }])
+      await customFieldService.create({
+        workspaceId: "ws-1",
+        data: { name: "Tier", type: "select", options: [" Gold", "Silver "] },
+      })
+      expect(mockInsertValues).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "select",
+          options: ["Gold", "Silver"],
+        }),
+      )
+    })
   })
 })

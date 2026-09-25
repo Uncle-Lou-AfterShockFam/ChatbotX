@@ -79,6 +79,8 @@ vi.mock("@chatbotx.io/utils", () => ({
 vi.mock("@chatbotx.io/utils/custom-field", () => ({
   customFieldResolutionKey: (field: { name: string; type: string }) =>
     `${field.type}:${field.name.trim().toLowerCase()}`,
+  isOptionFieldType: (type: string) =>
+    type === "select" || type === "multiSelect",
 }))
 
 vi.mock("@chatbotx.io/utils/datetime", () => ({
@@ -109,6 +111,8 @@ vi.mock("../src/javascript-execution/custom-field-value", () => ({
 vi.mock("../src/errors", () => ({
   ChatbotXException: class ChatbotXException extends Error {},
   notFoundException: (message: string) => new Error(message),
+  validationException: (field: string, message: string) =>
+    Object.assign(new Error(message), { field }),
 }))
 
 vi.mock("../src/folder/service", () => ({
@@ -291,6 +295,18 @@ describe("botFieldService.findManyByIds", () => {
     })
 
     expect(rows).toEqual([])
+    expect(mockFindMany).not.toHaveBeenCalled()
+  })
+})
+
+describe("s201: bot fields never take an option type", () => {
+  test("resolveByNameAndType refuses select / multiSelect before any read", async () => {
+    await expect(
+      botFieldService.resolveByNameAndType({
+        workspaceId: "ws-1",
+        fields: [{ name: "tier", type: "select" }],
+      }),
+    ).rejects.toMatchObject({ field: "type" })
     expect(mockFindMany).not.toHaveBeenCalled()
   })
 })

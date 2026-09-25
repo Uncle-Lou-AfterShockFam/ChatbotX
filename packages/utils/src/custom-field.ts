@@ -18,8 +18,17 @@ export const customFieldTypes = z.enum([
   "datetime",
   "boolean",
   "longText",
+  "select",
+  "multiSelect",
 ])
 export type CustomFieldType = z.infer<typeof customFieldTypes>
+
+/**
+ * Bot (account) fields share the Postgres enum but have no option list, so the
+ * option types (s201) are excluded from every bot-field write surface.
+ */
+export const botFieldTypes = customFieldTypes.exclude(["select", "multiSelect"])
+export type BotFieldType = z.infer<typeof botFieldTypes>
 
 /**
  * Contact-filter comparison operators. Lives here (not `@chatbotx.io/database`)
@@ -133,3 +142,176 @@ export const canonicalNumberLiteral = (raw: string): string | null => {
   const parsed = Number(trimmed)
   return Number.isFinite(parsed) ? String(parsed) : null
 }
+
+// --- Option-list fields (s201): `select` holds one option, `multiSelect` a
+// set of them. The option list lives on `CustomField.options`; a stored
+// multiSelect value is canonical JSON-array text in option order, e.g.
+// `["Gold","Silver"]` (owner decision s201: never comma text, because an
+// option may itself contain a comma).
+
+export type OptionFieldType = Extract<CustomFieldType, "select" | "multiSelect">
+
+export const isOptionFieldType = (type: string): type is OptionFieldType =>
+  type === "select" || type === "multiSelect"
+
+export const MAX_CUSTOM_FIELD_OPTIONS = 100
+export const MAX_CUSTOM_FIELD_OPTION_LENGTH = 60
+
+/** An option list: 1-100 trimmed, non-blank, case-insensitively unique labels. */
+export const customFieldOptionsSchema = z
+  .array(z.string().trim().min(1).max(MAX_CUSTOM_FIELD_OPTION_LENGTH))
+  .min(1)
+  .max(MAX_CUSTOM_FIELD_OPTIONS)
+  .superRefine((options, ctx) => {
+    const seen = new Set<string>()
+    for (const [index, option] of options.entries()) {
+      const folded = option.toLowerCase()
+      if (seen.has(folded)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [index],
+          message: `Duplicate option "${option}".`,
+        })
+      }
+      seen.add(folded)
+    }
+  })
+
+/**
+ * The (type, options) pairing rule, as a message or null: an option type needs
+ * an option list, every other type must not carry one.
+ */
+export const customFieldOptionsIssue = (
+  type: string,
+  options: unknown,
+): string | null => {
+  if (!isOptionFieldType(type)) {
+    return options === undefined || options === null
+      ? null
+      : "Only a select or multi-select field takes options."
+  }
+  if (options === undefined || options === null) {
+    return "A select or multi-select field needs at least one option."
+  }
+  const parsed = customFieldOptionsSchema.safeParse(options)
+  return parsed.success
+    ? null
+    : (parsed.error.issues[0]?.message ?? "Invalid options.")
+}
+
+/** Case-insensitive lookup of the canonical option spelling. */
+const matchOption = (
+  raw: string,
+  options: readonly string[],
+): string | undefined => {
+  const folded = raw.trim().toLowerCase()
+  return options.find((o) => o.toLowerCase() === folded)
+}
+
+/** Blank or a known option (canonical spelling); null when unknown. */
+export const canonicalSelectValue = (
+  raw: string,
+  options: readonly string[],
+): string | null => {
+  if (raw.trim() === "") {
+    return ""
+  }
+  return matchOption(raw, options) ?? null
+}
+
+/**
+ * Splits a multiSelect input into raw items: a JSON array of strings, or else a
+ * comma list. A whole input that is itself one option wins over the comma
+ * split, so an option like "Red, White" can be written as plain text.
+ * Returns null when the input is a JSON array holding a non-string.
+ */
+export const splitMultiSelectInput = (
+  raw: string,
+  options: readonly string[] = [],
+): string[] | null => {
+  const trimmed = raw.trim()
+  if (trimmed === "") {
+    return []
+  }
+  if (trimmed.startsWith("[")) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(trimmed)
+    } catch {
+      parsed = undefined
+    }
+    if (Array.isArray(parsed)) {
+      return parsed.every((v) => typeof v === "string") ? parsed : null
+    }
+  }
+  if (matchOption(trimmed, options) !== undefined) {
+    return [trimmed]
+  }
+  return trimmed.split(",")
+}
+
+export type MultiSelectResult =
+  | { ok: true; value: string }
+  | { ok: false; reason: "malformed" | "tooManyItems" }
+  | { ok: false; reason: "unknownOption"; unknown: string[] }
+
+/**
+ * Canonical stored text for a multiSelect write: known options only, deduped,
+ * in option-list order, as JSON array text. An empty selection is "" (unset).
+ */
+export const canonicalMultiSelectValue = (
+  raw: string,
+  options: readonly string[],
+): MultiSelectResult => {
+  const items = splitMultiSelectInput(raw, options)
+  if (items === null) {
+    return { ok: false, reason: "malformed" }
+  }
+  if (items.length > MAX_CUSTOM_FIELD_OPTIONS) {
+    return { ok: false, reason: "tooManyItems" }
+  }
+  const picked = new Set<string>()
+  const unknown: string[] = []
+  for (const item of items) {
+    if (item.trim() === "") {
+      continue
+    }
+    const match = matchOption(item, options)
+    if (match === undefined) {
+      unknown.push(item.trim())
+    } else {
+      picked.add(match)
+    }
+  }
+  if (unknown.length > 0) {
+    return { ok: false, reason: "unknownOption", unknown }
+  }
+  const ordered = options.filter((o) => picked.has(o))
+  return {
+    ok: true,
+    value: ordered.length === 0 ? "" : JSON.stringify(ordered),
+  }
+}
+
+/** Stored multiSelect text -> its items; legacy non-JSON text is one item. */
+export const multiSelectItems = (stored: string): string[] => {
+  const trimmed = stored.trim()
+  if (trimmed === "") {
+    return []
+  }
+  if (trimmed.startsWith("[")) {
+    try {
+      const parsed: unknown = JSON.parse(trimmed)
+      if (Array.isArray(parsed)) {
+        return parsed.filter((v): v is string => typeof v === "string")
+      }
+    } catch {
+      // legacy text that merely starts with "["
+    }
+  }
+  return [stored]
+}
+
+/** Human text for a stored multiSelect value: "Gold, Silver". */
+export const formatMultiSelectText = (stored: string): string =>
+  multiSelectItems(stored).join(", ")

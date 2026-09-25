@@ -18,6 +18,7 @@ import {
   type FormStatus,
   formIdentifiesContact,
   formInputFields,
+  formMappingIssue,
   formMapsToContact,
   normalizeFormDefinition,
   normalizeFormSettings,
@@ -482,7 +483,11 @@ export class FormService extends BaseService {
         .filter((v): v is string => v !== null)
       if (customIds.length > 0) {
         const found = await tx
-          .select({ id: customFieldModel.id })
+          .select({
+            id: customFieldModel.id,
+            type: customFieldModel.type,
+            options: customFieldModel.options,
+          })
           .from(customFieldModel)
           .where(
             and(
@@ -501,6 +506,30 @@ export class FormService extends BaseService {
             "A mapped custom field no longer exists; re-map or unmap it.",
             { reason: "danglingCustomField", customFieldId: missing },
           )
+        }
+        // s201: a select / multiSelect target takes only a matching choice
+        // field whose every option it knows.
+        const targetById = new Map(found.map((r) => [String(r.id), r]))
+        for (const field of inputs) {
+          if (field.mapTo?.kind !== "custom") {
+            continue
+          }
+          const target = targetById.get(field.mapTo.customFieldId)
+          const issue = target ? formMappingIssue(field, target) : null
+          if (issue) {
+            throw validationException(
+              "definition",
+              issue.reason === "unknownOptions"
+                ? `Field "${field.key}" has options the mapped field does not know: ${issue.unknown.join(", ")}.`
+                : `Field "${field.key}" cannot write to that select field: map a matching choice field.`,
+              {
+                reason: "mappedOptionsMismatch",
+                fieldKey: field.key,
+                customFieldId: field.mapTo.customFieldId,
+                detail: issue.reason,
+              },
+            )
+          }
         }
       }
     }

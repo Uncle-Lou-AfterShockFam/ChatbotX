@@ -1529,6 +1529,18 @@
     "longText": {
       "label": "Lange tekst"
     },
+    "select": {
+      "label": "Keuze"
+    },
+    "multiSelect": {
+      "label": "Meerkeuze"
+    },
+    "customFieldOptions": {
+      "label": "Opties",
+      "description": "Eén optie per regel (maximaal 100). Contacten kunnen alleen deze waarden hebben.",
+      "placeholder": "Goud\nZilver\nBrons",
+      "editHint": "Een optie verwijderen behoudt de waarden die contacten al hebben; ze worden ongewijzigd getoond."
+    },
     "replyFormat": {
       "label": "Antwoordformaat",
       "number": "Getal",
@@ -4760,6 +4772,7 @@
       "mapSystem": "Contact",
       "mapCustom": "Custom field",
       "mapSelectHint": "Choice answers are written as text; a multiple choice as a comma-separated list.",
+      "mapOptionsMissing": "Het gekoppelde veld heeft optie {options} niet: voeg die daar toe of wijzig deze optie, anders wordt publiceren geweigerd.",
       "mapped": "mapped",
       "conditional": "conditional",
       "visibleWhen": "Show this field only when",

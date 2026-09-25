@@ -1858,6 +1858,18 @@
     "longText": {
       "label": "نص طويل"
     },
+    "select": {
+      "label": "اختيار"
+    },
+    "multiSelect": {
+      "label": "اختيار متعدد"
+    },
+    "customFieldOptions": {
+      "label": "الخيارات",
+      "description": "خيار واحد في كل سطر (حتى 100). يمكن لجهات الاتصال حمل هذه القيم فقط.",
+      "placeholder": "ذهبي\nفضي\nبرونزي",
+      "editHint": "إزالة خيار تُبقي القيم التي تحملها جهات الاتصال بالفعل وتُعرض كما هي."
+    },
     "replyFormat": {
       "label": "تنسيق الرد",
       "number": "رقم",
@@ -4760,6 +4772,7 @@
       "mapSystem": "Contact",
       "mapCustom": "Custom field",
       "mapSelectHint": "Choice answers are written as text; a multiple choice as a comma-separated list.",
+      "mapOptionsMissing": "الحقل المرتبط لا يحتوي على الخيار {options}: أضفه هناك أو غيّر هذا الخيار، وإلا سيُرفض النشر.",
       "mapped": "mapped",
       "conditional": "conditional",
       "visibleWhen": "Show this field only when",

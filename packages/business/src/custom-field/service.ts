@@ -21,7 +21,12 @@ import {
 } from "@chatbotx.io/database/utils"
 import { withCache } from "@chatbotx.io/redis"
 import { createId, isNumericId } from "@chatbotx.io/utils"
-import { customFieldResolutionKey } from "@chatbotx.io/utils/custom-field"
+import {
+  customFieldOptionsIssue,
+  customFieldOptionsSchema,
+  customFieldResolutionKey,
+  isOptionFieldType,
+} from "@chatbotx.io/utils/custom-field"
 import { BaseService } from "../base.service"
 import { notFoundException, validationException } from "../errors"
 import { folderService } from "../folder/service"
@@ -39,11 +44,30 @@ type ListCustomFieldsInput = {
 type CreateCustomFieldData = {
   name: string
   type: CustomFieldType
+  /** s201: required for `select` / `multiSelect`, refused for every other type. */
+  options?: string[] | null
   description?: string | null
   folderId?: string | null
 }
 
 type UpdateCustomFieldData = Partial<CreateCustomFieldData>
+
+/**
+ * The stored option list for a (type, options) pair: trimmed, or null for a
+ * non-option type. Throws a field-level validation error on a bad pairing.
+ */
+const resolveOptionsForType = (
+  type: CustomFieldType,
+  options: unknown,
+): string[] | null => {
+  const issue = customFieldOptionsIssue(type, options)
+  if (issue) {
+    throw validationException("options", issue)
+  }
+  return isOptionFieldType(type)
+    ? customFieldOptionsSchema.parse(options)
+    : null
+}
 
 class CustomFieldService extends BaseService {
   async list(
@@ -184,7 +208,7 @@ class CustomFieldService extends BaseService {
    */
   async resolveByNameAndType(props: {
     workspaceId: string
-    fields: { name: string; type: CustomFieldType }[]
+    fields: { name: string; type: CustomFieldType; options?: string[] }[]
     tx?: DatabaseClient
   }): Promise<{ idMap: Map<string, string>; createdIds: string[] }> {
     const { workspaceId, fields, tx = db } = props
@@ -260,6 +284,9 @@ class CustomFieldService extends BaseService {
             workspaceId,
             name: field.name,
             type: field.type,
+            // An existing (name, type) match keeps ITS options; only a newly
+            // created select field takes the manifest's list.
+            options: resolveOptionsForType(field.type, field.options),
             showInInbox: true,
           })),
         )
@@ -313,10 +340,18 @@ class CustomFieldService extends BaseService {
       })
     }
 
+    const options = resolveOptionsForType(data.type, data.options)
+
     try {
       const [field] = await tx
         .insert(customFieldModel)
-        .values({ id: createId(), workspaceId, showInInbox: true, ...data })
+        .values({
+          id: createId(),
+          workspaceId,
+          showInInbox: true,
+          ...data,
+          options,
+        })
         .returning()
       await this.invalidate({ workspaceId })
       return field
@@ -347,9 +382,17 @@ class CustomFieldService extends BaseService {
       })
     }
 
+    // The type never changes on update (the request schemas omit it); the
+    // option list is validated against the stored type.
+    const { type: _ignoredType, options, ...rest } = data
+    const patch =
+      options === undefined
+        ? rest
+        : { ...rest, options: resolveOptionsForType(existing.type, options) }
+
     const [updated] = await tx
       .update(customFieldModel)
-      .set(data)
+      .set(patch)
       .where(eq(customFieldModel.id, existing.id))
       .returning()
 

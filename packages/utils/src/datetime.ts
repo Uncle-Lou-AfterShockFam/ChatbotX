@@ -1,5 +1,6 @@
 import { addDays, addMinutes, addSeconds, format, parseISO } from "date-fns"
 import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz"
+import { formatMultiSelectText } from "./custom-field"
 
 // ===========================================================================
 // Constants & vocabulary
@@ -376,6 +377,11 @@ export function formatCustomFieldValueInTimeZone(
 ): string {
   if (!value) {
     return ""
+  }
+
+  if (type === "multiSelect") {
+    // s201: stored JSON-array text -> "Gold, Silver" everywhere it is shown.
+    return formatMultiSelectText(value)
   }
 
   if (!isTemporalCustomFieldType(type)) {

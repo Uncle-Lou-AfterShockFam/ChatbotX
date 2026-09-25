@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@chatbotx.io/ui/components/ui/dialog"
 import { Form } from "@chatbotx.io/ui/components/ui/form"
+import { isOptionFieldType } from "@chatbotx.io/utils/custom-field"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useHookFormAction } from "@next-safe-action/adapter-react-hook-form/hooks"
 import { Loader2Icon } from "lucide-react"
@@ -19,6 +20,7 @@ import { useTranslations } from "next-intl"
 import { useEffect } from "react"
 import { toast } from "sonner"
 import { updateCustomFieldAction } from "./actions/update-custom-field.action"
+import { CustomFieldOptionsField } from "./components/custom-field-options-field"
 import { updateCustomFieldRequest } from "./schema/action"
 import type { CustomFieldResource } from "./schema/resource"
 
@@ -74,6 +76,9 @@ export function UpdateCustomFieldDialog({
     if (customField) {
       setValue("name", customField.name)
       setValue("description", customField.description ?? "")
+      if (customField.options) {
+        setValue("options", customField.options)
+      }
     }
   }, [customField, setValue])
 
@@ -106,6 +111,12 @@ export function UpdateCustomFieldDialog({
                 name="description"
                 placeholder={t("fields.description.placeholder")}
               />
+
+              {customField && isOptionFieldType(customField.type) ? (
+                <CustomFieldOptionsField
+                  hint={t("fields.customFieldOptions.editHint")}
+                />
+              ) : null}
 
               <div className="flex justify-end gap-4">
                 <Button

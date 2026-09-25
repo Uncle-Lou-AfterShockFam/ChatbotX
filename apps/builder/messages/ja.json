@@ -1716,6 +1716,18 @@
     "longText": {
       "label": "長文テキスト"
     },
+    "select": {
+      "label": "選択"
+    },
+    "multiSelect": {
+      "label": "複数選択"
+    },
+    "customFieldOptions": {
+      "label": "選択肢",
+      "description": "1 行に 1 つ (最大 100)。連絡先はこれらの値のみ保持できます。",
+      "placeholder": "ゴールド\nシルバー\nブロンズ",
+      "editHint": "選択肢を削除しても、連絡先が既に持つ値はそのまま保持・表示されます。"
+    },
     "replyFormat": {
       "label": "返信形式",
       "number": "数値",
@@ -4739,6 +4751,7 @@
       "mapSystem": "Contact",
       "mapCustom": "Custom field",
       "mapSelectHint": "Choice answers are written as text; a multiple choice as a comma-separated list.",
+      "mapOptionsMissing": "マッピング先のフィールドに選択肢 {options} がありません。そちらに追加するかこの選択肢を変更しないと公開できません。",
       "mapped": "mapped",
       "conditional": "conditional",
       "visibleWhen": "Show this field only when",

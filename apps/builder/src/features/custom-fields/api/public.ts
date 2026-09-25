@@ -11,7 +11,7 @@ import { publicListRequest } from "@/lib/public-api/list"
 import { workspaceTokenAuthAPIForScope } from "@/orpc"
 
 import {
-  createCustomFieldRequest,
+  publicCreateCustomFieldRequest,
   updateCustomFieldRequest,
 } from "../schema/action"
 import { listPublicCustomFieldsResponse } from "../schema/query"
@@ -50,7 +50,7 @@ export const customFieldsPublicRouter = {
       successStatus: 201,
       tags: ["Custom Fields"],
     })
-    .input(createCustomFieldRequest.pick({ name: true, type: true }))
+    .input(publicCreateCustomFieldRequest)
     .output(publicCustomFieldResource)
     .errors(possibleErrorsOnCreatingResource)
     .handler(

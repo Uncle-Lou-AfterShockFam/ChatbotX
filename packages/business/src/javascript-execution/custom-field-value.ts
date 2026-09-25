@@ -1,7 +1,9 @@
 import type { CustomFieldType } from "@chatbotx.io/database/partials"
 import { EMAIL_RE, NON_DIGIT_RE, PHONE_RE } from "@chatbotx.io/imports/parsers"
 import {
+  canonicalMultiSelectValue,
   canonicalNumberLiteral,
+  canonicalSelectValue,
   coerceBooleanLiteral,
 } from "@chatbotx.io/utils/custom-field"
 import {
@@ -13,7 +15,29 @@ import { normalizeTemporalValueForStorage } from "@chatbotx.io/utils/temporal-in
 export type CustomFieldValueNormalizer = (
   raw: string,
   timezone?: string | null,
+  options?: readonly string[] | null,
 ) => string | null
+
+/**
+ * Option types (s201): with the field's options, an unknown option is `null`
+ * (import skips the cell). Without them (a caller that does not know the
+ * list, e.g. a JS step's return value) the raw text passes through and the
+ * storage chokepoint (`normalizeCustomFieldValueForStorage`) enforces it.
+ */
+const normalizeSelect: CustomFieldValueNormalizer = (raw, _tz, options) =>
+  options ? canonicalSelectValue(raw, options) : raw
+
+const normalizeMultiSelect: CustomFieldValueNormalizer = (
+  raw,
+  _tz,
+  options,
+) => {
+  if (!options) {
+    return raw
+  }
+  const result = canonicalMultiSelectValue(raw, options)
+  return result.ok ? result.value : null
+}
 
 /**
  * Same generous rule as every runtime write path (user-confirmed): a falsy
@@ -72,6 +96,8 @@ const customFieldValueNormalizers = {
   number: normalizeNumber,
   phoneNumber: normalizePhone,
   shortText: (raw) => raw,
+  select: normalizeSelect,
+  multiSelect: normalizeMultiSelect,
 } as const satisfies Record<CustomFieldType, CustomFieldValueNormalizer>
 
 /**
@@ -86,7 +112,8 @@ export const normalizeCustomFieldValueByType = (
   type: CustomFieldType,
   raw: string,
   timezone?: string | null,
-): string | null => customFieldValueNormalizers[type](raw, timezone)
+  options?: readonly string[] | null,
+): string | null => customFieldValueNormalizers[type](raw, timezone, options)
 
 /**
  * CSV/spreadsheet import semantics: a blank cell means "no value for this
@@ -96,9 +123,17 @@ export const validateCustomFieldValue = (
   type: CustomFieldType,
   raw: string,
   timezone?: string | null,
+  options?: readonly string[] | null,
 ): string | null => {
   if (raw.length === 0) {
     return null
   }
-  return normalizeCustomFieldValueByType(type, raw, timezone)
+  const normalized = normalizeCustomFieldValueByType(
+    type,
+    raw,
+    timezone,
+    options,
+  )
+  // A cell that selects nothing ("[]", " , ") is a blank cell: skip it.
+  return normalized === "" ? null : normalized
 }

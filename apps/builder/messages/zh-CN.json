@@ -2356,6 +2356,18 @@
     "longText": {
       "label": "长文本"
     },
+    "select": {
+      "label": "单选"
+    },
+    "multiSelect": {
+      "label": "多选"
+    },
+    "customFieldOptions": {
+      "label": "选项",
+      "description": "每行一个选项（最多 100 个）。联系人只能使用这些值。",
+      "placeholder": "金\n银\n铜",
+      "editHint": "删除选项会保留联系人已有的值，并按原样显示。"
+    },
     "magicLink": {
       "label": "Magic Link",
       "nameHint": "在公共追踪 URL 中附加在 /r/{workspaceId}/ 之后。仅使用字母、数字、底线和连字号。",
@@ -4898,6 +4910,7 @@
       "mapSystem": "Contact",
       "mapCustom": "Custom field",
       "mapSelectHint": "Choice answers are written as text; a multiple choice as a comma-separated list.",
+      "mapOptionsMissing": "映射的字段没有选项 {options}：请在那里添加或修改此选项，否则无法发布。",
       "mapped": "mapped",
       "conditional": "conditional",
       "visibleWhen": "Show this field only when",

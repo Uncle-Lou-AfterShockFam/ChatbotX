@@ -17,6 +17,7 @@ type BooleanLabels = { true: string; false: string }
  * - `date` / `datetime`: formatted for display in `timezone` via the same
  *   `formatCustomFieldValueInTimeZone` helper the rest of the app uses —
  *   never a hand-rolled date formatter.
+ * - `multiSelect` (s201): the stored JSON array as "Gold, Silver".
  * - every other type: returned as-is.
  */
 export function formatCustomFieldDisplayValue(
@@ -39,7 +40,7 @@ export function formatCustomFieldDisplayValue(
     return value
   }
 
-  if (type === "date" || type === "datetime") {
+  if (type === "date" || type === "datetime" || type === "multiSelect") {
     return formatCustomFieldValueInTimeZone(type, value, timezone)
   }
 

@@ -2565,6 +2565,18 @@
     "longText": {
       "label": "Text lung"
     },
+    "select": {
+      "label": "Selecție"
+    },
+    "multiSelect": {
+      "label": "Selecție multiplă"
+    },
+    "customFieldOptions": {
+      "label": "Opțiuni",
+      "description": "O opțiune pe linie (până la 100). Contactele pot avea doar aceste valori.",
+      "placeholder": "Aur\nArgint\nBronz",
+      "editHint": "Eliminarea unei opțiuni păstrează valorile pe care contactele le au deja; sunt afișate ca atare."
+    },
     "replyFormat": {
       "label": "Formatul răspunsului",
       "number": "Număr",
@@ -4760,6 +4772,7 @@
       "mapSystem": "Contact",
       "mapCustom": "Custom field",
       "mapSelectHint": "Choice answers are written as text; a multiple choice as a comma-separated list.",
+      "mapOptionsMissing": "Câmpul mapat nu are opțiunea {options}: adaug-o acolo sau schimbă această opțiune, altfel publicarea este refuzată.",
       "mapped": "mapped",
       "conditional": "conditional",
       "visibleWhen": "Show this field only when",

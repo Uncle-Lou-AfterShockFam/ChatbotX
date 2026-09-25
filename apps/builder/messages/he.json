@@ -2793,6 +2793,7 @@
       "mapSystem": "Contact",
       "mapCustom": "Custom field",
       "mapSelectHint": "Choice answers are written as text; a multiple choice as a comma-separated list.",
+      "mapOptionsMissing": "לשדה הממופה אין את האפשרות {options}: הוסיפו אותה שם או שנו אפשרות זו, אחרת הפרסום יידחה.",
       "mapped": "mapped",
       "conditional": "conditional",
       "visibleWhen": "Show this field only when",
@@ -5098,6 +5099,18 @@
     },
     "longText": {
       "label": "טקסט ארוך"
+    },
+    "select": {
+      "label": "בחירה"
+    },
+    "multiSelect": {
+      "label": "בחירה מרובה"
+    },
+    "customFieldOptions": {
+      "label": "אפשרויות",
+      "description": "אפשרות אחת בכל שורה (עד 100). אנשי קשר יכולים להחזיק רק ערכים אלה.",
+      "placeholder": "זהב\nכסף\nארד",
+      "editHint": "הסרת אפשרות שומרת את הערכים שכבר קיימים אצל אנשי הקשר; הם מוצגים כפי שהם."
     },
     "replyFormat": {
       "label": "תבנית תשובה",

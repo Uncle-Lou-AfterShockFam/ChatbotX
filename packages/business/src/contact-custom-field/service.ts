@@ -492,7 +492,7 @@ class ContactCustomFieldService extends BaseService {
 
     const customFields = await client.query.customFieldModel.findMany({
       where: { workspaceId, id: { in: customFieldIds } },
-      columns: { id: true, name: true, type: true },
+      columns: { id: true, name: true, type: true, options: true },
     })
 
     if (customFields.length === 0) {
@@ -523,6 +523,7 @@ class ContactCustomFieldService extends BaseService {
         const normalizedValue = await normalizeCustomFieldValueForStorage({
           type: customField.type,
           value: field.value,
+          options: customField.options,
           resolveSourceTimezone,
           explicitTimezone: sourceTimezone,
           temporalInputParsing,

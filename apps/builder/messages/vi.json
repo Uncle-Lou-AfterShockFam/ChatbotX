@@ -1825,6 +1825,18 @@
     "longText": {
       "label": "Văn bản dài"
     },
+    "select": {
+      "label": "Lựa chọn"
+    },
+    "multiSelect": {
+      "label": "Chọn nhiều"
+    },
+    "customFieldOptions": {
+      "label": "Tùy chọn",
+      "description": "Mỗi dòng một tùy chọn (tối đa 100). Liên hệ chỉ có thể giữ các giá trị này.",
+      "placeholder": "Vàng\nBạc\nĐồng",
+      "editHint": "Xóa một tùy chọn vẫn giữ các giá trị liên hệ đã có; chúng được hiển thị nguyên trạng."
+    },
     "replyFormat": {
       "label": "Định dạng trả lời",
       "number": "Số",
@@ -4799,6 +4811,7 @@
       "mapSystem": "Contact",
       "mapCustom": "Custom field",
       "mapSelectHint": "Choice answers are written as text; a multiple choice as a comma-separated list.",
+      "mapOptionsMissing": "Trường được ánh xạ không có tùy chọn {options}: thêm vào đó hoặc đổi tùy chọn này, nếu không sẽ không thể xuất bản.",
       "mapped": "mapped",
       "conditional": "conditional",
       "visibleWhen": "Show this field only when",
