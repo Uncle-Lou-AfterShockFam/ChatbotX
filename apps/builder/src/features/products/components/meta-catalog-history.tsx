@@ -6,7 +6,7 @@ import {
   HistoryIcon,
   Loader2Icon,
 } from "lucide-react"
-import { useTranslations } from "next-intl"
+import { useFormatter, useTranslations } from "next-intl"
 import {
   ACTIVE_SYNC_STATUSES,
   type MetaCatalogSyncRun,
@@ -40,6 +40,7 @@ export function MetaCatalogHistory({
   history: MetaCatalogSyncRun[]
 }) {
   const t = useTranslations("metaCatalog")
+  const format = useFormatter()
 
   if (history.length === 0) {
     return (
@@ -66,7 +67,10 @@ export function MetaCatalogHistory({
                 </Badge>
               </div>
               <div className="text-muted-foreground text-xs">
-                {new Date(run.createdAt).toLocaleString()}
+                {format.dateTime(new Date(run.createdAt), {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}
               </div>
               {/* Its own line: a catalog id is a 15+ digit number, so sharing the
                   timestamp's line would wrap at some dialog widths and not at

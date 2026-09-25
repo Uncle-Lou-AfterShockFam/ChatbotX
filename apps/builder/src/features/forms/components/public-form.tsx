@@ -91,6 +91,7 @@ export function PublicForm(props: {
         body: JSON.stringify({
           values,
           website: honeypot,
+          // zone: viewer (the public submitter's own browser zone)
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       })

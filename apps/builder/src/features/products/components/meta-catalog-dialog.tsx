@@ -22,7 +22,7 @@ import { cn } from "@chatbotx.io/ui/lib/utils"
 import { SiFacebook } from "@icons-pack/react-simple-icons"
 import { Loader2Icon } from "lucide-react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { useTranslations } from "next-intl"
+import { useFormatter, useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -66,6 +66,7 @@ function ImportOutcome({
   connection: NonNullable<MetaCatalogViewState["connection"]>
 }) {
   const t = useTranslations("metaCatalog")
+  const format = useFormatter()
   // A failure already speaks through the error callout below; repeating a
   // "0 of 0 imported" line above it would only add noise.
   if (
@@ -86,7 +87,12 @@ function ImportOutcome({
         })}
         {connection.lastImportedAt ? (
           <span className="ms-1 text-muted-foreground">
-            ({new Date(connection.lastImportedAt).toLocaleString()})
+            (
+            {format.dateTime(new Date(connection.lastImportedAt), {
+              dateStyle: "medium",
+              timeStyle: "short",
+            })}
+            )
           </span>
         ) : null}
       </span>

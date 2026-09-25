@@ -27,6 +27,7 @@ export function useAdsRangeUrl() {
       const params = new URLSearchParams(searchParams)
       params.set("from", toLocalDateKey(range.from))
       params.set("to", toLocalDateKey(range.to))
+      // zone: viewer (client hook: the browser's zone rides the URL as ?tz)
       params.set("tz", Intl.DateTimeFormat().resolvedOptions().timeZone)
       router.push(`${pathname}?${params.toString()}`)
     },

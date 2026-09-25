@@ -22,7 +22,7 @@ import {
 import { cn } from "@chatbotx.io/ui/lib/utils"
 import { CheckIcon, X } from "lucide-react"
 import Image from "next/image"
-import { useTranslations } from "next-intl"
+import { useFormatter, useTranslations } from "next-intl"
 import { type KeyboardEvent, useEffect, useRef, useState } from "react"
 import { useForm } from "react-hook-form"
 import type { InstagramStory } from "../provider/ig-story-posts-store"
@@ -104,6 +104,7 @@ function StoryCard({
   selected: boolean
   onToggle: () => void
 }) {
+  const format = useFormatter()
   return (
     <button
       className={cn(
@@ -133,7 +134,7 @@ function StoryCard({
         {story.message ?? "—"}
       </p>
       <p className="mt-1 text-muted-foreground text-xs">
-        {new Date(story.created_time).toLocaleDateString()}
+        {format.dateTime(new Date(story.created_time), { dateStyle: "medium" })}
       </p>
     </button>
   )

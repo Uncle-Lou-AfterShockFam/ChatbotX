@@ -10,6 +10,7 @@ export const getWebchatProfileFields = (): {
   return {
     locale: navigator.language || undefined,
     parentUrl: getWebchatParentUrl(),
+    // zone: viewer (the webchat visitor's own browser zone)
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
   }
 }

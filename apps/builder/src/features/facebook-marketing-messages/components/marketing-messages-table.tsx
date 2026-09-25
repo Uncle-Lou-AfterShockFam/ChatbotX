@@ -16,7 +16,7 @@ import { useQuery } from "@tanstack/react-query"
 import type { ColumnDef } from "@tanstack/react-table"
 import { PencilIcon, PlusIcon, RefreshCwIcon, Trash2Icon } from "lucide-react"
 import Link from "next/link"
-import { useTranslations } from "next-intl"
+import { useFormatter, useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
@@ -53,6 +53,7 @@ export function MarketingMessagesTable({
   readOnly?: boolean
 }) {
   const t = useTranslations()
+  const format = useFormatter()
   const [pendingDelete, setPendingDelete] =
     useState<FacebookMarketingMessageModel | null>(null)
 
@@ -180,7 +181,8 @@ export function MarketingMessagesTable({
             title={t("fields.createdAt.label")}
           />
         ),
-        cell: ({ row }) => row.original.createdAt.toLocaleDateString(),
+        cell: ({ row }) =>
+          format.dateTime(row.original.createdAt, { dateStyle: "medium" }),
       },
     ]
 
@@ -226,7 +228,7 @@ export function MarketingMessagesTable({
         enableHiding: false,
       },
     ]
-  }, [t, workspaceId, readOnly, pageNameById, adAccountNameById])
+  }, [t, format, workspaceId, readOnly, pageNameById, adAccountNameById])
 
   const { table } = useDataTable({
     data: rows,

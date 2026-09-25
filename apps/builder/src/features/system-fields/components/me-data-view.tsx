@@ -83,6 +83,7 @@ const formatLocale = (t: Translator, value: string | null): string => {
 }
 
 const formatBrowserTime = (): string => {
+  // zone: viewer (shows the browser's own clock on purpose)
   const parts = new Intl.DateTimeFormat("en", {
     hour: "2-digit",
     minute: "2-digit",

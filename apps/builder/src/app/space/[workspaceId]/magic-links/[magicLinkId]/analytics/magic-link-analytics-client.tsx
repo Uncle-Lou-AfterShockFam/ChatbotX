@@ -11,6 +11,7 @@ export function MagicLinkAnalyticsClient({
   linkId: string
   linkName: string
 }) {
+  // zone: viewer (client component: the browser's zone buckets the chart)
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
   return (
     <MagicLinkAnalytics

@@ -22,6 +22,7 @@ export function CommentAutomationAnalyticsClient({
   automationId: string
   automationName: string
 }) {
+  // zone: viewer (client component: the browser's zone buckets the chart)
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
   return (
     <CommentAutomationAnalytics

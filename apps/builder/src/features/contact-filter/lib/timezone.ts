@@ -9,6 +9,7 @@
  */
 export const getBrowserTimezone = (): string => {
   try {
+    // zone: viewer (browser zone for naive wall-clock filter input)
     return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
   } catch {
     return "UTC"
