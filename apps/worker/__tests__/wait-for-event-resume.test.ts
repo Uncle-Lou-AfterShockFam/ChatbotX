@@ -169,7 +169,7 @@ describe("runWaitForEventResume", () => {
         nodeId: "timeout-node",
         contactInboxId: "ci-1",
       }),
-      { flowExecutionKey: undefined },
+      { flowExecutionKey: undefined, claimCheck: expect.any(Function) },
     )
   })
 
@@ -217,7 +217,7 @@ describe("runWaitForEventResume", () => {
     )
     expect(runFlowNode).toHaveBeenCalledWith(
       expect.objectContaining({ nodeId: "event-node" }),
-      { flowExecutionKey: undefined },
+      { flowExecutionKey: undefined, claimCheck: expect.any(Function) },
     )
     expect(smartDelayService.finishClaimedRun).toHaveBeenCalledWith({
       id: "sd-1",

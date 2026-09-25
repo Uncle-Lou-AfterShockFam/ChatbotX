@@ -48,6 +48,7 @@ import {
   detectFlowVersion,
 } from "../../lib/db"
 import { logger } from "../../lib/logger"
+import { type ClaimCheck, ClaimLostError } from "./claim-lost"
 import {
   type ExecuteMultipleStepsProps,
   MESSAGE_PRODUCING_STEP_TYPES,
@@ -123,6 +124,7 @@ type ExecuteStepsAndQuickRepliesProps = {
   commentAnchor?: CommentAnchor
   appointmentId?: string
   flowExecutionKey?: string
+  claimCheck?: ClaimCheck
 }
 
 /** A job carries either an entity ID or the already-loaded entity. */
@@ -135,7 +137,17 @@ const getFlowJobEntityId = (value: FlowJobEntityRef): string =>
 
 type FlowExecutionOptions = {
   flowExecutionKey?: string
+  /**
+   * A claimed smart-delay resume's ownership check (smart-delay-run.ts). The
+   * run stops with ClaimLostError before its next step or continuation once
+   * the stuck-running sweep has handed the row to another resume.
+   */
+  claimCheck?: ClaimCheck
 }
+
+// A tapped button / quick reply never runs under a smart-delay claim, and
+// runFlowAction does not thread one: refuse it at compile time.
+type FlowActionOptions = Omit<FlowExecutionOptions, "claimCheck">
 
 function resolveFlowExecutionKey(
   options: FlowExecutionOptions | undefined,
@@ -301,9 +313,15 @@ export const runFlowNode = async (
       commentAnchor,
       appointmentId: props.appointmentId,
       flowExecutionKey,
+      claimCheck: options?.claimCheck,
     })
   } catch (error) {
-    if (props.metadata?.type === BROADCAST_PAYLOAD_TYPE) {
+    // A lost claim is not a failed delivery: the edge's new owner (or a
+    // cancel) decides the outcome, so the broadcast row is left alone.
+    if (
+      props.metadata?.type === BROADCAST_PAYLOAD_TYPE &&
+      !(error instanceof ClaimLostError)
+    ) {
       const broadcastMeta = props.metadata
       await db
         .update(contactsOnBroadcastsModel)
@@ -455,6 +473,7 @@ export async function runStepsAndQuickReplies(
     const nextIdx = startIdx + 1
     if (nextIdx < details.steps.length) {
       const nextStep = details.steps[nextIdx]
+      await props.claimCheck?.()
       await integrationQueue.add(IntegrationJobAction.sendFlow, {
         type: IntegrationJobAction.sendFlow,
         data: {
@@ -528,6 +547,7 @@ export async function runStepsAndQuickReplies(
     (node) => node.id === relatedEdge.target,
   )
   if (nextNode) {
+    await props.claimCheck?.()
     await integrationQueue.add(IntegrationJobAction.sendFlow, {
       type: IntegrationJobAction.sendFlow,
       data: {
@@ -570,7 +590,7 @@ export async function executeMultipleSteps(props: ExecuteMultipleStepsProps) {
 async function* executeMultipleStepsGenerator(
   props: ExecuteMultipleStepsProps,
 ) {
-  const { steps, commentAnchor, ...rest } = props
+  const { steps, commentAnchor, claimCheck, ...rest } = props
   // A `private` anchor is claimed by the first message-producing step in this
   // run (however many jobs/nodes it takes to reach one) — see
   // MESSAGE_PRODUCING_STEP_TYPES — and then continues as `spent`. A `public`
@@ -578,6 +598,7 @@ async function* executeMultipleStepsGenerator(
   let anchorAvailable = commentAnchor
 
   for (const step of steps) {
+    await claimCheck?.()
     // `nodeId` is overloaded: startAnotherNode/startExternalNode store their own jump
     // target in it, while every other step uses it only to tag the message with the node
     // that produced it (flow analytics). Keep the step's own target when present; otherwise
@@ -639,6 +660,7 @@ async function* executeMultipleStepsGenerator(
           targetState.id,
         )
         if (connectedNodeId) {
+          await claimCheck?.()
           await integrationQueue.add(IntegrationJobAction.sendFlow, {
             type: IntegrationJobAction.sendFlow,
             data: {
@@ -792,7 +814,7 @@ const flowActionClickTypes = {
 async function runFlowAction(
   data: IntegrationJobSendFlowPostback["data"],
   handler: FlowActionHandler,
-  options?: FlowExecutionOptions,
+  options?: FlowActionOptions,
 ) {
   const { conversation, contactInbox } =
     await detectConversationAndContactInbox({
@@ -1050,14 +1072,14 @@ async function runFlowAction(
 
 export function runFlowPostback(
   data: IntegrationJobSendFlowPostback["data"],
-  options?: FlowExecutionOptions,
+  options?: FlowActionOptions,
 ) {
   return runFlowAction(data, flowActionHandlers.postback, options)
 }
 
 export function runFlowQuickReply(
   data: IntegrationJobSendFlowQuickReply["data"],
-  options?: FlowExecutionOptions,
+  options?: FlowActionOptions,
 ) {
   return runFlowAction(data, flowActionHandlers.quickReply, options)
 }
