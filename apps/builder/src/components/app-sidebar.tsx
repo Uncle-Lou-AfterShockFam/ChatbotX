@@ -14,6 +14,7 @@ import {
   CalendarCheckIcon,
   ChartPieIcon,
   ChevronsRight,
+  ClipboardListIcon,
   HandshakeIcon,
   LightbulbIcon,
   ListTodoIcon,
@@ -140,6 +141,12 @@ export function AppSidebar({
         title: t("tasks.mine.title"),
         url: `/space/${workspaceId}/my-tasks`,
         icon: ListTodoIcon,
+        permission: PERMISSION_NAV.deals,
+      },
+      {
+        title: t("forms.title"),
+        url: `/space/${workspaceId}/forms`,
+        icon: ClipboardListIcon,
         permission: PERMISSION_NAV.deals,
       },
       {

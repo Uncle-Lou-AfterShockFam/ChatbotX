@@ -28,6 +28,7 @@
     "./deal-position": "./src/deal-position.ts",
     "./mentions": "./src/mentions.ts",
     "./error-log": "./src/error-log.ts",
+    "./form": "./src/form/index.ts",
     "./graph-error": "./src/graph-error.ts",
     "./id": "./src/id.ts",
     "./meta-capi": "./src/meta-capi.ts",

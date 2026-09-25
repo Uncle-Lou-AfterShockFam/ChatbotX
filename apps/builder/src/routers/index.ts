@@ -80,6 +80,11 @@ export const router = {
       default: m.documentsAPI,
     })),
   ),
+  formsAPI: lazy(() =>
+    import("@/features/forms/api").then((m) => ({
+      default: m.formsAPI,
+    })),
+  ),
   dealTasksAPI: lazy(() =>
     import("@/features/deal-tasks/api").then((m) => ({
       default: m.dealTasksAPI,
