@@ -2,12 +2,12 @@ import { crmTimelineService } from "@chatbotx.io/business"
 import { documentService } from "@chatbotx.io/business/documents"
 import { documentTemplateStatuses } from "@chatbotx.io/database/partials"
 import { zodBigintAsString } from "@chatbotx.io/utils"
+import { contactDocumentVariables } from "@chatbotx.io/variables"
 import z from "zod"
 import { requireContactPermissionScope } from "@/features/contacts/permissions"
 import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
 import { contactsAccessAuthorizedMiddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
-import { contactDocumentVariables } from "../lib/resolve-variables"
 import { toContactDocumentResources } from "../lib/resource"
 import {
   contactDocumentResource,

@@ -1,6 +1,7 @@
 import { crmTimelineService } from "@chatbotx.io/business"
 import { documentService } from "@chatbotx.io/business/documents"
 import { zodBigintAsString } from "@chatbotx.io/utils"
+import { contactDocumentVariables } from "@chatbotx.io/variables"
 import { z } from "zod"
 import {
   possibleErrorsOnFindingResource,
@@ -8,7 +9,6 @@ import {
   possibleErrorsOnMutatingResource,
 } from "@/lib/orpc/orpc-error-helper"
 import { workspaceTokenAuthAPIForScope } from "@/orpc"
-import { contactDocumentVariables } from "../lib/resolve-variables"
 import { toContactDocumentResources } from "../lib/resource"
 import {
   contactDocumentResource,

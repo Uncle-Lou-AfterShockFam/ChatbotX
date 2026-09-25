@@ -80,6 +80,7 @@ import {
 import { handleSendMetaCapiEventStep } from "./meta-conversions/send-meta-capi-event-step-handler"
 import { addOrUpdateMoosendContact } from "./moosend-handler"
 import { questionnaires } from "./questionnaires"
+import { handleSendDocumentForSignature } from "./send-document-for-signature"
 import { sendEmail } from "./send-email"
 import { addSendGridContact } from "./sendgrid-handler"
 import { scheduleSmartDelayResume } from "./smart-delay"
@@ -468,6 +469,7 @@ export const flowStepHandlers: Record<
   [stepTypes.enum.callApi]: externalRequest,
   [stepTypes.enum.make]: handleMakeStep,
   [stepTypes.enum.triggerN8n]: handleTriggerN8nStep,
+  [stepTypes.enum.sendDocumentForSignature]: handleSendDocumentForSignature,
   [stepTypes.enum.executeJavascript]: handleExecuteJavascript,
   [stepTypes.enum.cancelContactInput]: undefined,
   [stepTypes.enum.clearCustomField]: clearContactCustomField,

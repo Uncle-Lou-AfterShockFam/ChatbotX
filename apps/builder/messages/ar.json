@@ -2547,7 +2547,8 @@
       "moveDealStage": "Move Deal to Stage",
       "setDealStatus": "Mark Deal Won / Lost",
       "createTask": "Create task",
-      "completeTask": "Complete task"
+      "completeTask": "Complete task",
+      "sendDocumentForSignature": "إرسال مستند للتوقيع"
     },
     "splitTraffic": {
       "balanceHint": "يجب أن يساوي مجموع النسب 100%.",
@@ -7111,6 +7112,12 @@
       "generated": "تم إنشاء المستند",
       "linkExpires": "الرابط صالح حتى {date}",
       "open": "فتح PDF"
+    },
+    "signStep": {
+      "template": "القالب",
+      "hint": "يُنشئ القالب لجهة الاتصال ويرسله للتوقيع. يُحفظ الرابط في sig_link؛ وعند التوقيع توسم جهة الاتصال بـ doc-signed.",
+      "noTemplates": "لا توجد قوالب مستندات بعد. أنشئ قالبًا من الإعدادات > المستندات.",
+      "noTemplatePicked": "لم يتم اختيار قالب"
     }
   },
   "tasks": {

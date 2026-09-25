@@ -2405,7 +2405,8 @@
       "moveDealStage": "Move Deal to Stage",
       "setDealStatus": "Mark Deal Won / Lost",
       "createTask": "Create task",
-      "completeTask": "Complete task"
+      "completeTask": "Complete task",
+      "sendDocumentForSignature": "Send dokument til underskrift"
     },
     "splitTraffic": {
       "balanceHint": "Den i alt sum must equal 100%.",
@@ -7111,6 +7112,12 @@
       "generated": "Dokument oprettet",
       "linkExpires": "Linket er gyldigt til {date}",
       "open": "Åbn PDF"
+    },
+    "signStep": {
+      "template": "Skabelon",
+      "hint": "Opretter skabelonen for kontakten og sender den til underskrift. Linket gemmes i sig_link; underskrift tagger kontakten doc-signed.",
+      "noTemplates": "Ingen dokumentskabeloner endnu. Opret en under Indstillinger > Dokumenter.",
+      "noTemplatePicked": "Ingen skabelon valgt"
     }
   },
   "tasks": {

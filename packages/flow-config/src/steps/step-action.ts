@@ -82,6 +82,7 @@ export const stepTypes = z.enum([
   "splitTraffic",
   "make",
   "triggerN8n",
+  "sendDocumentForSignature",
 
   // Flow Operations (F_)
   "startAnotherNode",

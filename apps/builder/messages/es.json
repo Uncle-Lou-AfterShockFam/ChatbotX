@@ -2547,7 +2547,8 @@
       "moveDealStage": "Move Deal to Stage",
       "setDealStatus": "Mark Deal Won / Lost",
       "createTask": "Create task",
-      "completeTask": "Complete task"
+      "completeTask": "Complete task",
+      "sendDocumentForSignature": "Enviar documento para firmar"
     },
     "splitTraffic": {
       "balanceHint": "La suma total debe ser igual al 100 %.",
@@ -7111,6 +7112,12 @@
       "generated": "Documento generado",
       "linkExpires": "Enlace válido hasta {date}",
       "open": "Abrir PDF"
+    },
+    "signStep": {
+      "template": "Plantilla",
+      "hint": "Genera la plantilla para el contacto y la envía para firmar. El enlace se guarda en sig_link; al firmar, el contacto recibe la etiqueta doc-signed.",
+      "noTemplates": "Aún no hay plantillas de documentos. Crea una en Configuración > Documentos.",
+      "noTemplatePicked": "Ninguna plantilla elegida"
     }
   },
   "tasks": {

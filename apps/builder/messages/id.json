@@ -2405,7 +2405,8 @@
       "moveDealStage": "Move Deal to Stage",
       "setDealStatus": "Mark Deal Won / Lost",
       "createTask": "Create task",
-      "completeTask": "Complete task"
+      "completeTask": "Complete task",
+      "sendDocumentForSignature": "Kirim dokumen untuk ditandatangani"
     },
     "splitTraffic": {
       "balanceHint": "Jumlah total harus sama dengan 100%.",
@@ -7111,6 +7112,12 @@
       "generated": "Dokumen dibuat",
       "linkExpires": "Tautan berlaku hingga {date}",
       "open": "Buka PDF"
+    },
+    "signStep": {
+      "template": "Templat",
+      "hint": "Membuat templat untuk kontak dan mengirimnya untuk ditandatangani. Tautan disimpan di sig_link; penandatanganan memberi kontak tag doc-signed.",
+      "noTemplates": "Belum ada templat dokumen. Buat di Pengaturan > Dokumen.",
+      "noTemplatePicked": "Belum ada templat dipilih"
     }
   },
   "tasks": {

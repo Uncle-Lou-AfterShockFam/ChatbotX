@@ -2547,7 +2547,8 @@
       "moveDealStage": "Move Deal to Stage",
       "setDealStatus": "Mark Deal Won / Lost",
       "createTask": "Create task",
-      "completeTask": "Complete task"
+      "completeTask": "Complete task",
+      "sendDocumentForSignature": "Belgeyi imzaya gönder"
     },
     "splitTraffic": {
       "balanceHint": "Toplam %100 olmalıdır.",
@@ -7111,6 +7112,12 @@
       "generated": "Belge oluşturuldu",
       "linkExpires": "Bağlantı {date} tarihine kadar geçerli",
       "open": "PDF'yi aç"
+    },
+    "signStep": {
+      "template": "Şablon",
+      "hint": "Şablonu kişi için oluşturur ve imzaya gönderir. Bağlantı sig_link alanına kaydedilir; imzalandığında kişiye doc-signed etiketi eklenir.",
+      "noTemplates": "Henüz belge şablonu yok. Ayarlar > Belgeler bölümünden oluşturun.",
+      "noTemplatePicked": "Şablon seçilmedi"
     }
   },
   "tasks": {

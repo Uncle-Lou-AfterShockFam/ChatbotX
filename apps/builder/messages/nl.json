@@ -2405,7 +2405,8 @@
       "moveDealStage": "Move Deal to Stage",
       "setDealStatus": "Mark Deal Won / Lost",
       "createTask": "Create task",
-      "completeTask": "Complete task"
+      "completeTask": "Complete task",
+      "sendDocumentForSignature": "Document ter ondertekening sturen"
     },
     "splitTraffic": {
       "balanceHint": "De totale som moet gelijk zijn aan 100%.",
@@ -7111,6 +7112,12 @@
       "generated": "Document gemaakt",
       "linkExpires": "Link geldig tot {date}",
       "open": "PDF openen"
+    },
+    "signStep": {
+      "template": "Sjabloon",
+      "hint": "Maakt het sjabloon voor het contact en stuurt het ter ondertekening. De link wordt opgeslagen in sig_link; na ondertekening krijgt het contact de tag doc-signed.",
+      "noTemplates": "Nog geen documentsjablonen. Maak er een in Instellingen > Documenten.",
+      "noTemplatePicked": "Geen sjabloon gekozen"
     }
   },
   "tasks": {
