@@ -38,8 +38,23 @@ describe("SmartDelayEventEmitter", () => {
         contactId: "contact-1",
         eventType: "tagApplied",
         tagId: "tag-1",
+        emittedAt: expect.any(String),
       },
     })
+  })
+
+  test("every event carries emittedAt = the instant it fired (ISO), so a retried job cannot resume a wait created later", async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date("2026-09-25T15:00:00.000Z"))
+      await SmartDelayEventEmitter.tagApplied("ws-1", "contact-1", "tag-1")
+      const payload = mocks.enqueueIntegrationJob.mock.calls[0]?.[0] as {
+        data: { emittedAt?: string }
+      }
+      expect(payload.data.emittedAt).toBe("2026-09-25T15:00:00.000Z")
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   test("customFieldChanged enqueues with the field id and no tag", async () => {
@@ -60,6 +75,7 @@ describe("SmartDelayEventEmitter", () => {
         eventType: "customFieldChanged",
         customFieldId: "cf-1",
         newValue: "ok",
+        emittedAt: expect.any(String),
       },
     })
   })

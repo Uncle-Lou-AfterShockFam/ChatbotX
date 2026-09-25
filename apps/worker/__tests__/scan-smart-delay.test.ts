@@ -14,7 +14,9 @@ const {
   smartDelayService: {
     claimForRun: vi.fn(),
     claimDueRows: vi.fn(),
+    listStuckRunning: vi.fn(),
     listStuckScheduled: vi.fn(),
+    resetStuckRunning: vi.fn(),
     resetToPending: vi.fn(),
   },
 }))
@@ -33,6 +35,7 @@ vi.mock("@chatbotx.io/database/partials", () => ({
     enum: {
       pending: "pending",
       scheduled: "scheduled",
+      running: "running",
       completed: "completed",
       failed: "failed",
       canceled: "canceled",
@@ -88,6 +91,10 @@ describe("scanSmartDelay", () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-07-16T00:00:00.000Z"))
     smartDelayService.listStuckScheduled.mockResolvedValue([])
+    smartDelayService.listStuckRunning.mockResolvedValue([])
+    smartDelayService.resetStuckRunning.mockImplementation(
+      ({ ids }: { ids: string[] }) => Promise.resolve(ids.length),
+    )
     smartDelayService.claimForRun.mockResolvedValue(true)
     smartDelayService.resetToPending.mockImplementation(
       ({ ids }: { ids: string[] }) => Promise.resolve(ids.length),
@@ -107,6 +114,48 @@ describe("scanSmartDelay", () => {
     expect(integrationQueueRemove).not.toHaveBeenCalled()
     expect(smartDelayService.resetToPending).not.toHaveBeenCalled()
     expect(integrationQueueAddBulk).not.toHaveBeenCalled()
+  })
+
+  test("HOSTILE #1 recovery: a row claimed (running) but never finished is swept back to pending, due now; a fresh claim is left alone", async () => {
+    smartDelayService.listStuckRunning.mockResolvedValueOnce([
+      {
+        id: "dead-worker-row",
+        triggerAt: new Date("2026-07-15T23:30:00.000Z"),
+      },
+    ])
+    smartDelayService.claimDueRows.mockResolvedValueOnce([])
+
+    await expect(scanSmartDelay()).resolves.toEqual({ scanned: 0, enqueued: 0 })
+
+    // Only claims older than the 10-minute grace are candidates ...
+    expect(smartDelayService.listStuckRunning).toHaveBeenCalledWith({
+      olderThan: new Date("2026-07-15T23:50:00.000Z"),
+      limit: 500,
+    })
+    // ... the stale wake-up job goes first (jobId dedup), then the CAS reset.
+    expect(integrationQueueRemove).toHaveBeenCalledWith(
+      "smart-delay-dead-worker-row-1784158200000",
+    )
+    expect(smartDelayService.resetStuckRunning).toHaveBeenCalledWith({
+      ids: ["dead-worker-row"],
+      claimedAtBefore: new Date("2026-07-15T23:50:00.000Z"),
+    })
+    expect(integrationQueueRemove.mock.invocationCallOrder[0]).toBeLessThan(
+      smartDelayService.resetStuckRunning.mock.invocationCallOrder[0],
+    )
+    expect(loggerWarn).toHaveBeenCalledWith(
+      { count: 1 },
+      "Reset stuck running smart delay rows to pending (claimed, never finished)",
+    )
+  })
+
+  test("a failing running-sweep never blocks the scheduled sweep or the claim loop", async () => {
+    smartDelayService.listStuckRunning.mockRejectedValueOnce(
+      new Error("db unavailable"),
+    )
+    smartDelayService.claimDueRows.mockResolvedValueOnce([makeRow()])
+
+    await expect(scanSmartDelay()).resolves.toEqual({ scanned: 1, enqueued: 1 })
   })
 
   test("removes stale wake-up jobs before resetting stuck rows to pending", async () => {

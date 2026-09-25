@@ -228,6 +228,10 @@ class SmartDelayService extends BaseService {
     return rows.map(toSmartDelayRow)
   }
 
+  /**
+   * Terminal claim of a scheduled row (follow-up decided, terminal wait):
+   * nothing runs after it, so the row goes straight to its final status.
+   */
   async claimForRun(props: {
     tx?: DatabaseClient
     id: string
@@ -249,6 +253,40 @@ class SmartDelayService extends BaseService {
       .returning({ id: contactOnSmartDelayModel.id })
 
     return rows.length > 0
+  }
+
+  /**
+   * Claim a scheduled row for a resume that RUNS the flow in-process (wait
+   * node / waitForEvent timeout): scheduled -> running, generation + 1. The
+   * returned row is what the caller owns (its nodeId is the edge to run and
+   * its claimGeneration is the token for finish / requeue); null = lost the
+   * CAS. Unlike the old completed-before-run claim, a worker that dies here
+   * leaves a `running` row the scanner sweeps back to pending.
+   */
+  async claimRunning(props: {
+    tx?: DatabaseClient
+    id: string
+  }): Promise<SmartDelayRow | null> {
+    const { tx = db, id } = props
+    const rows = await tx
+      .update(contactOnSmartDelayModel)
+      .set({
+        status: smartDelayStatuses.enum.running,
+        claimedAt: new Date(),
+        claimGeneration: sql`${contactOnSmartDelayModel.claimGeneration} + 1`,
+      })
+      .where(
+        and(
+          eq(contactOnSmartDelayModel.id, id),
+          eq(
+            contactOnSmartDelayModel.status,
+            smartDelayStatuses.enum.scheduled,
+          ),
+        ),
+      )
+      .returning()
+    const row = rows[0]
+    return row ? toSmartDelayRow(row) : null
   }
 
   /**
@@ -285,17 +323,27 @@ class SmartDelayService extends BaseService {
 
   /**
    * CAS for the event path: a `waitForEvent` row more than five minutes from
-   * its timeout is still `pending` (no job yet), so unlike claimForRun this
+   * its timeout is still `pending` (no job yet), so unlike claimRunning this
    * claims from pending OR scheduled. Exactly one of event / timeout wins.
+   * The SAME update re-points the row at its event edge and makes it due now,
+   * so whatever resumes it later (this run, a retry, the stuck-running sweep
+   * -> scanner -> timeout job) runs the edge that actually fired; no re-read.
    */
   async claimForEvent(props: {
     tx?: DatabaseClient
     id: string
-  }): Promise<boolean> {
+  }): Promise<SmartDelayRow | null> {
     const { tx = db, id } = props
+    const now = new Date()
     const rows = await tx
       .update(contactOnSmartDelayModel)
-      .set({ status: smartDelayStatuses.enum.completed })
+      .set({
+        status: smartDelayStatuses.enum.running,
+        claimedAt: now,
+        claimGeneration: sql`${contactOnSmartDelayModel.claimGeneration} + 1`,
+        nodeId: contactOnSmartDelayModel.eventNodeId,
+        triggerAt: now,
+      })
       .where(
         and(
           eq(contactOnSmartDelayModel.id, id),
@@ -306,47 +354,145 @@ class SmartDelayService extends BaseService {
           ]),
         ),
       )
+      .returning()
+    const row = rows[0]
+    return row ? toSmartDelayRow(row) : null
+  }
+
+  /**
+   * Renew a running claim while its flow is still in flight, so the
+   * stuck-running sweep (claimedAt older than the grace) only reclaims rows
+   * whose worker actually stopped renewing, never a slow but alive run.
+   * False = the claim is no longer current (swept / re-claimed): the caller
+   * keeps running, its finish will then be refused and logged.
+   */
+  async heartbeatClaim(props: {
+    tx?: DatabaseClient
+    id: string
+    generation: number
+  }): Promise<boolean> {
+    const { tx = db, id, generation } = props
+    const rows = await tx
+      .update(contactOnSmartDelayModel)
+      .set({ claimedAt: new Date() })
+      .where(
+        and(
+          eq(contactOnSmartDelayModel.id, id),
+          eq(contactOnSmartDelayModel.status, smartDelayStatuses.enum.running),
+          eq(contactOnSmartDelayModel.claimGeneration, generation),
+        ),
+      )
       .returning({ id: contactOnSmartDelayModel.id })
     return rows.length > 0
   }
 
   /**
-   * Re-open a wait row whose claimed resume job failed before completing the
-   * flow. The compare-and-set prevents a stale retry from resurrecting a row
-   * that a different terminal path has since changed.
+   * The flow of a claimed (running) row finished: running -> completed, but
+   * only for the generation that ran. A stale retry whose row was re-claimed
+   * (and re-run) by another path cannot complete that newer run.
+   */
+  async finishClaimedRun(props: {
+    tx?: DatabaseClient
+    id: string
+    generation: number
+  }): Promise<boolean> {
+    const { tx = db, id, generation } = props
+    const rows = await tx
+      .update(contactOnSmartDelayModel)
+      .set({ status: smartDelayStatuses.enum.completed })
+      .where(
+        and(
+          eq(contactOnSmartDelayModel.id, id),
+          eq(contactOnSmartDelayModel.status, smartDelayStatuses.enum.running),
+          eq(contactOnSmartDelayModel.claimGeneration, generation),
+        ),
+      )
+      .returning({ id: contactOnSmartDelayModel.id })
+    return rows.length > 0
+  }
+
+  /**
+   * Re-open a running row whose flow failed: running -> scheduled, so the
+   * BullMQ retry (or the recovery path) can claim and resume it again. The
+   * generation CAS keeps a stale retry from resurrecting a row that a
+   * different claim has since taken (or that a terminal path has closed).
+   * The edge to resume on is already on the row (claimForEvent wrote it).
    */
   async requeueClaimedRun(props: {
     tx?: DatabaseClient
     id: string
-    /**
-     * waitForEvent, event path: the flow failed AFTER the event won. Re-point
-     * the row at the event edge and make it due now, so whichever recovery
-     * path picks it up (the retried event job, or the sweeper -> scanner ->
-     * timeout job) resumes on the edge that actually fired (skeptic HIGH).
-     */
-    resumeAt?: { nodeId: string; triggerAt: Date }
+    generation: number
   }): Promise<boolean> {
-    const { tx = db, id, resumeAt } = props
+    const { tx = db, id, generation } = props
     const rows = await tx
       .update(contactOnSmartDelayModel)
-      .set({
-        status: smartDelayStatuses.enum.scheduled,
-        ...(resumeAt
-          ? { nodeId: resumeAt.nodeId, triggerAt: resumeAt.triggerAt }
-          : {}),
-      })
+      .set({ status: smartDelayStatuses.enum.scheduled })
       .where(
         and(
           eq(contactOnSmartDelayModel.id, id),
-          eq(
-            contactOnSmartDelayModel.status,
-            smartDelayStatuses.enum.completed,
-          ),
+          eq(contactOnSmartDelayModel.status, smartDelayStatuses.enum.running),
+          eq(contactOnSmartDelayModel.claimGeneration, generation),
         ),
       )
       .returning({ id: contactOnSmartDelayModel.id })
 
     return rows.length > 0
+  }
+
+  // Recovery input for the scanner: running rows whose claim is older than
+  // the grace window = a worker died between the claim and the end of the
+  // flow (the run itself is bounded well under the grace).
+  async listStuckRunning(props: {
+    tx?: DatabaseClient
+    olderThan: Date
+    limit: number
+  }): Promise<Pick<SmartDelayRow, "id" | "triggerAt">[]> {
+    const { tx = db, olderThan, limit } = props
+    return await tx
+      .select({
+        id: contactOnSmartDelayModel.id,
+        triggerAt: contactOnSmartDelayModel.triggerAt,
+      })
+      .from(contactOnSmartDelayModel)
+      .where(
+        and(
+          eq(contactOnSmartDelayModel.status, smartDelayStatuses.enum.running),
+          lt(contactOnSmartDelayModel.claimedAt, olderThan),
+        ),
+      )
+      .orderBy(contactOnSmartDelayModel.claimedAt)
+      .limit(limit)
+  }
+
+  // CAS: only rows still running with a stale claim go back to pending, due
+  // now, so the scanner's next claimDueRows re-enqueues them on the edge the
+  // row already carries. A row whose run finished (or was requeued and
+  // re-claimed) in the meantime has a newer claimedAt or status: untouched.
+  // Returns how many rows were actually reset.
+  async resetStuckRunning(props: {
+    tx?: DatabaseClient
+    ids: string[]
+    claimedAtBefore: Date
+  }): Promise<number> {
+    const { tx = db, ids, claimedAtBefore } = props
+    if (ids.length === 0) {
+      return 0
+    }
+    const rows = await tx
+      .update(contactOnSmartDelayModel)
+      .set({
+        status: smartDelayStatuses.enum.pending,
+        triggerAt: new Date(),
+      })
+      .where(
+        and(
+          inArray(contactOnSmartDelayModel.id, ids),
+          eq(contactOnSmartDelayModel.status, smartDelayStatuses.enum.running),
+          lt(contactOnSmartDelayModel.claimedAt, claimedAtBefore),
+        ),
+      )
+      .returning({ id: contactOnSmartDelayModel.id })
+    return rows.length
   }
 
   // Recovery input for the scanner sweeper: scheduled rows whose wake-up never

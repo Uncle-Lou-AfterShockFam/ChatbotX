@@ -154,6 +154,8 @@ export async function scheduleSmartDelayResume(props: {
     createdAt: new Date(),
     triggerAt: props.triggerAt,
     status: smartDelayStatuses.enum.pending,
+    claimGeneration: 0,
+    claimedAt: null,
   }
 
   // Insert tracking record first so a crash during enqueue still has a recovery path via scanner.

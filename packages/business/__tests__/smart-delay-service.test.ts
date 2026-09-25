@@ -272,23 +272,106 @@ describe("smartDelayService", () => {
     ).resolves.toBe(false)
   })
 
-  test("claimForEvent claims a waitForEvent row from pending OR scheduled, once", async () => {
-    mockDbReturning.mockResolvedValueOnce([{ id: "row-1" }])
+  test("claimRunning claims a scheduled row as RUNNING (not completed) with a bumped generation and returns it", async () => {
+    // Hostile #1 (codex probe): before this change the claim wrote
+    // `completed` BEFORE the flow ran, so a worker crash in between left a
+    // row nobody recovered. The claim must leave a `running` row with a
+    // fresh claimedAt, and hand back the row it took.
+    const claimedRow = {
+      ...smartDelayRow,
+      type: "waitNode",
+      status: "running",
+      claimGeneration: 3,
+      claimedAt: new Date("2026-07-16T00:01:00.000Z"),
+    }
+    mockDbReturning.mockResolvedValueOnce([claimedRow])
+
+    await expect(
+      smartDelayService.claimRunning({ id: "row-1" }),
+    ).resolves.toEqual(claimedRow)
+
+    const set = mockDbSet.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(set.status).toBe("running")
+    expect(set.claimedAt).toBeInstanceOf(Date)
+    expect(
+      (set.claimGeneration as { strings: string[] }).strings.join("?"),
+    ).toContain("+ 1")
+    expect(mockEq).toHaveBeenCalledWith(expect.anything(), "scheduled")
+    expect(mockDbReturning).toHaveBeenCalledWith()
+
+    mockDbReturning.mockResolvedValueOnce([])
+    await expect(
+      smartDelayService.claimRunning({ id: "row-1" }),
+    ).resolves.toBeNull()
+  })
+
+  test("claimForEvent claims a waitForEvent row from pending OR scheduled as RUNNING, re-pointed at its event edge, once", async () => {
+    const claimedRow = {
+      ...smartDelayRow,
+      type: "waitForEvent",
+      status: "running",
+      nodeId: "event-node",
+      eventNodeId: "event-node",
+      claimGeneration: 1,
+    }
+    mockDbReturning.mockResolvedValueOnce([claimedRow])
 
     await expect(
       smartDelayService.claimForEvent({ id: "row-1" }),
-    ).resolves.toBe(true)
-    expect(mockDbSet).toHaveBeenCalledWith({ status: "completed" })
+    ).resolves.toEqual(claimedRow)
+    const set = mockDbSet.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(set.status).toBe("running")
+    expect(set.claimedAt).toBeInstanceOf(Date)
+    expect(set.triggerAt).toBe(set.claimedAt)
+    // nodeId := eventNodeId in the SAME statement (a column reference, not a
+    // value read earlier): no re-read window for the edge.
+    expect(set.nodeId).toBeDefined()
+    expect(
+      (set.claimGeneration as { strings: string[] }).strings.join("?"),
+    ).toContain("+ 1")
     expect(mockEq).toHaveBeenCalledWith(expect.anything(), "waitForEvent")
     expect(mockInArray).toHaveBeenCalledWith(expect.anything(), [
       "pending",
       "scheduled",
     ])
 
-    // The timeout (or another event) already completed the row: nothing claimed.
+    // The timeout (or another event) already took the row: nothing claimed.
     mockDbReturning.mockResolvedValueOnce([])
     await expect(
       smartDelayService.claimForEvent({ id: "row-1" }),
+    ).resolves.toBeNull()
+  })
+
+  test("heartbeatClaim renews claimedAt only for the running row of THAT generation", async () => {
+    mockDbReturning.mockResolvedValueOnce([{ id: "row-1" }])
+    await expect(
+      smartDelayService.heartbeatClaim({ id: "row-1", generation: 2 }),
+    ).resolves.toBe(true)
+    const set = mockDbSet.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(Object.keys(set)).toEqual(["claimedAt"])
+    expect(set.claimedAt).toBeInstanceOf(Date)
+    expect(mockEq).toHaveBeenCalledWith(expect.anything(), "running")
+    expect(mockEq).toHaveBeenCalledWith(expect.anything(), 2)
+
+    mockDbReturning.mockResolvedValueOnce([])
+    await expect(
+      smartDelayService.heartbeatClaim({ id: "row-1", generation: 1 }),
+    ).resolves.toBe(false)
+  })
+
+  test("finishClaimedRun completes only the running row of THAT generation", async () => {
+    mockDbReturning.mockResolvedValueOnce([{ id: "row-1" }])
+    await expect(
+      smartDelayService.finishClaimedRun({ id: "row-1", generation: 2 }),
+    ).resolves.toBe(true)
+    expect(mockDbSet).toHaveBeenCalledWith({ status: "completed" })
+    expect(mockEq).toHaveBeenCalledWith(expect.anything(), "running")
+    expect(mockEq).toHaveBeenCalledWith(expect.anything(), 2)
+
+    // Stale finisher: the row was re-claimed (generation 3) by another path.
+    mockDbReturning.mockResolvedValueOnce([])
+    await expect(
+      smartDelayService.finishClaimedRun({ id: "row-1", generation: 2 }),
     ).resolves.toBe(false)
   })
 
@@ -317,33 +400,63 @@ describe("smartDelayService", () => {
     ])
   })
 
-  test("requeueClaimedRun only restores rows claimed as completed", async () => {
+  test("requeueClaimedRun reopens only the running row of THAT generation (a stale retry is a no-op)", async () => {
     mockDbReturning.mockResolvedValueOnce([{ id: "row-1" }])
 
     await expect(
-      smartDelayService.requeueClaimedRun({ id: "row-1" }),
+      smartDelayService.requeueClaimedRun({ id: "row-1", generation: 4 }),
     ).resolves.toBe(true)
 
     expect(mockDbSet).toHaveBeenCalledWith({ status: "scheduled" })
-    expect(mockEq).toHaveBeenCalledWith(expect.anything(), "completed")
+    expect(mockEq).toHaveBeenCalledWith(expect.anything(), "running")
+    expect(mockEq).toHaveBeenCalledWith(expect.anything(), 4)
+
+    mockDbReturning.mockResolvedValueOnce([])
+    await expect(
+      smartDelayService.requeueClaimedRun({ id: "row-1", generation: 3 }),
+    ).resolves.toBe(false)
   })
 
-  test("requeueClaimedRun with resumeAt re-points a waitForEvent row at the edge that fired", async () => {
-    mockDbReturning.mockResolvedValueOnce([{ id: "row-1" }])
-    const triggerAt = new Date("2026-09-23T18:02:00.000Z")
+  test("listStuckRunning returns a bounded batch of running rows with a stale claim", async () => {
+    const olderThan = new Date("2026-07-16T00:10:00.000Z")
+    const stuckRows = [
+      { id: "row-1", triggerAt: new Date("2026-07-16T00:00:00.000Z") },
+    ]
+    mockDbLimit.mockResolvedValueOnce(stuckRows)
 
     await expect(
-      smartDelayService.requeueClaimedRun({
-        id: "row-1",
-        resumeAt: { nodeId: "event-node", triggerAt },
-      }),
-    ).resolves.toBe(true)
+      smartDelayService.listStuckRunning({ olderThan, limit: 500 }),
+    ).resolves.toEqual(stuckRows)
 
-    expect(mockDbSet).toHaveBeenCalledWith({
-      status: "scheduled",
-      nodeId: "event-node",
-      triggerAt,
-    })
+    expect(mockEq).toHaveBeenCalledWith(expect.anything(), "running")
+    expect(mockLt).toHaveBeenCalledWith(expect.anything(), olderThan)
+    expect(mockDbLimit).toHaveBeenCalledWith(500)
+  })
+
+  test("resetStuckRunning resets only still-running rows with a stale claim to pending, due now", async () => {
+    mockDbReturning.mockResolvedValueOnce([{ id: "row-1" }])
+    const claimedAtBefore = new Date("2026-07-16T00:05:00.000Z")
+
+    await expect(
+      smartDelayService.resetStuckRunning({
+        ids: ["row-1", "row-2"],
+        claimedAtBefore,
+      }),
+    ).resolves.toBe(1)
+
+    const set = mockDbSet.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(set.status).toBe("pending")
+    expect(set.triggerAt).toBeInstanceOf(Date)
+    expect(mockInArray).toHaveBeenCalledWith(expect.anything(), [
+      "row-1",
+      "row-2",
+    ])
+    expect(mockEq).toHaveBeenCalledWith(expect.anything(), "running")
+    expect(mockLt).toHaveBeenCalledWith(expect.anything(), claimedAtBefore)
+
+    await expect(
+      smartDelayService.resetStuckRunning({ ids: [], claimedAtBefore }),
+    ).resolves.toBe(0)
   })
 
   test("listStuckScheduled returns a bounded batch of overdue scheduled rows", async () => {

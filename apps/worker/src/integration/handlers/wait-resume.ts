@@ -26,13 +26,14 @@ export async function runWaitResume(
     return
   }
 
-  const claimed = await smartDelayService.claimForRun({
-    id: row.id,
-    to: smartDelayStatuses.enum.completed,
-  })
+  const claimed = await smartDelayService.claimRunning({ id: row.id })
   if (!claimed) {
     return
   }
 
-  await runClaimedSmartDelay(row.id, buildSendFlowResumeJob(row), parentJob)
+  await runClaimedSmartDelay(
+    claimed,
+    buildSendFlowResumeJob(claimed),
+    parentJob,
+  )
 }

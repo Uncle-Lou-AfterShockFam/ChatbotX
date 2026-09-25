@@ -14,7 +14,7 @@ const MAX_CANCEL_BATCHES = 400
  *
  * Cancelling the row is the part that matters. A wake-up job for a `canceled`
  * row is already a no-op (`wait-resume` requires `status === 'scheduled'` and
- * `claimForRun` CASes on it), and — more importantly — the scanner's
+ * `claimRunning` CASes on it), and — more importantly — the scanner's
  * stuck-scheduled sweeper can only reset rows that are still `scheduled`, so a
  * canceled row stops churning through claim → drop → reset for the rest of the
  * 24-hour grace window.

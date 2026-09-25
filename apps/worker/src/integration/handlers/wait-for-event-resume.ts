@@ -1,4 +1,7 @@
-import { smartDelayService } from "@chatbotx.io/business/smart-delay"
+import {
+  type SmartDelayRow,
+  smartDelayService,
+} from "@chatbotx.io/business/smart-delay"
 import {
   smartDelayStatuses,
   smartDelayTypes,
@@ -55,22 +58,43 @@ async function resumeOnTimeout(
     return
   }
 
-  const claimed = await smartDelayService.claimForRun({
-    id: row.id,
-    to: smartDelayStatuses.enum.completed,
-  })
+  // The claim RETURNS the row it took (same statement): a failed event resume
+  // re-pointed this row at the EVENT edge, and the snapshot above may predate
+  // that, so only the returned row's nodeId is the edge to run.
+  const claimed = await smartDelayService.claimRunning({ id: row.id })
   if (!claimed) {
     return
   }
-  // Re-read what we now own: a failed event resume requeues this row pointed
-  // at the EVENT edge (requeueClaimedRun), and the snapshot above may predate
-  // that, so running its nodeId would take the wrong edge.
-  const owned = (await smartDelayService.findById({ id: row.id })) ?? row
-  if (!owned.nodeId) {
+  if (!claimed.nodeId) {
     // No timeout edge: the wait simply ends.
+    await smartDelayService.finishClaimedRun({
+      id: claimed.id,
+      generation: claimed.claimGeneration,
+    })
     return
   }
-  await runClaimedSmartDelay(owned.id, buildSendFlowResumeJob(owned), parentJob)
+  await runClaimedSmartDelay(
+    claimed,
+    buildSendFlowResumeJob(claimed),
+    parentJob,
+  )
+}
+
+/**
+ * A retried event job must never resume a wait CREATED AFTER the event fired:
+ * the contact-wide lookup runs fresh on every attempt, so without this a
+ * BullMQ retry of an old `tagApplied` would satisfy a brand-new wait for the
+ * same tag. Fails closed on a job enqueued before `emittedAt` was carried.
+ */
+export const eventPrecedesRow = (
+  event: Pick<EventPayload, "emittedAt">,
+  row: Pick<SmartDelayRow, "createdAt">,
+): boolean => {
+  if (typeof event.emittedAt !== "string") {
+    return false
+  }
+  const emittedAt = Date.parse(event.emittedAt)
+  return Number.isFinite(emittedAt) && row.createdAt.getTime() <= emittedAt
 }
 
 /** Does this row wait for the event that just landed? */
@@ -109,16 +133,24 @@ async function resumeOnEvent(
   })
   for (const row of rows) {
     const spec = waitForEventSpecSchema.safeParse(row.eventSpec)
-    if (!(spec.success && eventMatchesSpec(spec.data, event))) {
+    if (
+      !(
+        spec.success &&
+        eventMatchesSpec(spec.data, event) &&
+        eventPrecedesRow(event, row)
+      )
+    ) {
       continue
     }
     const wasScheduled = row.status === smartDelayStatuses.enum.scheduled
+    // The claim re-points the row at its event edge (nodeId) and returns it.
     const claimed = await smartDelayService.claimForEvent({ id: row.id })
     if (!claimed) {
       continue // the timeout (or another event) got there first
     }
     if (wasScheduled) {
-      // Best effort: a job already running loses the CAS above anyway.
+      // Best effort: a job already running loses the CAS above anyway. The
+      // job id was built from the PRE-claim triggerAt (the claim moved it).
       try {
         await integrationQueue.remove(buildJobId(row.id, row.triggerAt))
       } catch (err) {
@@ -128,14 +160,18 @@ async function resumeOnEvent(
         )
       }
     }
-    if (!row.eventNodeId) {
-      continue // no event edge: the wait simply ends
+    if (!claimed.nodeId) {
+      // No event edge: the wait simply ends.
+      await smartDelayService.finishClaimedRun({
+        id: claimed.id,
+        generation: claimed.claimGeneration,
+      })
+      continue
     }
     await runClaimedSmartDelay(
-      row.id,
-      buildSendFlowResumeJob({ ...row, nodeId: row.eventNodeId }),
+      claimed,
+      buildSendFlowResumeJob(claimed),
       parentJob,
-      { nodeId: row.eventNodeId, triggerAt: new Date() },
     )
   }
 }

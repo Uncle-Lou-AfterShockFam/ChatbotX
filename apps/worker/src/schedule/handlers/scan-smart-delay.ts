@@ -18,6 +18,9 @@ const SCAN_BATCH_SIZE = 500
 const MAX_SWEEP_BATCHES_PER_RUN = 20
 const MAX_CLAIM_BATCHES_PER_RUN = 200
 const STUCK_SCHEDULED_GRACE_MS = 10 * 60 * 1000
+// A claimed (running) row whose flow has not finished in this long belongs to
+// a worker that died between the claim and the run.
+const STUCK_RUNNING_GRACE_MS = 10 * 60 * 1000
 
 const sweepStuckScheduled = async (olderThan: Date): Promise<void> => {
   let swept = 0
@@ -70,6 +73,54 @@ const sweepStuckScheduled = async (olderThan: Date): Promise<void> => {
     logger.warn(
       { maxBatches: MAX_SWEEP_BATCHES_PER_RUN, batchSize: SCAN_BATCH_SIZE },
       "Smart delay sweep hit its per-run batch cap; backlog remains for the next tick",
+    )
+  }
+}
+
+// Recovery for the claim -> run window: a running row whose claimedAt is past
+// the grace goes back to pending, due now, and the claim loop below (same
+// tick) re-enqueues it on the edge the row carries. Its old wake-up job (if
+// any survived) is removed first for the same jobId-dedup reason as above.
+const sweepStuckRunning = async (olderThan: Date): Promise<void> => {
+  let swept = 0
+  let lastBatchSize = 0
+
+  for (let batch = 0; batch < MAX_SWEEP_BATCHES_PER_RUN; batch++) {
+    const stuckRows = await smartDelayService.listStuckRunning({
+      olderThan,
+      limit: SCAN_BATCH_SIZE,
+    })
+    lastBatchSize = stuckRows.length
+    if (stuckRows.length === 0) {
+      break
+    }
+
+    await Promise.allSettled(
+      stuckRows.map((row) =>
+        integrationQueue.remove(buildJobId(row.id, row.triggerAt)),
+      ),
+    )
+
+    swept += await smartDelayService.resetStuckRunning({
+      ids: stuckRows.map((row) => row.id),
+      claimedAtBefore: olderThan,
+    })
+
+    if (stuckRows.length < SCAN_BATCH_SIZE) {
+      break
+    }
+  }
+
+  if (swept > 0) {
+    logger.warn(
+      { count: swept },
+      "Reset stuck running smart delay rows to pending (claimed, never finished)",
+    )
+  }
+  if (lastBatchSize === SCAN_BATCH_SIZE) {
+    logger.warn(
+      { maxBatches: MAX_SWEEP_BATCHES_PER_RUN, batchSize: SCAN_BATCH_SIZE },
+      "Smart delay running-sweep hit its per-run batch cap; backlog remains for the next tick",
     )
   }
 }
@@ -153,6 +204,14 @@ export const scanSmartDelay = async () => {
     await sweepStuckScheduled(subMilliseconds(now, STUCK_SCHEDULED_GRACE_MS))
   } catch (err) {
     logger.error({ err }, "Smart delay sweep failed; continuing with claim")
+  }
+  try {
+    await sweepStuckRunning(subMilliseconds(now, STUCK_RUNNING_GRACE_MS))
+  } catch (err) {
+    logger.error(
+      { err },
+      "Smart delay running-sweep failed; continuing with claim",
+    )
   }
 
   let scanned = 0
