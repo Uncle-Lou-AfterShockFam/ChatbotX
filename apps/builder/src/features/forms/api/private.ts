@@ -96,6 +96,7 @@ const privateUpdateFormAPI = authorizedAPI
         workspaceId: input.workspaceId,
         id: input.id,
         force: input.force,
+        ifUnmodifiedSince: input.ifUnmodifiedSince,
         data: {
           title: input.title,
           slug: input.slug,

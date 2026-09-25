@@ -4,7 +4,9 @@ import { type FormDefinition, formDefinition } from "@chatbotx.io/utils/form"
 import { describe, expect, test } from "vitest"
 import {
   addField,
+  addRule,
   addStep,
+  conditionSourcesBefore,
   moveField,
   moveStep,
   newField,
@@ -126,9 +128,31 @@ describe("editor ops (s200)", () => {
       "other",
       "interest",
     ])
+    // `other` now precedes `interest`: its condition on `interest` is pruned
+    expect(next.steps[0].fields[0].visibleWhen?.rules).toEqual([])
     valid(next)
     const same = base()
     expect(moveField(same, "s1", 0, 5)).toBe(same)
+  })
+
+  test("addRule stops at the cap; conditionSourcesBefore lists only earlier inputs", () => {
+    let def = base()
+    for (let i = 0; i < 60; i++) {
+      def = addRule(def, {
+        id: `x${i}`,
+        when: { logic: "AND", rules: [] },
+        action: { type: "hide", fieldKey: "notes" },
+      })
+    }
+    expect(def.rules).toHaveLength(50)
+    expect(conditionSourcesBefore(base(), "other").map((f) => f.key)).toEqual([
+      "interest",
+    ])
+    expect(conditionSourcesBefore(base(), "interest")).toEqual([])
+    expect(conditionSourcesBefore(base(), "notes").map((f) => f.key)).toEqual([
+      "interest",
+      "other",
+    ])
   })
 
   test("addStep stops at the cap", () => {

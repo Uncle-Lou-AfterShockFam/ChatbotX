@@ -106,6 +106,115 @@ describe("compareFormValue", () => {
   })
 })
 
+describe("hostile values never throw (blind probe, s200)", () => {
+  test("list fields with non-string elements, null-proto objects, symbols", () => {
+    const d = def()
+    d.steps[0].fields[1].visibleWhen = {
+      logic: "AND",
+      rules: [{ fieldKey: "tags", op: "contains", value: "a" }],
+    }
+    // `tags` comes before `other`? No: reorder so tags is read by a later field.
+    const later = formDefinition.parse({
+      steps: [
+        {
+          id: "s1",
+          fields: [
+            {
+              key: "t",
+              type: "checkboxGroup",
+              options: [{ value: "a", label: "A" }],
+            },
+            {
+              key: "u",
+              type: "text",
+              visibleWhen: {
+                logic: "AND",
+                rules: [{ fieldKey: "t", op: "contains", value: "a" }],
+              },
+            },
+          ],
+        },
+      ],
+      rules: [],
+    })
+    for (const values of [
+      { t: [1] },
+      { t: [null] },
+      { t: [{ x: 1 }] },
+      { t: Object.create(null) },
+      { t: [Symbol("s")] },
+      { t: 10n },
+      { t: new Date() },
+      { t: () => 1 },
+    ] as unknown as Record<string, never>[]) {
+      expect(() => evaluateForm(later, values)).not.toThrow()
+      expect(() => validateFormSubmission(later, values)).not.toThrow()
+    }
+    expect(validateFormSubmission(later, { t: [1] } as never)).toContainEqual({
+      key: "t",
+      code: "type",
+    })
+  })
+
+  test("compareFormValue never throws on any (op, actual, expected)", () => {
+    const actuals = [
+      null,
+      undefined,
+      "",
+      "x",
+      1,
+      Number.NaN,
+      true,
+      [1, "a", null],
+      Object.create(null),
+      Symbol("s"),
+      5n,
+      new Date(0),
+      () => 1,
+    ]
+    const expecteds = ["a", 1, true, undefined]
+    for (const op of [
+      "eq",
+      "neq",
+      "gt",
+      "gte",
+      "lt",
+      "lte",
+      "contains",
+      "not_contains",
+      "starts_with",
+      "ends_with",
+      "is_empty",
+      "is_not_empty",
+    ] as const) {
+      for (const a of actuals) {
+        for (const e of expecteds) {
+          expect(
+            () => compareFormValue(op, a as never, e),
+            `${op}`,
+          ).not.toThrow()
+        }
+      }
+    }
+  })
+
+  test("a field keyed `constructor` reads only own properties", () => {
+    const d = formDefinition.parse({
+      steps: [{ id: "s1", fields: [{ key: "constructor", type: "text" }] }],
+      rules: [],
+    })
+    expect(validateFormSubmission(d, {})).toEqual([])
+    expect(pruneFormValues(d, {}, evaluateForm(d, {}))).toEqual({})
+    expect(
+      pruneFormValues(
+        d,
+        { constructor: "x" },
+        evaluateForm(d, { constructor: "x" }),
+      ),
+    ).toEqual({ constructor: "x" })
+  })
+})
+
 describe("evaluateForm", () => {
   test("a field's own condition shows it and a rule requires it", () => {
     const e = evaluateForm(def(), { interest: "other" })

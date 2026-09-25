@@ -37,13 +37,26 @@ import type {
 } from "@chatbotx.io/database/types"
 import { createId } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
-import { notFoundException, validationException } from "../errors"
+import {
+  ChatbotXException,
+  notFoundException,
+  validationException,
+} from "../errors"
 
 const FORM_NOT_FOUND = "Form not found"
 const SUBMISSION_NOT_FOUND = "Submission not found"
 const SLUG_TAKEN = "That slug is already used by another form."
 const SLUG_UNIQUE_INDEX = "Form_workspaceId_slug_key"
 const MAX_DUPLICATE_ATTEMPTS = 5
+const INT8_ID = /^\d{1,19}$/
+
+/** Someone else saved since the caller loaded the form (optimistic lock). */
+const conflictException = () =>
+  new ChatbotXException(
+    "This form changed since you loaded it. Reload and apply your edits again.",
+    "conflict",
+    409,
+  )
 
 export type FormWriteData = {
   title?: string
@@ -51,6 +64,23 @@ export type FormWriteData = {
   definition?: unknown
   settings?: unknown
   inboxId?: string | null
+}
+
+const normalizeSubmission = (row: FormSubmissionModel): FormSubmissionModel => {
+  const values =
+    row.values !== null &&
+    typeof row.values === "object" &&
+    !Array.isArray(row.values)
+      ? row.values
+      : {}
+  const raw = row.visibility as { steps?: unknown; fields?: unknown } | null
+  const list = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []
+  return {
+    ...row,
+    values,
+    visibility: { steps: list(raw?.steps), fields: list(raw?.fields) },
+  }
 }
 
 /** A form as every read path returns it: jsonb normalised, never raw. */
@@ -125,7 +155,7 @@ const parseSlug = (raw: unknown): string => {
   if (!FORM_SLUG_REGEX.test(slug)) {
     throw validationException(
       "slug",
-      "Slug: lower-case letters, digits and single dashes, 1-64 characters.",
+      "Slug: lower-case letters, digits and dashes, 1-64 characters, no dash at either end.",
     )
   }
   return slug
@@ -224,7 +254,16 @@ export class FormService extends BaseService {
     if (!row || row.publishedDefinition === null) {
       return null
     }
-    return this.normalize(row)
+    const form = this.normalize(row)
+    // A published form always has an input field (publish refuses an empty
+    // one), so a normalised-to-empty copy is a corrupt row: fail closed.
+    if (
+      formInputFields(form.publishedDefinition ?? EMPTY_FORM_DEFINITION)
+        .length === 0
+    ) {
+      return null
+    }
+    return form
   }
 
   async create(props: {
@@ -276,10 +315,18 @@ export class FormService extends BaseService {
     id: string
     data: FormWriteData
     force?: boolean
+    /** The `updatedAt` the caller loaded; a newer row is a 409, never overwritten. */
+    ifUnmodifiedSince?: Date | null
     tx?: DatabaseClient
   }): Promise<NormalizedForm> {
     const { workspaceId, id, data, force = false, tx = db } = props
     const current = await this.get({ workspaceId, id, tx })
+    if (
+      props.ifUnmodifiedSince &&
+      current.updatedAt.getTime() !== props.ifUnmodifiedSince.getTime()
+    ) {
+      throw conflictException()
+    }
     const patch: Partial<typeof formModel.$inferInsert> = {}
 
     if (data.title !== undefined) {
@@ -311,14 +358,23 @@ export class FormService extends BaseService {
       patch.definition = definition
     }
     if (data.settings !== undefined) {
+      if (data.settings === null || typeof data.settings !== "object") {
+        throw validationException("settings", "Settings must be an object.")
+      }
       const parsed = parseFormSettings(data.settings)
       if (!parsed.success) {
-        throw validationException(`settings.${parsed.path}`, parsed.message)
+        throw validationException(
+          parsed.path === "" ? "settings" : `settings.${parsed.path}`,
+          parsed.message,
+        )
       }
       patch.settings = parsed.data
     }
     const inboxId = data.inboxId === undefined ? current.inboxId : data.inboxId
     if (data.inboxId !== undefined) {
+      if (inboxId !== null && !INT8_ID.test(inboxId)) {
+        throw validationException("inboxId", "That inbox does not exist here.")
+      }
       patch.inboxId = inboxId
     }
     if (inboxId !== null) {
@@ -339,11 +395,16 @@ export class FormService extends BaseService {
         .update(formModel)
         .set({ ...patch, updatedAt: new Date() })
         .where(
-          and(eq(formModel.id, id), eq(formModel.workspaceId, workspaceId)),
+          and(
+            eq(formModel.id, id),
+            eq(formModel.workspaceId, workspaceId),
+            eq(formModel.updatedAt, current.updatedAt),
+          ),
         )
         .returning()
       if (!row) {
-        throw notFoundException(FORM_NOT_FOUND)
+        // The read above found it: 0 rows means it moved under us.
+        throw conflictException()
       }
       return this.normalize(row)
     } catch (error) {
@@ -430,10 +491,17 @@ export class FormService extends BaseService {
         publishedAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(and(eq(formModel.id, id), eq(formModel.workspaceId, workspaceId)))
+      .where(
+        and(
+          eq(formModel.id, id),
+          eq(formModel.workspaceId, workspaceId),
+          eq(formModel.definitionVersion, current.definitionVersion),
+          eq(formModel.updatedAt, current.updatedAt),
+        ),
+      )
       .returning()
     if (!row) {
-      throw notFoundException(FORM_NOT_FOUND)
+      throw conflictException()
     }
     return this.normalize(row)
   }
@@ -549,7 +617,10 @@ export class FormService extends BaseService {
     tx?: DatabaseClient
   }): Promise<{ data: FormSubmissionModel[]; nextCursor: string | null }> {
     const { workspaceId, formId, tx = db } = props
-    const limit = Math.min(Math.max(props.limit ?? 50, 1), 200)
+    const requested = Number.isInteger(props.limit)
+      ? (props.limit as number)
+      : 50
+    const limit = Math.min(Math.max(requested, 1), 200)
     await this.get({ workspaceId, id: formId, tx })
     const after = props.cursor ? decodeSubmissionCursor(props.cursor) : null
     const conditions: SQL[] = [
@@ -573,7 +644,7 @@ export class FormService extends BaseService {
     const page = rows.slice(0, limit)
     const last = page.at(-1)
     return {
-      data: page.map((r) => r.row),
+      data: page.map((r) => normalizeSubmission(r.row)),
       nextCursor:
         rows.length > limit && last
           ? encodeSubmissionCursor({ k: last.k, i: last.row.id })
@@ -602,7 +673,7 @@ export class FormService extends BaseService {
     if (!row) {
       throw notFoundException(SUBMISSION_NOT_FOUND)
     }
-    return row
+    return normalizeSubmission(row)
   }
 
   async deleteSubmission(props: {

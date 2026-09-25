@@ -64,6 +64,8 @@ export const updateFormRequest = z
     settings: z.unknown().optional(),
     inboxId: zodBigintAsString().nullable().optional(),
     force: z.boolean().optional(),
+    /** The `updatedAt` the editor loaded; a newer row answers 409. */
+    ifUnmodifiedSince: z.coerce.date().optional(),
   })
   .strict()
 

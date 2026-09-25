@@ -28,6 +28,7 @@ export const MAX_FORM_DEFINITION_BYTES = 65_536
 export const MAX_FORM_LABEL = 120
 export const MAX_FORM_TEXT = 500
 export const MAX_FORM_VALUE = 2000
+export const MAX_FORM_PATTERN = 200
 
 export const FORM_FIELD_KEY_REGEX = /^[a-z][a-z0-9_]{0,39}$/
 export const FORM_STEP_ID_REGEX = /^[a-z0-9][a-z0-9_-]{0,39}$/
@@ -100,7 +101,10 @@ export const formSystemFieldKeys = z.enum([
 export type FormSystemFieldKey = z.infer<typeof formSystemFieldKeys>
 
 export const formFieldMapTo = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("custom"), customFieldId: z.string().min(1) }),
+  z.object({
+    kind: z.literal("custom"),
+    customFieldId: z.string().regex(/^\d{1,19}$/),
+  }),
   z.object({ kind: z.literal("system"), key: formSystemFieldKeys }),
 ])
 export type FormFieldMapTo = z.infer<typeof formFieldMapTo>
@@ -136,27 +140,76 @@ export function formConditionDepth(group: FormConditionGroup): number {
   return deepest + 1
 }
 
-const formConditionGroupNode: z.ZodType<FormConditionGroup> = z.lazy(() =>
+/**
+ * A group schema that admits nested groups only `depth` more levels. Built
+ * per level instead of one `z.lazy`, so the PARSER refuses depth 5 before
+ * recursing: a `superRefine` after a full recursive parse let a 4,534-deep
+ * body throw RangeError instead of returning a failure (blind probe, s200).
+ */
+const groupSchemaAt = (depth: number): z.ZodType<FormConditionGroup> =>
   z
     .object({
       logic: z.enum(["AND", "OR"]),
       rules: z
-        .array(z.union([formConditionRule, formConditionGroupNode]))
+        .array(
+          depth >= MAX_FORM_CONDITION_DEPTH
+            ? formConditionRule
+            : z.union([formConditionRule, groupSchemaAt(depth + 1)]),
+        )
         .max(MAX_FORM_RULES_PER_GROUP),
     })
-    .strict(),
-)
+    .strict() as unknown as z.ZodType<FormConditionGroup>
 
-export const formConditionGroup = formConditionGroupNode.superRefine(
-  (group, ctx) => {
-    if (formConditionDepth(group) > MAX_FORM_CONDITION_DEPTH) {
-      ctx.addIssue({
-        code: "custom",
-        message: `Conditions may nest at most ${MAX_FORM_CONDITION_DEPTH} levels deep.`,
-      })
+export const formConditionGroup = groupSchemaAt(1)
+
+/**
+ * `pattern` is a caller-supplied regex run against submitted text, so it may
+ * not carry the shapes that make V8 backtrack exponentially: a quantified
+ * group whose body is itself quantified (`(a+)+`), alternation inside a
+ * quantified group (`(a|aa)+`), or a backreference. Measured before the
+ * guard: `(a+)+$` on 29 chars took 35 s (blind probe, s200).
+ */
+const BACKREFERENCE = /\\[1-9]/
+/** `*`, `+` or `{n,}` right after a group: the group repeats without bound. */
+const UNBOUNDED_AFTER_GROUP = /\)(?:[*+]|\{\d+,\})/
+/** An unbounded quantifier or an alternation inside a group body. */
+const UNBOUNDED_OR_ALTERNATION_IN_BODY = /[*+|]|\{\d+,\}/
+
+export function isSafeFormPattern(pattern: string): boolean {
+  if (pattern.length > MAX_FORM_PATTERN || BACKREFERENCE.test(pattern)) {
+    return false
+  }
+  try {
+    new RegExp(pattern, "u")
+  } catch {
+    return false
+  }
+  if (!UNBOUNDED_AFTER_GROUP.test(pattern)) {
+    return true
+  }
+  // Walk each unboundedly-quantified group; refuse when its body repeats or alternates.
+  const stack: number[] = []
+  for (let i = 0; i < pattern.length; i++) {
+    const ch = pattern[i]
+    if (ch === "\\") {
+      i++
+      continue
     }
-  },
-)
+    if (ch === "(") {
+      stack.push(i)
+    } else if (ch === ")") {
+      const start = stack.pop()
+      if (
+        start !== undefined &&
+        UNBOUNDED_AFTER_GROUP.test(pattern.slice(i, i + 12)) &&
+        UNBOUNDED_OR_ALTERNATION_IN_BODY.test(pattern.slice(start + 1, i))
+      ) {
+        return false
+      }
+    }
+  }
+  return true
+}
 
 export const formFieldOption = z
   .object({
@@ -178,7 +231,7 @@ export const formField = z
     defaultValue: z.string().max(MAX_FORM_TEXT).optional(),
     min: z.number().optional(),
     max: z.number().optional(),
-    pattern: z.string().max(MAX_FORM_TEXT).optional(),
+    pattern: z.string().max(MAX_FORM_PATTERN).optional(),
     mapTo: formFieldMapTo.optional(),
     visibleWhen: formConditionGroup.optional(),
   })
@@ -219,16 +272,13 @@ export const formField = z
         message: `A ${field.type} block cannot be required or mapped.`,
       })
     }
-    if (field.pattern !== undefined) {
-      try {
-        new RegExp(field.pattern)
-      } catch {
-        ctx.addIssue({
-          code: "custom",
-          path: ["pattern"],
-          message: "Invalid pattern.",
-        })
-      }
+    if (field.pattern !== undefined && !isSafeFormPattern(field.pattern)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["pattern"],
+        message:
+          "Pattern is invalid or unsafe (no nested quantifiers, alternation inside a quantified group, or backreferences).",
+      })
     }
     if (
       field.min !== undefined &&
@@ -308,7 +358,16 @@ export const formDefinition = z
     const stepIndex = new Map<string, number>()
     const systemKeys = new Set<string>()
     const customIds = new Set<string>()
-    const conditionRefs: { path: (string | number)[]; key: string }[] = []
+    /** Position of every input key in document order, for the reads-earlier rule. */
+    const keyOrder = new Map<string, number>()
+    const keyStep = new Map<string, number>()
+    let order = 0
+    const conditionRefs: {
+      path: (string | number)[]
+      key: string
+      /** A field condition may read keys with a lower order; a step condition keys of earlier steps. */
+      before?: { order: number } | { step: number }
+    }[] = []
 
     for (const [s, step] of def.steps.entries()) {
       if (stepIds.has(step.id)) {
@@ -322,7 +381,11 @@ export const formDefinition = z
       stepIndex.set(step.id, s)
       if (step.visibleWhen) {
         for (const key of collectRuleKeys(step.visibleWhen, [])) {
-          conditionRefs.push({ path: ["steps", s, "visibleWhen"], key })
+          conditionRefs.push({
+            path: ["steps", s, "visibleWhen"],
+            key,
+            before: { step: s },
+          })
         }
       }
       for (const [f, field] of step.fields.entries()) {
@@ -336,7 +399,11 @@ export const formDefinition = z
         seenKeys.add(field.key)
         if (isFormInputFieldType(field.type)) {
           inputKeys.add(field.key)
+          keyOrder.set(field.key, order)
+          keyStep.set(field.key, s)
         }
+        const myOrder = order
+        order++
         if (field.mapTo?.kind === "system") {
           if (systemKeys.has(field.mapTo.key)) {
             ctx.addIssue({
@@ -362,6 +429,7 @@ export const formDefinition = z
             conditionRefs.push({
               path: ["steps", s, "fields", f, "visibleWhen"],
               key,
+              before: { order: myOrder },
             })
           }
         }
@@ -404,6 +472,24 @@ export const formDefinition = z
           code: "custom",
           path: ref.path,
           message: `Condition reads unknown input field "${ref.key}".`,
+        })
+        continue
+      }
+      // The evaluator resolves steps and fields in order, so a condition
+      // that reads a LATER field would always see undefined (skeptic, s200).
+      const before = ref.before
+      if (before === undefined) {
+        continue
+      }
+      const tooLate =
+        "order" in before
+          ? (keyOrder.get(ref.key) ?? -1) >= before.order
+          : (keyStep.get(ref.key) ?? -1) >= before.step
+      if (tooLate) {
+        ctx.addIssue({
+          code: "custom",
+          path: ref.path,
+          message: `Condition reads "${ref.key}", which comes later in the form; conditions may only read earlier fields.`,
         })
       }
     }

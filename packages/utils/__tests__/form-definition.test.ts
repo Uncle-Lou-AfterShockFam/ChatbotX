@@ -8,6 +8,7 @@ import {
   formDefinition,
   formIdentifiesContact,
   formMapsToContact,
+  isSafeFormPattern,
   MAX_FORM_CONDITION_DEPTH,
   MAX_FORM_DEFINITION_BYTES,
   MAX_FORM_FIELDS_PER_STEP,
@@ -57,7 +58,7 @@ const base = (): FormDefinitionInput => ({
 /** A group nested `n` levels deep (n = 1 is a flat group). */
 const nest = (n: number): FormConditionGroup =>
   n <= 1
-    ? { logic: "AND", rules: [{ fieldKey: "first_name", op: "is_empty" }] }
+    ? { logic: "AND", rules: [{ fieldKey: "interest", op: "is_empty" }] }
     : { logic: "OR", rules: [nest(n - 1)] }
 
 describe("formDefinition", () => {
@@ -215,6 +216,81 @@ describe("formDefinition", () => {
     }
   })
 
+  test("a condition may only read EARLIER fields (a later read is always undefined)", () => {
+    const d = base()
+    // `other` (index 2) reading `notes` (step 2): later -> refused
+    d.steps[0].fields[2].visibleWhen = {
+      logic: "AND",
+      rules: [{ fieldKey: "notes", op: "is_empty" }],
+    }
+    const r = formDefinition.safeParse(d)
+    expect(r.success).toBe(false)
+    expect(JSON.stringify(r.error?.issues)).toContain("comes later")
+    // a field reading itself is also "not earlier"
+    const e = base()
+    e.steps[0].fields[0].visibleWhen = {
+      logic: "AND",
+      rules: [{ fieldKey: "first_name", op: "is_empty" }],
+    }
+    expect(formDefinition.safeParse(e).success).toBe(false)
+    // a step condition may read only EARLIER steps
+    const f = base()
+    f.steps[1].visibleWhen = {
+      logic: "AND",
+      rules: [{ fieldKey: "notes", op: "is_empty" }],
+    }
+    expect(formDefinition.safeParse(f).success).toBe(false)
+    f.steps[1].visibleWhen = {
+      logic: "AND",
+      rules: [{ fieldKey: "interest", op: "eq", value: "other" }],
+    }
+    expect(formDefinition.safeParse(f).success).toBe(true)
+    // form-level rules run after visibility: any input field is fine
+    const g = base()
+    g.rules = [
+      {
+        id: "r1",
+        when: {
+          logic: "AND",
+          rules: [{ fieldKey: "notes", op: "is_not_empty" }],
+        },
+        action: { type: "hide", fieldKey: "first_name" },
+      },
+    ]
+    expect(formDefinition.safeParse(g).success).toBe(true)
+  })
+
+  test("customFieldId must be an int8 id (a `::bigint` cast on publish)", () => {
+    for (const bad of ["abc", "1e5", "77; drop", "9".repeat(20), ""]) {
+      const d = base()
+      d.steps[0].fields[0].mapTo = { kind: "custom", customFieldId: bad }
+      expect(formDefinition.safeParse(d).success, bad).toBe(false)
+    }
+    const ok = base()
+    ok.steps[0].fields[0].mapTo = { kind: "custom", customFieldId: "77" }
+    expect(formDefinition.safeParse(ok).success).toBe(true)
+  })
+
+  describe("pattern safety (ReDoS)", () => {
+    test.each([
+      ["(a+)+$", false],
+      ["^(a|aa)+$", false],
+      ["(\\d+)*x", false],
+      ["(a)\\1", false],
+      ["^[a-z0-9_-]{3,16}$", true],
+      ["^\\d{5}(-\\d{4})?$", true],
+      ["^(foo|bar)$", true],
+      ["(ab)+c", true],
+      ["(", false],
+      ["a".repeat(201), false],
+    ])("%s -> safe %s", (pattern, safe) => {
+      expect(isSafeFormPattern(pattern)).toBe(safe)
+      const d = base()
+      d.steps[0].fields[0].pattern = pattern
+      expect(formDefinition.safeParse(d).success).toBe(safe)
+    })
+  })
+
   test("an invalid pattern and min > max are refused", () => {
     const d = base()
     d.steps[0].fields[0].pattern = "("
@@ -295,17 +371,25 @@ describe("formDefinition", () => {
       expect(formConditionDepth(group)).toBe(MAX_FORM_CONDITION_DEPTH)
       expect(formConditionGroup.safeParse(group).success).toBe(true)
       const d = base()
-      d.steps[0].fields[0].visibleWhen = group
-      // first_name reads itself here; only the depth matters for this test
+      d.steps[0].fields[2].visibleWhen = group
       expect(formDefinition.safeParse(d).success).toBe(true)
     })
+    test("a 6000-deep body returns a failure, never a RangeError", () => {
+      const group = nest(6000)
+      expect(() => formConditionGroup.safeParse(group)).not.toThrow()
+      expect(formConditionGroup.safeParse(group).success).toBe(false)
+      const d = base()
+      d.steps[0].fields[2].visibleWhen = group
+      expect(() => formDefinition.safeParse(d)).not.toThrow()
+      expect(formDefinition.safeParse(d).success).toBe(false)
+    })
+
     test(`nesting ${MAX_FORM_CONDITION_DEPTH + 1} deep is refused`, () => {
       const group = nest(MAX_FORM_CONDITION_DEPTH + 1)
       const r = formConditionGroup.safeParse(group)
       expect(r.success).toBe(false)
-      expect(JSON.stringify(r.error?.issues)).toContain("nest at most")
       const d = base()
-      d.steps[0].fields[0].visibleWhen = group
+      d.steps[0].fields[2].visibleWhen = group
       expect(formDefinition.safeParse(d).success).toBe(false)
     })
   })

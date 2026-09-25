@@ -11,6 +11,7 @@ import {
   FORM_OPTION_FIELD_TYPES,
   isFormInputFieldType,
   MAX_FORM_FIELDS_PER_STEP,
+  MAX_FORM_RULES,
   MAX_FORM_STEPS,
 } from "@chatbotx.io/utils/form"
 
@@ -138,6 +139,49 @@ export function removeStep(
   return next
 }
 
+/**
+ * After a reorder, prune condition rules that now read a LATER field (the
+ * strict schema refuses them and the evaluator would read undefined).
+ */
+function dropForwardReferences(def: FormDefinition): FormDefinition {
+  const order = new Map<string, number>()
+  const stepOf = new Map<string, number>()
+  let n = 0
+  def.steps.forEach((step, si) => {
+    for (const field of step.fields) {
+      order.set(field.key, n++)
+      stepOf.set(field.key, si)
+    }
+  })
+  const keep = (
+    g: FormConditionGroup,
+    ok: (key: string) => boolean,
+  ): FormConditionGroup => ({
+    logic: g.logic,
+    rules: g.rules
+      .map((r) => ("logic" in r ? keep(r, ok) : r))
+      .filter((r) => ("logic" in r ? true : ok(r.fieldKey))),
+  })
+  return {
+    ...def,
+    steps: def.steps.map((step, si) => ({
+      ...step,
+      visibleWhen: step.visibleWhen
+        ? keep(step.visibleWhen, (key) => (stepOf.get(key) ?? -1) < si)
+        : undefined,
+      fields: step.fields.map((field) => ({
+        ...field,
+        visibleWhen: field.visibleWhen
+          ? keep(
+              field.visibleWhen,
+              (key) => (order.get(key) ?? -1) < (order.get(field.key) ?? -1),
+            )
+          : undefined,
+      })),
+    })),
+  }
+}
+
 export function moveStep(
   def: FormDefinition,
   from: number,
@@ -157,7 +201,7 @@ export function moveStep(
   steps.splice(to, 0, moved)
   // A skip rule that now points backwards is dropped rather than left invalid.
   const index = new Map(steps.map((s, i) => [s.id, i]))
-  return {
+  return dropForwardReferences({
     ...def,
     steps,
     rules: def.rules.filter(
@@ -166,7 +210,7 @@ export function moveStep(
         (index.get(r.action.toStepId) ?? -1) >
           (index.get(r.action.fromStepId) ?? -1),
     ),
-  }
+  })
 }
 
 export function addField(
@@ -305,42 +349,16 @@ export function moveField(
   const fields = [...step.fields]
   const [moved] = fields.splice(from, 1)
   fields.splice(to, 0, moved)
-  return {
+  return dropForwardReferences({
     ...def,
     steps: def.steps.map((s) => (s.id === stepId ? { ...s, fields } : s)),
-  }
-}
-
-export function moveFieldToStep(
-  def: FormDefinition,
-  key: string,
-  toStepId: string,
-): FormDefinition {
-  let moved: FormField | undefined
-  const steps = def.steps.map((s) => {
-    const field = s.fields.find((f) => f.key === key)
-    if (!field) {
-      return s
-    }
-    moved = field
-    return { ...s, fields: s.fields.filter((f) => f.key !== key) }
   })
-  if (!moved) {
-    return def
-  }
-  const target = steps.find((s) => s.id === toStepId)
-  if (!target || target.fields.length >= MAX_FORM_FIELDS_PER_STEP) {
-    return def
-  }
-  return {
-    ...def,
-    steps: steps.map((s) =>
-      s.id === toStepId && moved ? { ...s, fields: [...s.fields, moved] } : s,
-    ),
-  }
 }
 
 export function addRule(def: FormDefinition, rule: FormRule): FormDefinition {
+  if (def.rules.length >= MAX_FORM_RULES) {
+    return def
+  }
   return { ...def, rules: [...def.rules, rule] }
 }
 
@@ -367,6 +385,28 @@ export function uniqueRuleId(def: FormDefinition): string {
     }
   }
   return `rule-${Date.now().toString(36)}`
+}
+
+/**
+ * Input fields a FIELD condition may read: those placed before it in document
+ * order (the evaluator resolves in order; a later field reads as undefined).
+ */
+export function conditionSourcesBefore(
+  def: FormDefinition,
+  fieldKey: string,
+): FormField[] {
+  const out: FormField[] = []
+  for (const step of def.steps) {
+    for (const field of step.fields) {
+      if (field.key === fieldKey) {
+        return out
+      }
+      if (isFormInputFieldType(field.type)) {
+        out.push(field)
+      }
+    }
+  }
+  return out
 }
 
 /** Input fields a condition may read, in step order (display blocks excluded). */

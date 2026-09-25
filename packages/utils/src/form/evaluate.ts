@@ -52,15 +52,34 @@ const toNumber = (value: FormValue): number | null => {
   return null
 }
 
-const toText = (value: FormValue): string => {
-  if (value === undefined || value === null) {
-    return ""
+/** Text of ONE scalar; anything that is not string / number / boolean is "". */
+const scalarText = (value: unknown): string => {
+  switch (typeof value) {
+    case "string":
+      return value
+    case "number":
+      return Number.isFinite(value) ? String(value) : ""
+    case "boolean":
+      return value ? "true" : "false"
+    default:
+      return ""
   }
-  if (Array.isArray(value)) {
-    return value.join(",")
-  }
-  return String(value)
 }
+
+/** Text of an answer; a list joins its string elements, never throws. */
+const toText = (value: unknown): string => {
+  if (Array.isArray(value)) {
+    return value.map(scalarText).join(",")
+  }
+  return scalarText(value)
+}
+
+const listText = (value: unknown[]): string[] =>
+  value.filter((v): v is string => typeof v === "string")
+
+/** Own-property read: a field keyed `constructor` must not read the prototype. */
+export const readFormValue = (values: FormValues, key: string): FormValue =>
+  Object.hasOwn(values, key) ? values[key] : undefined
 
 /** Compare one answer with one rule; unknown ops and NaN compare false. */
 export function compareFormValue(
@@ -75,14 +94,9 @@ export function compareFormValue(
       return !isEmptyValue(actual)
     case "eq":
     case "neq": {
-      let hit: boolean
-      if (Array.isArray(actual)) {
-        hit = actual.includes(toText(expected))
-      } else if (typeof actual === "boolean" || typeof expected === "boolean") {
-        hit = toText(actual).toLowerCase() === toText(expected).toLowerCase()
-      } else {
-        hit = toText(actual).toLowerCase() === toText(expected).toLowerCase()
-      }
+      const hit = Array.isArray(actual)
+        ? listText(actual).includes(toText(expected))
+        : toText(actual).toLowerCase() === toText(expected).toLowerCase()
       return op === "eq" ? hit : !hit
     }
     case "gt":
@@ -109,7 +123,7 @@ export function compareFormValue(
     case "not_contains": {
       const needle = toText(expected).toLowerCase()
       const hit = Array.isArray(actual)
-        ? actual.some((v) => v.toLowerCase() === needle)
+        ? listText(actual).some((v) => v.toLowerCase() === needle)
         : toText(actual).toLowerCase().includes(needle)
       return op === "contains" ? hit : !hit
     }
@@ -165,7 +179,7 @@ export function evaluateForm(
 
   // Reads see only fields resolved visible so far; everything else is undefined.
   const read = (key: string): FormValue =>
-    visibleFields.has(key) ? values[key] : undefined
+    visibleFields.has(key) ? readFormValue(values, key) : undefined
 
   // Pass 1: own conditions, step by step (a hidden step clamps its fields).
   for (const step of def.steps) {
@@ -377,7 +391,7 @@ export function validateFormSubmission(
     if (!evaluation.visibleFields.has(field.key)) {
       continue
     }
-    const value = values[field.key]
+    const value = readFormValue(values, field.key)
     if (isEmptyValue(value)) {
       if (evaluation.requiredFields.has(field.key)) {
         issues.push({ key: field.key, code: "required" })
@@ -406,12 +420,10 @@ export function pruneFormValues(
     if (!evaluation.visibleFields.has(field.key)) {
       continue
     }
-    const value = values[field.key]
+    const value = readFormValue(values, field.key)
     if (!isEmptyValue(value)) {
       out[field.key] = value
     }
   }
   return out
 }
-
-export const isFormValueEmpty = isEmptyValue

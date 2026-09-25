@@ -346,6 +346,56 @@ describe("formService.update", () => {
     expect(row.slug).toBe("new-slug")
   })
 
+  test("settings must be an object; a root-level issue names `settings`, not `settings.`", async () => {
+    for (const bad of [null, [], "x", 5]) {
+      m.state.selects.push([draft()])
+      const e = await field(
+        formService.update({
+          workspaceId: WS,
+          id: "f1",
+          data: { settings: bad },
+        }),
+      )
+      expect(e.field, JSON.stringify(bad)).toBe("settings")
+    }
+    expect(m.state.calls).not.toContain("update")
+  })
+
+  test("a non-int8 inboxId is a 422 before any inbox lookup", async () => {
+    m.state.selects.push([draft()])
+    const e = await field(
+      formService.update({ workspaceId: WS, id: "f1", data: { inboxId: "" } }),
+    )
+    expect(e.field).toBe("inboxId")
+    expect(m.state.calls).toEqual(["select"])
+  })
+
+  test("optimistic lock: a stale ifUnmodifiedSince or a moved row is a 409", async () => {
+    m.state.selects.push([draft()])
+    const stale = await field(
+      formService.update({
+        workspaceId: WS,
+        id: "f1",
+        data: { title: "x" },
+        ifUnmodifiedSince: new Date(NOW.getTime() - 1000),
+      }),
+    )
+    expect(stale.httpStatusCode).toBe(409)
+    expect(m.state.calls).not.toContain("update")
+    // the row moved between the read and the write: 0 rows updated
+    m.state.selects.push([draft()])
+    m.state.updates.push([])
+    const moved = await field(
+      formService.update({
+        workspaceId: WS,
+        id: "f1",
+        data: { title: "x" },
+        ifUnmodifiedSince: NOW,
+      }),
+    )
+    expect(moved.httpStatusCode).toBe(409)
+  })
+
   test("a no-op patch does not write", async () => {
     m.state.selects.push([draft()])
     await formService.update({ workspaceId: WS, id: "f1", data: {} })
@@ -431,6 +481,17 @@ describe("formService.publish", () => {
     expect(row.publishedDefinition?.steps).toHaveLength(1)
   })
 
+  test("publish is a 409 when the version or updatedAt moved under it", async () => {
+    const anon = {
+      steps: [{ id: "s1", fields: [{ key: "q", type: "text" }] }],
+      rules: [],
+    }
+    m.state.selects.push([draft({ definition: anon })])
+    m.state.updates.push([])
+    const e = await field(formService.publish({ workspaceId: WS, id: "f1" }))
+    expect(e.httpStatusCode).toBe(409)
+  })
+
   test("an anonymous form (no mapping) publishes without an inbox", async () => {
     const anon = {
       steps: [{ id: "s1", fields: [{ key: "q", type: "text" }] }],
@@ -463,6 +524,27 @@ describe("formService reads never throw on corrupt jsonb", () => {
     expect(row.definition).toEqual(EMPTY_FORM_DEFINITION)
     expect(row.settings).toEqual(DEFAULT_FORM_SETTINGS)
     expect(row.publishedDefinition).toEqual(EMPTY_FORM_DEFINITION)
+  })
+
+  test("findPublishedBySlug: a corrupt published copy fails closed (null)", async () => {
+    m.state.selects.push([
+      draft({ status: "published", publishedDefinition: "garbage" }),
+    ])
+    expect(
+      await formService.findPublishedBySlug({
+        workspaceId: WS,
+        slug: "demo-intake",
+      }),
+    ).toBeNull()
+    m.state.selects.push([
+      draft({ status: "published", publishedDefinition: { steps: [] } }),
+    ])
+    expect(
+      await formService.findPublishedBySlug({
+        workspaceId: WS,
+        slug: "demo-intake",
+      }),
+    ).toBeNull()
   })
 
   test("findPublishedBySlug: bad slug shape short-circuits, draft -> null", async () => {
@@ -552,6 +634,48 @@ describe("submissions", () => {
       cursor: page.nextCursor,
     })
     expect(last.nextCursor).toBeNull()
+  })
+
+  test("submission rows are normalised: corrupt jsonb never reaches the output schema", async () => {
+    m.state.selects.push(
+      [draft()],
+      [
+        {
+          row: { id: "3", createdAt: NOW, values: "garbage", visibility: null },
+          k: "3000",
+        },
+        {
+          row: {
+            id: "2",
+            createdAt: NOW,
+            values: [1],
+            visibility: { steps: "x", fields: ["a", 2] },
+          },
+          k: "2000",
+        },
+      ],
+    )
+    const page = await formService.listSubmissions({
+      workspaceId: WS,
+      formId: "f1",
+      limit: 5,
+    })
+    expect(page.data[0].values).toEqual({})
+    expect(page.data[0].visibility).toEqual({ steps: [], fields: [] })
+    expect(page.data[1].visibility).toEqual({ steps: [], fields: ["a"] })
+    // a non-integer limit falls back to the default instead of reaching SQL
+    m.state.selects.push([draft()], [])
+    await formService.listSubmissions({
+      workspaceId: WS,
+      formId: "f1",
+      limit: Number.NaN,
+    })
+    m.state.selects.push([draft()], [])
+    await formService.listSubmissions({
+      workspaceId: WS,
+      formId: "f1",
+      limit: 1.5,
+    })
   })
 
   test("delete of an unknown submission -> 404", async () => {

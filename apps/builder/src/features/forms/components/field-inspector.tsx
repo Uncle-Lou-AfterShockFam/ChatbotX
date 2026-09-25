@@ -28,7 +28,7 @@ import { useTranslations } from "next-intl"
 import { useState } from "react"
 import { useCustomFieldStore } from "@/features/custom-fields/provider/custom-field-store-context"
 import {
-  conditionSources,
+  conditionSourcesBefore,
   renameFieldKey,
   updateField,
 } from "../lib/editor-ops"
@@ -67,9 +67,7 @@ export function FieldInspector(props: {
   const customFields = useCustomFieldStore((s) => s.customFields)
   const [keyDraft, setKeyDraft] = useState(field.key)
   const isInput = isFormInputFieldType(field.type)
-  const sources = conditionSources(definition).filter(
-    (f) => f.key !== field.key,
-  )
+  const sources = conditionSourcesBefore(definition, field.key)
   const patch = (p: Partial<Omit<FormField, "key">>) =>
     onChange(updateField(definition, field.key, p))
   const mapValue = mapToValue(field.mapTo)

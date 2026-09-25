@@ -9,6 +9,12 @@ import { Badge } from "@chatbotx.io/ui/components/ui/badge"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
 import { Input } from "@chatbotx.io/ui/components/ui/input"
 import {
+  Sortable,
+  SortableContent,
+  SortableItem,
+  SortableItemHandle,
+} from "@chatbotx.io/ui/components/ui/sortable"
+import {
   Tabs,
   TabsContent,
   TabsList,
@@ -17,13 +23,19 @@ import {
 import { cn } from "@chatbotx.io/ui/lib/utils"
 import type { FormDefinition, FormStep } from "@chatbotx.io/utils/form"
 import { formMapsToContact, MAX_FORM_STEPS } from "@chatbotx.io/utils/form"
-import { Loader2Icon, PlusIcon, Trash2Icon } from "lucide-react"
+import {
+  GripVerticalIcon,
+  Loader2Icon,
+  PlusIcon,
+  Trash2Icon,
+} from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
   addStep,
   conditionSources,
+  moveStep,
   removeStep,
   updateStep,
 } from "../lib/editor-ops"
@@ -124,6 +136,7 @@ export function FormEditor(props: { workspaceId: string; id: string }) {
         definition: draft.definition,
         settings: draft.settings,
         inboxId: draft.inboxId,
+        ifUnmodifiedSince: form.updatedAt,
       },
       {
         onSuccess: (saved) => {
@@ -216,45 +229,75 @@ export function FormEditor(props: { workspaceId: string; id: string }) {
               <span className="font-medium text-sm">
                 {t("forms.editor.steps")}
               </span>
-              {def.steps.map((s, i) => (
-                <div
-                  className={cn(
-                    "flex items-center gap-1 rounded-md border p-1",
-                    step?.id === s.id && "border-primary",
-                  )}
-                  data-testid={`step-row-${s.id}`}
-                  key={s.id}
-                >
-                  <button
-                    className="min-w-0 grow truncate px-2 py-1 text-start text-sm"
-                    onClick={() => {
-                      setStepId(s.id)
-                      setFieldKey(null)
-                    }}
-                    type="button"
-                  >
-                    {s.title || `${t("forms.editor.step")} ${i + 1}`}
-                    <span className="ms-1 text-muted-foreground text-xs">
-                      ({s.fields.length})
-                    </span>
-                  </button>
-                  <Button
-                    aria-label={t("actions.delete")}
-                    onClick={() => {
-                      setDefinition(removeStep(def, s.id))
-                      if (step?.id === s.id) {
-                        setStepId(null)
-                        setFieldKey(null)
-                      }
-                    }}
-                    size="icon"
-                    type="button"
-                    variant="ghost"
-                  >
-                    <Trash2Icon className="size-4" />
-                  </Button>
-                </div>
-              ))}
+              <Sortable
+                getItemValue={(s: FormStep) => s.id}
+                onMove={({ activeIndex, overIndex }) =>
+                  setDefinition(moveStep(def, activeIndex, overIndex))
+                }
+                value={def.steps}
+              >
+                <SortableContent>
+                  <div className="flex flex-col gap-2">
+                    {def.steps.map((s, i) => (
+                      <SortableItem
+                        key={s.id}
+                        render={
+                          <div
+                            className={cn(
+                              "flex items-center gap-1 rounded-md border p-1",
+                              step?.id === s.id && "border-primary",
+                            )}
+                            data-testid={`step-row-${s.id}`}
+                            role="presentation"
+                          >
+                            <SortableItemHandle
+                              render={
+                                <Button
+                                  aria-label={t("deals.reorder")}
+                                  size="icon"
+                                  type="button"
+                                  variant="ghost"
+                                >
+                                  <GripVerticalIcon className="size-4" />
+                                </Button>
+                              }
+                            />
+                            <button
+                              className="min-w-0 grow truncate px-2 py-1 text-start text-sm"
+                              onClick={() => {
+                                setStepId(s.id)
+                                setFieldKey(null)
+                              }}
+                              type="button"
+                            >
+                              {s.title || `${t("forms.editor.step")} ${i + 1}`}
+                              <span className="ms-1 text-muted-foreground text-xs">
+                                ({s.fields.length})
+                              </span>
+                            </button>
+                            <Button
+                              aria-label={t("actions.delete")}
+                              onClick={() => {
+                                setDefinition(removeStep(def, s.id))
+                                if (step?.id === s.id) {
+                                  setStepId(null)
+                                  setFieldKey(null)
+                                }
+                              }}
+                              size="icon"
+                              type="button"
+                              variant="ghost"
+                            >
+                              <Trash2Icon className="size-4" />
+                            </Button>
+                          </div>
+                        }
+                        value={s.id}
+                      />
+                    ))}
+                  </div>
+                </SortableContent>
+              </Sortable>
               <Button
                 data-testid="add-step"
                 disabled={def.steps.length >= MAX_FORM_STEPS}
