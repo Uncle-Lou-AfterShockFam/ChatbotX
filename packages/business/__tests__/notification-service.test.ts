@@ -81,6 +81,12 @@ vi.mock("@chatbotx.io/database/client", () => ({
   ),
 }))
 vi.mock("@chatbotx.io/database/schema", () => ({
+  dealModel: {
+    _name: "Deal",
+    id: "deal.id",
+    workspaceId: "deal.ws",
+    ownerId: "deal.ownerId",
+  },
   notificationModel: {
     _name: "Notification",
     id: "id",
@@ -131,6 +137,13 @@ vi.mock("../src/pipeline/access", () => ({
   }) =>
     pipeline.settings.access !== "members" ||
     m.state.pipelineMembers.includes(viewer.userId),
+  viewerOwnerFilter: (viewer: {
+    userId: string
+    permissions?: Record<string, boolean>
+  }) =>
+    !viewer.permissions?.superAdmin && viewer.permissions?.onlyAssignedContacts
+      ? viewer.userId
+      : undefined,
 }))
 vi.mock("../src/workspace-member/service", () => ({
   workspaceMemberService: {
@@ -246,6 +259,33 @@ describe("notificationService.notify", () => {
     m.state.pipelineMembers = ["u-2"]
     const ok = await notificationService.notify(INPUT)
     expect(ok.notification?.id).toBe("n-1")
+  })
+
+  test("s198: an assigned-only recipient is notified only about a deal they own (no title leak)", async () => {
+    m.state.member = {
+      notificationTypes: {},
+      notificationChannels: {},
+      permissions: { superAdmin: false, onlyAssignedContacts: true },
+    }
+    m.state.selectReturns = [[{ ownerId: "u-9" }]]
+    expect(await notificationService.notify(INPUT)).toEqual({
+      notification: null,
+      pushEnqueued: false,
+    })
+    expect(m.state.calls).toEqual([])
+    expect(m.queueAdd).not.toHaveBeenCalled()
+    expect(m.logInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "u-2", dealId: "deal-1" }),
+      "notification: assigned-only recipient does not own the deal, skipped",
+    )
+    // a vanished deal is skipped too
+    m.state.selectReturns = [[]]
+    expect((await notificationService.notify(INPUT)).notification).toBeNull()
+    // the owner is notified
+    m.state.selectReturns = [[{ ownerId: "u-2" }]]
+    expect((await notificationService.notify(INPUT)).notification?.id).toBe(
+      "n-1",
+    )
   })
 
   test("a realtime send failure is logged on its own; the row and the push stand", async () => {
