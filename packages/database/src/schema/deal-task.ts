@@ -122,6 +122,8 @@ export const dealTaskModel = pgTable(
   (table) => [
     index("DealTask_dealId_status_idx").on(table.dealId, table.status),
     index("DealTask_assigneeId_idx").on(table.assigneeId),
+    // the workspace task calendar's range scan (s197)
+    index("DealTask_workspaceId_dueAt_idx").on(table.workspaceId, table.dueAt),
     // The overdue scanner's candidate set: open, not yet notified.
     index("DealTask_dueAt_open_unnotified_idx")
       .on(table.dueAt)

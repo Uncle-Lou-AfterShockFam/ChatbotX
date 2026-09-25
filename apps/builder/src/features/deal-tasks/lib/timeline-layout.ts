@@ -71,6 +71,29 @@ export function dayToDate(day: number): Date {
   return new Date(day * DAY_MS)
 }
 
+/**
+ * `value` moved to UTC day `day`, keeping its time of day. A template task
+ * carries the time its deal entered the stage while a date input writes UTC
+ * midnight; keeping the time means a same-day edit never puts a start after
+ * its due date (s197 probe). No value = that day's midnight.
+ */
+export function moveToDay(value: Date | string | null, day: number): Date {
+  const ms = value ? new Date(value).getTime() : 0
+  return new Date(day * DAY_MS + (((ms % DAY_MS) + DAY_MS) % DAY_MS))
+}
+
+/**
+ * Today as the viewer sees it, in the UTC-day convention of the stored dates:
+ * a date picked in a date input is the UTC midnight of the LOCAL date, so
+ * "today" is the local date too (not the UTC day, which runs ahead or behind
+ * for hours).
+ */
+export function localToday(now = new Date()): number {
+  return utcDay(
+    new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())),
+  )
+}
+
 export function layoutTimeline(
   tasks: TimelineTask[],
   options: LayoutOptions,
@@ -91,7 +114,7 @@ export function layoutTimeline(
         a.task.id.localeCompare(b.task.id),
     )
   const unscheduled = tasks.filter((t) => t.dueAt === null).map((t) => t.id)
-  const today = utcDay(new Date())
+  const today = localToday()
   const first =
     scheduled.length === 0
       ? today
@@ -171,28 +194,31 @@ export function arrowPath(props: {
  * The dates a drag commits. `mode` = move (both ends by `deltaDays`) or
  * resize (the due day only, never before the start day). Returns null when
  * nothing changes. A task without its own `startAt` gets one on a move: the
- * bar the user dragged is what they meant.
+ * bar the user dragged is what they meant. Times of day are kept
+ * (`moveToDay`) and the start is never after the due date.
  */
 export function draggedDates(props: {
   bar: Pick<TimelineBar, "startDay" | "dueDay">
+  task: Pick<TimelineTask, "effectiveStart" | "dueAt">
   mode: "move" | "resize"
   deltaDays: number
 }): { startAt: Date | undefined; dueAt: Date } | null {
-  const { bar, mode, deltaDays } = props
+  const { bar, task, mode, deltaDays } = props
   if (deltaDays === 0) {
     return null
   }
   if (mode === "move") {
-    return {
-      startAt: dayToDate(bar.startDay + deltaDays),
-      dueAt: dayToDate(bar.dueDay + deltaDays),
-    }
+    const dueAt = moveToDay(task.dueAt, bar.dueDay + deltaDays)
+    const startAt = moveToDay(task.effectiveStart, bar.startDay + deltaDays)
+    return { startAt: startAt > dueAt ? dueAt : startAt, dueAt }
   }
   const dueDay = Math.max(bar.dueDay + deltaDays, bar.startDay)
   if (dueDay === bar.dueDay) {
     return null
   }
-  return { startAt: undefined, dueAt: dayToDate(dueDay) }
+  const dueAt = moveToDay(task.dueAt, dueDay)
+  const start = new Date(task.effectiveStart)
+  return { startAt: undefined, dueAt: dueAt < start ? start : dueAt }
 }
 
 /** Open tasks that wait on `taskId` directly (the shift dialog's count uses the full walk server-side). */

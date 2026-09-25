@@ -61,6 +61,7 @@ export function useRescheduleTask(props: {
     setPending(null)
   }
   const reschedule = (target: RescheduleTarget, dates: Dates) => {
+    // a CLEARED due date has no delta to shift successors by: no question
     const dueMoved =
       dates.dueAt !== undefined &&
       target.dueAt &&

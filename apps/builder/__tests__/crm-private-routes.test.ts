@@ -117,11 +117,7 @@ describe("crm private routes (s195)", () => {
   })
 
   test("deal-derived company reads pass the viewer to dealService.list and the task rollup", async () => {
-    for (const path of [
-      "/companies/{id}/deals",
-      "/companies/{id}/tasks",
-      "/companies/{id}/metrics",
-    ]) {
+    for (const path of ["/companies/{id}/deals", "/companies/{id}/metrics"]) {
       dealService.list.mockClear()
       await find("GET", path).handler?.({ context, input })
       expect(dealService.list, path).toHaveBeenCalledWith(
@@ -132,8 +128,22 @@ describe("crm private routes (s195)", () => {
         }),
       )
     }
-    expect(dealTaskService.listByDealIds).toHaveBeenLastCalledWith(
-      expect.objectContaining({ dealIds: ["d-1"], viewer: VIEWER }),
+    // s197: the task rollup filters by the company IN its scoped query, not
+    // by the ids of dealService.list's first page (capped at 50 deals)
+    expect(dealTaskService.listForDealsOf).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        parent: { companyId: "co-1" },
+        viewer: VIEWER,
+      }),
+    )
+    dealService.list.mockClear()
+    await find("GET", "/companies/{id}/tasks").handler?.({ context, input })
+    expect(dealService.list).not.toHaveBeenCalled()
+    expect(dealTaskService.listForDealsOf).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        parent: { companyId: "co-1" },
+        viewer: VIEWER,
+      }),
     )
     expect(crmTimelineService.forCompany).toHaveBeenLastCalledWith(
       expect.objectContaining({ companyId: "co-1", viewer: VIEWER, limit: 1 }),
@@ -154,7 +164,7 @@ describe("crm private routes (s195)", () => {
       ],
       pageCount: 1,
     })
-    dealTaskService.listByDealIds.mockResolvedValueOnce([
+    dealTaskService.listForDealsOf.mockResolvedValueOnce([
       { status: "open", dueAt: new Date(now - 1000) },
       { status: "open", dueAt: new Date(now + 1000) },
       { status: "open", dueAt: null },
@@ -271,6 +281,9 @@ describe("crm private routes (s195)", () => {
       context,
       input,
     })
+    expect(dealTaskService.listForDealsOf).toHaveBeenCalledWith(
+      expect.objectContaining({ parent: { contactId: "c-1" }, viewer: VIEWER }),
+    )
     expect(crmTimelineService.forContact).toHaveBeenLastCalledWith(
       expect.objectContaining({
         contactId: "c-1",

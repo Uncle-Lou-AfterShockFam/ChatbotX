@@ -119,6 +119,20 @@ describe("s197 task calendar grid (UTC days, Monday first)", () => {
       ),
     ).toBeNull()
     expect(droppedDates({ startAt: null, dueAt: null }, 0)).toBeNull()
+    // a template task: start and due on one day, start later than 00:00 -
+    // the drop keeps both times, so the start never passes the due date
+    expect(
+      droppedDates(
+        {
+          startAt: new Date("2026-10-02T15:00:00Z"),
+          dueAt: new Date("2026-10-02T15:00:00Z"),
+        },
+        utcDay(D("2026-10-05")),
+      ),
+    ).toEqual({
+      startAt: new Date("2026-10-05T15:00:00Z"),
+      dueAt: new Date("2026-10-05T15:00:00Z"),
+    })
   })
 
   test("the range query coerces dates and refuses an unknown assignee value", () => {

@@ -18,6 +18,7 @@ const m = vi.hoisted(() => {
     insertFailTitle: null as string | null,
     activities: [] as Record<string, unknown>[],
     calls: [] as string[],
+    setValues: [] as Record<string, unknown>[],
   }
   const chain = (kind: "select" | "update" | "delete") => {
     const self: Record<string, unknown> = {}
@@ -49,6 +50,7 @@ const m = vi.hoisted(() => {
       self[k] = (v: unknown) => {
         if (k === "set") {
           state.calls.push(`update:${Object.keys(v as object).join(",")}`)
+          state.setValues.push(v as Record<string, unknown>)
         }
         if (k === "for") {
           state.calls.push(`for:${String(v)}`)
@@ -163,6 +165,8 @@ vi.mock("@chatbotx.io/database/schema", () => ({
     pipelineId: "deal.pipelineId",
     ownerId: "deal.ownerId",
     title: "deal.title",
+    contactId: "deal.contactId",
+    companyId: "deal.companyId",
   },
   pipelineModel: {
     _name: "Pipeline",
@@ -315,6 +319,7 @@ beforeEach(() => {
     "inserted",
     "activities",
     "calls",
+    "setValues",
   ] as const) {
     ;(m.state[k] as unknown[]).length = 0
   }
@@ -818,37 +823,50 @@ describe("dealTaskService.claimOverdue + instantiateForStage", () => {
   })
 })
 
-describe("dealTaskService.listByDealIds (s195, scoped in SQL s197)", () => {
+describe("dealTaskService.listForDealsOf (s195 360, scoped in SQL s197)", () => {
   const client = () =>
     import("@chatbotx.io/database/client") as unknown as Promise<{
       inArray: ReturnType<typeof vi.fn>
       eq: ReturnType<typeof vi.fn>
     }>
 
-  test("empty input = no query; the requested ids are filtered IN the query, never against a page of newest deals", async () => {
-    expect(
-      await dealTaskService.listByDealIds({ workspaceId: WS, dealIds: [] }),
-    ).toEqual([])
-    expect(m.state.calls).toEqual([])
-    // three deals asked for, the oldest among them: all reach the query
+  test("the parent is a Deal predicate IN the query (no pre-paged id list); no parent = typed 422", async () => {
     m.state.selects.push([{ task: { id: "t-old", dealId: "d-old" } }])
-    const rows = await dealTaskService.listByDealIds({
+    const rows = await dealTaskService.listForDealsOf({
       workspaceId: WS,
-      dealIds: ["d-new", "d-mid", "d-old"],
+      parent: { companyId: "co-1" },
       limit: 9999,
     })
     expect(rows).toEqual([{ id: "t-old", dealId: "d-old" }])
-    const { inArray } = await client()
-    expect(inArray).toHaveBeenCalledWith("dealId", ["d-new", "d-mid", "d-old"])
+    const { eq } = await client()
+    expect(eq).toHaveBeenCalledWith("deal.companyId", "co-1")
     expect(m.dealList).not.toHaveBeenCalled()
+    m.state.selects.push([])
+    await dealTaskService.listForDealsOf({
+      workspaceId: WS,
+      parent: { contactId: "c-1" },
+    })
+    expect(eq).toHaveBeenCalledWith("deal.contactId", "c-1")
+    await expect(
+      dealTaskService.listForDealsOf({
+        workspaceId: WS,
+        parent: {} as never,
+      }),
+    ).rejects.toMatchObject({ code: "validation" })
+    await expect(
+      dealTaskService.listForDealsOf({
+        workspaceId: WS,
+        parent: null as never,
+      }),
+    ).rejects.toMatchObject({ code: "validation" })
   })
 
   test("a scoped viewer: visible pipelines + the assigned-only owner go into the WHERE; nothing visible = no query", async () => {
     visibleIds.mockResolvedValueOnce(["p-1"])
     m.state.selects.push([])
-    await dealTaskService.listByDealIds({
+    await dealTaskService.listForDealsOf({
       workspaceId: WS,
-      dealIds: ["d-1"],
+      parent: { contactId: "c-1" },
       viewer: { userId: "u-1", permissions: { onlyAssignedContacts: true } },
     })
     const { inArray, eq } = await client()
@@ -857,9 +875,9 @@ describe("dealTaskService.listByDealIds (s195, scoped in SQL s197)", () => {
     visibleIds.mockResolvedValueOnce([])
     const calls = m.state.calls.length
     expect(
-      await dealTaskService.listByDealIds({
+      await dealTaskService.listForDealsOf({
         workspaceId: WS,
-        dealIds: ["d-1"],
+        parent: { contactId: "c-1" },
         viewer: { userId: "u-1", permissions: {} },
       }),
     ).toEqual([])
@@ -1097,6 +1115,27 @@ describe("s197 dealTaskService.create / update dates", () => {
     expect(calls).toContain("for:update")
     // b and c moved (+2 days); d has no dates; e is done
     expect(calls.filter((c) => c.startsWith("update:startAt"))).toHaveLength(2)
+  })
+
+  test("the shift is whole CALENDAR days: a template-time due date (15:00) moved to a midnight three days on shifts successors exactly 3 days", async () => {
+    m.state.selects.push(
+      [TASK({ dueAt: new Date("2026-10-01T15:00:00Z") })],
+      [
+        { id: "task-1", status: "open", startAt: null, dueAt: D("2026-10-04") },
+        { id: "b", status: "open", startAt: null, dueAt: D("2026-10-05") },
+      ],
+      [{ taskId: "b", dependsOnTaskId: "task-1" }],
+    )
+    m.state.updates.push([TASK({ dueAt: D("2026-10-04") })], [])
+    const result = await dealTaskService.update({
+      workspaceId: WS,
+      dealId: "deal-1",
+      taskId: "task-1",
+      data: { dueAt: D("2026-10-04"), shiftSuccessors: true },
+    })
+    expect(result.shifted).toEqual(["b"])
+    // the raw difference is 2 d 9 h; the successor moves 3 calendar days
+    expect(m.state.setValues.at(-1)).toMatchObject({ dueAt: D("2026-10-08") })
   })
 
   test("without shiftSuccessors (or with no due-date move) there is no graph lock and no walk; a date change still reads its row FOR UPDATE", async () => {

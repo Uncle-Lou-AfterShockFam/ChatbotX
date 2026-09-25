@@ -174,7 +174,12 @@ export class DealTaskService extends BaseService {
     const tasks = await tx
       .select()
       .from(dealTaskModel)
-      .where(eq(dealTaskModel.dealId, dealId))
+      .where(
+        and(
+          eq(dealTaskModel.dealId, dealId),
+          eq(dealTaskModel.workspaceId, workspaceId),
+        ),
+      )
       .orderBy(dealTaskModel.createdAt, dealTaskModel.id)
     if (tasks.length === 0) {
       return []
@@ -192,23 +197,33 @@ export class DealTaskService extends BaseService {
   }
 
   /**
-   * Tasks across several deals (s195 Contact / Company 360), newest due
-   * first, open before done. Visibility is checked IN the query (the deal's
-   * pipeline among the viewer's visible pipelines, the assigned-only owner
-   * filter), so every requested deal the viewer may read is consulted (s197:
-   * the old page-of-newest-deals intersection dropped older deals).
+   * Tasks across every deal of a contact or a company (s195 Contact /
+   * Company 360), open before done, soonest due first. The parent and the
+   * viewer's visibility (visible pipelines, assigned-only owner) are Deal
+   * predicates IN the query (s197: the callers used to pass the ids of the
+   * first `dealService.list` page, capped at 50 deals, so older deals'
+   * tasks never showed).
    */
-  async listByDealIds(props: {
+  async listForDealsOf(props: {
     workspaceId: string
-    dealIds: string[]
+    parent: { contactId: string } | { companyId: string }
     viewer?: DealViewer | null
     limit?: number
     tx?: DatabaseClient
   }): Promise<DealTaskModel[]> {
-    const { workspaceId, viewer, tx = db } = props
+    const { workspaceId, viewer, parent, tx = db } = props
     const limit = Math.min(Math.max(Math.trunc(props.limit ?? 100), 1), 200)
-    if (props.dealIds.length === 0) {
-      return []
+    const parentPredicate =
+      parent && "contactId" in parent && parent.contactId
+        ? eq(dealModel.contactId, parent.contactId)
+        : parent && "companyId" in parent && parent.companyId
+          ? eq(dealModel.companyId, parent.companyId)
+          : null
+    if (!parentPredicate) {
+      throw validationException(
+        "parent",
+        "A contactId or a companyId is required.",
+      )
     }
     const scope = await this.dealScope({ workspaceId, viewer, tx })
     if (!scope) {
@@ -221,7 +236,7 @@ export class DealTaskService extends BaseService {
       .where(
         and(
           eq(dealTaskModel.workspaceId, workspaceId),
-          inArray(dealTaskModel.dealId, props.dealIds),
+          parentPredicate,
           ...scope,
         ),
       )
@@ -283,11 +298,18 @@ export class DealTaskService extends BaseService {
           select count(*)::int from "DealDependency" dd
           join "DealTask" s on s."id" = dd."taskId" and s."status" = 'open'
           where dd."dependsOnTaskId" = ${dealTaskModel.id}
+            and dd."workspaceId" = ${workspaceId}
         )`,
       })
       .from(dealTaskModel)
       .innerJoin(dealModel, eq(dealModel.id, dealTaskModel.dealId))
-      .innerJoin(pipelineModel, eq(pipelineModel.id, dealModel.pipelineId))
+      .innerJoin(
+        pipelineModel,
+        and(
+          eq(pipelineModel.id, dealModel.pipelineId),
+          eq(pipelineModel.workspaceId, workspaceId),
+        ),
+      )
       .where(
         and(
           eq(dealTaskModel.workspaceId, workspaceId),
@@ -495,9 +517,14 @@ export class DealTaskService extends BaseService {
           shifted: [],
         }
       }
+      // Whole CALENDAR days: a date input writes UTC midnight while a
+      // template task carries the time its deal entered the stage, so the raw
+      // difference is often a fraction of a day (s197 probe).
       const deltaMs =
         data.shiftSuccessors && set.dueAt && current.dueAt
-          ? set.dueAt.getTime() - current.dueAt.getTime()
+          ? (Math.floor(set.dueAt.getTime() / DAY_MS) -
+              Math.floor(current.dueAt.getTime() / DAY_MS)) *
+            DAY_MS
           : 0
       // An assignee change is pinned to the assignee this call read: two
       // concurrent identical reassignments touch one row between them, so

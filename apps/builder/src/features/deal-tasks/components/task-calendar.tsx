@@ -22,7 +22,7 @@ import {
   stepAnchor,
   type TaskCalendarView,
 } from "../lib/task-calendar-grid"
-import { dayToDate, utcDay } from "../lib/timeline-layout"
+import { dayToDate, localToday } from "../lib/timeline-layout"
 import { useTasksInRange } from "../provider/deal-task-hook"
 import type { DealTaskCalendarResource } from "../schema/resource"
 import { useRescheduleTask } from "./use-reschedule-task"
@@ -43,7 +43,7 @@ const TONE_CLASS: Record<ChipTone, string> = {
 export function TaskCalendar({ workspaceId }: { workspaceId: string }) {
   const t = useTranslations()
   const format = useFormatter()
-  const today = utcDay(new Date())
+  const today = localToday()
   const [view, setView] = useState<TaskCalendarView>("month")
   const [anchor, setAnchor] = useState(today)
   const [assignee, setAssignee] = useState<"me" | "any">("me")
@@ -62,6 +62,10 @@ export function TaskCalendar({ workspaceId }: { workspaceId: string }) {
   const onDrop = (e: DragEvent<HTMLElement>, day: number) => {
     e.preventDefault()
     setDropDay(null)
+    // a drop during a save would send dates read from the stale row
+    if (rescheduler.isPending) {
+      return
+    }
     const task = rows.find((r) => r.id === e.dataTransfer.getData(DRAG_TYPE))
     const dates = task ? droppedDates(task, day) : null
     if (task && dates) {

@@ -4,7 +4,7 @@
  * it in UTC, so the calendar groups by the same day (the broadcasts grid is
  * browser-local and would move a task across midnight). Weeks start Monday.
  */
-import { DAY_MS, dayToDate, utcDay } from "./timeline-layout"
+import { dayToDate, moveToDay, utcDay } from "./timeline-layout"
 
 export const TASK_CALENDAR_VIEWS = ["month", "week"] as const
 export type TaskCalendarView = (typeof TASK_CALENDAR_VIEWS)[number]
@@ -108,7 +108,9 @@ export function chipTone(
 /**
  * The dates a drop on `targetDay` commits: the due date moves to that day and
  * an explicit start moves by the same number of days (the task keeps its
- * length). Null = dropped on its own day.
+ * length), both keeping their time of day (`moveToDay`: a template task's
+ * start and due can share a day with the start later in it). Null = dropped
+ * on its own day.
  */
 export function droppedDates(
   task: { startAt: Date | string | null; dueAt: Date | string | null },
@@ -123,8 +125,8 @@ export function droppedDates(
   }
   return {
     ...(task.startAt
-      ? { startAt: new Date(new Date(task.startAt).getTime() + delta * DAY_MS) }
+      ? { startAt: moveToDay(task.startAt, utcDay(task.startAt) + delta) }
       : {}),
-    dueAt: dayToDate(targetDay),
+    dueAt: moveToDay(task.dueAt, targetDay),
   }
 }
