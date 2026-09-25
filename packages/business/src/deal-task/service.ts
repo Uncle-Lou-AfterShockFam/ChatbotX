@@ -213,12 +213,7 @@ export class DealTaskService extends BaseService {
   }): Promise<DealTaskModel[]> {
     const { workspaceId, viewer, parent, tx = db } = props
     const limit = Math.min(Math.max(Math.trunc(props.limit ?? 100), 1), 200)
-    const parentPredicate =
-      parent && "contactId" in parent && parent.contactId
-        ? eq(dealModel.contactId, parent.contactId)
-        : parent && "companyId" in parent && parent.companyId
-          ? eq(dealModel.companyId, parent.companyId)
-          : null
+    const parentPredicate = dealParentPredicate(parent)
     if (!parentPredicate) {
       throw validationException(
         "parent",
@@ -1373,6 +1368,19 @@ export class DealTaskService extends BaseService {
   private parseStartAt(value: unknown): Date | null {
     return parseDateOrNull(value, "startAt")
   }
+}
+
+/** The Deal predicate of a 360 parent, or null when none is named. */
+function dealParentPredicate(
+  parent: { contactId: string } | { companyId: string } | null | undefined,
+): SQL | null {
+  if (parent && "contactId" in parent && parent.contactId) {
+    return eq(dealModel.contactId, parent.contactId)
+  }
+  if (parent && "companyId" in parent && parent.companyId) {
+    return eq(dealModel.companyId, parent.companyId)
+  }
+  return null
 }
 
 /**
