@@ -37,6 +37,8 @@ type ApiRateLimitInput = {
   limit?: number
   store?: RateLimitStore
   now?: number
+  /** Test seam; app code keeps the default `STORE_TIMEOUT_MS`. */
+  storeTimeoutMs?: number
 }
 
 type ApiRateLimitResult = {
@@ -95,11 +97,39 @@ const incrementMemoryWindowCounter = (key: string, windowSeconds: number) => {
   return next
 }
 
+/**
+ * Upper bound on one store round trip. The cache connection's own
+ * commandTimeout is 10 s, which is also Documenso's webhook delivery timeout
+ * (and a timed-out delivery is terminal there): a HUNG Redis would hold every
+ * limited request for the full 10 s. Past this bound the request takes the
+ * same local fallback as a failed store. The abandoned INCR may still land
+ * later; over-counting one window during an outage is the accepted cost.
+ */
+export const STORE_TIMEOUT_MS = 2000
+
 const incrementWindowCounter = async (
   store: RateLimitStore,
   key: string,
   windowSeconds: number,
-) => await store.incrWithWindow(key, windowSeconds)
+  timeoutMs: number,
+) => {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(new Error(`rate limit store did not answer in ${timeoutMs}ms`)),
+      timeoutMs,
+    )
+  })
+  try {
+    return await Promise.race([
+      store.incrWithWindow(key, windowSeconds),
+      timeout,
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 /**
  * Keyed on the caller's authenticated identity (inbox id, workspace id, ...),
@@ -113,13 +143,19 @@ export const checkApiRateLimit = async ({
   limit = REQUEST_LIMIT,
   store = distributedStore,
   now = Date.now(),
+  storeTimeoutMs = STORE_TIMEOUT_MS,
 }: ApiRateLimitInput): Promise<ApiRateLimitResult> => {
   const windowSuffix = buildWindowSuffix(now, WINDOW_SECONDS)
   const retryAfter = secondsUntilNextWindow(now, WINDOW_SECONDS)
   const key = buildRateLimitKey(scope, identityKey, windowSuffix)
 
   try {
-    const count = await incrementWindowCounter(store, key, WINDOW_SECONDS)
+    const count = await incrementWindowCounter(
+      store,
+      key,
+      WINDOW_SECONDS,
+      storeTimeoutMs,
+    )
     return { limited: count > limit, retryAfter }
   } catch (error) {
     logger.warn(

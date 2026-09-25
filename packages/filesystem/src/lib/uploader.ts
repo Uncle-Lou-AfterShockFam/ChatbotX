@@ -2,6 +2,7 @@ import type { Readable } from "node:stream"
 import {
   CopyObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
@@ -200,6 +201,47 @@ export class Uploader {
     return await this.#client.send(command)
   }
 
+  /**
+   * One S3 multi-object delete (at most 1000 keys, one listing page). Per key,
+   * not all-or-nothing: returns the keys the store confirmed gone and the
+   * first failure; a key the reply names in neither list counts as failed.
+   */
+  async deleteObjects(
+    keys: string[],
+  ): Promise<{ deleted: number; firstFailure?: unknown }> {
+    if (keys.length === 0) {
+      return { deleted: 0 }
+    }
+    const reply = await this.#client.send(
+      new DeleteObjectsCommand({
+        Bucket: env.S3_BUCKET,
+        Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: false },
+      }),
+    )
+    const requested = new Set(keys)
+    const deleted = (reply.Deleted ?? []).filter(
+      (entry) => entry.Key !== undefined && requested.has(entry.Key),
+    ).length
+    const error = reply.Errors?.[0]
+    if (error) {
+      return {
+        deleted,
+        firstFailure: new Error(
+          `${error.Code ?? "DeleteError"} on "${error.Key}": ${error.Message ?? ""}`,
+        ),
+      }
+    }
+    if (deleted < keys.length) {
+      return {
+        deleted,
+        firstFailure: new Error(
+          `multi-object delete confirmed ${deleted} of ${keys.length} key(s)`,
+        ),
+      }
+    }
+    return { deleted }
+  }
+
   async listObjects(
     prefix: string,
     options: Partial<ListObjectsV2CommandInput> = {},
@@ -247,19 +289,19 @@ export class Uploader {
         .map((object) => object.Key)
         .filter((key): key is string => Boolean(key) && key !== options.except)
 
-      // Per object, not all-or-nothing: S3 deletes do not roll back, so the
-      // count must reflect what is actually gone even when one key fails.
-      const results = await Promise.allSettled(
-        keys.map((key) => this.deleteObject(key)),
-      )
-      let firstFailure: unknown
-      for (const result of results) {
-        if (result.status === "fulfilled") {
-          deleted++
-        } else {
-          firstFailure ??= result.reason
-        }
+      // One request per page (a page is at most 1000 keys, the S3 limit),
+      // counted per key: S3 deletes do not roll back, so the count must
+      // reflect what is actually gone even when one key fails. A rejected
+      // request counts nothing from this page (the store may still have
+      // removed some; the error under-reports, never over-reports).
+      let outcome: Awaited<ReturnType<Uploader["deleteObjects"]>>
+      try {
+        outcome = await this.deleteObjects(keys)
+      } catch (error) {
+        throw new PrefixPurgeError(prefix, deleted, error)
       }
+      deleted += outcome.deleted
+      const firstFailure = outcome.firstFailure
       if (firstFailure !== undefined) {
         throw new PrefixPurgeError(prefix, deleted, firstFailure)
       }
