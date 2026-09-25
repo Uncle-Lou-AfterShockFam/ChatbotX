@@ -1144,6 +1144,8 @@
     },
     "outputCustomField": {
       "label": "Aangepast uitvoerveld",
+      "errorLabel": "On error (status 400 or higher)",
+      "errorHelp": "Optional. Written from the JSON body of a failed response, for example a refusal code, before the error path runs.",
       "javascriptOptional": "Optioneel. Slaat de volledige returnwaarde op. Gebruik de JSON-padtoewijzing hierboven om afzonderlijke velden te schrijven.",
       "javascriptDumpLabel": "Volledige JSON-uitvoer (optioneel)"
     },

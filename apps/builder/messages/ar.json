@@ -1473,6 +1473,8 @@
     },
     "outputCustomField": {
       "label": "حقل الإخراج المخصص",
+      "errorLabel": "On error (status 400 or higher)",
+      "errorHelp": "Optional. Written from the JSON body of a failed response, for example a refusal code, before the error path runs.",
       "javascriptOptional": "اختياري. يخزّن القيمة الكاملة المُرجعة. استخدم تعيين مسار JSON أعلاه لكتابة الحقول الفردية.",
       "javascriptDumpLabel": "مخرجات JSON الكاملة (اختياري)"
     },

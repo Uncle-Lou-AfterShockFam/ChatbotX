@@ -28,6 +28,24 @@ describe("External request flow contract", () => {
     mapping: [{ jsonPath: "data.id", outputFieldId: "field-1" }],
   })
 
+  test("errorMapping: a saved step without the key parses to []; rows need a path and a field", () => {
+    const { errorMapping: _unused, ...legacy } = validBase()
+    const parsed = externalRequestStepSchema.parse(legacy)
+    expect(parsed.errorMapping).toEqual([])
+    expect(
+      externalRequestStepSchema.parse({
+        ...validBase(),
+        errorMapping: [{ jsonPath: " code ", outputFieldId: "field-err" }],
+      }).errorMapping,
+    ).toEqual([{ jsonPath: "code", outputFieldId: "field-err" }])
+    expect(
+      externalRequestStepSchema.safeParse({
+        ...validBase(),
+        errorMapping: [{ jsonPath: "", outputFieldId: "field-err" }],
+      }).success,
+    ).toBe(false)
+  })
+
   test("GET without a body is valid", () => {
     expect(externalRequestStepSchema.safeParse(validBase()).success).toBe(true)
   })

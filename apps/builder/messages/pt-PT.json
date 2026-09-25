@@ -1331,6 +1331,8 @@
     },
     "outputCustomField": {
       "label": "Campo personalizado de saída",
+      "errorLabel": "On error (status 400 or higher)",
+      "errorHelp": "Optional. Written from the JSON body of a failed response, for example a refusal code, before the error path runs.",
       "javascriptOptional": "Opcional. Guarda o valor de retorno inteiro. Use o mapeamento de caminhos JSON acima para gravar campos individuais.",
       "javascriptDumpLabel": "JSON completo de saída (opcional)"
     },

@@ -1331,6 +1331,8 @@
     },
     "outputCustomField": {
       "label": "出力カスタムフィールド",
+      "errorLabel": "On error (status 400 or higher)",
+      "errorHelp": "Optional. Written from the JSON body of a failed response, for example a refusal code, before the error path runs.",
       "javascriptOptional": "任意。戻り値全体を保存します。個別フィールドは上の JSON パス割り当てで書き込みます。",
       "javascriptDumpLabel": "JSON 全体の出力（任意）"
     },

@@ -128,6 +128,11 @@ export type ExternalRequestFieldsSchema = z.infer<
   typeof externalRequestFieldsSchema
 >
 
+const externalRequestMappingSchema = z.object({
+  jsonPath: z.string().trim().min(1),
+  outputFieldId: z.string().trim().min(1),
+})
+
 export const externalRequestStepSchema = z
   .object({
     id: zodBigintAsString(),
@@ -136,12 +141,10 @@ export const externalRequestStepSchema = z
     url: z.string().trim().min(1),
     headers: z.array(externalRequestHeaderSchema),
     body: externalRequestBodySchema.optional(),
-    mapping: z.array(
-      z.object({
-        jsonPath: z.string().trim().min(1),
-        outputFieldId: z.string().trim().min(1),
-      }),
-    ),
+    mapping: z.array(externalRequestMappingSchema),
+    // Written only from a >= 400 JSON body (e.g. a refusal `code`), before the
+    // error edge. `mapping` never runs on an error status.
+    errorMapping: z.array(externalRequestMappingSchema).optional().default([]),
     states: z.tuple([successStateSchema, errorStateSchema]),
   })
   .superRefine(validateRequestFields)
@@ -162,5 +165,6 @@ export const externalRequestStepDefaultFn = (): ExternalRequestStepSchema => ({
       outputFieldId: "",
     },
   ],
+  errorMapping: [],
   states: [successStateDefaultFn(), errorStateDefaultFn()],
 })

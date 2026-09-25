@@ -1331,6 +1331,8 @@
     },
     "outputCustomField": {
       "label": "Tulosteen mukautettu kenttä",
+      "errorLabel": "On error (status 400 or higher)",
+      "errorHelp": "Optional. Written from the JSON body of a failed response, for example a refusal code, before the error path runs.",
       "javascriptOptional": "Valinnainen. Tallentaa koko paluuarvon. Kirjoita yksittäiset kentät yllä olevalla JSON-polkukartoituksella.",
       "javascriptDumpLabel": "Koko JSON-tuloste (valinnainen)"
     },

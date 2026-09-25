@@ -281,4 +281,92 @@ describe("externalRequestService.executeAndMap", () => {
     expect(result.responseBody).toBe("not json")
     expect(mocks.setValues).not.toHaveBeenCalled()
   })
+
+  const refusal = () =>
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ status: "refused", code: "bad-args", n: 3 }),
+            { status: 400 },
+          ),
+      ),
+    )
+  const input = {
+    method: "POST" as const,
+    url: "https://api.example.com/actions/order.invoice",
+    headers: [],
+  }
+
+  test("a >= 400 JSON body writes errorMapping (the refusal code), never mapping", async () => {
+    refusal()
+    const result = await externalRequestService.executeAndMap({
+      workspaceId: "workspace-1",
+      contactId: "contact-1",
+      input,
+      mapping: [{ jsonPath: "status", outputFieldId: "field-ok" }],
+      errorMapping: [
+        { jsonPath: "code", outputFieldId: "field-err" },
+        { jsonPath: "n", outputFieldId: "field-n" },
+        { jsonPath: "missing.path", outputFieldId: "field-x" },
+      ],
+    })
+    expect(result.statusCode).toBe(400)
+    expect(mocks.setValues).toHaveBeenCalledTimes(1)
+    expect(mocks.setValues).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      contactId: "contact-1",
+      fields: [
+        { customFieldId: "field-err", value: "bad-args" },
+        { customFieldId: "field-n", value: "3" },
+      ],
+    })
+  })
+
+  test("a >= 400 without errorMapping (legacy steps) or with a non-JSON body writes nothing", async () => {
+    refusal()
+    await externalRequestService.executeAndMap({
+      workspaceId: "workspace-1",
+      contactId: "contact-1",
+      input,
+      mapping: [{ jsonPath: "code", outputFieldId: "field-ok" }],
+    })
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("<html>502</html>", { status: 502 })),
+    )
+    await externalRequestService.executeAndMap({
+      workspaceId: "workspace-1",
+      contactId: "contact-1",
+      input,
+      mapping: [],
+      errorMapping: [{ jsonPath: "code", outputFieldId: "field-err" }],
+    })
+    expect(mocks.setValues).not.toHaveBeenCalled()
+  })
+
+  test("a 2xx ignores errorMapping", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ status: "ok", code: "done" }), {
+            status: 200,
+          }),
+      ),
+    )
+    await externalRequestService.executeAndMap({
+      workspaceId: "workspace-1",
+      contactId: "contact-1",
+      input,
+      mapping: [{ jsonPath: "status", outputFieldId: "field-ok" }],
+      errorMapping: [{ jsonPath: "code", outputFieldId: "field-err" }],
+    })
+    expect(mocks.setValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fields: [{ customFieldId: "field-ok", value: "ok" }],
+      }),
+    )
+  })
 })

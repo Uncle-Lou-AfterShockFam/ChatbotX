@@ -96,6 +96,11 @@ const ExternalRequestDialog = ({ parentName }: { parentName: string }) => {
     name: "mapping",
   })
 
+  const errorRows = useFieldArray({
+    control: form.control,
+    name: "errorMapping",
+  })
+
   const { activeTargetIndex, setActiveTargetIndex } = useJsonSourceContext()
 
   useEffect(() => {
@@ -135,6 +140,7 @@ const ExternalRequestDialog = ({ parentName }: { parentName: string }) => {
       headers: data.headers,
       body: data.body,
       mapping: data.mapping,
+      errorMapping: data.errorMapping,
     })
     setOpen(false)
   }
@@ -298,6 +304,59 @@ const ExternalRequestDialog = ({ parentName }: { parentName: string }) => {
                 <Button
                   className="w-full"
                   onClick={handleAppendMapping}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  {t("actions.add")}
+                </Button>
+              </div>
+            </div>
+
+            <div>
+              <Label className="mb-1">
+                {t("fields.outputCustomField.errorLabel")}
+              </Label>
+              <p className="mb-2 text-muted-foreground text-xs">
+                {t("fields.outputCustomField.errorHelp")}
+              </p>
+              <div className="flex w-full flex-col gap-y-4">
+                {errorRows.fields.map((field, index) => (
+                  <div
+                    className="flex w-full items-center gap-x-2"
+                    key={field.id}
+                  >
+                    <div className="w-[45%]">
+                      <InputField
+                        name={`errorMapping.${index}.jsonPath`}
+                        placeholder={t("fields.jsonPath.placeholder")}
+                      />
+                    </div>
+                    <div className="flex h-[36px] items-center justify-center">
+                      <ArrowRight className="rtl:rotate-180" size={24} />
+                    </div>
+                    <div className="w-[45%]">
+                      <CustomFieldSelect
+                        label=""
+                        name={`errorMapping.${index}.outputFieldId`}
+                      />
+                    </div>
+                    <Button
+                      className="text-destructive text-sm"
+                      onClick={() => errorRows.remove(index)}
+                      size="icon"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <XIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  className="w-full"
+                  onClick={() =>
+                    errorRows.append({ jsonPath: "", outputFieldId: "" })
+                  }
                   size="sm"
                   type="button"
                   variant="outline"

@@ -192,16 +192,22 @@ class ExternalRequestService extends BaseService {
     }
   }
 
+  /**
+   * Run the request, then write custom fields from its JSON body: `mapping`
+   * on a < 400 status, `errorMapping` on >= 400 (so a refusal code can reach
+   * a field before the error edge). A non-JSON body writes nothing.
+   */
   async executeAndMap(props: {
     workspaceId: string
     contactId: string
     input: ExternalRequestInput
     mapping: ExternalRequestMapping[]
+    errorMapping?: ExternalRequestMapping[]
   }): Promise<ExternalRequestResult> {
-    const { workspaceId, contactId, input, mapping } = props
+    const { workspaceId, contactId, input, mapping, errorMapping = [] } = props
     const result = await this.execute(input, { workspaceId, contactId })
-
-    if (result.statusCode >= 400) {
+    const active = result.statusCode >= 400 ? errorMapping : mapping
+    if (active.length === 0) {
       return result
     }
 
@@ -212,7 +218,7 @@ class ExternalRequestService extends BaseService {
       return result
     }
 
-    const fields = mapping.flatMap(({ jsonPath, outputFieldId }) => {
+    const fields = active.flatMap(({ jsonPath, outputFieldId }) => {
       const value = getProperty(
         responseJson as Record<string, unknown>,
         jsonPath,
