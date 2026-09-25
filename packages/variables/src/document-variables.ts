@@ -1,5 +1,5 @@
 import type { ResolveDocumentVariables } from "@chatbotx.io/business/documents"
-import { contactVariableService } from "@chatbotx.io/variables"
+import { contactVariableService } from "./contact-variable"
 
 /**
  * The contact's values for a template's `{{variable}}` keys, through the same

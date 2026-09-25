@@ -438,7 +438,8 @@
       "moveDealStage": "Move Deal to Stage",
       "setDealStatus": "Mark Deal Won / Lost",
       "createTask": "Create task",
-      "completeTask": "Complete task"
+      "completeTask": "Complete task",
+      "sendDocumentForSignature": "שליחת מסמך לחתימה"
     },
     "splitTraffic": {
       "balanceHint": "הסכום הכולל חייב להיות 100%.",
@@ -7083,6 +7084,12 @@
       "generated": "המסמך נוצר",
       "linkExpires": "הקישור בתוקף עד {date}",
       "open": "פתיחת PDF"
+    },
+    "signStep": {
+      "template": "תבנית",
+      "hint": "יוצר את התבנית עבור איש הקשר ושולח אותה לחתימה. הקישור נשמר ב-sig_link; החתימה מתייגת את איש הקשר ב-doc-signed.",
+      "noTemplates": "אין עדיין תבניות מסמכים. צרו תבנית בהגדרות > מסמכים.",
+      "noTemplatePicked": "לא נבחרה תבנית"
     }
   },
   "tasks": {

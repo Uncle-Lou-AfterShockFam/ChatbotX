@@ -2405,7 +2405,8 @@
       "moveDealStage": "Move Deal to Stage",
       "setDealStatus": "Mark Deal Won / Lost",
       "createTask": "Create task",
-      "completeTask": "Complete task"
+      "completeTask": "Complete task",
+      "sendDocumentForSignature": "Invia documento da firmare"
     },
     "splitTraffic": {
       "balanceHint": "La somma totale deve essere pari al 100%.",
@@ -7083,6 +7084,12 @@
       "generated": "Documento generato",
       "linkExpires": "Link valido fino al {date}",
       "open": "Apri PDF"
+    },
+    "signStep": {
+      "template": "Modello",
+      "hint": "Genera il modello per il contatto e lo invia da firmare. Il link è salvato in sig_link; la firma aggiunge al contatto il tag doc-signed.",
+      "noTemplates": "Nessun modello di documento. Creane uno in Impostazioni > Documenti.",
+      "noTemplatePicked": "Nessun modello scelto"
     }
   },
   "tasks": {

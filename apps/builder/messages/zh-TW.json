@@ -2722,7 +2722,8 @@
       "moveDealStage": "Move Deal to Stage",
       "setDealStatus": "Mark Deal Won / Lost",
       "createTask": "Create task",
-      "completeTask": "Complete task"
+      "completeTask": "Complete task",
+      "sendDocumentForSignature": "傳送文件以簽署"
     },
     "splitTraffic": {
       "balanceHint": "總和必須等於 100%。",
@@ -7083,6 +7084,12 @@
       "generated": "文件已產生",
       "linkExpires": "連結有效至 {date}",
       "open": "開啟 PDF"
+    },
+    "signStep": {
+      "template": "範本",
+      "hint": "為聯絡人產生範本並傳送簽署。連結儲存在 sig_link 中；簽署後聯絡人會被標記 doc-signed。",
+      "noTemplates": "尚無文件範本。請在 設定 > 文件 中建立。",
+      "noTemplatePicked": "未選擇範本"
     }
   },
   "tasks": {

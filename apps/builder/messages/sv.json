@@ -3303,7 +3303,8 @@
       "moveDealStage": "Move Deal to Stage",
       "setDealStatus": "Mark Deal Won / Lost",
       "createTask": "Create task",
-      "completeTask": "Complete task"
+      "completeTask": "Complete task",
+      "sendDocumentForSignature": "Skicka dokument för signering"
     },
     "sendCarousel": {
       "addSlide": "Lägg till kort",
@@ -7083,6 +7084,12 @@
       "generated": "Dokument skapat",
       "linkExpires": "Länken gäller till {date}",
       "open": "Öppna PDF"
+    },
+    "signStep": {
+      "template": "Mall",
+      "hint": "Skapar mallen för kontakten och skickar den för signering. Länken sparas i sig_link; signering taggar kontakten doc-signed.",
+      "noTemplates": "Inga dokumentmallar ännu. Skapa en under Inställningar > Dokument.",
+      "noTemplatePicked": "Ingen mall vald"
     }
   },
   "tasks": {

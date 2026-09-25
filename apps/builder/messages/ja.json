@@ -2405,7 +2405,8 @@
       "moveDealStage": "Move Deal to Stage",
       "setDealStatus": "Mark Deal Won / Lost",
       "createTask": "Create task",
-      "completeTask": "Complete task"
+      "completeTask": "Complete task",
+      "sendDocumentForSignature": "署名用に書類を送信"
     },
     "splitTraffic": {
       "balanceHint": "合計は100%になる必要があります。",
@@ -7083,6 +7084,12 @@
       "generated": "ドキュメントを生成しました",
       "linkExpires": "リンクの有効期限: {date}",
       "open": "PDF を開く"
+    },
+    "signStep": {
+      "template": "テンプレート",
+      "hint": "連絡先用にテンプレートを作成して署名用に送信します。リンクは sig_link に保存され、署名されると連絡先に doc-signed タグが付きます。",
+      "noTemplates": "書類テンプレートはまだありません。設定 > 書類 で作成してください。",
+      "noTemplatePicked": "テンプレート未選択"
     }
   },
   "tasks": {

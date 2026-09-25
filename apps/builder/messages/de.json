@@ -2405,7 +2405,8 @@
       "moveDealStage": "Move Deal to Stage",
       "setDealStatus": "Mark Deal Won / Lost",
       "createTask": "Create task",
-      "completeTask": "Complete task"
+      "completeTask": "Complete task",
+      "sendDocumentForSignature": "Dokument zur Unterschrift senden"
     },
     "splitTraffic": {
       "balanceHint": "Die Gesamtsumme muss 100 % ergeben.",
@@ -7083,6 +7084,12 @@
       "generated": "Dokument erstellt",
       "linkExpires": "Link gültig bis {date}",
       "open": "PDF öffnen"
+    },
+    "signStep": {
+      "template": "Vorlage",
+      "hint": "Erstellt die Vorlage für den Kontakt und sendet sie zur Unterschrift. Der Link wird in sig_link gespeichert; nach der Unterschrift erhält der Kontakt das Tag doc-signed.",
+      "noTemplates": "Noch keine Dokumentvorlagen. Erstelle eine unter Einstellungen > Dokumente.",
+      "noTemplatePicked": "Keine Vorlage gewählt"
     }
   },
   "tasks": {

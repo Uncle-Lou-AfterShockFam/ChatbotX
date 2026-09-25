@@ -2547,7 +2547,8 @@
       "moveDealStage": "Move Deal to Stage",
       "setDealStatus": "Mark Deal Won / Lost",
       "createTask": "Create task",
-      "completeTask": "Complete task"
+      "completeTask": "Complete task",
+      "sendDocumentForSignature": "Gửi tài liệu để ký"
     },
     "splitTraffic": {
       "balanceHint": "Tổng phần trăm phải bằng 100%.",
@@ -7083,6 +7084,12 @@
       "generated": "Đã tạo tài liệu",
       "linkExpires": "Liên kết có hiệu lực đến {date}",
       "open": "Mở PDF"
+    },
+    "signStep": {
+      "template": "Mẫu",
+      "hint": "Tạo mẫu cho liên hệ và gửi để ký. Liên kết được lưu trong sig_link; khi ký xong, liên hệ được gắn thẻ doc-signed.",
+      "noTemplates": "Chưa có mẫu tài liệu. Hãy tạo trong Cài đặt > Tài liệu.",
+      "noTemplatePicked": "Chưa chọn mẫu"
     }
   },
   "tasks": {

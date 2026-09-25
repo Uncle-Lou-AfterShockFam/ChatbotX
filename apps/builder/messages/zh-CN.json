@@ -3306,7 +3306,8 @@
       "moveDealStage": "Move Deal to Stage",
       "setDealStatus": "Mark Deal Won / Lost",
       "createTask": "Create task",
-      "completeTask": "Complete task"
+      "completeTask": "Complete task",
+      "sendDocumentForSignature": "发送文档以签名"
     },
     "additionalSteps": "附加步骤",
     "aiAnalyzeImage": {
@@ -7083,6 +7084,12 @@
       "generated": "文档已生成",
       "linkExpires": "链接有效期至 {date}",
       "open": "打开 PDF"
+    },
+    "signStep": {
+      "template": "模板",
+      "hint": "为联系人生成模板并发送签名。链接保存在 sig_link 中；签署后联系人会被标记 doc-signed。",
+      "noTemplates": "还没有文档模板。请在 设置 > 文档 中创建。",
+      "noTemplatePicked": "未选择模板"
     }
   },
   "tasks": {

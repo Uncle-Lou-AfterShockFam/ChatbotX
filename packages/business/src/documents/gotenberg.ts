@@ -13,7 +13,7 @@ export type PdfResult =
   | { ok: true; pdf: Uint8Array; ms: number }
   | { ok: false; status: number | null; error: string }
 
-const readCapped = async (
+export const readCapped = async (
   res: Response,
   max: number,
 ): Promise<Uint8Array | null> => {

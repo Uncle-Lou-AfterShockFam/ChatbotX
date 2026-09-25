@@ -2405,7 +2405,8 @@
       "moveDealStage": "Move Deal to Stage",
       "setDealStatus": "Mark Deal Won / Lost",
       "createTask": "Create task",
-      "completeTask": "Complete task"
+      "completeTask": "Complete task",
+      "sendDocumentForSignature": "Lähetä asiakirja allekirjoitettavaksi"
     },
     "splitTraffic": {
       "balanceHint": "Kokonaissumman on oltava 100 %.",
@@ -7083,6 +7084,12 @@
       "generated": "Asiakirja luotu",
       "linkExpires": "Linkki voimassa {date} asti",
       "open": "Avaa PDF"
+    },
+    "signStep": {
+      "template": "Pohja",
+      "hint": "Luo pohjasta asiakirjan yhteystiedolle ja lähettää sen allekirjoitettavaksi. Linkki tallennetaan kenttään sig_link; allekirjoitus lisää yhteystiedolle tunnisteen doc-signed.",
+      "noTemplates": "Ei vielä asiakirjapohjia. Luo pohja kohdassa Asetukset > Asiakirjat.",
+      "noTemplatePicked": "Pohjaa ei valittu"
     }
   },
   "tasks": {

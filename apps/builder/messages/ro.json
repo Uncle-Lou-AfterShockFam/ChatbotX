@@ -146,7 +146,8 @@
       "moveDealStage": "Move Deal to Stage",
       "setDealStatus": "Mark Deal Won / Lost",
       "createTask": "Create task",
-      "completeTask": "Complete task"
+      "completeTask": "Complete task",
+      "sendDocumentForSignature": "Trimite documentul spre semnare"
     },
     "splitTraffic": {
       "balanceHint": "Suma totală trebuie să fie egală cu 100%.",
@@ -7083,6 +7084,12 @@
       "generated": "Document generat",
       "linkExpires": "Link valabil până la {date}",
       "open": "Deschide PDF"
+    },
+    "signStep": {
+      "template": "Șablon",
+      "hint": "Generează șablonul pentru contact și îl trimite spre semnare. Linkul este salvat în sig_link; la semnare, contactul primește eticheta doc-signed.",
+      "noTemplates": "Încă nu există șabloane de documente. Creează unul în Setări > Documente.",
+      "noTemplatePicked": "Niciun șablon ales"
     }
   },
   "tasks": {

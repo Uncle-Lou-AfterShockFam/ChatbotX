@@ -2735,7 +2735,8 @@
       "moveDealStage": "Move Deal to Stage",
       "setDealStatus": "Mark Deal Won / Lost",
       "createTask": "Create task",
-      "completeTask": "Complete task"
+      "completeTask": "Complete task",
+      "sendDocumentForSignature": "Send document for signature"
     },
     "splitTraffic": {
       "balanceHint": "The total sum must equal 100%.",
@@ -7083,6 +7084,12 @@
       "generated": "Document generated",
       "linkExpires": "Link valid until {date}",
       "open": "Open PDF"
+    },
+    "signStep": {
+      "template": "Template",
+      "hint": "Renders the template for the contact and sends it for signature. The link is saved in sig_link; signing tags the contact doc-signed.",
+      "noTemplates": "No document templates yet. Create one in Settings > Documents.",
+      "noTemplatePicked": "No template picked"
     }
   },
   "tasks": {

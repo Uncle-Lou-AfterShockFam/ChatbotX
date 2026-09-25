@@ -20,6 +20,7 @@ import {
   CloudDownloadIcon,
   CodeIcon,
   CogIcon,
+  FileSignatureIcon,
   GlobeIcon,
   HandshakeIcon,
   KanbanIcon,
@@ -475,6 +476,11 @@ export const performActionMenus = (t: TranslationFn): MenuItem[] => [
         stepType: stepTypes.enum.completeTask,
       },
     ],
+  },
+  {
+    label: t("flows.actions.sendDocumentForSignature"),
+    icon: FileSignatureIcon,
+    stepType: stepTypes.enum.sendDocumentForSignature,
   },
   {
     label: t("flows.actions.emailActions"),

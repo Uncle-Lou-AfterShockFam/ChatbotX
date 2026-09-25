@@ -59,6 +59,7 @@ import { questionnairesStep } from "./questionnaires"
 import { removeContactTagStep } from "./remove-contact-tag"
 import sendAudioStep from "./send-audio"
 import { sendCarouselStep } from "./send-carousel"
+import { sendDocumentForSignatureStep } from "./send-document-for-signature"
 import sendFileStep from "./send-file"
 import sendGifStep from "./send-gif"
 import sendImageStep from "./send-image"
@@ -122,6 +123,7 @@ export const allSteps: Record<StepType, StepDefinition<any> | undefined> = {
   [stepTypes.enum.callApi]: externalRequestStep,
   [stepTypes.enum.make]: makeStep,
   [stepTypes.enum.triggerN8n]: triggerN8nStep,
+  [stepTypes.enum.sendDocumentForSignature]: sendDocumentForSignatureStep,
   [stepTypes.enum.executeJavascript]: executeJavascriptStep,
   [stepTypes.enum.disableBot]: disableBotStep,
   [stepTypes.enum.enableBot]: enableBotStep,
