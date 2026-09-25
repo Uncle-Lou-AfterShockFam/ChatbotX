@@ -99,6 +99,9 @@ const {
   runStepsAndQuickReplies,
 } = await import("../src/integration/handlers/flow")
 const { logger } = await import("../src/lib/logger")
+const { ClaimLostError } = await import(
+  "../src/integration/handlers/claim-lost"
+)
 
 // --- helpers ---
 
@@ -2297,5 +2300,199 @@ describe("runFlowNode — stop/resume guard", () => {
     await expect(runFlowNode(initialDispatchJobData)).rejects.toBe(sentinel)
 
     expect(resetContactForResume).not.toHaveBeenCalled()
+  })
+})
+
+describe("claimCheck — a claimed resume stops once its claim is taken over", () => {
+  const lostAfter = (okCalls: number) => {
+    let calls = 0
+    return vi.fn(() => {
+      calls += 1
+      return calls > okCalls
+        ? Promise.reject(new ClaimLostError("sd-1", 1))
+        : Promise.resolve()
+    })
+  }
+
+  beforeEach(() => integrationQueueAdd.mockClear())
+
+  test("the step after a failed check never starts", async () => {
+    const { flowStepHandlers } = await import(
+      "../src/integration/handlers/step"
+    )
+    const handler = mockSpy(
+      flowStepHandlers,
+      "autoAssignConversation",
+    ).mockResolvedValue({ status: "success", result: null })
+    const claimCheck = lostAfter(1)
+    const steps = [
+      { ...makeStep("autoAssignConversation"), id: "step-a" },
+      { ...makeStep("autoAssignConversation"), id: "step-b" },
+    ]
+
+    await expect(
+      executeMultipleSteps({ ...makeBaseProps(), steps, claimCheck }),
+    ).rejects.toBeInstanceOf(ClaimLostError)
+
+    expect(handler).toHaveBeenCalledOnce()
+    expect(claimCheck).toHaveBeenCalledTimes(2)
+    // Step handlers never see the check.
+    expect(handler.mock.calls[0]?.[0]).not.toHaveProperty("claimCheck")
+  })
+
+  test("a branch is not dispatched once the claim is lost mid-step", async () => {
+    const stateId = "state-ok"
+    const step = makeStep("autoAssignConversation", [
+      { id: stateId, stateType: "success" },
+    ])
+    const flowVersion = makeFlowVersion(
+      [],
+      [
+        {
+          id: "e1",
+          source: "n1",
+          sourceHandle: stateId,
+          target: "success-node",
+          targetHandle: "input",
+        },
+      ],
+    )
+    const { flowStepHandlers } = await import(
+      "../src/integration/handlers/step"
+    )
+    mockSpy(flowStepHandlers, "autoAssignConversation").mockResolvedValue({
+      status: "success",
+      result: null,
+    })
+
+    await expect(
+      executeMultipleSteps({
+        ...makeBaseProps(flowVersion),
+        steps: [step],
+        claimCheck: lostAfter(1),
+      }),
+    ).rejects.toBeInstanceOf(ClaimLostError)
+    expect(integrationQueueAdd).not.toHaveBeenCalled()
+  })
+
+  test("the next step of the node is not enqueued once the claim is lost", async () => {
+    const { flowStepHandlers } = await import(
+      "../src/integration/handlers/step"
+    )
+    mockSpy(flowStepHandlers, "autoAssignConversation").mockResolvedValue({
+      status: "success",
+      result: null,
+    })
+    const steps = ["step-a", "step-b", "step-c"].map((id) => ({
+      ...makeStep("autoAssignConversation"),
+      id,
+    }))
+
+    await expect(
+      runStepsAndQuickReplies({
+        ...makeBaseProps(),
+        details: { steps },
+        claimCheck: lostAfter(1),
+      }),
+    ).rejects.toBeInstanceOf(ClaimLostError)
+    expect(integrationQueueAdd).not.toHaveBeenCalled()
+  })
+
+  test("the next node is not enqueued once the claim is lost", async () => {
+    const edges: EdgeSchema[] = [
+      {
+        id: "e1",
+        source: "node-1",
+        sourceHandle: "node-1",
+        target: "node-2",
+        targetHandle: "input",
+      },
+    ]
+    const nextNode: FlowNode = {
+      id: "node-2",
+      position: { x: 0, y: 0 },
+      measured: { width: 100, height: 100 },
+      data: { name: "Next", isStartNode: false, details: { steps: [] } },
+    }
+
+    await expect(
+      runStepsAndQuickReplies({
+        ...makeBaseProps(makeFlowVersion([nextNode], edges)),
+        details: { steps: [] },
+        claimCheck: lostAfter(0),
+      }),
+    ).rejects.toBeInstanceOf(ClaimLostError)
+    expect(integrationQueueAdd).not.toHaveBeenCalled()
+  })
+
+  test("a current claim is checked at every boundary and the run continues", async () => {
+    const { flowStepHandlers } = await import(
+      "../src/integration/handlers/step"
+    )
+    mockSpy(flowStepHandlers, "autoAssignConversation").mockResolvedValue({
+      status: "success",
+      result: null,
+    })
+    const steps = ["step-a", "step-b"].map((id) => ({
+      ...makeStep("autoAssignConversation"),
+      id,
+    }))
+    const claimCheck = vi.fn(async () => undefined)
+
+    await runStepsAndQuickReplies({
+      ...makeBaseProps(),
+      details: { steps },
+      claimCheck,
+    })
+
+    // Before step-a, then before enqueueing step-b.
+    expect(claimCheck).toHaveBeenCalledTimes(2)
+    expect(integrationQueueAdd).toHaveBeenCalledOnce()
+  })
+})
+
+describe("runFlowNode — a lost claim is not a failed broadcast delivery", () => {
+  test("ClaimLostError propagates without stamping contactsOnBroadcasts.failedAt", async () => {
+    const { db } = await import("@chatbotx.io/database/client")
+    const dbUpdate = vi.mocked(db.update)
+    dbUpdate.mockClear()
+    findSendableBroadcast.mockReset().mockResolvedValue({ id: "broadcast-1" })
+    detectConversationAndContactInbox.mockReset().mockResolvedValue({
+      conversation: makeConversation(),
+      contactInbox: makeContactInbox(),
+    })
+    const node: FlowNode = {
+      id: "node-1",
+      position: { x: 0, y: 0 },
+      measured: { width: 100, height: 100 },
+      data: {
+        name: "Resumed",
+        isStartNode: false,
+        details: { steps: [makeStep("autoAssignConversation")] },
+      },
+    }
+    detectFlowVersion.mockReset().mockResolvedValue({
+      flowVersion: makeFlowVersion([node]),
+      useLatestFlowVersion: false,
+    })
+    const lost = new ClaimLostError("sd-1", 1)
+
+    await expect(
+      runFlowNode(
+        {
+          flowId: "flow-1",
+          conversationId: "conv-1",
+          contactInboxId: "ci-1",
+          nodeId: "node-1",
+          metadata: {
+            type: "broadcast",
+            broadcastId: "broadcast-1",
+            contactInboxId: "ci-1",
+          },
+        },
+        { flowExecutionKey: "job-1", claimCheck: () => Promise.reject(lost) },
+      ),
+    ).rejects.toBe(lost)
+    expect(dbUpdate).not.toHaveBeenCalled()
   })
 })

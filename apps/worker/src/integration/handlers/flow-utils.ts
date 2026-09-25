@@ -25,6 +25,7 @@ import {
   type NodeVisits,
 } from "@chatbotx.io/worker-config"
 import { waitForChatJobCompletion } from "../utils/message"
+import type { ClaimCheck } from "./claim-lost"
 
 export type ExecuteMultipleStepsProps = {
   conversation: ConversationModel
@@ -48,9 +49,15 @@ export type ExecuteMultipleStepsProps = {
   commentAnchor?: CommentAnchor
   appointmentId?: string
   flowExecutionKey?: string
+  /** Set by a claimed smart-delay resume; runs before every step and dispatch. */
+  claimCheck?: ClaimCheck
 }
 
-export type ExecuteStepProps<T> = Omit<ExecuteMultipleStepsProps, "steps"> & {
+// claimCheck stays with the runner: handlers never receive it.
+export type ExecuteStepProps<T> = Omit<
+  ExecuteMultipleStepsProps,
+  "steps" | "claimCheck"
+> & {
   step: T
 }
 

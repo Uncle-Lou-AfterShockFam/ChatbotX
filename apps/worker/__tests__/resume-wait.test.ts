@@ -29,6 +29,9 @@ vi.mock("../src/integration/handlers/flow", () => ({ runFlowNode }))
 const { runWaitResume } = await import(
   "../src/integration/handlers/wait-resume"
 )
+const { CLAIM_WRITE_ATTEMPTS } = await import(
+  "../src/integration/handlers/smart-delay-run"
+)
 
 const waitRow = {
   id: "smart-delay-1",
@@ -80,7 +83,7 @@ describe("runWaitResume", () => {
         flowVersionId: "flow-version-1",
         nodeId: "next-node",
       },
-      { flowExecutionKey: undefined },
+      { flowExecutionKey: undefined, claimCheck: expect.any(Function) },
     )
   })
 
@@ -106,7 +109,7 @@ describe("runWaitResume", () => {
           contactInboxId: "contact-inbox-1",
         },
       }),
-      { flowExecutionKey: undefined },
+      { flowExecutionKey: undefined, claimCheck: expect.any(Function) },
     )
   })
 
@@ -125,7 +128,7 @@ describe("runWaitResume", () => {
       expect.objectContaining({
         appointmentId: "appointment-1",
       }),
-      { flowExecutionKey: undefined },
+      { flowExecutionKey: undefined, claimCheck: expect.any(Function) },
     )
   })
 
@@ -174,7 +177,7 @@ describe("runWaitResume", () => {
 
     expect(runFlowNode).toHaveBeenCalledWith(
       expect.objectContaining({ nodeId: "re-pointed-node" }),
-      { flowExecutionKey: undefined },
+      { flowExecutionKey: undefined, claimCheck: expect.any(Function) },
     )
   })
 
@@ -202,5 +205,96 @@ describe("runWaitResume", () => {
 
     expect(smartDelayService.claimRunning).not.toHaveBeenCalled()
     expect(runFlowNode).not.toHaveBeenCalled()
+  })
+  describe("claimCheck (the runner's ownership check between steps)", () => {
+    type RunOptions = { claimCheck: () => Promise<void> }
+    // The resumed flow reaches one step boundary, then (if still owned) a second.
+    const runTwoBoundaries = async (_data: unknown, options: RunOptions) => {
+      await options.claimCheck()
+      await options.claimCheck()
+    }
+
+    test("renews the claim with ITS generation at every boundary, then finishes", async () => {
+      runFlowNode.mockImplementationOnce(runTwoBoundaries)
+
+      await runWaitResume({ smartDelayId: "smart-delay-1" })
+
+      expect(smartDelayService.heartbeatClaim).toHaveBeenCalledTimes(2)
+      expect(smartDelayService.heartbeatClaim).toHaveBeenCalledWith({
+        id: "smart-delay-1",
+        generation: 7,
+      })
+      expect(smartDelayService.finishClaimedRun).toHaveBeenCalledOnce()
+    })
+
+    test("a taken-over claim stops the run: no requeue, no finish, no retry, no timer left", async () => {
+      smartDelayService.heartbeatClaim.mockResolvedValueOnce(false)
+      let reachedSecondBoundary = false
+      runFlowNode.mockImplementationOnce(
+        async (_data: unknown, options: RunOptions) => {
+          await options.claimCheck()
+          reachedSecondBoundary = true
+        },
+      )
+
+      await expect(
+        runWaitResume({ smartDelayId: "smart-delay-1" }),
+      ).resolves.toBeUndefined()
+
+      expect(reachedSecondBoundary).toBe(false)
+      expect(smartDelayService.requeueClaimedRun).not.toHaveBeenCalled()
+      expect(smartDelayService.finishClaimedRun).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    test("a transient database error in the check is retried, not replayed", async () => {
+      smartDelayService.heartbeatClaim.mockRejectedValueOnce(
+        new Error("connection reset"),
+      )
+      runFlowNode.mockImplementationOnce(runTwoBoundaries)
+
+      const run = runWaitResume({ smartDelayId: "smart-delay-1" })
+      await vi.advanceTimersByTimeAsync(1000)
+      await run
+
+      expect(smartDelayService.heartbeatClaim).toHaveBeenCalledTimes(3)
+      expect(smartDelayService.requeueClaimedRun).not.toHaveBeenCalled()
+      expect(smartDelayService.finishClaimedRun).toHaveBeenCalledOnce()
+    })
+
+    test(`a check that keeps failing (${CLAIM_WRITE_ATTEMPTS} tries) is a flow failure: requeue + rethrow`, async () => {
+      const dbDown = new Error("connection terminated")
+      smartDelayService.heartbeatClaim.mockRejectedValue(dbDown)
+      runFlowNode.mockImplementationOnce(runTwoBoundaries)
+
+      const run = runWaitResume({ smartDelayId: "smart-delay-1" })
+      const settled = expect(run).rejects.toBe(dbDown)
+      await vi.advanceTimersByTimeAsync(1000)
+      await settled
+
+      expect(smartDelayService.heartbeatClaim).toHaveBeenCalledTimes(
+        CLAIM_WRITE_ATTEMPTS,
+      )
+
+      expect(smartDelayService.requeueClaimedRun).toHaveBeenCalledWith({
+        id: "smart-delay-1",
+        generation: 7,
+      })
+      expect(smartDelayService.finishClaimedRun).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    test("a transient database error on finish is retried, so the row does not wait for the sweep", async () => {
+      smartDelayService.finishClaimedRun.mockRejectedValueOnce(
+        new Error("connection reset"),
+      )
+
+      const run = runWaitResume({ smartDelayId: "smart-delay-1" })
+      await vi.advanceTimersByTimeAsync(1000)
+      await run
+
+      expect(smartDelayService.finishClaimedRun).toHaveBeenCalledTimes(2)
+      expect(smartDelayService.requeueClaimedRun).not.toHaveBeenCalled()
+    })
   })
 })
