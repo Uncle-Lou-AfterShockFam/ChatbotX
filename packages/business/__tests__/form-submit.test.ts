@@ -43,6 +43,10 @@ const m = vi.hoisted(() => {
         },
       }),
     }),
+    execute: vi.fn(() => {
+      state.calls.push("execute")
+      return Promise.resolve([])
+    }),
     transaction: async (fn: (t: unknown) => Promise<unknown>) => {
       state.calls.push("tx:begin")
       const out = await fn(tx)
@@ -64,6 +68,9 @@ const m = vi.hoisted(() => {
     tx,
     findPublishedBySlug: vi.fn(),
     findByPhone: vi.fn(async () => undefined as { id: string } | undefined),
+    findById: vi.fn(
+      async () => undefined as Record<string, unknown> | undefined,
+    ),
     setRichSystemFieldByKey: vi.fn(async () => ({})),
     attachContactToInbox: vi.fn(),
     createContactWithInbox: vi.fn(),
@@ -93,10 +100,20 @@ vi.mock("@chatbotx.io/database/client", () => ({
   and: (...c: unknown[]) => ({ c }),
   eq: (f: unknown, v: unknown) => ({ f, v }),
   gte: (f: unknown, v: unknown) => ({ gte: [f, v] }),
+  inArray: (f: unknown, v: unknown) => ({ in: [f, v] }),
+  isUniqueViolationError: (e: unknown) =>
+    typeof e === "object" &&
+    e !== null &&
+    (e as { code?: string }).code === "23505",
   sql: Object.assign((...a: unknown[]) => ({ sql: a }), { join: () => ({}) }),
 }))
 vi.mock("@chatbotx.io/database/schema", () => ({
   contactModel: { id: "id" },
+  contactCustomFieldModel: {
+    contactId: "contactId",
+    customFieldId: "customFieldId",
+    value: "value",
+  },
   formSubmissionModel: {
     id: "id",
     formId: "formId",
@@ -122,6 +139,7 @@ vi.mock("../src/contact/create-with-inbox", () => ({
 vi.mock("../src/contact/service", () => ({
   contactService: {
     findByPhone: m.findByPhone,
+    findById: m.findById,
     setRichSystemFieldByKey: m.setRichSystemFieldByKey,
   },
 }))
@@ -248,6 +266,7 @@ const FORM = (over: Record<string, unknown> = {}) => ({
     submitLimitPerIpPerHour: 3,
     embedOrigins: [],
     prefillKeys: [],
+    overwriteExisting: false,
   },
   ...over,
 })
@@ -283,8 +302,8 @@ beforeEach(() => {
   })
 })
 
-/** dedup miss, budget count */
-const queueClean = (used = 0) => m.state.selects.push([], [{ count: used }])
+/** dedup miss, budget count, in-tx dedup re-check (miss) */
+const queueClean = (used = 0) => m.state.selects.push([], [{ count: used }], [])
 
 describe("formSubmitService.submit (s200)", () => {
   test("unknown / unpublished slug -> notFound before anything else", async () => {
@@ -458,6 +477,8 @@ describe("formSubmitService.submit (s200)", () => {
 
   test("existing contact by phone: attached with onConflict resolve; the OWNER wins when another contact holds the identity", async () => {
     queueClean()
+    m.state.selects.push([]) // stored custom values of the owner: none
+    m.findById.mockResolvedValue({ id: "c-owner", firstName: null })
     m.findByPhone.mockResolvedValue({ id: "c-old" })
     m.attachContactToInbox.mockResolvedValue({
       contactInbox: { contactId: "c-owner" },
@@ -481,6 +502,8 @@ describe("formSubmitService.submit (s200)", () => {
 
   test("existing contact found by email when no phone; a blank answer never clears a stored value", async () => {
     queueClean()
+    m.state.selects.push([])
+    m.findById.mockResolvedValue({ id: "c-mail", email: null })
     m.tx.query.contactModel.findFirst.mockResolvedValue({ id: "c-mail" })
     m.attachContactToInbox.mockResolvedValue({
       contactInbox: { contactId: "c-mail" },
@@ -501,6 +524,8 @@ describe("formSubmitService.submit (s200)", () => {
 
   test("owner without a DM conversation (409 from attach): the owner is looked up and written to", async () => {
     queueClean()
+    m.state.selects.push([])
+    m.findById.mockResolvedValue({ id: "c-owner2" })
     m.findByPhone.mockResolvedValue({ id: "c-old" })
     m.attachContactToInbox.mockRejectedValue(
       new ChatbotXException("owned", "contactInboxOwnedByAnotherContact", 409),
@@ -512,6 +537,8 @@ describe("formSubmitService.submit (s200)", () => {
 
   test("a transaction failure rolls everything back: no events, no tags", async () => {
     queueClean()
+    m.state.selects.push([])
+    m.findById.mockResolvedValue({ id: "c-new" })
     m.state.txFails = true
     await expect(submit({ phone: "+12154075123" })).rejects.toThrow("tx failed")
     expect(m.emitFormSubmitted).not.toHaveBeenCalled()
@@ -546,6 +573,81 @@ describe("formSubmitService.submit (s200)", () => {
     const r = await submit({ q: "+12154075123" })
     expect(r).toMatchObject({ kind: "ok", contactId: null })
     expect(m.findByPhone).not.toHaveBeenCalled()
+  })
+
+  test("an EXISTING contact keeps its stored values: only blanks are filled (skeptic, s200)", async () => {
+    queueClean()
+    m.findByPhone.mockResolvedValue({ id: "c-old" })
+    m.attachContactToInbox.mockResolvedValue({
+      contactInbox: { contactId: "c-old" },
+      ownedByAnotherContact: false,
+      created: false,
+    })
+    m.findById.mockResolvedValue({
+      id: "c-old",
+      firstName: "Stored",
+      email: "kept@x.io",
+      phoneNumber: "+12154075123",
+    })
+    m.state.selects.push([{ customFieldId: "77", value: "M" }]) // size already stored
+    const r = await submit({
+      phone: "+12154075123",
+      first_name: "Attacker",
+      email: "evil@x.io",
+      size: "L",
+    })
+    expect(r).toMatchObject({ kind: "ok", contactId: "c-old" })
+    expect(m.setRichSystemFieldByKey).not.toHaveBeenCalled()
+    expect(m.setValuesInTransaction).not.toHaveBeenCalled()
+  })
+
+  test("with overwriteExisting on, an existing contact's values are replaced", async () => {
+    m.findPublishedBySlug.mockResolvedValue(
+      FORM({ settings: { ...FORM().settings, overwriteExisting: true } }),
+    )
+    queueClean()
+    m.findByPhone.mockResolvedValue({ id: "c-old" })
+    m.attachContactToInbox.mockResolvedValue({
+      contactInbox: { contactId: "c-old" },
+      ownedByAnotherContact: false,
+      created: false,
+    })
+    await submit({ phone: "+12154075123", first_name: "New" })
+    expect(m.findById).not.toHaveBeenCalled()
+    expect(m.setRichSystemFieldByKey).toHaveBeenCalledWith(
+      expect.objectContaining({ fieldName: "first_name", value: "New" }),
+    )
+  })
+
+  test("a create race (the other submit won) resolves to the winner, never an error", async () => {
+    queueClean()
+    m.state.selects.push([])
+    m.findById.mockResolvedValue({ id: "c-winner" })
+    m.findByPhone
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ id: "c-winner" })
+    m.createContactWithInbox.mockRejectedValue(
+      new ChatbotXException("Phone number is exists", "validation", 422),
+    )
+    const r = await submit({ phone: "+12154075123", first_name: "Ada" })
+    expect(r).toMatchObject({ kind: "ok", contactId: "c-winner" })
+  })
+
+  test("the transaction takes an advisory lock and re-checks dedup before inserting", async () => {
+    m.state.selects.push(
+      [],
+      [{ count: 0 }],
+      [{ id: "sub-race", contactId: null }],
+    ) // in-tx re-check finds the racer's row
+    const r = await submit({ first_name: "Ada" })
+    expect(r).toMatchObject({
+      kind: "ok",
+      duplicate: true,
+      submissionId: "sub-race",
+    })
+    expect(m.state.calls).toContain("execute")
+    expect(m.state.inserted).toHaveLength(0)
+    expect(m.emitFormSubmitted).not.toHaveBeenCalled()
   })
 
   test("the same answers from another ip are NOT a duplicate (ip is in the hash)", () => {

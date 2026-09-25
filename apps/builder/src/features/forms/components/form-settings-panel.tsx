@@ -47,6 +47,8 @@ export function FormSettingsPanel(props: {
   slug: string
   /** The published URL (null until published); the embed snippet is derived from it. */
   publicUrl: string | null
+  /** The SAVED slug: the snippet must match what the page posts, not the draft input. */
+  savedSlug: string
   inboxId: string | null
   settings: FormSettings
   mapsToContact: boolean
@@ -164,6 +166,21 @@ export function FormSettingsPanel(props: {
         />
       </div>
       <div className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
+        <div className="flex flex-col gap-0.5">
+          <Label htmlFor="fs-overwrite">
+            {t("forms.settings.overwriteExisting")}
+          </Label>
+          <span className="text-muted-foreground text-xs">
+            {t("forms.settings.overwriteExistingHint")}
+          </span>
+        </div>
+        <Switch
+          checked={props.settings.overwriteExisting}
+          id="fs-overwrite"
+          onCheckedChange={(overwriteExisting) => set({ overwriteExisting })}
+        />
+      </div>
+      <div className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
         <Label htmlFor="fs-honeypot">{t("forms.settings.honeypot")}</Label>
         <Switch
           checked={props.settings.honeypot}
@@ -206,7 +223,7 @@ export function FormSettingsPanel(props: {
           rows={6}
           value={
             props.publicUrl
-              ? embedSnippet(props.publicUrl, props.slug)
+              ? embedSnippet(props.publicUrl, props.savedSlug)
               : t("forms.settings.embedUnpublished")
           }
         />

@@ -3,8 +3,9 @@ import { ThemeSwitcher } from "@/components/theme-switcher"
 import { getTenantSettings } from "@/features/tenant/utils"
 
 /**
- * Public form pages (s200). The branded frame of `/t/[shareToken]`; the
- * page itself drops the header and the switcher in embed mode.
+ * Public form pages (s200): the branded frame (logo, muted background, theme
+ * switcher) around `/forms/[workspaceId]/[slug]`; the page hides the header
+ * and the switcher in embed mode.
  */
 export default async function PublicFormLayout({
   children,

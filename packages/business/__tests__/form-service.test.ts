@@ -13,6 +13,7 @@ const m = vi.hoisted(() => {
     inserted: [] as Record<string, unknown>[],
     insertErrors: [] as (Error | null)[],
     calls: [] as string[],
+    lastWhere: null as unknown,
   }
   const chain = (kind: "select" | "update" | "delete") => {
     const self: Record<string, unknown> = {}
@@ -23,7 +24,6 @@ const m = vi.hoisted(() => {
     }
     for (const k of [
       "from",
-      "where",
       "orderBy",
       "limit",
       "set",
@@ -32,6 +32,12 @@ const m = vi.hoisted(() => {
       "leftJoin",
     ]) {
       self[k] = () => self
+    }
+    self.where = (arg: unknown) => {
+      if (kind === "update") {
+        state.lastWhere = arg
+      }
+      return self
     }
     self.as = () => ({ count: "count", formId: "formId" })
     // biome-ignore lint/suspicious/noThenProperty: awaitable like a drizzle query
@@ -84,7 +90,11 @@ const m = vi.hoisted(() => {
 })
 
 vi.mock("@chatbotx.io/database/client", () => {
-  const sqlTag = (...args: unknown[]) => ({ sql: args, as: () => ({}) })
+  const sqlTag = (strings: TemplateStringsArray, ...values: unknown[]) => ({
+    sql: strings.join("?"),
+    values,
+    as: () => ({}),
+  })
   sqlTag.join = (parts: unknown[]) => ({ join: parts })
   return {
     db: m.tx,
@@ -394,6 +404,19 @@ describe("formService.update", () => {
       }),
     )
     expect(moved.httpStatusCode).toBe(409)
+  })
+
+  test("the optimistic lock compares updatedAt at millisecond precision (timestamp(6) column)", async () => {
+    m.state.selects.push([draft()])
+    m.state.updates.push([draft({ title: "x" })])
+    await formService.update({
+      workspaceId: WS,
+      id: "f1",
+      data: { title: "x" },
+    })
+    const where = JSON.stringify(m.state.lastWhere)
+    expect(where).toContain("date_trunc('milliseconds'")
+    expect(where).not.toContain('"f":"u"')
   })
 
   test("a no-op patch does not write", async () => {

@@ -5,6 +5,7 @@ import {
 } from "@chatbotx.io/business"
 import { triggerEventTypes } from "@chatbotx.io/database/partials"
 import type { MatchableEventType } from "@chatbotx.io/events"
+import { isPlainRecord } from "@chatbotx.io/utils"
 import type { MatchableWebhookEventData, WebhookPayload } from "../types"
 
 type WebhookPayloadBase = {
@@ -149,9 +150,6 @@ async function buildNewContactPayload(
  * internal `sourceId` (and may carry a contactInboxId), neither of which is a
  * documented public field.
  */
-const isPlainRecord = (v: unknown): v is Record<string, unknown> =>
-  v !== null && typeof v === "object" && !Array.isArray(v)
-
 function buildDealPayload(
   basePayload: WebhookPayloadBase,
   data: Record<string, unknown>,

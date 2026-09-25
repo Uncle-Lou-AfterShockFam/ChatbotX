@@ -150,11 +150,11 @@ export function PublicForm(props: {
             aria-hidden="true"
             className="absolute top-0 -left-[9999px] h-px w-px overflow-hidden"
           >
-            <label htmlFor={`hp-${slug}`}>Website</label>
+            <label htmlFor={`hp-${slug}`}>Leave this field empty</label>
             <input
               autoComplete="off"
               id={`hp-${slug}`}
-              name="website"
+              name={`hp_${slug}`}
               onChange={(e) => setHoneypot(e.target.value)}
               tabIndex={-1}
               type="text"

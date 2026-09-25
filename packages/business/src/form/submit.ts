@@ -5,6 +5,8 @@ import {
   db,
   eq,
   gte,
+  inArray,
+  isUniqueViolationError,
   sql,
 } from "@chatbotx.io/database/client"
 import {
@@ -21,10 +23,13 @@ import {
   pruneFormValues,
   validateFormSubmission,
 } from "@chatbotx.io/database/partials"
-import { contactModel, formSubmissionModel } from "@chatbotx.io/database/schema"
+import {
+  contactCustomFieldModel,
+  formSubmissionModel,
+} from "@chatbotx.io/database/schema"
 import type { FormSubmissionModel } from "@chatbotx.io/database/types"
 import { emitFormSubmitted } from "@chatbotx.io/events"
-import { createId } from "@chatbotx.io/utils"
+import { createId, isPlainRecord } from "@chatbotx.io/utils"
 import { parsePhoneNumberFromString } from "libphonenumber-js"
 import { attachContactToInbox } from "../contact/attach-inbox"
 import {
@@ -94,9 +99,15 @@ const SYSTEM_KEY_TO_FIELD: Record<FormSystemFieldKey, RichSystemContactField> =
 const sha256 = (value: string): string =>
   createHash("sha256").update(value).digest("hex")
 
-/** One hash per (workspace, ip): the row never stores the address itself. */
+/**
+ * One hash per (workspace, ip): the row never stores the address itself, and
+ * the server secret keeps a row reader from brute-forcing IPv4 (2^32 hashes
+ * without it; probe, s200).
+ */
 export const hashClientIp = (workspaceId: string, clientIp: string): string =>
-  sha256(`${workspaceId}:${clientIp}`)
+  sha256(
+    `${process.env.BETTER_AUTH_SECRET ?? ""}|${workspaceId.length}:${workspaceId}|${clientIp}`,
+  )
 
 /** Stable JSON: sorted keys, so `{a,b}` and `{b,a}` hash alike. */
 const canonical = (values: FormValues): string =>
@@ -105,9 +116,6 @@ const canonical = (values: FormValues): string =>
       .sort()
       .map((k) => [k, values[k]]),
   )
-
-const isPlainRecord = (v: unknown): v is Record<string, unknown> =>
-  v !== null && typeof v === "object" && !Array.isArray(v)
 
 /** Keep only JSON shapes the evaluator understands; anything else reads as absent. */
 const coerceValues = (raw: Record<string, unknown>): FormValues => {
@@ -138,6 +146,9 @@ const toStoredText = (value: FormValue): string => {
 }
 
 type Identity = { phoneNumber: string | null; email: string | null }
+type PendingChanges = Awaited<
+  ReturnType<typeof contactCustomFieldService.setValuesInTransaction>
+>
 
 export class FormSubmitService {
   async submit(input: SubmitFormInput): Promise<SubmitFormResult> {
@@ -204,53 +215,125 @@ export class FormSubmitService {
     // Contact resolution runs BEFORE the transaction: attach / create have
     // their own transactions and emit their own events.
     let contactId: string | null = null
+    let contactCreated = false
     let identityIssue: FormValidationIssue | null = null
     if (formMapsToContact(def) && form.inboxId) {
-      const resolved = await this.resolveContact({
-        workspaceId: input.workspaceId,
-        inboxId: form.inboxId,
-        def,
-        values: pruned,
-      })
+      let resolved: Awaited<ReturnType<FormSubmitService["resolveContact"]>>
+      try {
+        resolved = await this.resolveContact({
+          workspaceId: input.workspaceId,
+          inboxId: form.inboxId,
+          def,
+          values: pruned,
+        })
+      } catch (error) {
+        // A refused attach / create (wrong inbox channel, a workspace rule)
+        // is the submitter's typed issue on the identity field, never a bare
+        // status that loses their answers (probe P4, s200).
+        if (error instanceof ChatbotXException) {
+          logger.warn(
+            { err: error, workspaceId: input.workspaceId, formId: form.id },
+            "form submit: contact resolution refused",
+          )
+          const key =
+            this.identityKeys(def).phone ??
+            this.identityKeys(def).email ??
+            "values"
+          return { kind: "invalid", issues: [{ key, code: "type" }] }
+        }
+        throw error
+      }
       if ("issue" in resolved) {
         identityIssue = resolved.issue
       } else {
         contactId = resolved.contactId
+        contactCreated = resolved.created
       }
     }
     if (identityIssue) {
       return { kind: "invalid", issues: [identityIssue] }
     }
 
-    const persisted = await db.transaction(async (tx) => {
-      const pending =
-        contactId === null
-          ? []
-          : await this.writeMappedFields({
-              workspaceId: input.workspaceId,
-              contactId,
-              def,
-              values: pruned,
-              sourceTimezone: input.sourceTimezone,
-              tx,
-            })
-      const [row] = await tx
-        .insert(formSubmissionModel)
-        .values({
-          id: createId(),
-          workspaceId: input.workspaceId,
-          formId: form.id,
-          contactId,
-          definitionVersion: form.definitionVersion,
-          values: pruned,
-          visibility,
-          ipHash,
-          userAgent: input.userAgent?.slice(0, 500) ?? null,
+    let persisted: {
+      row: FormSubmissionModel
+      pending: PendingChanges
+      duplicateOf: FormSubmissionModel | null
+    }
+    try {
+      persisted = await db.transaction(async (tx) => {
+        // Serialise identical answers from one ip: two racing submits both
+        // pass the read above; the second waits here and sees the first.
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${dedupHash}))`,
+        )
+        const duplicateOf = await this.findRecentDuplicate({
+          form,
           dedupHash,
+          now,
+          tx,
         })
-        .returning()
-      return { row, pending }
-    })
+        if (duplicateOf) {
+          return { row: duplicateOf, pending: [], duplicateOf }
+        }
+        const pending =
+          contactId === null
+            ? []
+            : await this.writeMappedFields({
+                workspaceId: input.workspaceId,
+                contactId,
+                def,
+                values: pruned,
+                sourceTimezone: input.sourceTimezone,
+                // A contact this submission created is ours to fill; an
+                // existing contact keeps every non-blank value unless the form
+                // owner opted into overwriting (skeptic, s200).
+                fillBlanksOnly: !(contactCreated || settings.overwriteExisting),
+                tx,
+              })
+        const [row] = await tx
+          .insert(formSubmissionModel)
+          .values({
+            id: createId(),
+            workspaceId: input.workspaceId,
+            formId: form.id,
+            contactId,
+            definitionVersion: form.definitionVersion,
+            values: pruned,
+            visibility,
+            ipHash,
+            userAgent: input.userAgent?.slice(0, 500) ?? null,
+            dedupHash,
+          })
+          .returning()
+        return { row, pending, duplicateOf: null }
+      })
+    } catch (error) {
+      if (contactCreated && contactId) {
+        // The contact's own transaction committed before ours failed: name
+        // the row so it is never a silent orphan.
+        logger.warn(
+          {
+            err: error,
+            workspaceId: input.workspaceId,
+            formId: form.id,
+            contactId,
+          },
+          "form submit: submission transaction failed after creating the contact",
+        )
+      }
+      throw error
+    }
+
+    if (persisted.duplicateOf) {
+      return {
+        kind: "ok",
+        duplicate: true,
+        submissionId: persisted.duplicateOf.id,
+        contactId: persisted.duplicateOf.contactId,
+        successMessage: settings.successMessage,
+        redirectUrl: settings.redirectUrl,
+      }
+    }
 
     if (contactId !== null) {
       await this.afterCommit({
@@ -316,6 +399,25 @@ export class FormSubmitService {
     return Number(row?.count ?? 0)
   }
 
+  /** The field keys that carry the contact identity, if any. */
+  private identityKeys(def: FormDefinition): {
+    phone?: string
+    email?: string
+  } {
+    const out: { phone?: string; email?: string } = {}
+    for (const field of formInputFields(def)) {
+      if (field.mapTo?.kind !== "system") {
+        continue
+      }
+      if (field.mapTo.key === "phoneNumber") {
+        out.phone = field.key
+      } else if (field.mapTo.key === "email") {
+        out.email = field.key
+      }
+    }
+    return out
+  }
+
   /** The phone / email answers mapped to the contact, normalised. */
   private async identityOf(props: {
     workspaceId: string
@@ -376,7 +478,10 @@ export class FormSubmitService {
     inboxId: string
     def: FormDefinition
     values: FormValues
-  }): Promise<{ contactId: string | null } | { issue: FormValidationIssue }> {
+  }): Promise<
+    | { contactId: string | null; created: boolean }
+    | { issue: FormValidationIssue }
+  > {
     const { workspaceId, inboxId, def, values } = props
     const found = await this.identityOf({ workspaceId, def, values })
     if ("issue" in found) {
@@ -384,18 +489,22 @@ export class FormSubmitService {
     }
     const { phoneNumber, email } = found.identity
     if (!(phoneNumber || email)) {
-      return { contactId: null }
+      return { contactId: null, created: false }
     }
     const sourceId = phoneNumber ?? (email as string)
 
-    let existing = phoneNumber
-      ? await contactService.findByPhone({ workspaceId, phoneNumber })
-      : undefined
-    if (!existing && email) {
-      existing = await db.query.contactModel.findFirst({
-        where: { workspaceId, email },
-      })
+    const lookup = async () => {
+      let existing = phoneNumber
+        ? await contactService.findByPhone({ workspaceId, phoneNumber })
+        : undefined
+      if (!existing && email) {
+        existing = await db.query.contactModel.findFirst({
+          where: { workspaceId, email },
+        })
+      }
+      return existing
     }
+    const existing = await lookup()
 
     if (existing) {
       try {
@@ -406,7 +515,7 @@ export class FormSubmitService {
           sourceId,
           onConflict: "resolve",
         })
-        return { contactId: attached.contactInbox.contactId }
+        return { contactId: attached.contactInbox.contactId, created: false }
       } catch (error) {
         // The identity belongs to another contact that has no DM conversation
         // yet: write to that owner rather than refuse the submission.
@@ -420,7 +529,7 @@ export class FormSubmitService {
             workspaceId,
           })
           if (owner) {
-            return { contactId: owner.contactId }
+            return { contactId: owner.contactId, created: false }
           }
         }
         throw error
@@ -428,22 +537,41 @@ export class FormSubmitService {
     }
 
     const names = this.namesOf(def, values)
-    const { contact } = await createContactWithInbox({
-      workspaceId,
-      input: {
-        email: email ?? "",
-        phoneNumber: phoneNumber ?? undefined,
-        firstName: names.firstName,
-        lastName: names.lastName,
-        gender: null,
-        channel: "api",
-        inboxId,
-        contactId: sourceId,
-      },
-    })
-    // Same identity on the same inbox: the constraint refused a duplicate,
-    // so `findLatestBySource` names the row that won.
-    return { contactId: contact.id }
+    try {
+      const { contact } = await createContactWithInbox({
+        workspaceId,
+        input: {
+          email: email ?? "",
+          phoneNumber: phoneNumber ?? undefined,
+          firstName: names.firstName,
+          lastName: names.lastName,
+          gender: null,
+          channel: "api",
+          inboxId,
+          contactId: sourceId,
+        },
+      })
+      return { contactId: contact.id, created: true }
+    } catch (error) {
+      // Two submissions racing on one new identity: the loser's create is
+      // refused ("Phone number is exists" / the inbox identity constraint);
+      // the winner's row is the contact to write to, never an error.
+      if (error instanceof ChatbotXException || isUniqueViolationError(error)) {
+        const winner = await lookup()
+        if (winner) {
+          return { contactId: winner.id, created: false }
+        }
+        const owner = await contactInboxService.findLatestBySource({
+          inboxId,
+          sourceId,
+          workspaceId,
+        })
+        if (owner) {
+          return { contactId: owner.contactId, created: false }
+        }
+      }
+      throw error
+    }
   }
 
   private namesOf(
@@ -475,9 +603,22 @@ export class FormSubmitService {
     def: FormDefinition
     values: FormValues
     sourceTimezone?: string
+    /** Existing contact, no opt-in: write only where nothing is stored yet. */
+    fillBlanksOnly: boolean
     tx: DatabaseClient
-  }) {
-    const { workspaceId, contactId, def, values, sourceTimezone, tx } = props
+  }): Promise<PendingChanges> {
+    const {
+      workspaceId,
+      contactId,
+      def,
+      values,
+      sourceTimezone,
+      fillBlanksOnly,
+      tx,
+    } = props
+    const stored = fillBlanksOnly
+      ? await this.storedValues({ workspaceId, contactId, def, tx })
+      : null
     const custom: { customFieldId: string; value: string; key: string }[] = []
     for (const field of formInputFields(def)) {
       const value = values[field.key]
@@ -486,6 +627,14 @@ export class FormSubmitService {
         value === undefined ||
         value === null ||
         value === ""
+      ) {
+        continue
+      }
+      if (
+        stored &&
+        (field.mapTo.kind === "system"
+          ? stored.system[field.mapTo.key]
+          : stored.custom.has(field.mapTo.customFieldId))
       ) {
         continue
       }
@@ -526,6 +675,55 @@ export class FormSubmitService {
     )
   }
 
+  /** What the contact already holds for the mapped fields (blank = absent). */
+  private async storedValues(props: {
+    workspaceId: string
+    contactId: string
+    def: FormDefinition
+    tx: DatabaseClient
+  }): Promise<{
+    system: Record<FormSystemFieldKey, boolean>
+    custom: Set<string>
+  }> {
+    const { workspaceId, contactId, def, tx } = props
+    const contact = await contactService.findById({
+      workspaceId,
+      id: contactId,
+      tx,
+    })
+    const filled = (v: unknown) => typeof v === "string" && v.trim() !== ""
+    const system: Record<FormSystemFieldKey, boolean> = {
+      firstName: filled(contact?.firstName),
+      lastName: filled(contact?.lastName),
+      email: filled(contact?.email),
+      phoneNumber: filled(contact?.phoneNumber),
+    }
+    const ids = formInputFields(def)
+      .map((f) => (f.mapTo?.kind === "custom" ? f.mapTo.customFieldId : null))
+      .filter((v): v is string => v !== null)
+    const custom = new Set<string>()
+    if (ids.length > 0) {
+      const rows = await tx
+        .select({
+          customFieldId: contactCustomFieldModel.customFieldId,
+          value: contactCustomFieldModel.value,
+        })
+        .from(contactCustomFieldModel)
+        .where(
+          and(
+            eq(contactCustomFieldModel.contactId, contactId),
+            inArray(contactCustomFieldModel.customFieldId, ids),
+          ),
+        )
+      for (const row of rows) {
+        if (filled(row.value)) {
+          custom.add(String(row.customFieldId))
+        }
+      }
+    }
+    return { system, custom }
+  }
+
   /** Events and tags only after the row is committed; a failure is logged, never surfaced. */
   private async afterCommit(props: {
     workspaceId: string
@@ -533,9 +731,7 @@ export class FormSubmitService {
     form: NormalizedForm
     submission: FormSubmissionModel
     values: FormValues
-    pending: Awaited<
-      ReturnType<typeof contactCustomFieldService.setValuesInTransaction>
-    >
+    pending: PendingChanges
   }): Promise<void> {
     const { workspaceId, contactId, form, submission, values, pending } = props
     const warn = (what: string) => (error: unknown) =>
@@ -566,6 +762,3 @@ export class FormSubmitService {
 }
 
 export const formSubmitService = new FormSubmitService()
-
-/** The `contact` table is referenced so the import is not dead when tree-shaken. */
-export const FORM_SUBMIT_CONTACT_TABLE = contactModel

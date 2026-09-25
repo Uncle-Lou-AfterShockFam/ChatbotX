@@ -1,4 +1,5 @@
 import { formService } from "@chatbotx.io/business/form"
+import { FORM_EMBED_ORIGIN_REGEX } from "@chatbotx.io/database/partials"
 import { distributedStore } from "@chatbotx.io/redis"
 import { logger } from "@/lib/log"
 
@@ -12,8 +13,19 @@ export const FORM_FRAME_ANCESTORS_CACHE_SECONDS = 60
 const FORM_PATH =
   /^\/forms\/(\d{1,19})\/([a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)\/?$/
 
-export const buildFrameAncestors = (origins: readonly string[]): string =>
-  `frame-ancestors 'self'${origins.map((o) => ` ${o}`).join("")}`
+/** Only well-formed origins reach the header, wherever the list came from. */
+export const sanitizeOrigins = (list: unknown): string[] =>
+  Array.isArray(list)
+    ? list.filter(
+        (o): o is string =>
+          typeof o === "string" && FORM_EMBED_ORIGIN_REGEX.test(o),
+      )
+    : []
+
+export const buildFrameAncestors = (origins: unknown): string =>
+  `frame-ancestors 'self'${sanitizeOrigins(origins)
+    .map((o) => ` ${o}`)
+    .join("")}`
 
 /** The two store calls this needs; `distributedStore` satisfies it. */
 export type FrameAncestorsCache = {
@@ -40,8 +52,8 @@ export async function formFrameAncestors(
     ((ws: string, s: string) =>
       formService.getEmbedOrigins({ workspaceId: ws, slug: s }))
   try {
-    const cached = await cache.get<string[]>(key)
-    if (cached) {
+    const cached = await cache.get<unknown>(key)
+    if (Array.isArray(cached)) {
       return buildFrameAncestors(cached)
     }
   } catch (error) {
@@ -57,7 +69,7 @@ export async function formFrameAncestors(
     )
   }
   // Unknown form: still deny framing by strangers (the page 404s anyway).
-  const list = origins ?? []
+  const list = sanitizeOrigins(origins)
   try {
     await cache.put(key, list, FORM_FRAME_ANCESTORS_CACHE_SECONDS)
   } catch (error) {

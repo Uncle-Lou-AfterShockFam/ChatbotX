@@ -2,11 +2,12 @@ import {
   isWorkspaceScheduledForDeletion,
   workspaceService,
 } from "@chatbotx.io/business"
+import { ChatbotXException } from "@chatbotx.io/business/errors"
 import { formService, formSubmitService } from "@chatbotx.io/business/form"
 import { FORM_SLUG_REGEX } from "@chatbotx.io/database/partials"
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { serverErrorHandler } from "@/lib/errors/server-handler"
+import { logger } from "@/lib/log"
 import { checkFormRateLimit } from "@/lib/rate-limit/form-rate-limit"
 import { getGuestClientIp } from "@/lib/rate-limit/guest-rate-limit"
 import { loadServableWorkspace } from "@/lib/workspace/load-servable-workspace"
@@ -20,6 +21,44 @@ import { loadServableWorkspace } from "@/lib/workspace/load-servable-workspace"
  */
 const MAX_BODY_BYTES = 64 * 1024
 const INT8 = /^\d{1,19}$/
+const INT8_MAX = 2n ** 63n - 1n
+const isInt8 = (v: string) => INT8.test(v) && BigInt(v) <= INT8_MAX
+
+/**
+ * Read at most `max` bytes of the body; a lying or missing Content-Length
+ * cannot make us buffer more than that (skeptic, s200). Returns null when
+ * the cap is exceeded.
+ */
+async function readBodyCapped(
+  req: NextRequest,
+  max: number,
+): Promise<string | null> {
+  const reader = req.body?.getReader()
+  if (!reader) {
+    return ""
+  }
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) {
+      break
+    }
+    total += value.byteLength
+    if (total > max) {
+      await reader.cancel().catch(() => undefined)
+      return null
+    }
+    chunks.push(value)
+  }
+  const merged = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    merged.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return new TextDecoder().decode(merged)
+}
 
 export const submitFormRequest = z
   .object({
@@ -56,6 +95,12 @@ const corsHeaders = (origin: string | null, allowed: boolean) => {
 const json = (body: unknown, status: number, headers: Headers) =>
   NextResponse.json(body, { status, headers })
 
+/** RFC 9110 delta-seconds: a non-negative integer, whatever the limiter said. */
+const retryAfterSeconds = (value: unknown): number =>
+  typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.ceil(value)
+    : 60
+
 type Params = { params: Promise<{ workspaceId: string; slug: string }> }
 
 export function OPTIONS(req: NextRequest) {
@@ -71,7 +116,7 @@ export async function POST(req: NextRequest, ctx: Params) {
   const closed = corsHeaders(origin, false)
   try {
     const { workspaceId, slug } = await ctx.params
-    if (!(INT8.test(workspaceId) && FORM_SLUG_REGEX.test(slug))) {
+    if (!(isInt8(workspaceId) && FORM_SLUG_REGEX.test(slug))) {
       return json({ ok: false, errors: [] }, 404, closed)
     }
     const length = Number(req.headers.get("content-length") ?? 0)
@@ -106,16 +151,13 @@ export async function POST(req: NextRequest, ctx: Params) {
     const clientIp = getGuestClientIp(req.headers)
     const limit = await checkFormRateLimit({ formId: form.id, clientIp })
     if (limit.limited) {
-      headers.set("Retry-After", String(limit.retryAfter))
-      return json(
-        { ok: false, errors: [], retryAfter: limit.retryAfter },
-        429,
-        headers,
-      )
+      const retryAfter = retryAfterSeconds(limit.retryAfter)
+      headers.set("Retry-After", String(retryAfter))
+      return json({ ok: false, errors: [], retryAfter }, 429, headers)
     }
 
-    const raw = await req.text()
-    if (raw.length > MAX_BODY_BYTES) {
+    const raw = await readBodyCapped(req, MAX_BODY_BYTES)
+    if (raw === null) {
       return json({ ok: false, errors: [] }, 413, headers)
     }
     let body: unknown
@@ -157,14 +199,12 @@ export async function POST(req: NextRequest, ctx: Params) {
         return json({ ok: false, errors: [] }, 404, headers)
       case "invalid":
         return json({ ok: false, errors: result.issues }, 400, headers)
-      case "rateLimited":
-        headers.set("Retry-After", String(result.retryAfter))
-        return json(
-          { ok: false, errors: [], retryAfter: result.retryAfter },
-          429,
-          headers,
-        )
-      default:
+      case "rateLimited": {
+        const retryAfter = retryAfterSeconds(result.retryAfter)
+        headers.set("Retry-After", String(retryAfter))
+        return json({ ok: false, errors: [], retryAfter }, 429, headers)
+      }
+      case "ok":
         return json(
           {
             ok: true,
@@ -175,8 +215,18 @@ export async function POST(req: NextRequest, ctx: Params) {
           200,
           headers,
         )
+      default:
+        return json({ ok: false, errors: [] }, 500, headers)
     }
   } catch (error) {
-    return serverErrorHandler(error, closed)
+    // Anonymous callers never see an internal message (driver text, constraint
+    // names): log it, answer a bare status. A ChatbotXException keeps its
+    // status so a 422 stays a 422.
+    logger.error({ err: error }, "form submit: unhandled error")
+    const status =
+      error instanceof ChatbotXException && error.httpStatusCode >= 400
+        ? error.httpStatusCode
+        : 500
+    return json({ ok: false, errors: [] }, status, closed)
   }
 }

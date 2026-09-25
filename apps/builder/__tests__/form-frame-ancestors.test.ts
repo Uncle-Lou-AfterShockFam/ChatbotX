@@ -109,3 +109,38 @@ describe("public form frame-ancestors (s200)", () => {
     ).toBe("frame-ancestors 'self'")
   })
 })
+
+describe("origin lists are re-validated wherever they come from (probe, s200)", () => {
+  test("a poisoned cache or an odd load result never reaches the header", async () => {
+    const poisoned = cache()
+    poisoned.map.set("form-frame-ancestors:11701868563365888:demo", [
+      "*",
+      "'none'",
+      "https://a.example; script-src *",
+      "https://ok.example",
+      1,
+      "https://x.example\nX-Foo: bar",
+    ])
+    expect(
+      await formFrameAncestors("/forms/11701868563365888/demo", {
+        load: () => Promise.resolve([]),
+        cache: poisoned,
+      }),
+    ).toBe("frame-ancestors 'self' https://ok.example")
+    const stringCached = cache()
+    stringCached.map.set(
+      "form-frame-ancestors:11701868563365888/demo",
+      "https://a.example",
+    )
+    expect(
+      await formFrameAncestors("/forms/11701868563365888/demo", {
+        load: () => Promise.resolve("https://b.example" as unknown as string[]),
+        cache: stringCached,
+      }),
+    ).toBe("frame-ancestors 'self'")
+    expect(buildFrameAncestors("x")).toBe("frame-ancestors 'self'")
+    expect(
+      buildFrameAncestors(["https://a.example", "javascript:alert(1)"]),
+    ).toBe("frame-ancestors 'self' https://a.example")
+  })
+})

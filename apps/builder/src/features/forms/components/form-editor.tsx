@@ -382,6 +382,7 @@ export function FormEditor(props: { workspaceId: string; id: string }) {
                 : null
             }
             published={form.status === "published"}
+            savedSlug={form.slug}
             settings={draft.settings}
             slug={draft.slug}
             title={draft.title}
@@ -394,9 +395,8 @@ export function FormEditor(props: { workspaceId: string; id: string }) {
               definition={def}
               idPrefix="preview"
               key={JSON.stringify(def)}
-              onSubmit={(values) => {
+              onSubmit={() => {
                 toast.success(t("forms.editor.previewSubmitted"))
-                console.info("[form preview]", values)
               }}
               submitLabel={t("forms.editor.previewSubmit")}
             />

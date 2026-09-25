@@ -40,6 +40,9 @@ vi.mock("@/lib/rate-limit/form-rate-limit", () => ({
 vi.mock("@/lib/rate-limit/guest-rate-limit", () => ({
   getGuestClientIp: () => "203.0.113.9",
 }))
+vi.mock("@/lib/log", () => ({
+  logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
+}))
 
 const { POST, OPTIONS, submitFormRequest } = await import(
   "../src/app/api/forms/[workspaceId]/[slug]/submit/route"
@@ -225,11 +228,30 @@ describe("POST /api/forms/{ws}/{slug}/submit", () => {
     expect((await post({ values: {} })).status).toBe(404)
   })
 
-  test("a thrown error never leaks: serverErrorHandler shape, closed CORS", async () => {
-    m.submit.mockRejectedValue(new Error("db down"))
+  test("a thrown error never leaks its message: bare 500, closed CORS; a ChatbotXException keeps its status", async () => {
+    m.submit.mockRejectedValue(
+      new Error("invalid input syntax for type bigint"),
+    )
     const res = await post({ values: {} }, { origin: "https://host.example" })
-    expect(res.status).toBe(400)
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ ok: false, errors: [] })
     expect(res.headers.get("access-control-allow-origin")).toBeNull()
+    const { ChatbotXException } = await import("@chatbotx.io/business/errors")
+    m.submit.mockRejectedValue(new ChatbotXException("nope", "validation", 422))
+    const typed = await post({ values: {} })
+    expect(typed.status).toBe(422)
+    expect(await typed.json()).toEqual({ ok: false, errors: [] })
+  })
+
+  test("a workspace id above int8 max is a 404 before any lookup", async () => {
+    const res = await post(
+      { values: {} },
+      {},
+      "demo-intake",
+      "9223372036854775808",
+    )
+    expect(res.status).toBe(404)
+    expect(m.servable).not.toHaveBeenCalled()
   })
 
   test("OPTIONS preflight answers 204 and reflects the origin", () => {
