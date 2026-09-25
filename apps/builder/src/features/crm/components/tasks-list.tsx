@@ -67,7 +67,10 @@ export function TasksList({
             </div>
             {task.dueAt ? (
               <Badge variant={overdue ? "destructive" : "outline"}>
-                {format.dateTime(task.dueAt, { dateStyle: "medium" })}
+                {format.dateTime(task.dueAt, {
+                  dateStyle: "medium",
+                  timeZone: "UTC",
+                })}
               </Badge>
             ) : null}
           </li>
