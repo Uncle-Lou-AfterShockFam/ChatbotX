@@ -588,9 +588,14 @@ class SmartDelayService extends BaseService {
    * it to `pending` and re-enqueue it on the next tick. `resetToPending` uses a
    * `status = 'scheduled'` CAS, so a `canceled` row can never be resurrected.
    *
-   * Bounded + SKIP LOCKED for the same reason as `claimDueRows`: this table can
-   * hold hundreds of thousands of rows per workspace, and a concurrent scanner
-   * run must not be blocked by the teardown.
+   * Bounded (this table can hold hundreds of thousands of rows per workspace)
+   * but NOT `SKIP LOCKED`, unlike `claimDueRows`: a skipped row is a missed
+   * stop. A heartbeat or claim holds a running row's lock for a few ms; the
+   * cancel waits that out, then READ COMMITTED re-checks the status filter.
+   * The scanner and sweeps do use SKIP LOCKED, so they step over the rows the
+   * cancel holds instead of waiting on it. A row the re-check drops (it
+   * finished meanwhile) is replaced by the next match, so a short batch still
+   * means the backlog is drained (real-PG proof: smart-delay-claim-race).
    */
   async cancelActiveForWorkspace(props: {
     tx?: DatabaseClient
@@ -614,9 +619,11 @@ class SmartDelayService extends BaseService {
           ]),
         ),
       )
-      .orderBy(contactOnSmartDelayModel.triggerAt)
+      // id breaks triggerAt ties: two concurrent cancels of one workspace
+      // (company stop + freeze) lock rows in the same order, never a cycle.
+      .orderBy(contactOnSmartDelayModel.triggerAt, contactOnSmartDelayModel.id)
       .limit(limit)
-      .for("update", { skipLocked: true })
+      .for("update")
 
     return await tx
       .update(contactOnSmartDelayModel)
@@ -630,9 +637,10 @@ class SmartDelayService extends BaseService {
 
   /**
    * Company stop: cancel every still-firable row of the given contacts. Same
-   * shape as `cancelActiveForWorkspace` (bounded, SKIP LOCKED, the ROW is what
-   * stops the work); the row stores a contactInbox, so the contact filter goes
-   * through `ContactInbox` exactly as `findActiveWaitForEvent` does.
+   * shape as `cancelActiveForWorkspace` (bounded, waits on a held row lock,
+   * the ROW is what stops the work); the row stores a contactInbox, so the
+   * contact filter goes through `ContactInbox` exactly as
+   * `findActiveWaitForEvent` does.
    */
   async cancelActiveForContacts(props: {
     tx?: DatabaseClient
@@ -662,9 +670,9 @@ class SmartDelayService extends BaseService {
           inArray(contactInboxModel.contactId, contactIds),
         ),
       )
-      .orderBy(contactOnSmartDelayModel.triggerAt)
+      .orderBy(contactOnSmartDelayModel.triggerAt, contactOnSmartDelayModel.id)
       .limit(limit)
-      .for("update", { skipLocked: true, of: contactOnSmartDelayModel })
+      .for("update", { of: contactOnSmartDelayModel }) // waits: see cancelActiveForWorkspace
 
     return await tx
       .update(contactOnSmartDelayModel)

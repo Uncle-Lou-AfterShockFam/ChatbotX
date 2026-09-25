@@ -22,9 +22,15 @@
  *     DATABASE_URL=postgres://... pnpm --filter @chatbotx.io/business test:db
  */
 
-import { db, sql } from "@chatbotx.io/database/client"
-import { afterAll, afterEach, describe, expect, test } from "vitest"
+import { type DatabaseClient, db, sql } from "@chatbotx.io/database/client"
+import { afterAll, afterEach, describe, expect, test, vi } from "vitest"
 import { MAX_RESUME_CLAIMS, smartDelayService } from "../../src/smart-delay"
+import { runSmartDelayCancelLoop } from "../../src/smart-delay/cancel-loop"
+
+// The cancel loop drops each canceled row's delayed BullMQ job; no Redis here.
+vi.mock("@chatbotx.io/worker-config", () => ({
+  integrationQueue: { remove: vi.fn().mockResolvedValue(undefined) },
+}))
 
 /** The `setup-env` sentinel: a real database never listens on port 1. */
 const NON_ROUTABLE_PORT = "1"
@@ -56,6 +62,12 @@ const RACE_ITERATIONS = 200
 
 let nextId = ID_BASE
 const seeded: string[] = []
+const seededInboxes: string[] = []
+
+function mintId(): string {
+  nextId += 1n
+  return nextId.toString()
+}
 
 type RowState = {
   status: string
@@ -66,10 +78,13 @@ type RowState = {
 async function insertRow(props: {
   status: "pending" | "scheduled" | "running"
   claimGeneration?: number
+  workspaceId?: string
+  contactInboxId?: string
 }): Promise<string> {
-  nextId += 1n
-  const id = nextId.toString()
+  const id = mintId()
   const generation = props.claimGeneration ?? 0
+  const workspaceId = props.workspaceId ?? "1"
+  const contactInboxId = props.contactInboxId ?? "1"
   await db.transaction(async (tx) => {
     // Transaction-scoped: the pooled connection goes back with FKs enforced.
     await tx.execute(sql`SET LOCAL session_replication_role = replica`)
@@ -78,8 +93,8 @@ async function insertRow(props: {
         (id, "workspaceId", "flowId", "contactInboxId", "conversationId",
          "nodeId", "eventNodeId", type, "triggerAt", status,
          "claimGeneration", "claimedAt")
-      VALUES (${id}, 1, 1, 1, 1, 'timeout-edge', 'event-edge', 'waitForEvent',
-              now() + interval '1 hour', ${props.status}::"ContactOnSmartDelayStatus",
+      VALUES (${id}, ${workspaceId}, 1, ${contactInboxId}, 1, 'timeout-edge',
+              'event-edge', 'waitForEvent', clock_timestamp() + interval '1 hour', ${props.status}::"ContactOnSmartDelayStatus",
               ${generation},
               ${props.status === "running" ? sql`now()` : sql`NULL`})`)
   })
@@ -104,23 +119,39 @@ async function setStatus(id: string, status: "scheduled"): Promise<void> {
        SET status = ${status}::"ContactOnSmartDelayStatus" WHERE id = ${id}`)
 }
 
+// Hooks at file level: both suites share the seeded rows and the one pool.
+afterEach(async () => {
+  if (!databaseUrl) {
+    return
+  }
+  if (seeded.length > 0) {
+    const ids = seeded.splice(0)
+    await db.execute(sql`
+      DELETE FROM "ContactOnSmartDelay"
+       WHERE id IN (${sql.join(
+         ids.map((id) => sql`${id}`),
+         sql`, `,
+       )})`)
+  }
+  if (seededInboxes.length > 0) {
+    const ids = seededInboxes.splice(0)
+    await db.execute(sql`
+      DELETE FROM "ContactInbox"
+       WHERE id IN (${sql.join(
+         ids.map((id) => sql`${id}`),
+         sql`, `,
+       )})`)
+  }
+})
+
+afterAll(async () => {
+  if (!databaseUrl) {
+    return
+  }
+  await db.$client.end()
+})
+
 describe.skipIf(!databaseUrl)("smart delay claim CAS on real Postgres", () => {
-  afterEach(async () => {
-    if (seeded.length > 0) {
-      const ids = seeded.splice(0)
-      await db.execute(sql`
-        DELETE FROM "ContactOnSmartDelay"
-         WHERE id IN (${sql.join(
-           ids.map((id) => sql`${id}`),
-           sql`, `,
-         )})`)
-    }
-  })
-
-  afterAll(async () => {
-    await db.$client.end()
-  })
-
   test(`event x2 vs timeout racing one row: exactly one claim wins (${RACE_ITERATIONS} rounds)`, async () => {
     let eventWins = 0
     let timeoutWins = 0
@@ -266,5 +297,212 @@ describe.skipIf(!databaseUrl)("smart delay claim CAS on real Postgres", () => {
         generation: MAX_RESUME_CLAIMS - 1,
       }),
     ).toBe("scheduled")
+  })
+})
+
+async function insertContactInbox(contactId: string): Promise<string> {
+  const id = mintId()
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL session_replication_role = replica`)
+    await tx.execute(sql`
+      INSERT INTO "ContactInbox"
+        (id, "originalContactId", "contactId", "inboxId", channel, source, "sourceId")
+      VALUES (${id}, ${contactId}, ${contactId}, 1, 'api', 'api', ${`s202-${id}`})`)
+  })
+  seededInboxes.push(id)
+  return id
+}
+
+async function statusesOf(ids: string[]): Promise<string[]> {
+  return await Promise.all(ids.map(async (id) => (await readRow(id)).status))
+}
+
+/**
+ * Holds the row lock of one running row inside an open transaction (the
+ * window a heartbeat / claim UPDATE holds it for), until `release()`; the
+ * holder then runs `then` in the same transaction before committing.
+ */
+async function holdRowLock(
+  id: string,
+  then: (tx: DatabaseClient) => Promise<void> = async () => undefined,
+) {
+  let release: () => void = () => undefined
+  const released = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  let locked: () => void = () => undefined
+  const hasLock = new Promise<void>((resolve) => {
+    locked = resolve
+  })
+  const done = db.transaction(async (tx) => {
+    // A second UPDATE of a row this tx already updated re-runs the FK checks;
+    // the seeded workspace does not exist.
+    await tx.execute(sql`SET LOCAL session_replication_role = replica`)
+    expect(
+      await smartDelayService.heartbeatClaim({ tx, id, generation: 1 }),
+    ).toBe(true)
+    locked()
+    await released
+    await then(tx)
+  })
+  await hasLock
+  return { release, done }
+}
+
+function cancelWorkspace(workspaceId: string, batchSize: number) {
+  return runSmartDelayCancelLoop({
+    workspaceId,
+    batchSize,
+    maxBatches: 50,
+    logLabel: "s202-test",
+    fetchBatch: (limit) =>
+      smartDelayService.cancelActiveForWorkspace({ workspaceId, limit }),
+  })
+}
+
+describe.skipIf(!databaseUrl)("smart delay cancel vs a held row lock", () => {
+  test("workspace cancel waits for a heartbeat's lock instead of skipping the row", async () => {
+    const workspaceId = mintId()
+    const locked = await insertRow({
+      status: "running",
+      claimGeneration: 1,
+      workspaceId,
+    })
+    const others = [
+      await insertRow({ status: "running", claimGeneration: 1, workspaceId }),
+      await insertRow({ status: "pending", workspaceId }),
+      await insertRow({ status: "scheduled", workspaceId }),
+    ]
+    const holder = await holdRowLock(locked)
+
+    let settled = false
+    const cancel = cancelWorkspace(workspaceId, 10).finally(() => {
+      settled = true
+    })
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    // Parked on the heartbeat's row lock, not done with the row skipped.
+    const settledWhileLocked = settled
+    holder.release()
+    await holder.done
+    expect(settledWhileLocked).toBe(false)
+    expect(await cancel).toBe(4)
+    expect(await statusesOf([locked, ...others])).toEqual([
+      "canceled",
+      "canceled",
+      "canceled",
+      "canceled",
+    ])
+    // The in-flight run cannot finish (or continue) a canceled row.
+    expect(
+      await smartDelayService.heartbeatClaim({ id: locked, generation: 1 }),
+    ).toBe(false)
+    expect(
+      await smartDelayService.finishClaimedRun({ id: locked, generation: 1 }),
+    ).toBe(false)
+  })
+
+  test("company-stop cancel (contact join) waits for the lock too", async () => {
+    const workspaceId = mintId()
+    const contactId = mintId()
+    const contactInboxId = await insertContactInbox(contactId)
+    const locked = await insertRow({
+      status: "running",
+      claimGeneration: 1,
+      workspaceId,
+      contactInboxId,
+    })
+    const other = await insertRow({
+      status: "pending",
+      workspaceId,
+      contactInboxId,
+    })
+    // Another contact's row in the same workspace is left alone.
+    const bystander = await insertRow({
+      status: "pending",
+      workspaceId,
+      contactInboxId: await insertContactInbox(mintId()),
+    })
+    const holder = await holdRowLock(locked)
+
+    const cancel = runSmartDelayCancelLoop({
+      workspaceId,
+      batchSize: 10,
+      maxBatches: 50,
+      logLabel: "s202-test",
+      fetchBatch: (limit) =>
+        smartDelayService.cancelActiveForContacts({
+          workspaceId,
+          contactIds: [contactId],
+          limit,
+        }),
+    })
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    holder.release()
+    await holder.done
+    expect(await cancel).toBe(2)
+    expect(await statusesOf([locked, other, bystander])).toEqual([
+      "canceled",
+      "canceled",
+      "pending",
+    ])
+  })
+
+  test("a batch cut short by a row that finished under the lock does not end the loop", async () => {
+    const workspaceId = mintId()
+    // Earliest triggerAt: the first batch waits on it, then drops it when the
+    // holder commits `completed` (READ COMMITTED re-check of the status filter).
+    const finishing = await insertRow({
+      status: "running",
+      claimGeneration: 1,
+      workspaceId,
+    })
+    const rest = [
+      await insertRow({ status: "pending", workspaceId }),
+      await insertRow({ status: "pending", workspaceId }),
+      await insertRow({ status: "pending", workspaceId }),
+    ]
+    const holder = await holdRowLock(finishing, async (tx) => {
+      expect(
+        await smartDelayService.finishClaimedRun({
+          tx,
+          id: finishing,
+          generation: 1,
+        }),
+      ).toBe(true)
+    })
+
+    const cancel = cancelWorkspace(workspaceId, 2)
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    holder.release()
+    await holder.done
+    expect(await cancel).toBe(3)
+    expect(await statusesOf([finishing, ...rest])).toEqual([
+      "completed",
+      "canceled",
+      "canceled",
+      "canceled",
+    ])
+  })
+
+  test("two cancel loops on one workspace never deadlock and cancel every row once (30 rounds)", async () => {
+    for (let round = 0; round < 30; round++) {
+      const workspaceId = mintId()
+      const ids: string[] = []
+      for (let i = 0; i < 12; i++) {
+        ids.push(
+          await insertRow({
+            status: i % 3 === 0 ? "running" : "pending",
+            claimGeneration: 1,
+            workspaceId,
+          }),
+        )
+      }
+      const [a, b] = await Promise.all([
+        cancelWorkspace(workspaceId, 5),
+        cancelWorkspace(workspaceId, 5),
+      ])
+      expect(a + b, `round ${round}`).toBe(12)
+      expect(new Set(await statusesOf(ids))).toEqual(new Set(["canceled"]))
+    }
   })
 })
