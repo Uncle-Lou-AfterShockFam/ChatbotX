@@ -12,6 +12,7 @@ import { describe, expect, test } from "vitest"
  */
 const ROOT = "src/features"
 const CALL = /format\.dateTime\(\s*[\w.?]*dueAt\b[^)]*\)/g
+const UTC_ZONE = /timeZone:\s*"UTC"/
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -36,6 +37,6 @@ describe("due dates are formatted in UTC", () => {
   })
 
   test.each(calls.map((c) => [c.path, c.call]))("%s", (_path, call) => {
-    expect(call).toMatch(/timeZone:\s*"UTC"/)
+    expect(call).toMatch(UTC_ZONE)
   })
 })
