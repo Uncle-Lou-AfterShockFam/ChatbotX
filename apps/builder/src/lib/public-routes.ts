@@ -10,6 +10,8 @@ export const PUBLIC_ROUTES = [
   "/l",
   // Tracked short links texted to contacts (`/go/[token]`).
   "/go",
+  // Generated contact documents (`/f/[token]`, roadmap B3).
+  "/f",
   "/dynamic-images",
   "/minigames",
   "/auth",
