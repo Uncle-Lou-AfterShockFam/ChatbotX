@@ -1,9 +1,14 @@
 "use client"
 
 import { Badge } from "@chatbotx.io/ui/components/ui/badge"
-import { CalendarIcon, UserIcon } from "lucide-react"
+import {
+  CalendarIcon,
+  ListTodoIcon,
+  MessageSquareIcon,
+  UserIcon,
+} from "lucide-react"
 import { useFormatter, useTranslations } from "next-intl"
-import type { DealResource } from "./schema/resource"
+import type { BoardDealResource, DealResource } from "./schema/resource"
 
 export function formatDealValue(
   value: string | null,
@@ -43,7 +48,7 @@ export function DealCardContent({
   deal,
   ownerName,
 }: {
-  deal: DealResource
+  deal: DealResource & Partial<DealCardCounts>
   ownerName?: string | null
 }) {
   const t = useTranslations()
@@ -89,7 +94,56 @@ export function DealCardContent({
             {ownerName}
           </span>
         ) : null}
+        <DealCountChips deal={deal} />
       </div>
     </div>
+  )
+}
+
+type DealCardCounts = Pick<
+  BoardDealResource,
+  "openTaskCount" | "overdueTaskCount" | "commentCount"
+>
+
+/** Open tasks (red when any is overdue) and comments; a zero count shows nothing (s198). */
+function DealCountChips({ deal }: { deal: Partial<DealCardCounts> }) {
+  const t = useTranslations()
+  const open = deal.openTaskCount ?? 0
+  const overdue = deal.overdueTaskCount ?? 0
+  const comments = deal.commentCount ?? 0
+  const tasksLabel =
+    overdue > 0
+      ? t("deals.card.tasksOverdue", { count: open, overdue })
+      : t("deals.card.tasks", { count: open })
+  const commentsLabel = t("deals.card.comments", { count: comments })
+  return (
+    <>
+      {open > 0 ? (
+        <span
+          className={
+            overdue > 0
+              ? "inline-flex items-center gap-1 font-medium text-destructive"
+              : "inline-flex items-center gap-1"
+          }
+          data-testid={overdue > 0 ? "deal-tasks-overdue" : "deal-tasks"}
+          title={tasksLabel}
+        >
+          <ListTodoIcon aria-hidden className="size-3" />
+          <span aria-hidden>{open}</span>
+          <span className="sr-only">{tasksLabel}</span>
+        </span>
+      ) : null}
+      {comments > 0 ? (
+        <span
+          className="inline-flex items-center gap-1"
+          data-testid="deal-comments"
+          title={commentsLabel}
+        >
+          <MessageSquareIcon aria-hidden className="size-3" />
+          <span aria-hidden>{comments}</span>
+          <span className="sr-only">{commentsLabel}</span>
+        </span>
+      ) : null}
+    </>
   )
 }
