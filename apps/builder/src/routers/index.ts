@@ -75,6 +75,11 @@ export const router = {
       default: m.dealsAPI,
     })),
   ),
+  documentsAPI: lazy(() =>
+    import("@/features/documents/api").then((m) => ({
+      default: m.documentsAPI,
+    })),
+  ),
   dealTasksAPI: lazy(() =>
     import("@/features/deal-tasks/api").then((m) => ({
       default: m.dealTasksAPI,

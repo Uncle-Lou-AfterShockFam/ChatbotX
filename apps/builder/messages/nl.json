@@ -6957,7 +6957,8 @@
       "timeline": "Timeline",
       "contacts": "Contacts",
       "activity": "Change log",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "documents": "Documenten"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7037,6 +7038,47 @@
     "changeCompany": "Change company",
     "noCompany": "No company",
     "deleteNote": "Delete note"
+  },
+  "documents": {
+    "title": "Documenten",
+    "newTemplate": "Nieuwe sjabloon",
+    "showArchived": "Gearchiveerde tonen",
+    "noTemplates": "Nog geen documentsjablonen",
+    "archived": "Gearchiveerd",
+    "pickOrCreate": "Kies links een sjabloon of maak een nieuwe.",
+    "name": "Naam",
+    "namePlaceholder": "Toestemmingsformulier",
+    "saved": "Sjabloon opgeslagen",
+    "deleteTitle": "Deze sjabloon verwijderen?",
+    "deleteConfirm": "Documenten die er al mee zijn gemaakt, blijven bewaard.",
+    "editorPlaceholder": "Schrijf het document. Gebruik Veld invoegen om contactgegevens toe te voegen.",
+    "insertField": "Veld invoegen",
+    "insertSignature": "Handtekeningblok",
+    "signatureHint": "Het handtekeningblok geeft aan waar het contact tekent wanneer het document ter ondertekening wordt verstuurd.",
+    "signatureLabel": "Handtekening",
+    "dateSignedLabel": "Datum",
+    "toolbar": {
+      "bold": "Vet",
+      "italic": "Cursief",
+      "heading1": "Kop 1",
+      "heading2": "Kop 2",
+      "bulletList": "Opsommingslijst",
+      "orderedList": "Genummerde lijst"
+    },
+    "status": {
+      "generated": "Gemaakt",
+      "sent": "Verzonden",
+      "signed": "Ondertekend",
+      "failed": "Mislukt"
+    },
+    "contact": {
+      "selectTemplate": "Kies een sjabloon",
+      "noTemplates": "Maak eerst een documentsjabloon in Instellingen > Documenten.",
+      "empty": "Nog geen documenten voor dit contact",
+      "generated": "Document gemaakt",
+      "linkExpires": "Link geldig tot {date}",
+      "open": "PDF openen"
+    }
   },
   "tasks": {
     "calendar": {

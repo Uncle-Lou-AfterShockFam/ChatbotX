@@ -281,4 +281,8 @@ export type DealTaskTemplateModel =
 export type DealDependencyModel = typeof schema.dealDependencyModel.$inferSelect
 export type DealTaskTemplateDependencyModel =
   typeof schema.dealTaskTemplateDependencyModel.$inferSelect
+export type DocumentTemplateModel =
+  typeof schema.documentTemplateModel.$inferSelect
+export type ContactDocumentModel =
+  typeof schema.contactDocumentModel.$inferSelect
 export type NotificationModel = typeof schema.notificationModel.$inferSelect

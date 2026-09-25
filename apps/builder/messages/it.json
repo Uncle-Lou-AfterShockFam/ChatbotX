@@ -6957,7 +6957,8 @@
       "timeline": "Timeline",
       "contacts": "Contacts",
       "activity": "Change log",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "documents": "Documenti"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7037,6 +7038,47 @@
     "changeCompany": "Change company",
     "noCompany": "No company",
     "deleteNote": "Delete note"
+  },
+  "documents": {
+    "title": "Documenti",
+    "newTemplate": "Nuovo modello",
+    "showArchived": "Mostra archiviati",
+    "noTemplates": "Nessun modello di documento",
+    "archived": "Archiviato",
+    "pickOrCreate": "Scegli un modello a sinistra o creane uno nuovo.",
+    "name": "Nome",
+    "namePlaceholder": "Modulo di consenso",
+    "saved": "Modello salvato",
+    "deleteTitle": "Eliminare questo modello?",
+    "deleteConfirm": "I documenti già generati da esso vengono conservati.",
+    "editorPlaceholder": "Scrivi il documento. Usa Inserisci campo per aggiungere i dati del contatto.",
+    "insertField": "Inserisci campo",
+    "insertSignature": "Blocco firma",
+    "signatureHint": "Il blocco firma indica dove firma il contatto quando il documento viene inviato per la firma.",
+    "signatureLabel": "Firma",
+    "dateSignedLabel": "Data",
+    "toolbar": {
+      "bold": "Grassetto",
+      "italic": "Corsivo",
+      "heading1": "Titolo 1",
+      "heading2": "Titolo 2",
+      "bulletList": "Elenco puntato",
+      "orderedList": "Elenco numerato"
+    },
+    "status": {
+      "generated": "Generato",
+      "sent": "Inviato",
+      "signed": "Firmato",
+      "failed": "Non riuscito"
+    },
+    "contact": {
+      "selectTemplate": "Scegli un modello",
+      "noTemplates": "Crea prima un modello di documento in Impostazioni > Documenti.",
+      "empty": "Nessun documento per questo contatto",
+      "generated": "Documento generato",
+      "linkExpires": "Link valido fino al {date}",
+      "open": "Apri PDF"
+    }
   },
   "tasks": {
     "calendar": {

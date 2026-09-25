@@ -6957,7 +6957,8 @@
       "timeline": "Timeline",
       "contacts": "Contacts",
       "activity": "Change log",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "documents": "Dokumen"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7037,6 +7038,47 @@
     "changeCompany": "Change company",
     "noCompany": "No company",
     "deleteNote": "Delete note"
+  },
+  "documents": {
+    "title": "Dokumen",
+    "newTemplate": "Template baru",
+    "showArchived": "Tampilkan yang diarsipkan",
+    "noTemplates": "Belum ada template dokumen",
+    "archived": "Diarsipkan",
+    "pickOrCreate": "Pilih template di kiri atau buat yang baru.",
+    "name": "Nama",
+    "namePlaceholder": "Formulir persetujuan",
+    "saved": "Template disimpan",
+    "deleteTitle": "Hapus template ini?",
+    "deleteConfirm": "Dokumen yang sudah dibuat darinya tetap disimpan.",
+    "editorPlaceholder": "Tulis dokumen. Gunakan Sisipkan kolom untuk menambahkan data kontak.",
+    "insertField": "Sisipkan kolom",
+    "insertSignature": "Blok tanda tangan",
+    "signatureHint": "Blok tanda tangan menandai tempat kontak menandatangani saat dokumen dikirim untuk ditandatangani.",
+    "signatureLabel": "Tanda tangan",
+    "dateSignedLabel": "Tanggal",
+    "toolbar": {
+      "bold": "Tebal",
+      "italic": "Miring",
+      "heading1": "Judul 1",
+      "heading2": "Judul 2",
+      "bulletList": "Daftar berpoin",
+      "orderedList": "Daftar bernomor"
+    },
+    "status": {
+      "generated": "Dibuat",
+      "sent": "Terkirim",
+      "signed": "Ditandatangani",
+      "failed": "Gagal"
+    },
+    "contact": {
+      "selectTemplate": "Pilih template",
+      "noTemplates": "Buat template dokumen terlebih dahulu di Pengaturan > Dokumen.",
+      "empty": "Belum ada dokumen untuk kontak ini",
+      "generated": "Dokumen dibuat",
+      "linkExpires": "Tautan berlaku hingga {date}",
+      "open": "Buka PDF"
+    }
   },
   "tasks": {
     "calendar": {

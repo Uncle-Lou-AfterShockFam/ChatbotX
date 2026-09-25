@@ -48,6 +48,7 @@ import {
 } from "@/features/crm/provider/crm-hooks"
 import type { TimelineKind } from "@/features/crm/schema/resource"
 import { namesById } from "@/features/deals/lib/names-by-id"
+import { ContactDocumentsTab } from "@/features/documents/contact-documents-tab"
 import { SequenceStoreProvider } from "@/features/sequences/provider/sequence-store-context"
 import type { TagResource } from "@/features/tags/schema/resource"
 import { client } from "@/lib/orpc/orpc"
@@ -203,6 +204,7 @@ export function ContactView({
                 "submissions",
                 "notes",
                 "appointments",
+                "documents",
                 "timeline",
               ] as const
             ).map((tab) => (
@@ -314,6 +316,13 @@ export function ContactView({
 
           <TabsContent className="pt-3" value="appointments">
             <AppointmentsTab contactId={contactId} workspaceId={workspaceId} />
+          </TabsContent>
+
+          <TabsContent className="pt-3" value="documents">
+            <ContactDocumentsTab
+              contactId={contactId}
+              workspaceId={workspaceId}
+            />
           </TabsContent>
 
           <TabsContent className="pt-3" value="timeline">
