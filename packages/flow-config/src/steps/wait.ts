@@ -115,16 +115,12 @@ export const waitStepSchema = z
           .default(""),
         timeoutValue: z.coerce.number().int().min(1).max(MAX_DELAY).default(1),
         timeoutUnit: waitStepDelayUnits.default(waitStepDelayUnits.enum.days),
-        // success = the event landed, skip = timed out
-        states: z
-          .tuple([successStateSchema, skipStateSchema])
-          .default(
-            () =>
-              [successStateDefaultFn(), skipStateDefaultFn()] as [
-                SuccessStateSchema,
-                SkipStateSchema,
-              ],
-          ),
+        // success = the event landed, skip = timed out. Required, like every
+        // other step: the node's defaultFn (delayTypeEventDefaultFn) mints the
+        // state ids at creation. A schema-level default that called createId()
+        // made every OpenAPI generation mint a new snowflake (non-deterministic
+        // public-spec ETag, "Clock moved backwards" under fake timers).
+        states: z.tuple([successStateSchema, skipStateSchema]),
       }),
     ]),
   )

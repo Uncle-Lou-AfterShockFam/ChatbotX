@@ -23,6 +23,7 @@ export type ApiRateLimitScope =
   | "channel-api-rate-limit"
   | "workspace-token-rate-limit"
   | "workspace-token-preauth-rate-limit"
+  | "documenso-webhook-rate-limit"
 
 type ApiRateLimitInput = {
   scope: ApiRateLimitScope

@@ -116,8 +116,12 @@ vi.mock("@chatbotx.io/utils", async (importOriginal) => ({
 }))
 
 import {
-  CONTACT_DOCUMENT_TOKEN_LENGTH,
   contactDocumentPath,
+  contactDocumentsPrefix,
+  workspaceDocumentsPrefix,
+} from "../src/documents/paths"
+import {
+  CONTACT_DOCUMENT_TOKEN_LENGTH,
   documentService,
   isContactDocumentToken,
   mintContactDocumentToken,
@@ -384,6 +388,25 @@ describe("documentService templates + download", () => {
     expect(contactDocumentPath("1", "2", "3")).toBe(
       "workspaces/1/documents/2/3.pdf",
     )
+  })
+
+  test("the purge prefixes are exact parents of the object key, so a prefix delete cannot reach a sibling contact or workspace", () => {
+    const key = contactDocumentPath("1", "2", "3")
+    expect(contactDocumentsPrefix("1", "2")).toBe("workspaces/1/documents/2/")
+    expect(workspaceDocumentsPrefix("1")).toBe("workspaces/1/documents/")
+    expect(key.startsWith(contactDocumentsPrefix("1", "2"))).toBe(true)
+    expect(key.startsWith(workspaceDocumentsPrefix("1"))).toBe(true)
+    // "2" must not match contact "21"; "1" must not match workspace "12".
+    expect(
+      contactDocumentPath("1", "21", "3").startsWith(
+        contactDocumentsPrefix("1", "2"),
+      ),
+    ).toBe(false)
+    expect(
+      contactDocumentPath("12", "2", "3").startsWith(
+        workspaceDocumentsPrefix("1"),
+      ),
+    ).toBe(false)
   })
 })
 

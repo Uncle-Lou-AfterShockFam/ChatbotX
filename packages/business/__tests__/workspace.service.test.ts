@@ -16,9 +16,12 @@ const update = vi.fn(() => ({ set: setUpdate }))
 const findFirstUser = vi.fn(async () => ({ tenantId: "1" }))
 const findFirstWorkspace = vi.fn(async () => ({ name: "Old Name" }))
 const countWorkspaces = vi.fn(async () => 0)
+const whereDelete = vi.fn(async () => undefined)
+const deleteRow = vi.fn(() => ({ where: whereDelete }))
 const db = {
   insert,
   update,
+  delete: deleteRow,
   $count: countWorkspaces,
   query: {
     userModel: { findFirst: findFirstUser },
@@ -103,6 +106,23 @@ vi.mock("@chatbotx.io/analytics", () => ({ macRepository, anchoredPeriod }))
 
 const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
 vi.mock("../src/logger", () => ({ logger }))
+
+const deleteByPrefix = vi.fn(async () => ({ deleted: 0 }))
+class PrefixPurgeError extends Error {}
+vi.mock("@chatbotx.io/filesystem", () => ({
+  PrefixPurgeError,
+  uploader: { deleteByPrefix },
+}))
+
+const workspaceLifecycleService = {
+  freezeWorkspaceRuntime: vi.fn(async () => undefined),
+  disconnectWorkspaceIntegrations: vi.fn(async () => undefined),
+  disconnectWorkspaceChannels: vi.fn(async () => undefined),
+  purgeWorkspaceHeavyData: vi.fn(async () => undefined),
+}
+vi.mock("../src/workspace-lifecycle/service", () => ({
+  workspaceLifecycleService,
+}))
 
 const dispatchAuditRecord = vi.fn()
 vi.mock("../src/audit/dispatcher", () => ({ dispatchAuditRecord }))
@@ -333,3 +353,57 @@ describe("WorkspaceService.update — member cache invalidation", () => {
 
 // Token-creation auditing moved with the write: see
 // workspace-api-token.service.test.ts (workspaceApiTokenService.createToken).
+
+describe("WorkspaceService.teardownDueWorkspace — contact document files", () => {
+  const teardown = (
+    workspaceService as unknown as {
+      teardownDueWorkspace: (w: {
+        id: string
+        ownerId: string
+        tenantId: string
+      }) => Promise<unknown>
+    }
+  ).teardownDueWorkspace.bind(workspaceService)
+  const due = { id: "ws-9", ownerId: "user-1", tenantId: "1" }
+
+  beforeEach(() => {
+    deleteByPrefix.mockReset().mockResolvedValue({ deleted: 0 })
+    deleteRow.mockClear()
+    whereDelete.mockClear()
+    logger.warn.mockClear()
+  })
+
+  test("purges the workspace's documents prefix after the heavy-data drain and before the row delete", async () => {
+    const order: string[] = []
+    workspaceLifecycleService.purgeWorkspaceHeavyData.mockImplementation(() => {
+      order.push("heavy")
+      return Promise.resolve()
+    })
+    deleteByPrefix.mockImplementation((prefix: string) => {
+      order.push(`purge:${prefix}`)
+      return Promise.resolve({ deleted: 4 })
+    })
+    whereDelete.mockImplementation(() => {
+      order.push("row")
+      return Promise.resolve()
+    })
+
+    await expect(teardown(due)).resolves.toEqual(due)
+    expect(order).toEqual(["heavy", "purge:workspaces/ws-9/documents/", "row"])
+    expect(deleteByPrefix).toHaveBeenCalledWith(
+      "workspaces/ws-9/documents/",
+      {},
+    )
+  })
+
+  test("a storage failure is logged and the workspace row is still deleted", async () => {
+    const err = new Error("S3 unreachable")
+    deleteByPrefix.mockRejectedValue(err)
+    await expect(teardown(due)).resolves.toEqual(due)
+    expect(deleteRow).toHaveBeenCalledTimes(1)
+    expect(logger.warn).toHaveBeenCalledWith(
+      { workspaceId: "ws-9", prefix: "workspaces/ws-9/documents/", err },
+      "workspace-purge: failed to purge storage objects under prefix",
+    )
+  })
+})

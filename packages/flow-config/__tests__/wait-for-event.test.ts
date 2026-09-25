@@ -27,11 +27,12 @@ describe("wait step: event delay type", () => {
     vi.useRealTimers()
   })
 
-  test("defaults every field so an old saved graph still parses", () => {
+  test("defaults every field but the states so an old saved graph still parses", () => {
     const parsed = waitStepSchema.safeParse({
       ...base,
       delayType: "event",
       tagId: "tag-1",
+      states: delayTypeEventDefaultFn().states,
     })
     expect(parsed.success).toBe(true)
     if (!parsed.success || parsed.data.delayType !== "event") {
@@ -41,6 +42,21 @@ describe("wait step: event delay type", () => {
     expect(parsed.data.timeoutValue).toBe(1)
     expect(parsed.data.timeoutUnit).toBe(waitStepDelayUnits.enum.days)
     expect(parsed.data.states.map((s) => s.stateType)).toEqual([
+      stateTypes.success,
+      stateTypes.skip,
+    ])
+  })
+
+  test("the states are REQUIRED (no schema default): the node defaultFn mints them", () => {
+    // A schema default calling createId() made the OpenAPI document (and its
+    // ETag) differ on every generation; the ids belong to node creation.
+    const parsed = waitStepSchema.safeParse({
+      ...base,
+      delayType: "event",
+      tagId: "tag-1",
+    })
+    expect(parsed.success).toBe(false)
+    expect(delayTypeEventDefaultFn().states.map((s) => s.stateType)).toEqual([
       stateTypes.success,
       stateTypes.skip,
     ])
@@ -145,6 +161,7 @@ describe("wait step: event matchValue", () => {
       delayType: "event",
       eventType: "customFieldChanged",
       customFieldId: "cf-1",
+      states: delayTypeEventDefaultFn().states,
     })
     if (parsed.delayType !== "event") {
       throw new Error("unreachable")

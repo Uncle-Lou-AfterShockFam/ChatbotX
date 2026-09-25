@@ -1,5 +1,6 @@
 export * from "./documenso"
 export * from "./gotenberg"
 export * from "./html"
+export * from "./paths"
 export * from "./service"
 export * from "./signing"
