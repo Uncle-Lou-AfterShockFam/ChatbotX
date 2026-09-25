@@ -61,6 +61,11 @@ export async function runSmartDelayCancelLoop(props: {
   for (let attempt = 0; ; attempt += 1) {
     while (batches < maxBatches) {
       const rows = await fetchBatch(batchSize)
+      if (rows.length === 0) {
+        // Nothing takeable (skipped rows are locked): the retry budget, not
+        // the batch cap, bounds these fetches.
+        break
+      }
       batches += 1
       canceled += rows.length
       await removeJobs(rows, workspaceId, logLabel)

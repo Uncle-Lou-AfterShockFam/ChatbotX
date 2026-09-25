@@ -542,6 +542,32 @@ describe.skipIf(!databaseUrl)("smart delay cancel vs a held row lock", () => {
     expect(await statusesOf(ids)).toEqual(["canceled", "canceled", "pending"])
   })
 
+  test("retries after a skipped row do not use up the batch cap", async () => {
+    const workspaceId = mintId()
+    const locked = await insertRow({
+      status: "running",
+      claimGeneration: 1,
+      workspaceId,
+    })
+    const rest = [
+      await insertRow({ status: "pending", workspaceId }),
+      await insertRow({ status: "pending", workspaceId }),
+    ]
+    const holder = await holdRowLock(locked)
+    // Batch 1 takes the two free rows (full), the next fetch is empty: with a
+    // cap of 2 an empty fetch must not count, or this throws batch-cap.
+    const cancel = cancelWorkspace(workspaceId, 2, 2)
+    await new Promise((resolve) => setTimeout(resolve, 120))
+    holder.release()
+    await holder.done
+    expect(await cancel).toBe(3)
+    expect(await statusesOf([locked, ...rest])).toEqual([
+      "canceled",
+      "canceled",
+      "canceled",
+    ])
+  })
+
   test("two cancel loops on one workspace never deadlock and cancel every row once (30 rounds)", async () => {
     for (let round = 0; round < 30; round++) {
       const workspaceId = mintId()

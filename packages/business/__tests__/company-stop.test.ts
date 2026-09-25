@@ -322,6 +322,7 @@ describe("stopCompany", () => {
     expect(result).toMatchObject({
       status: "partial",
       failedPhases: ["smart-delays"],
+      smartDelaysCanceled: 1,
       tagId: "tag-stopped",
     })
   })

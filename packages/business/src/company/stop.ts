@@ -23,7 +23,10 @@ import { broadcastService } from "../broadcast/service"
 import { contactSequenceService } from "../contact-sequence/service"
 import { notFoundException } from "../errors"
 import { logger } from "../logger"
-import { runSmartDelayCancelLoop } from "../smart-delay/cancel-loop"
+import {
+  runSmartDelayCancelLoop,
+  SmartDelayCancelIncompleteError,
+} from "../smart-delay/cancel-loop"
 import { smartDelayService } from "../smart-delay/service"
 import { tagService } from "../tag/service"
 import { companyActivityService } from "./activity"
@@ -211,6 +214,7 @@ async function phase<T>(
   props: { workspaceId: string; companyId: string; failed: CompanyStopPhase[] },
   run: () => Promise<T>,
   fallback: T,
+  recover: (error: unknown) => T = () => fallback,
 ): Promise<T> {
   try {
     return await run()
@@ -225,7 +229,7 @@ async function phase<T>(
       "company-stop: cascade phase failed",
     )
     props.failed.push(name)
-    return fallback
+    return recover(error)
   }
 }
 
@@ -272,6 +276,9 @@ export async function stopCompany(props: {
     ctx,
     () => cancelSmartDelays({ workspaceId, contactIds }),
     0,
+    // Rows it did cancel before giving up still count.
+    (error) =>
+      error instanceof SmartDelayCancelIncompleteError ? error.canceled : 0,
   )
   const broadcastRowsFailed = await phase(
     "broadcasts",
