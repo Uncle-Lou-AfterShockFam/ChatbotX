@@ -44,6 +44,26 @@ const toSmartDelayRow = (
   type: smartDelayTypes.parse(row.type),
 })
 
+// running too: a freeze / stop must also cancel a claimed row, or the
+// stuck-running sweep would later resurrect it for a stopped contact. The
+// in-flight run's claimCheck / finishClaimedRun CAS then just fails.
+const activeInWorkspace = (workspaceId: string) =>
+  and(
+    eq(contactOnSmartDelayModel.workspaceId, workspaceId),
+    inArray(contactOnSmartDelayModel.status, [
+      smartDelayStatuses.enum.pending,
+      smartDelayStatuses.enum.scheduled,
+      smartDelayStatuses.enum.running,
+    ]),
+  )
+
+/** Needs the `ContactInbox` join on `contactInboxId`. */
+const activeForContacts = (workspaceId: string, contactIds: string[]) =>
+  and(
+    activeInWorkspace(workspaceId),
+    inArray(contactInboxModel.contactId, contactIds),
+  )
+
 /** Claims a resume may take (initial + retries + recoveries) before the row is `failed`. */
 export const MAX_RESUME_CLAIMS = 3
 
@@ -588,9 +608,12 @@ class SmartDelayService extends BaseService {
    * it to `pending` and re-enqueue it on the next tick. `resetToPending` uses a
    * `status = 'scheduled'` CAS, so a `canceled` row can never be resurrected.
    *
-   * Bounded + SKIP LOCKED for the same reason as `claimDueRows`: this table can
-   * hold hundreds of thousands of rows per workspace, and a concurrent scanner
-   * run must not be blocked by the teardown.
+   * Bounded + SKIP LOCKED: this table can hold hundreds of thousands of rows
+   * per workspace, and a cancel that WAITS on row locks deadlocks against the
+   * stuck-row sweeps and the contact-delete cascade (they lock in a different
+   * order) and has no bound on a request path. A skipped row is still a
+   * missed stop, so `runSmartDelayCancelLoop` re-checks with
+   * `hasActiveForWorkspace` and retries the rows it stepped over.
    */
   async cancelActiveForWorkspace(props: {
     tx?: DatabaseClient
@@ -601,19 +624,7 @@ class SmartDelayService extends BaseService {
     const activeRowIds = tx
       .select({ id: contactOnSmartDelayModel.id })
       .from(contactOnSmartDelayModel)
-      .where(
-        and(
-          eq(contactOnSmartDelayModel.workspaceId, workspaceId),
-          // running too: a freeze / stop must also cancel a claimed row, or
-          // the stuck-running sweep would later resurrect it for a stopped
-          // contact. The in-flight run's finishClaimedRun CAS then just fails.
-          inArray(contactOnSmartDelayModel.status, [
-            smartDelayStatuses.enum.pending,
-            smartDelayStatuses.enum.scheduled,
-            smartDelayStatuses.enum.running,
-          ]),
-        ),
-      )
+      .where(activeInWorkspace(workspaceId))
       .orderBy(contactOnSmartDelayModel.triggerAt)
       .limit(limit)
       .for("update", { skipLocked: true })
@@ -628,11 +639,26 @@ class SmartDelayService extends BaseService {
       })
   }
 
+  /** Non-locking: does the workspace still have a firable row (one a cancel skipped)? */
+  async hasActiveForWorkspace(props: {
+    tx?: DatabaseClient
+    workspaceId: string
+  }): Promise<boolean> {
+    const { tx = db, workspaceId } = props
+    const rows = await tx
+      .select({ id: contactOnSmartDelayModel.id })
+      .from(contactOnSmartDelayModel)
+      .where(activeInWorkspace(workspaceId))
+      .limit(1)
+    return rows.length > 0
+  }
+
   /**
    * Company stop: cancel every still-firable row of the given contacts. Same
-   * shape as `cancelActiveForWorkspace` (bounded, SKIP LOCKED, the ROW is what
-   * stops the work); the row stores a contactInbox, so the contact filter goes
-   * through `ContactInbox` exactly as `findActiveWaitForEvent` does.
+   * shape as `cancelActiveForWorkspace` (bounded, SKIP LOCKED + the loop's
+   * re-check, the ROW is what stops the work); the row stores a contactInbox,
+   * so the contact filter goes through `ContactInbox` exactly as
+   * `findActiveWaitForEvent` does.
    */
   async cancelActiveForContacts(props: {
     tx?: DatabaseClient
@@ -651,17 +677,7 @@ class SmartDelayService extends BaseService {
         contactInboxModel,
         eq(contactInboxModel.id, contactOnSmartDelayModel.contactInboxId),
       )
-      .where(
-        and(
-          eq(contactOnSmartDelayModel.workspaceId, workspaceId),
-          inArray(contactOnSmartDelayModel.status, [
-            smartDelayStatuses.enum.pending,
-            smartDelayStatuses.enum.scheduled,
-            smartDelayStatuses.enum.running, // see cancelActiveForWorkspace
-          ]),
-          inArray(contactInboxModel.contactId, contactIds),
-        ),
-      )
+      .where(activeForContacts(workspaceId, contactIds))
       .orderBy(contactOnSmartDelayModel.triggerAt)
       .limit(limit)
       .for("update", { skipLocked: true, of: contactOnSmartDelayModel })
@@ -674,6 +690,28 @@ class SmartDelayService extends BaseService {
         id: contactOnSmartDelayModel.id,
         triggerAt: contactOnSmartDelayModel.triggerAt,
       })
+  }
+
+  /** Non-locking twin of `cancelActiveForContacts`' filter. */
+  async hasActiveForContacts(props: {
+    tx?: DatabaseClient
+    workspaceId: string
+    contactIds: string[]
+  }): Promise<boolean> {
+    const { tx = db, workspaceId, contactIds } = props
+    if (contactIds.length === 0) {
+      return false
+    }
+    const rows = await tx
+      .select({ id: contactOnSmartDelayModel.id })
+      .from(contactOnSmartDelayModel)
+      .innerJoin(
+        contactInboxModel,
+        eq(contactInboxModel.id, contactOnSmartDelayModel.contactInboxId),
+      )
+      .where(activeForContacts(workspaceId, contactIds))
+      .limit(1)
+    return rows.length > 0
   }
 
   private async markStatus(props: {

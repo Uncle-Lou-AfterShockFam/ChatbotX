@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest"
 
 const cancelActiveForWorkspace = vi.fn()
+const hasActiveForWorkspace = vi.fn()
 const queueRemove = vi.fn()
 const loggerWarn = vi.fn()
 
@@ -13,7 +14,7 @@ vi.mock("../src/logger", () => ({
 }))
 
 vi.mock("../src/smart-delay/service", () => ({
-  smartDelayService: { cancelActiveForWorkspace },
+  smartDelayService: { cancelActiveForWorkspace, hasActiveForWorkspace },
 }))
 
 const { cancelSmartDelaysForWorkspace, SMART_DELAY_CANCEL_BATCH_SIZE } =
@@ -29,6 +30,8 @@ describe("cancelSmartDelaysForWorkspace", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     queueRemove.mockResolvedValue(undefined)
+    cancelActiveForWorkspace.mockResolvedValue([])
+    hasActiveForWorkspace.mockResolvedValue(false)
   })
 
   test("cancels nothing and touches no queue when the workspace has no live rows", async () => {
@@ -83,5 +86,27 @@ describe("cancelSmartDelaysForWorkspace", () => {
     await expect(
       cancelSmartDelaysForWorkspace({ workspaceId: "workspace-1" }),
     ).resolves.toBe(1)
+  })
+
+  test("comes back for rows a batch skipped (locked) once the re-check still sees them", async () => {
+    cancelActiveForWorkspace
+      .mockResolvedValueOnce(rowsOfSize(2))
+      .mockResolvedValueOnce(rowsOfSize(1, 2))
+    hasActiveForWorkspace.mockResolvedValueOnce(true)
+
+    await expect(
+      cancelSmartDelaysForWorkspace({ workspaceId: "workspace-1" }),
+    ).resolves.toBe(3)
+    expect(cancelActiveForWorkspace).toHaveBeenCalledTimes(2)
+    expect(hasActiveForWorkspace).toHaveBeenCalledTimes(2)
+  })
+
+  test("throws, never reports done, when rows are still firable after every retry", async () => {
+    cancelActiveForWorkspace.mockResolvedValueOnce(rowsOfSize(1))
+    hasActiveForWorkspace.mockResolvedValue(true)
+
+    await expect(
+      cancelSmartDelaysForWorkspace({ workspaceId: "workspace-1" }),
+    ).rejects.toMatchObject({ reason: "locked-rows", canceled: 1 })
   })
 })

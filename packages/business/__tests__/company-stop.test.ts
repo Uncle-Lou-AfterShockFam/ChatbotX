@@ -9,6 +9,7 @@ const {
   mockListByContactId,
   mockRemoveSequences,
   mockCancelActiveForContacts,
+  mockHasActiveForContacts,
   mockQueueRemove,
   mockMarkBroadcastFailed,
   mockEnsureTag,
@@ -48,6 +49,7 @@ const {
     mockListByContactId: vi.fn(),
     mockRemoveSequences: vi.fn(),
     mockCancelActiveForContacts: vi.fn(),
+    mockHasActiveForContacts: vi.fn(async () => false),
     mockQueueRemove: vi.fn(),
     mockMarkBroadcastFailed: vi.fn(),
     mockEnsureTag: vi.fn(),
@@ -97,7 +99,10 @@ vi.mock("../src/contact-sequence/service", () => ({
   },
 }))
 vi.mock("../src/smart-delay/service", () => ({
-  smartDelayService: { cancelActiveForContacts: mockCancelActiveForContacts },
+  smartDelayService: {
+    cancelActiveForContacts: mockCancelActiveForContacts,
+    hasActiveForContacts: mockHasActiveForContacts,
+  },
 }))
 vi.mock("../src/broadcast/service", () => ({
   broadcastService: { markContactsFailedForContacts: mockMarkBroadcastFailed },
@@ -134,6 +139,7 @@ describe("stopCompany", () => {
     )
     mockRemoveSequences.mockResolvedValue([{ id: "d1" }, { id: "d2" }])
     mockCancelActiveForContacts.mockResolvedValue([])
+    mockHasActiveForContacts.mockResolvedValue(false)
     mockQueueRemove.mockResolvedValue(undefined)
     mockMarkBroadcastFailed.mockResolvedValue(1)
     mockEnsureTag.mockResolvedValue("tag-stopped")
@@ -301,6 +307,24 @@ describe("stopCompany", () => {
       expect.objectContaining({ failedCount: 1 }),
       "company-stop: failed to remove smart-delay jobs",
     )
+  })
+
+  test("rows still firable after the cancel's retries make the stop partial, never stopped", async () => {
+    mockCancelActiveForContacts.mockResolvedValueOnce([
+      { id: "sd-1", triggerAt: new Date(0) },
+    ])
+    mockHasActiveForContacts.mockResolvedValue(true)
+    const result = await stopCompany({
+      workspaceId: WS,
+      companyId: COMPANY,
+      reason: "api",
+    })
+    expect(result).toMatchObject({
+      status: "partial",
+      failedPhases: ["smart-delays"],
+      smartDelaysCanceled: 1,
+      tagId: "tag-stopped",
+    })
   })
 
   test("a company with no contacts stops with zero counts and no tag attach", async () => {
