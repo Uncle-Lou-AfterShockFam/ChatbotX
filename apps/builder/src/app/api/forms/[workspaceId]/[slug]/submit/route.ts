@@ -5,6 +5,7 @@ import {
 import { ChatbotXException } from "@chatbotx.io/business/errors"
 import { formService, formSubmitService } from "@chatbotx.io/business/form"
 import { FORM_SLUG_REGEX } from "@chatbotx.io/database/partials"
+import { getPublicOriginFromRequest } from "@chatbotx.io/utils"
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { logger } from "@/lib/log"
@@ -139,8 +140,12 @@ export async function POST(req: NextRequest, ctx: Params) {
     if (!form) {
       return json({ ok: false, errors: [] }, 404, closed)
     }
+    // Same-origin = the PUBLIC origin Caddy forwards, never `req.nextUrl`
+    // (that is `builder:3000` behind the proxy: the embedded page's own POST
+    // was a 403 in the live proof, s200).
     const allowed =
       origin === null ||
+      origin === getPublicOriginFromRequest(req) ||
       origin === req.nextUrl.origin ||
       form.settings.embedOrigins.includes(origin)
     const headers = corsHeaders(origin, allowed)
