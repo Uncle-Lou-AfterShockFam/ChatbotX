@@ -236,6 +236,7 @@ class ExternalRequestService extends BaseService {
         workspaceId,
         contactId,
         fields,
+        skipInvalidOptions: true,
       })
     }
 

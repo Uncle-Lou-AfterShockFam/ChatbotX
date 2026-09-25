@@ -192,3 +192,21 @@ describe("stored multiSelect text", () => {
     expect(splitMultiSelectInput("[not json")).toEqual(["[not json"])
   })
 })
+
+describe("display text round-trips (s201 probe)", () => {
+  test("a comma option inside a comma list is re-joined, longest first", () => {
+    const opts = ["Red", "Red, White", "Blue"]
+    expect(canonicalMultiSelectValue("Red, White, Blue", opts)).toEqual({
+      ok: true,
+      value: '["Red, White","Blue"]',
+    })
+    expect(canonicalMultiSelectValue("Blue, Red", opts)).toEqual({
+      ok: true,
+      value: '["Red","Blue"]',
+    })
+    const stored = '["Red, White","Blue"]'
+    expect(
+      canonicalMultiSelectValue(formatMultiSelectText(stored), opts),
+    ).toEqual({ ok: true, value: stored })
+  })
+})

@@ -199,6 +199,24 @@ export const customFieldOptionsIssue = (
     : (parsed.error.issues[0]?.message ?? "Invalid options.")
 }
 
+/** Options textarea text -> option list: one per line, trimmed, blanks dropped. */
+export const optionsFromText = (text: string): string[] =>
+  text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+
+/** zod refine for any object carrying `type` + `options`: the pairing rule. */
+export const refineCustomFieldOptions = (
+  value: { type: string; options?: unknown },
+  ctx: z.RefinementCtx,
+): void => {
+  const issue = customFieldOptionsIssue(value.type, value.options)
+  if (issue) {
+    ctx.addIssue({ code: "custom", path: ["options"], message: issue })
+  }
+}
+
 /** Case-insensitive lookup of the canonical option spelling. */
 const matchOption = (
   raw: string,
@@ -247,7 +265,40 @@ export const splitMultiSelectInput = (
   if (matchOption(trimmed, options) !== undefined) {
     return [trimmed]
   }
-  return trimmed.split(",")
+  return joinCommaOptions(trimmed.split(","), options)
+}
+
+/**
+ * Re-joins comma-split segments that together spell an option holding a
+ * comma, longest match first: "Red, White, Blue" with the option
+ * "Red, White" -> ["Red, White", " Blue"] (the display / CSV text of a
+ * stored multiSelect round-trips). Bounded: at most MAX_CUSTOM_FIELD_OPTIONS
+ * segments are joined (callers cap the item count past that).
+ */
+const joinCommaOptions = (
+  segments: string[],
+  options: readonly string[],
+): string[] => {
+  if (
+    segments.length > MAX_CUSTOM_FIELD_OPTIONS ||
+    !options.some((o) => o.includes(","))
+  ) {
+    return segments
+  }
+  const out: string[] = []
+  let i = 0
+  while (i < segments.length) {
+    let taken = 1
+    for (let j = segments.length; j > i + 1; j--) {
+      if (matchOption(segments.slice(i, j).join(","), options) !== undefined) {
+        taken = j - i
+        break
+      }
+    }
+    out.push(segments.slice(i, i + taken).join(","))
+    i += taken
+  }
+  return out
 }
 
 export type MultiSelectResult =

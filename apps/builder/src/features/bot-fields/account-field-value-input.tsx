@@ -36,18 +36,24 @@ function MultiSelectJsonField(props: { name: string; options: string[] }) {
         const picked = new Set(
           multiSelectItems(typeof field.value === "string" ? field.value : ""),
         )
+        // A stored item the field no longer offers stays visible (checked) so
+        // it can be unchecked; saving it unchanged is refused by the server.
+        const rows = [
+          ...options,
+          ...[...picked].filter((p) => !options.includes(p)),
+        ]
         const toggle = (option: string, checked: boolean) => {
           if (checked) {
             picked.add(option)
           } else {
             picked.delete(option)
           }
-          const ordered = options.filter((o) => picked.has(o))
+          const ordered = rows.filter((o) => picked.has(o))
           field.onChange(ordered.length === 0 ? "" : JSON.stringify(ordered))
         }
         return (
           <div className="flex flex-col gap-2" data-testid="multi-select-value">
-            {options.map((option, index) => {
+            {rows.map((option, index) => {
               const id = `${baseId}-${index}`
               return (
                 <div className="flex min-w-0 items-center gap-2" key={option}>

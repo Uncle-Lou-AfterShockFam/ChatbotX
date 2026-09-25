@@ -2,15 +2,9 @@
 
 import { FormFieldWrapper } from "@chatbotx.io/ui/components/form/field-wrapper"
 import { Textarea } from "@chatbotx.io/ui/components/ui/textarea"
+import { optionsFromText } from "@chatbotx.io/utils/custom-field"
 import { useTranslations } from "next-intl"
 import { useEffect, useState } from "react"
-
-/** Textarea text -> option list: one option per line, blank lines dropped. */
-export const customFieldOptionsFromText = (text: string): string[] =>
-  text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
 
 /**
  * The option list of a select / multi-select custom field (s201), edited as
@@ -54,9 +48,7 @@ function OptionsTextarea(props: {
   // typing keeps parsed text and value equal, so it never clobbers input.
   useEffect(() => {
     setText((current) =>
-      customFieldOptionsFromText(current).join("\n") === joined
-        ? current
-        : joined,
+      optionsFromText(current).join("\n") === joined ? current : joined,
     )
   }, [joined])
   return (
@@ -65,7 +57,7 @@ function OptionsTextarea(props: {
       onBlur={props.onBlur}
       onChange={(e) => {
         setText(e.target.value)
-        props.onChange(customFieldOptionsFromText(e.target.value))
+        props.onChange(optionsFromText(e.target.value))
       }}
       placeholder={t("fields.customFieldOptions.placeholder")}
       rows={5}

@@ -258,6 +258,7 @@ describe("externalRequestService.executeAndMap", () => {
       workspaceId: "workspace-1",
       contactId: "contact-1",
       fields: [{ customFieldId: "field-1", value: "abc-123" }],
+      skipInvalidOptions: true,
     })
   })
 
@@ -321,6 +322,7 @@ describe("externalRequestService.executeAndMap", () => {
         { customFieldId: "field-err", value: "bad-args" },
         { customFieldId: "field-n", value: "3" },
       ],
+      skipInvalidOptions: true,
     })
   })
 

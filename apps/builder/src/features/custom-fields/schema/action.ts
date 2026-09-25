@@ -2,8 +2,8 @@ import { customFieldTypes } from "@chatbotx.io/database/partials"
 import { zodFieldName } from "@chatbotx.io/flow-config"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import {
-  customFieldOptionsIssue,
   customFieldOptionsSchema,
+  refineCustomFieldOptions,
 } from "@chatbotx.io/utils/custom-field"
 import { z } from "zod"
 
@@ -23,23 +23,14 @@ const createCustomFieldObject = z.object({
   description: z.string().nullish().describe("Optional internal description."),
 })
 
-const refineOptionsPairing = (
-  value: { type: string; options?: string[] },
-  ctx: z.RefinementCtx,
-) => {
-  const issue = customFieldOptionsIssue(value.type, value.options)
-  if (issue) {
-    ctx.addIssue({ code: "custom", path: ["options"], message: issue })
-  }
-}
-
-export const createCustomFieldRequest =
-  createCustomFieldObject.superRefine(refineOptionsPairing)
+export const createCustomFieldRequest = createCustomFieldObject.superRefine(
+  refineCustomFieldOptions,
+)
 
 /** The public API's create body: name, type and (for option types) options. */
 export const publicCreateCustomFieldRequest = createCustomFieldObject
   .pick({ name: true, type: true, options: true })
-  .superRefine(refineOptionsPairing)
+  .superRefine(refineCustomFieldOptions)
 export type CreateCustomFieldRequest = z.infer<typeof createCustomFieldRequest>
 
 export const updateCustomFieldRequest = z.object({

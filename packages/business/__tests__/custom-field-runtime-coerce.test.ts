@@ -235,3 +235,28 @@ describe("runtime coercion — select / multiSelect (s201)", () => {
     ).resolves.toBe("Platinum")
   })
 })
+
+describe("import cell validation — option types (s201)", async () => {
+  const { validateCustomFieldValue } = await import(
+    "../src/javascript-execution/custom-field-value"
+  )
+  test("unknown list or unknown option -> skipped (null); a known one is canonical", () => {
+    expect(validateCustomFieldValue("select", "Gold")).toBeNull()
+    expect(validateCustomFieldValue("select", "Gold", null, [])).toBeNull()
+    expect(
+      validateCustomFieldValue("select", "Platinum", null, ["Gold"]),
+    ).toBeNull()
+    expect(validateCustomFieldValue("select", "gold", null, ["Gold"])).toBe(
+      "Gold",
+    )
+    expect(
+      validateCustomFieldValue("multiSelect", "silver, gold", null, [
+        "Gold",
+        "Silver",
+      ]),
+    ).toBe('["Gold","Silver"]')
+    expect(
+      validateCustomFieldValue("multiSelect", "[]", null, ["Gold"]),
+    ).toBeNull()
+  })
+})

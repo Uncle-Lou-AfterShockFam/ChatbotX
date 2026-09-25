@@ -459,6 +459,7 @@ const updateContactCustomFields = async ({
     // Anchor naive values to the workspace clock and skip the contact lookup.
     temporalInputParsing: TemporalInputParsing.Lenient,
     sourceTimezoneStrategy: SourceTimezoneStrategy.Workspace,
+    skipInvalidOptions: true,
   })
 }
 

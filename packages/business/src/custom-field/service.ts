@@ -26,6 +26,7 @@ import {
   customFieldOptionsSchema,
   customFieldResolutionKey,
   isOptionFieldType,
+  MAX_CUSTOM_FIELD_OPTIONS,
 } from "@chatbotx.io/utils/custom-field"
 import { BaseService } from "../base.service"
 import { notFoundException, validationException } from "../errors"
@@ -263,7 +264,7 @@ class CustomFieldService extends BaseService {
 
     const existing = await tx.query.customFieldModel.findMany({
       where: { workspaceId },
-      columns: { id: true, name: true, type: true },
+      columns: { id: true, name: true, type: true, options: true },
     })
     for (const row of existing) {
       remember(row as CustomFieldModel)
@@ -314,6 +315,14 @@ class CustomFieldService extends BaseService {
       }
     }
 
+    await this.addMissingManifestOptions({
+      uniqueFields,
+      byKey,
+      createdIds,
+      workspaceId,
+      tx,
+    })
+
     const idMap = new Map(
       uniqueFields.flatMap((field) => {
         const key = customFieldResolutionKey(field)
@@ -323,6 +332,51 @@ class CustomFieldService extends BaseService {
     )
 
     return { idMap, createdIds }
+  }
+
+  /**
+   * s201: an imported flow / template may set a select field to an option the
+   * workspace's same-named field lacks; ADD the manifest's missing options
+   * (never remove or reorder) so those writes do not fail later. Past the
+   * option cap the field is left as it is.
+   */
+  private async addMissingManifestOptions(props: {
+    uniqueFields: { name: string; type: CustomFieldType; options?: string[] }[]
+    byKey: Map<string, CustomFieldModel>
+    createdIds: string[]
+    workspaceId: string
+    tx: DatabaseClient
+  }): Promise<void> {
+    const created = new Set(props.createdIds)
+    const updated: string[] = []
+    for (const field of props.uniqueFields) {
+      const row = props.byKey.get(customFieldResolutionKey(field))
+      if (
+        !(row && field.options && isOptionFieldType(row.type)) ||
+        created.has(row.id)
+      ) {
+        continue
+      }
+      const current = row.options ?? []
+      const known = new Set(current.map((o) => o.toLowerCase()))
+      const missing = field.options
+        .map((o) => o.trim())
+        .filter((o) => o !== "" && !known.has(o.toLowerCase()))
+      if (
+        missing.length === 0 ||
+        current.length + missing.length > MAX_CUSTOM_FIELD_OPTIONS
+      ) {
+        continue
+      }
+      await props.tx
+        .update(customFieldModel)
+        .set({ options: [...current, ...missing] })
+        .where(eq(customFieldModel.id, row.id))
+      updated.push(row.id)
+    }
+    if (updated.length > 0) {
+      await this.invalidate({ workspaceId: props.workspaceId, ids: updated })
+    }
   }
 
   async create(props: {

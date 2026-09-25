@@ -1,7 +1,7 @@
 import {
-  customFieldOptionsIssue,
   customFieldOptionsSchema,
   customFieldTypes,
+  refineCustomFieldOptions,
 } from "@chatbotx.io/utils/custom-field"
 import { z } from "zod"
 import { refineStepsByChannel } from "../channel-rules/channel-step-refinement"
@@ -25,12 +25,7 @@ export const flowExportCustomFieldSchema = z
     type: customFieldTypes,
     options: customFieldOptionsSchema.optional(),
   })
-  .superRefine((field, ctx) => {
-    const issue = customFieldOptionsIssue(field.type, field.options)
-    if (issue) {
-      ctx.addIssue({ code: "custom", path: ["options"], message: issue })
-    }
-  })
+  .superRefine(refineCustomFieldOptions)
 export type FlowExportCustomField = z.infer<typeof flowExportCustomFieldSchema>
 
 // Mirrors `flowExportCustomFieldSchema` except for `name`: `BotField` is a

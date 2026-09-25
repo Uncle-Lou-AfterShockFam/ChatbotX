@@ -97,10 +97,19 @@ const buildTagManifestEntries = (
   Object.fromEntries(tags.map((tag) => [tag.id, { name: tag.name }]))
 
 const buildCustomFieldManifestEntries = (
-  fields: Pick<CustomFieldModel, "id" | "name" | "type">[],
-): Record<string, { name: string; type: CustomFieldModel["type"] }> =>
+  fields: Pick<CustomFieldModel, "id" | "name" | "type" | "options">[],
+): Record<
+  string,
+  { name: string; type: CustomFieldModel["type"]; options?: string[] }
+> =>
   Object.fromEntries(
-    fields.map((field) => [field.id, { name: field.name, type: field.type }]),
+    fields.map((field) => [
+      field.id,
+      // s201: a select / multiSelect field travels with its option list.
+      field.options
+        ? { name: field.name, type: field.type, options: field.options }
+        : { name: field.name, type: field.type },
+    ]),
   )
 
 /**
@@ -331,7 +340,7 @@ export const buildTemplateSnapshot = async (
       customFieldIds.length > 0
         ? db.query.customFieldModel.findMany({
             where: { workspaceId, id: { in: customFieldIds } },
-            columns: { id: true, name: true, type: true },
+            columns: { id: true, name: true, type: true, options: true },
           })
         : Promise.resolve([]),
     ])

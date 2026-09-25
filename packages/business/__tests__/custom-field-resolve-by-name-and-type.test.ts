@@ -4,6 +4,7 @@ import { afterEach, describe, expect, test, vi } from "vitest"
 
 const {
   mockCreateId,
+  mockUpdateSet,
   mockDb,
   mockFindMany,
   mockInsert,
@@ -19,12 +20,15 @@ const {
   }))
   const mockInsert = vi.fn(() => ({ values: mockInsertValues }))
   const mockFindMany = vi.fn()
+  const mockUpdateSet = vi.fn(() => ({ where: vi.fn(async () => undefined) }))
 
   return {
     mockCreateId: vi.fn(),
+    mockUpdateSet,
     mockDb: {
       query: { customFieldModel: { findMany: mockFindMany } },
       insert: mockInsert,
+      update: vi.fn(() => ({ set: mockUpdateSet })),
     },
     mockFindMany,
     mockInsert,
@@ -466,5 +470,40 @@ describe("customFieldService.resolveByNameAndType case collisions", () => {
         }),
       )
     })
+  })
+
+  test("s201: an existing select field gains the manifest's missing options, never loses any", async () => {
+    mockFindMany.mockResolvedValue([
+      {
+        id: "7",
+        workspaceId: "ws-1",
+        name: "Status",
+        type: "select",
+        options: ["A", "B"],
+      },
+    ])
+    const { createdIds } = await customFieldService.resolveByNameAndType({
+      workspaceId: "ws-1",
+      fields: [{ name: "status", type: "select", options: ["b", "C"] }],
+    })
+    expect(createdIds).toEqual([])
+    expect(mockUpdateSet).toHaveBeenCalledWith({ options: ["A", "B", "C"] })
+  })
+
+  test("s201: no update when the existing field already knows every option", async () => {
+    mockFindMany.mockResolvedValue([
+      {
+        id: "7",
+        workspaceId: "ws-1",
+        name: "Status",
+        type: "select",
+        options: ["A"],
+      },
+    ])
+    await customFieldService.resolveByNameAndType({
+      workspaceId: "ws-1",
+      fields: [{ name: "Status", type: "select", options: ["a"] }],
+    })
+    expect(mockUpdateSet).not.toHaveBeenCalled()
   })
 })

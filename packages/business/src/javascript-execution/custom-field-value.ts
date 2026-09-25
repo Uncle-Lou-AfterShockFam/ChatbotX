@@ -128,6 +128,11 @@ export const validateCustomFieldValue = (
   if (raw.length === 0) {
     return null
   }
+  // An option field whose list is unknown here fails CLOSED: an import cell
+  // may be inserted without passing the storage normalizer again (s201).
+  if ((type === "select" || type === "multiSelect") && !options?.length) {
+    return null
+  }
   const normalized = normalizeCustomFieldValueByType(
     type,
     raw,

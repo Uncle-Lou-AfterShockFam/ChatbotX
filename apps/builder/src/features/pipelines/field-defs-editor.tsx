@@ -19,16 +19,10 @@ import {
 } from "@chatbotx.io/ui/components/ui/select"
 import { Switch } from "@chatbotx.io/ui/components/ui/switch"
 import { Textarea } from "@chatbotx.io/ui/components/ui/textarea"
+import { optionsFromText } from "@chatbotx.io/utils/custom-field"
 import { PlusIcon, TrashIcon } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useRef, useState } from "react"
-
-/** Options textarea text <-> the def's options list (one per line, blanks dropped). */
-export const optionsFromText = (text: string): string[] =>
-  text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
 
 const blankDef = (): DealFieldDef => ({
   key: "",

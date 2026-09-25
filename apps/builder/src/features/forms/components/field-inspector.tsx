@@ -88,15 +88,19 @@ export function FieldInspector(props: {
       label: `${t("forms.editor.mapSystem")}: ${t(`forms.systemKeys.${k}`)}`,
     })),
     ...customFields
-      .filter(
-        (cf) =>
-          MAPPABLE_TYPES.has(cf.type) ||
-          // s201: a select / multiSelect field is offered to a choice field
-          // of matching cardinality; missing options are flagged below.
-          (isOptionFieldType(cf.type) &&
-            formMappingIssue(field, cf)?.reason !== "optionFieldRequired" &&
-            formMappingIssue(field, cf)?.reason !== "cardinalityMismatch"),
-      )
+      .filter((cf) => {
+        if (MAPPABLE_TYPES.has(cf.type)) {
+          return true
+        }
+        // s201: a select / multiSelect field is offered to a choice field of
+        // matching cardinality; missing options are flagged below the picker.
+        const reason = formMappingIssue(field, cf)?.reason
+        return (
+          isOptionFieldType(cf.type) &&
+          reason !== "optionFieldRequired" &&
+          reason !== "cardinalityMismatch"
+        )
+      })
       .map((cf) => ({
         value: `custom:${cf.id}`,
         label: `${t("forms.editor.mapCustom")}: ${cf.name}`,

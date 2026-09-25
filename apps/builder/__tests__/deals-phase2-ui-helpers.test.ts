@@ -1,10 +1,10 @@
+import { optionsFromText } from "@chatbotx.io/utils/custom-field"
 import { describe, expect, test } from "vitest"
 import { isOverdue } from "@/features/deals/deal-card"
 import { describeActivity } from "@/features/deals/deal-drawer/activity-list"
 import { parseFieldInput } from "@/features/deals/deal-field-input"
 import { toDateInput } from "@/features/deals/lib/date-input"
 import type { DealActivityResource } from "@/features/deals/schema/resource"
-import { optionsFromText } from "@/features/pipelines/field-defs-editor"
 
 // next-intl `t` stand-in: "<key>|<json values>" so the assertion sees both.
 const t = ((key: string, values?: Record<string, unknown>) =>

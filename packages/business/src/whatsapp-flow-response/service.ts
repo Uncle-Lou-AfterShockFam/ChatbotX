@@ -77,6 +77,7 @@ class WhatsappFlowResponseService {
       workspaceId: input.workspaceId,
       contactId: input.contactId,
       fields,
+      skipInvalidOptions: true,
     })
   }
 }
