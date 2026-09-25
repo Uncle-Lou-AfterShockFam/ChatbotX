@@ -98,6 +98,7 @@
   "scripts": {
     "check-types": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
+    "test:db": "DATABASE_DEBUG=false vitest run --dir __tests__/integration",
     "test:watch": "vitest"
   }
 }
