@@ -29,11 +29,16 @@ export const waitStepDelayTypes = z.enum([
 /** `event`: park the run until this lands on the contact, or the timeout fires. */
 export const waitStepEventTypes = z.enum(["tagApplied", "customFieldChanged"])
 
+export const MATCH_VALUE_MAX = 500
+
 /** What a parked `waitForEvent` row waits for (stored as ContactOnSmartDelay.eventSpec). */
 export const waitForEventSpecSchema = z.object({
   eventType: waitStepEventTypes,
   tagId: z.string().trim().min(1).optional(),
   customFieldId: z.string().trim().min(1).optional(),
+  // customFieldChanged only: the RESOLVED value the field must change TO,
+  // captured once at wait start (so paying order B cannot resume invoice A).
+  matchValue: z.string().max(MATCH_VALUE_MAX).optional(),
 })
 export type WaitForEventSpec = z.infer<typeof waitForEventSpecSchema>
 
@@ -101,6 +106,13 @@ export const waitStepSchema = z
         ),
         tagId: z.string().trim().optional().default(""),
         customFieldId: z.string().trim().optional().default(""),
+        // customFieldChanged only; may hold {{variables}}, resolved at wait start. "" = any change.
+        matchValue: z
+          .string()
+          .trim()
+          .max(MATCH_VALUE_MAX)
+          .optional()
+          .default(""),
         timeoutValue: z.coerce.number().int().min(1).max(MAX_DELAY).default(1),
         timeoutUnit: waitStepDelayUnits.default(waitStepDelayUnits.enum.days),
         // success = the event landed, skip = timed out
@@ -132,6 +144,17 @@ export const waitStepSchema = z
           code: "custom",
           path: ["customFieldId"],
           message: "Required",
+        })
+      }
+      if (
+        data.eventType === waitStepEventTypes.enum.tagApplied &&
+        data.matchValue
+      ) {
+        // A tag event carries no value to compare.
+        ctx.addIssue({
+          code: "custom",
+          path: ["matchValue"],
+          message: "Only a custom field change can match a value",
         })
       }
     }
@@ -206,6 +229,7 @@ export const delayTypeEventDefaultFn = () => ({
   eventType: waitStepEventTypes.enum.tagApplied,
   tagId: "",
   customFieldId: "",
+  matchValue: "",
   timeoutValue: 1,
   timeoutUnit: waitStepDelayUnits.enum.days,
   states: [successStateDefaultFn(), skipStateDefaultFn()] as [
@@ -214,15 +238,30 @@ export const delayTypeEventDefaultFn = () => ({
   ],
 })
 
-/** The spec a parked row stores, from an `event` wait step; null for any other delayType. */
+/**
+ * The spec a parked row stores, from an `event` wait step; null for any other
+ * delayType. `resolvedMatchValue` is the step's matchValue with its variables
+ * already resolved for this contact (the caller resolves; this stays pure).
+ */
 export const waitForEventSpecFromStep = (
   step: WaitStepSchema,
+  resolvedMatchValue?: string,
 ): WaitForEventSpec | null => {
   if (step.delayType !== waitStepDelayTypes.enum.event) {
     return null
   }
-  return step.eventType === waitStepEventTypes.enum.tagApplied
-    ? { eventType: step.eventType, tagId: step.tagId }
+  if (step.eventType === waitStepEventTypes.enum.tagApplied) {
+    return { eventType: step.eventType, tagId: step.tagId }
+  }
+  return step.matchValue
+    ? {
+        eventType: step.eventType,
+        customFieldId: step.customFieldId,
+        matchValue: (resolvedMatchValue ?? step.matchValue).slice(
+          0,
+          MATCH_VALUE_MAX,
+        ),
+      }
     : { eventType: step.eventType, customFieldId: step.customFieldId }
 }
 

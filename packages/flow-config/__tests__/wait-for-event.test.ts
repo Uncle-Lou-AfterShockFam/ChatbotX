@@ -128,3 +128,65 @@ describe("wait step: event delay type", () => {
     )
   })
 })
+
+describe("wait step: event matchValue", () => {
+  const fieldStep = (extra: Record<string, unknown> = {}) => ({
+    ...base,
+    delayType: waitStepDelayTypes.enum.event,
+    ...delayTypeEventDefaultFn(),
+    eventType: waitStepEventTypes.enum.customFieldChanged,
+    customFieldId: "cf-1",
+    ...extra,
+  })
+
+  test("defaults to empty (any change) and parses an old graph without the key", () => {
+    const parsed = waitStepSchema.parse({
+      ...base,
+      delayType: "event",
+      eventType: "customFieldChanged",
+      customFieldId: "cf-1",
+    })
+    if (parsed.delayType !== "event") {
+      throw new Error("unreachable")
+    }
+    expect(parsed.matchValue).toBe("")
+    expect(waitForEventSpecFromStep(parsed)).toEqual({
+      eventType: "customFieldChanged",
+      customFieldId: "cf-1",
+    })
+  })
+
+  test("a tag wait cannot carry a matchValue; over-long values are refused", () => {
+    expect(
+      waitStepSchema.safeParse(eventStep({ matchValue: "3635" })).success,
+    ).toBe(false)
+    expect(
+      waitStepSchema.safeParse(fieldStep({ matchValue: "x".repeat(501) }))
+        .success,
+    ).toBe(false)
+  })
+
+  test("the stored spec keeps the RESOLVED value, trimmed input, capped", () => {
+    const parsed = waitStepSchema.parse(
+      fieldStep({ matchValue: "  {{raw:wp_order_id}} " }),
+    )
+    expect(waitForEventSpecFromStep(parsed, "3635")).toEqual({
+      eventType: "customFieldChanged",
+      customFieldId: "cf-1",
+      matchValue: "3635",
+    })
+    // No resolved value handed in: the (literal) step value is stored.
+    expect(waitForEventSpecFromStep(parsed)?.matchValue).toBe(
+      "{{raw:wp_order_id}}",
+    )
+    // The caller's fail-closed "" is kept, never replaced by the template.
+    expect(waitForEventSpecFromStep(parsed, "")?.matchValue).toBe("")
+    expect(
+      waitForEventSpecFromStep(parsed, "9".repeat(900))?.matchValue,
+    ).toHaveLength(500)
+    expect(
+      waitForEventSpecSchema.safeParse(waitForEventSpecFromStep(parsed, "3635"))
+        .success,
+    ).toBe(true)
+  })
+})

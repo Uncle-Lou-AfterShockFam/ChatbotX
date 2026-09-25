@@ -80,8 +80,18 @@ export const eventMatchesSpec = (
   if (spec.eventType === waitStepEventTypes.enum.tagApplied) {
     return Boolean(spec.tagId) && spec.tagId === event.tagId
   }
+  if (!spec.customFieldId || spec.customFieldId !== event.customFieldId) {
+    return false
+  }
+  if (spec.matchValue === undefined) {
+    return true // any change
+  }
+  // Value-scoped: fail closed on an empty captured value, a cleared field, or
+  // an event enqueued before newValue was carried.
   return (
-    Boolean(spec.customFieldId) && spec.customFieldId === event.customFieldId
+    spec.matchValue !== "" &&
+    typeof event.newValue === "string" &&
+    event.newValue.trim() === spec.matchValue
   )
 }
 

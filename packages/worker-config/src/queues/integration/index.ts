@@ -364,6 +364,8 @@ export type IntegrationJobResumeWaitForEvent = {
         eventType: "tagApplied" | "customFieldChanged"
         tagId?: string
         customFieldId?: string
+        // customFieldChanged: the value the field changed TO (null = cleared).
+        newValue?: string | null
       }
 }
 

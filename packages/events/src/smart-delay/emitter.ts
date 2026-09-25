@@ -16,6 +16,14 @@ const WAIT_FOR_EVENT_TYPES = new Set<TriggerEventType>([
   triggerEventTypes.enum.customFieldValueChanged,
 ])
 
+/** A wait can match on the value a field changed TO; anything but text is carried as text, a clear as null. */
+const newValueOf = (value: unknown): string | null => {
+  if (value === null || value === undefined) {
+    return null
+  }
+  return typeof value === "string" ? value : JSON.stringify(value)
+}
+
 class SmartDelayEventEmitterImpl extends BaseEventEmitter {
   protected supportedEventTypes = WAIT_FOR_EVENT_TYPES
 
@@ -46,7 +54,11 @@ class SmartDelayEventEmitterImpl extends BaseEventEmitter {
           contactId: data.contactId,
           ...(isTag
             ? { eventType: "tagApplied", tagId: id }
-            : { eventType: "customFieldChanged", customFieldId: id }),
+            : {
+                eventType: "customFieldChanged",
+                customFieldId: id,
+                newValue: newValueOf(metadata.newValue),
+              }),
         },
       },
       { removeOnComplete: true, removeOnFail: 100 },
