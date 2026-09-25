@@ -6974,7 +6974,8 @@
       "push": {
         "label": "Mobile push",
         "hint": "A push notification on your signed-in mobile devices."
-      }
+      },
+      "loadError": "Your preferences could not be loaded. Reload the page to try again."
     }
   },
   "crm": {

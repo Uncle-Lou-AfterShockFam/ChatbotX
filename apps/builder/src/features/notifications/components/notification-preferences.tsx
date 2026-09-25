@@ -47,18 +47,23 @@ export function NotificationPreferences({
       <p className="text-muted-foreground text-sm">
         {t("notifications.preferences.description")}
       </p>
+      {prefs.isError ? (
+        <p
+          className="text-destructive text-sm"
+          data-testid="notification-preferences-error"
+          role="alert"
+        >
+          {t("notifications.preferences.loadError")}
+        </p>
+      ) : null}
       {ROWS.map(({ group, key }, index) => {
         const id = `notification-pref-${key}`
-        const firstChannel = index === 2
+        const startsGroup = ROWS[index - 1]?.group !== group
         return (
           <div className="flex flex-col gap-4" key={key}>
-            {index === 0 || firstChannel ? (
+            {startsGroup ? (
               <h2 className="font-medium text-sm">
-                {t(
-                  firstChannel
-                    ? "notifications.preferences.channels"
-                    : "notifications.preferences.types",
-                )}
+                {t(`notifications.preferences.${group}`)}
               </h2>
             ) : null}
             <div className="flex items-start justify-between gap-4 rounded-md border px-3 py-2">

@@ -4,6 +4,7 @@ import {
   db,
   eq,
   relationsFilterToSQL,
+  type SQL,
   sql,
 } from "@chatbotx.io/database/client"
 import { workspaceMemberRoles } from "@chatbotx.io/database/partials"
@@ -370,12 +371,23 @@ export class WorkspaceMemberService extends BaseService {
     id: string
     workspaceId: string
     data: Partial<typeof workspaceMemberModel.$inferInsert>
+    /**
+     * Notification flags MERGED into the stored jsonb (s198): only the keys
+     * the caller actually changed, so a member's own self-service choices
+     * survive an admin save made from a stale page.
+     */
+    notificationPatch?: NotificationFlagsPatch
   }): Promise<{ id: string } | undefined> {
     const { tx = db, id, workspaceId, data } = input
 
     const updated = await tx
       .update(workspaceMemberModel)
-      .set(data)
+      .set({
+        ...data,
+        ...(input.notificationPatch
+          ? notificationMergeSet(input.notificationPatch)
+          : {}),
+      })
       .where(
         and(
           eq(workspaceMemberModel.id, id),
@@ -440,26 +452,7 @@ export class WorkspaceMemberService extends BaseService {
         { reason: "invalidPrefs" },
       )
     }
-    const merge = (
-      column:
-        | typeof workspaceMemberModel.notificationTypes
-        | typeof workspaceMemberModel.notificationChannels,
-      values: Record<string, boolean>,
-    ) =>
-      sql`(case when jsonb_typeof(${column}) = 'object' then ${column} else '{}'::jsonb end) || ${JSON.stringify(values)}::jsonb`
-    const set: Record<string, unknown> = {}
-    if (patch.types && Object.keys(patch.types).length > 0) {
-      set.notificationTypes = merge(
-        workspaceMemberModel.notificationTypes,
-        patch.types,
-      )
-    }
-    if (patch.channels && Object.keys(patch.channels).length > 0) {
-      set.notificationChannels = merge(
-        workspaceMemberModel.notificationChannels,
-        patch.channels,
-      )
-    }
+    const set = notificationMergeSet(patch)
     const [row] = await tx
       .update(workspaceMemberModel)
       .set(set)
@@ -531,3 +524,40 @@ export class WorkspaceMemberService extends BaseService {
 }
 
 export const workspaceMemberService = new WorkspaceMemberService()
+
+/** Changed notification flags per jsonb column (keys are the column's own). */
+export type NotificationFlagsPatch = {
+  types?: Record<string, boolean>
+  channels?: Record<string, boolean>
+}
+
+/**
+ * The SET clause that merges flags into the two jsonb columns: a non-object
+ * stored value (legacy / garbage) is treated as `{}`, like
+ * `resolveMemberNotificationPrefs` does. An empty group sets nothing.
+ */
+function notificationMergeSet(
+  patch: NotificationFlagsPatch,
+): Record<string, SQL> {
+  const merge = (
+    column:
+      | typeof workspaceMemberModel.notificationTypes
+      | typeof workspaceMemberModel.notificationChannels,
+    values: Record<string, boolean>,
+  ) =>
+    sql`(case when jsonb_typeof(${column}) = 'object' then ${column} else '{}'::jsonb end) || ${JSON.stringify(values)}::jsonb`
+  const set: Record<string, SQL> = {}
+  if (patch.types && Object.keys(patch.types).length > 0) {
+    set.notificationTypes = merge(
+      workspaceMemberModel.notificationTypes,
+      patch.types,
+    )
+  }
+  if (patch.channels && Object.keys(patch.channels).length > 0) {
+    set.notificationChannels = merge(
+      workspaceMemberModel.notificationChannels,
+      patch.channels,
+    )
+  }
+  return set
+}

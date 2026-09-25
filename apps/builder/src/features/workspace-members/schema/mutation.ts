@@ -27,10 +27,16 @@ export type InviteWorkspaceMemberRequest = z.infer<
 
 // The mutation is the FULL shape (every switch is on the form); the stored
 // schemas keep the s194 keys optional for legacy rows.
+// `loaded*` = the values the form was opened with (s198): the action writes
+// only the flags the admin changed, so a member's own self-service choices
+// made meanwhile survive the save.
 export const updateWorkspaceMemberRequest = inviteWorkspaceMemberRequest.extend(
   {
     notificationTypes: workspaceMemberNotificationTypesSchema.required(),
     notificationChannels: workspaceMemberNotificationChannelsSchema.required(),
+    loadedNotificationTypes: workspaceMemberNotificationTypesSchema.required(),
+    loadedNotificationChannels:
+      workspaceMemberNotificationChannelsSchema.required(),
   },
 )
 export type UpdateWorkspaceMemberRequest = z.infer<
