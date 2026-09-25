@@ -40,12 +40,15 @@ type GetColumnsProps = {
     SetStateAction<DataTableRowAction<FlowResource> | null>
   >
   locale: string
+  /** The user zone next-intl rendered with; undefined = the runtime zone. */
+  timeZone: string | undefined
 }
 
 export function getFlowColumns({
   t,
   setRowAction,
   locale,
+  timeZone,
 }: GetColumnsProps): ColumnDef<FlowResource>[] {
   return [
     {
@@ -194,7 +197,7 @@ export function getFlowColumns({
         />
       ),
       cell: ({ row }) => (
-        <div>{formatDate(row.original.updatedAt, { locale })}</div>
+        <div>{formatDate(row.original.updatedAt, { locale, timeZone })}</div>
       ),
       size: 50,
       enableSorting: true,

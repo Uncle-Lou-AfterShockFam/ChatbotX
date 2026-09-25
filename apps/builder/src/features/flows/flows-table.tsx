@@ -15,7 +15,7 @@ import type { DataTableRowAction } from "@chatbotx.io/ui/types/data-table"
 import { HistoryIcon } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useLocale, useTranslations } from "next-intl"
+import { useLocale, useTimeZone, useTranslations } from "next-intl"
 import { use, useMemo, useState } from "react"
 import { ChangeFolderDialog } from "../folders/change-folder"
 import { CreateFlowDialog } from "./create-flow-dialog"
@@ -41,6 +41,7 @@ export function FlowsTable({
 }: FlowsTableProps) {
   const t = useTranslations()
   const locale = useLocale()
+  const timeZone = useTimeZone()
   const router = useRouter()
 
   const [{ data, pageCount }] = use(promises)
@@ -48,8 +49,8 @@ export function FlowsTable({
   const [rowAction, setRowAction] =
     useState<DataTableRowAction<FlowResource> | null>(null)
   const columns = useMemo(
-    () => getFlowColumns({ t, setRowAction, locale }),
-    [t, locale],
+    () => getFlowColumns({ t, setRowAction, locale, timeZone }),
+    [t, locale, timeZone],
   )
 
   const { table } = useDataTable({
