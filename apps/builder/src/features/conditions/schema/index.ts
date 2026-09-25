@@ -14,6 +14,7 @@ import {
   ticketStatusChanged,
   ticketValueChanged,
 } from "./deal-conditions"
+import { formSubmitted } from "./form-conditions"
 import {
   archived,
   contactReferredANewContact,
@@ -59,6 +60,7 @@ export const allConditions = {
   taskOverdue,
   taskAssigned,
   dealMentioned,
+  formSubmitted,
 }
 
 export const conditionSchema = z.union(Object.values(allConditions))

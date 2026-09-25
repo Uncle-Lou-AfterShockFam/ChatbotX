@@ -35,6 +35,7 @@ export const EMITTED_EVENT_TYPES = [
   triggerEventTypes.enum.taskOverdue,
   triggerEventTypes.enum.taskAssigned,
   triggerEventTypes.enum.dealMentioned,
+  triggerEventTypes.enum.formSubmitted,
 ] as const
 
 export const SCANNER_VERIFIED_EVENT_TYPES = [

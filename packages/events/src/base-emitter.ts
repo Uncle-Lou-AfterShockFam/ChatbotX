@@ -79,6 +79,16 @@ export type DealMentionedMetadata = DealEventMetadata & {
   excerpt: string
 }
 
+/** A web form submission written to a contact (s200); `sourceId` = the form id. */
+export type FormSubmittedMetadata = {
+  formId: string
+  formSlug: string
+  submissionId: string
+  definitionVersion: number
+  /** Visible, non-blank answers keyed by field key (strings, numbers, booleans, string lists). */
+  values: Record<string, unknown>
+}
+
 /**
  * Base event emitter class with common functionality
  */
@@ -581,6 +591,18 @@ export abstract class BaseEventEmitter {
       workspaceId,
       contactId,
       metadata: { ...metadata, sourceId: metadata.pipelineId },
+    })
+  }
+
+  async formSubmitted(
+    workspaceId: string,
+    contactId: string,
+    metadata: FormSubmittedMetadata,
+  ): Promise<void> {
+    await this.emit(triggerEventTypes.enum.formSubmitted, {
+      workspaceId,
+      contactId,
+      metadata: { ...metadata, sourceId: metadata.formId },
     })
   }
 }

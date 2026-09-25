@@ -83,6 +83,8 @@ export const BaseEditor = ({
         return t("trigger.conditions.taskAssigned")
       case triggerEventTypes.enum.dealMentioned:
         return t("trigger.conditions.dealMentioned")
+      case triggerEventTypes.enum.formSubmitted:
+        return t("trigger.conditions.formSubmitted")
       case triggerEventTypes.enum.subscribedToSequence:
         return t("trigger.conditions.subscribedToSequence")
       case triggerEventTypes.enum.unsubscribedFromSequence:

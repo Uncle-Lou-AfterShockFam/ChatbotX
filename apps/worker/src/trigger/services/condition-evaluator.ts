@@ -67,6 +67,7 @@ export class ConditionEvaluator {
       case triggerEventTypes.enum.taskOverdue:
       case triggerEventTypes.enum.taskAssigned:
       case triggerEventTypes.enum.dealMentioned:
+      case triggerEventTypes.enum.formSubmitted:
         return this.evaluateSourceIdMatch(
           sourceId,
           eventData.eventData.sourceId as string,

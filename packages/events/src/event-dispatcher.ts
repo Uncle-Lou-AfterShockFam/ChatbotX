@@ -13,6 +13,7 @@ import type {
   DealTaskCompletedMetadata,
   DealTaskEventMetadata,
   DealValueChangedMetadata,
+  FormSubmittedMetadata,
   IncomingCallMetadata,
 } from "./base-emitter"
 import { CompanyStopEventEmitter } from "./company-stop/emitter"
@@ -418,3 +419,10 @@ export const emitDealMentioned = async (
   contactId: string,
   metadata: DealMentionedMetadata,
 ) => await emitToAllEmitters("dealMentioned", workspaceId, contactId, metadata)
+
+// Web forms (s200)
+export const emitFormSubmitted = async (
+  workspaceId: string,
+  contactId: string,
+  metadata: FormSubmittedMetadata,
+) => await emitToAllEmitters("formSubmitted", workspaceId, contactId, metadata)

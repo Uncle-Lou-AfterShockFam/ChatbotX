@@ -12,6 +12,8 @@ export const PUBLIC_ROUTES = [
   "/go",
   // Generated contact documents (`/f/[token]`, roadmap B3).
   "/f",
+  // Public web forms (`/forms/[workspaceId]/[slug]`, s200).
+  "/forms",
   "/dynamic-images",
   "/minigames",
   "/auth",

@@ -50,6 +50,15 @@ const SLUG_UNIQUE_INDEX = "Form_workspaceId_slug_key"
 const MAX_DUPLICATE_ATTEMPTS = 5
 const INT8_ID = /^\d{1,19}$/
 
+/**
+ * The optimistic-lock predicate. `updatedAt` is `timestamp(6)` (microseconds)
+ * while a JS Date carries milliseconds, so `eq(column, date)` never matches a
+ * row that has sub-millisecond digits and every save was a 409 (live proof,
+ * s200). Compare at the precision the caller can hold.
+ */
+const updatedAtMatches = (updatedAt: Date): SQL =>
+  sql`date_trunc('milliseconds', ${formModel.updatedAt}) = date_trunc('milliseconds', ${updatedAt}::timestamptz)`
+
 /** Someone else saved since the caller loaded the form (optimistic lock). */
 const conflictException = () =>
   new ChatbotXException(
@@ -266,6 +275,19 @@ export class FormService extends BaseService {
     return form
   }
 
+  /**
+   * The `embedOrigins` of a PUBLISHED form, for the `frame-ancestors` CSP the
+   * proxy sets on `/forms/<ws>/<slug>`; null when there is no such form.
+   */
+  async getEmbedOrigins(props: {
+    workspaceId: string
+    slug: string
+    tx?: DatabaseClient
+  }): Promise<string[] | null> {
+    const form = await this.findPublishedBySlug(props)
+    return form ? form.settings.embedOrigins : null
+  }
+
   async create(props: {
     workspaceId: string
     userId?: string | null
@@ -398,7 +420,7 @@ export class FormService extends BaseService {
           and(
             eq(formModel.id, id),
             eq(formModel.workspaceId, workspaceId),
-            eq(formModel.updatedAt, current.updatedAt),
+            updatedAtMatches(current.updatedAt),
           ),
         )
         .returning()
@@ -496,7 +518,7 @@ export class FormService extends BaseService {
           eq(formModel.id, id),
           eq(formModel.workspaceId, workspaceId),
           eq(formModel.definitionVersion, current.definitionVersion),
-          eq(formModel.updatedAt, current.updatedAt),
+          updatedAtMatches(current.updatedAt),
         ),
       )
       .returning()

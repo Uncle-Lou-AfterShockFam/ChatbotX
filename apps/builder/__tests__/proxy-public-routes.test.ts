@@ -37,11 +37,19 @@ describe("tracked links", () => {
   test("/f/<token> is public so a texted document link needs no session", () => {
     expect(isPublicRoute("/f/0123456789ABCDEFGHIJKL")).toBe(true)
     expect(isPublicRoute("/files")).toBe(false)
-    expect(isPublicRoute("/forms")).toBe(false)
+    expect(isPublicRoute("/formsx")).toBe(false)
   })
 
   test("/go/<token> is public so a texted short link needs no session", () => {
     expect(isPublicRoute("/go/AbCdEfGhIjK")).toBe(true)
     expect(isPublicRoute("/gone")).toBe(false)
+  })
+})
+
+describe("public web forms (s200)", () => {
+  test("/forms/<ws>/<slug> needs no session; a longer first segment stays closed", () => {
+    expect(isPublicRoute("/forms/11701868563365888/demo-intake")).toBe(true)
+    expect(isPublicRoute("/forms")).toBe(true)
+    expect(isPublicRoute("/forms-admin")).toBe(false)
   })
 })

@@ -4425,7 +4425,8 @@
       "taskCompleted": "Task completed",
       "taskOverdue": "Task overdue",
       "taskAssigned": "Task assigned",
-      "dealMentioned": "Teammate mentioned on a deal"
+      "dealMentioned": "Teammate mentioned on a deal",
+      "formSubmitted": "Web form submitted"
     },
     "actions": {
       "addTag": "Adicionar etiqueta",
@@ -4772,7 +4773,7 @@
       "previewBack": "Back",
       "previewNext": "Next",
       "previewSubmit": "Submit (preview)",
-      "previewSubmitted": "Preview submitted; the values were logged to the console."
+      "previewSubmitted": "Preview submitted. Nothing is stored from the preview."
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4843,11 +4844,21 @@
       "redirectUrl": "Redirect after submit (https URL, optional)",
       "tags": "Tags to apply (comma-separated)",
       "honeypot": "Spam trap (hidden field bots fill in)",
+      "overwriteExisting": "Overwrite existing contact data",
+      "overwriteExistingHint": "Off: a submission that matches an existing contact fills only empty fields. On: the answers replace what is stored.",
       "submitLimit": "Submissions per hour per visitor",
       "embedOrigins": "Sites allowed to embed this form",
-      "embedOriginsHint": "One origin per line, https://host only. Empty = the form cannot be embedded elsewhere.",
+      "embedOriginsHint": "One origin per line, https://host only. Empty = the form cannot be embedded elsewhere. The host page must send a referrer (the browser default does); with Referrer-Policy: no-referrer the embed cannot resize or report a submit.",
       "prefillKeys": "Fields a link may prefill",
-      "prefillKeysHint": "Field keys that accept a value from the URL, e.g. ?first_name=Ada."
+      "prefillKeysHint": "Field keys that accept a value from the URL, e.g. ?first_name=Ada.",
+      "embedSnippet": "Embed on another site",
+      "embedUnpublished": "Publish the form to get its link and embed code.",
+      "publicUrl": "Public link"
+    },
+    "public": {
+      "submit": "Submit",
+      "failed": "Your answers could not be sent. Please try again.",
+      "tooMany": "Too many submissions from your connection. Please try again later."
     },
     "submissions": {
       "title": "Submissions",

@@ -65,6 +65,11 @@ vi.mock("@/features/tags/provider/tag-hook", () => ({
   ],
 }))
 
+vi.mock("@/features/forms/provider/form-hooks", () => ({
+  useFormOptions: () => [
+    { label: "Demo intake (demo-intake)", value: "form-1" },
+  ],
+}))
 vi.mock("@/features/pipelines/provider/pipeline-hook", () => ({
   usePipelineOptions: () => [
     { label: "Sales", value: "pipe-1" },

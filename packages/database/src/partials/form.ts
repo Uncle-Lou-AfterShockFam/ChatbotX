@@ -56,6 +56,12 @@ export const formSettingsSchema = z
       .max(FORM_MAX_TAGS)
       .default([]),
     honeypot: z.boolean().default(true),
+    /**
+     * A public submission that resolves to an EXISTING contact fills only
+     * blank fields unless this is on: an anonymous caller who knows a phone
+     * number must not rewrite that contact's record (skeptic, s200).
+     */
+    overwriteExisting: z.boolean().default(false),
     submitLimitPerIpPerHour: z.number().int().min(1).max(1000).default(20),
     embedOrigins: z
       .array(z.string().regex(FORM_EMBED_ORIGIN_REGEX, "Origin only, https."))
