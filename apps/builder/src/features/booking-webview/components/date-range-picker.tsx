@@ -271,9 +271,12 @@ function dateKeyToCalendarDate(dateKey: string) {
   return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1, 12)
 }
 
+// `date` is a day key (YYYY-MM-DD) pinned to noon UTC, so it is read back in
+// UTC: any other zone past +/-12 h would print the neighbouring day.
 function formatDateLabel(date: string) {
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
+    timeZone: "UTC",
   }).format(new Date(`${date}T12:00:00.000Z`))
 }
 

@@ -1,6 +1,7 @@
 import { ConversationsDashboard } from "@chatbotx.io/analytics-nextjs/components/conversations-dashboard"
 import { getIdFromParams } from "@chatbotx.io/utils"
 import { notFound } from "next/navigation"
+import { getTimeZone } from "next-intl/server"
 import { AnalyticsNav } from "@/features/analytics/components/analytics-nav"
 import { resolveAdsDashboardChannels } from "@/features/analytics/lib/ads-dashboard-channels"
 import { hasWorkspacePermission } from "@/lib/auth/permission-routes"
@@ -29,7 +30,9 @@ export default async function ConversationsAnalyticsPage({
     return notFound()
   }
 
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  // The user's zone (next-intl's), not the runtime's: this is a server
+  // component, where the Intl probe answers the container's UTC.
+  const timezone = await getTimeZone()
   const { targetWorkspace } = userAndWorkspace
   const isSuperAdmin = hasWorkspacePermission(
     userAndWorkspace.targetWorkspaceMember.permissions,

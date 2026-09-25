@@ -35,6 +35,7 @@ export function formatSelectionLabel(
   mode: "date" | "datetime",
   locale?: string,
 ): string {
+  // zone: viewer (label of the Date the viewer just picked)
   const dayPart = new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "short",
@@ -45,6 +46,7 @@ export function formatSelectionLabel(
     return dayPart.toLocaleUpperCase(locale)
   }
 
+  // zone: viewer (label of the Date the viewer just picked)
   const timePart = new Intl.DateTimeFormat(locale, {
     hour: "2-digit",
     minute: "2-digit",

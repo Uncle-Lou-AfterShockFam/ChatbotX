@@ -7,7 +7,7 @@ import {
   waitStepEventTypes,
   waitStepOffsetOperators,
 } from "@chatbotx.io/flow-config"
-import { useTranslations } from "next-intl"
+import { useFormatter, useTranslations } from "next-intl"
 import { useCustomFieldStore } from "@/features/custom-fields/provider/custom-field-store-context"
 import { useTagSelectOptions } from "@/features/tags/provider/tag-hook"
 import { BaseStateViewer } from "../../states/viewer"
@@ -20,6 +20,7 @@ const WaitStepViewer = (props: WaitStepViewerProps) => {
   const { data } = props
 
   const t = useTranslations()
+  const format = useFormatter()
   const { customFields } = useCustomFieldStore((state) => state)
 
   const tagOptions = useTagSelectOptions()
@@ -107,7 +108,12 @@ const WaitStepViewer = (props: WaitStepViewerProps) => {
             <>
               {t("flows.wait.dateDetailPrefix")}{" "}
               <span className="rounded-full py-1 font-medium text-primary text-sm">
-                {data.datetime ? new Date(data.datetime).toLocaleString() : ""}
+                {data.datetime
+                  ? format.dateTime(new Date(data.datetime), {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })
+                  : ""}
               </span>
             </>
           )}

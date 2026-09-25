@@ -27,7 +27,7 @@ import {
 import { cn } from "@chatbotx.io/ui/lib/utils"
 import { CheckIcon, X } from "lucide-react"
 import Image from "next/image"
-import { useTranslations } from "next-intl"
+import { useFormatter, useTranslations } from "next-intl"
 import { type KeyboardEvent, useEffect, useRef, useState } from "react"
 import type { FacebookPost } from "../provider/fb-comment-posts-store"
 import { useFbCommentPostsStore } from "../provider/fb-comment-posts-store-context"
@@ -108,6 +108,7 @@ function PostCard({
   selected: boolean
   onToggle: () => void
 }) {
+  const format = useFormatter()
   return (
     <button
       className={cn(
@@ -137,7 +138,7 @@ function PostCard({
         {post.message ?? "—"}
       </p>
       <p className="mt-1 text-muted-foreground text-xs">
-        {new Date(post.created_time).toLocaleDateString()}
+        {format.dateTime(new Date(post.created_time), { dateStyle: "medium" })}
       </p>
     </button>
   )

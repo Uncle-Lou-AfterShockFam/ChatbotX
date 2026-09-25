@@ -507,6 +507,7 @@ const SelectableContactItem = memo(function SelectableContactItem({
   onToggle: () => void
 }) {
   const t = useTranslations()
+  const formatter = useFormatter()
   const avatarUrl = useAvatarUrl({
     avatar: contact.avatar,
     firstName: contact.firstName,
@@ -556,7 +557,10 @@ const SelectableContactItem = memo(function SelectableContactItem({
         </div>
         {contact.occurredAt && (
           <div className="text-start text-muted-foreground text-xs">
-            {new Date(contact.occurredAt).toLocaleString()}
+            {formatter.dateTime(new Date(contact.occurredAt), {
+              dateStyle: "medium",
+              timeStyle: "short",
+            })}
           </div>
         )}
       </div>

@@ -47,10 +47,12 @@ export function InlineDateTimePicker({
   yearLabel,
 }: InlineDateTimePickerProps) {
   const monthFormatter = useMemo(
+    // zone: viewer (month names of local-built calendar Dates)
     () => new Intl.DateTimeFormat(locale, { month: "short" }),
     [locale],
   )
   const weekdayLabels = useMemo(() => {
+    // zone: viewer (weekday names of local-built calendar Dates)
     const formatter = new Intl.DateTimeFormat(locale, { weekday: "short" })
     // Jan 4, 1970 was a Sunday; the following 7 days name the columns.
     return Array.from({ length: 7 }, (_, day) =>
