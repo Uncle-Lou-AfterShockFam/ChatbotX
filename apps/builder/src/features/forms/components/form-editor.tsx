@@ -15,13 +15,18 @@ import {
   TabsTrigger,
 } from "@chatbotx.io/ui/components/ui/tabs"
 import { cn } from "@chatbotx.io/ui/lib/utils"
-import type { FormDefinition } from "@chatbotx.io/utils/form"
+import type { FormDefinition, FormStep } from "@chatbotx.io/utils/form"
 import { formMapsToContact, MAX_FORM_STEPS } from "@chatbotx.io/utils/form"
 import { Loader2Icon, PlusIcon, Trash2Icon } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { addStep, removeStep, updateStep } from "../lib/editor-ops"
+import {
+  addStep,
+  conditionSources,
+  removeStep,
+  updateStep,
+} from "../lib/editor-ops"
 import {
   useForm,
   usePublishForm,
@@ -29,6 +34,7 @@ import {
   useUpdateForm,
 } from "../provider/form-hooks"
 import type { FormResource } from "../schema/resource"
+import { ConditionGroupEditor } from "./condition-group-editor"
 import { FieldInspector } from "./field-inspector"
 import { FieldList } from "./field-list"
 import { FormPreview } from "./form-preview"
@@ -279,6 +285,11 @@ export function FormEditor(props: { workspaceId: string; id: string }) {
                     placeholder={t("forms.editor.stepTitle")}
                     value={step.title}
                   />
+                  <StepCondition
+                    definition={def}
+                    onChange={setDefinition}
+                    step={step}
+                  />
                   <FieldList
                     definition={def}
                     onChange={setDefinition}
@@ -345,6 +356,81 @@ export function FormEditor(props: { workspaceId: string; id: string }) {
           </div>
         </TabsContent>
       </Tabs>
+    </div>
+  )
+}
+
+/**
+ * A step's own `visibleWhen`: it may read fields of EARLIER steps only (the
+ * evaluator resolves steps in order, so a later field reads as undefined).
+ */
+function StepCondition(props: {
+  definition: FormDefinition
+  step: FormStep
+  onChange: (definition: FormDefinition) => void
+}) {
+  const { definition, step, onChange } = props
+  const t = useTranslations()
+  const index = definition.steps.findIndex((s) => s.id === step.id)
+  const earlier = new Set(
+    definition.steps.slice(0, index).flatMap((s) => s.fields.map((f) => f.key)),
+  )
+  const sources = conditionSources(definition).filter((f) => earlier.has(f.key))
+  if (index <= 0) {
+    return null
+  }
+  return (
+    <div
+      className="flex flex-col gap-1.5"
+      data-testid={`step-condition-${step.id}`}
+    >
+      <div className="flex items-center justify-between">
+        <span className="font-medium text-sm">
+          {t("forms.editor.stepVisibleWhen")}
+        </span>
+        {step.visibleWhen ? (
+          <Button
+            onClick={() =>
+              onChange(
+                updateStep(definition, step.id, { visibleWhen: undefined }),
+              )
+            }
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            {t("actions.clear")}
+          </Button>
+        ) : (
+          <Button
+            data-testid={`step-condition-add-${step.id}`}
+            disabled={sources.length === 0}
+            onClick={() =>
+              onChange(
+                updateStep(definition, step.id, {
+                  visibleWhen: { logic: "AND", rules: [] },
+                }),
+              )
+            }
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            <PlusIcon className="size-3" />
+            {t("forms.editor.addCondition")}
+          </Button>
+        )}
+      </div>
+      {step.visibleWhen ? (
+        <ConditionGroupEditor
+          group={step.visibleWhen}
+          onChange={(visibleWhen) =>
+            onChange(updateStep(definition, step.id, { visibleWhen }))
+          }
+          sources={sources}
+          testId={`step-visible-${step.id}`}
+        />
+      ) : null}
     </div>
   )
 }

@@ -4741,6 +4741,7 @@
       "mapped": "mapped",
       "conditional": "conditional",
       "visibleWhen": "Show this field only when",
+      "stepVisibleWhen": "Show this step only when",
       "conditionAll": "All of",
       "conditionAny": "Any of",
       "addCondition": "Add condition",
