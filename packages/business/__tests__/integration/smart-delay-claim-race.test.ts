@@ -17,7 +17,7 @@
  *
  * The suite SKIPS itself unless `DATABASE_URL` points at a reachable database
  * (`setup-env` defines a non-routable `127.0.0.1:1` sentinel). Run it against
- * a migrated scratch Postgres with:
+ * a migrated scratch Postgres with (test:db refuses to run without one):
  *
  *     DATABASE_URL=postgres://... pnpm --filter @chatbotx.io/business test:db
  */
@@ -42,6 +42,13 @@ function realDatabaseUrl(): string | null {
 }
 
 const databaseUrl = realDatabaseUrl()
+
+// `test:db` sets this: there, a skip would be a silent green with nothing run.
+if (process.env.REQUIRE_REAL_DB === "1" && !databaseUrl) {
+  throw new Error(
+    "test:db needs DATABASE_URL pointing at a migrated Postgres (it is unset or the setup-env sentinel)",
+  )
+}
 
 /** Ids far above any snowflake a scratch database would hold. */
 const ID_BASE = 9_100_000_000_000_000n
