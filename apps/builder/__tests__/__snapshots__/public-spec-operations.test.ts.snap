@@ -1189,6 +1189,21 @@ exports[`public API spec — operation naming guard > operation list (operationI
   },
   {
     "method": "POST",
+    "operationId": "documents.generateForContact",
+    "path": "/v1/contacts/{id}/documents",
+  },
+  {
+    "method": "GET",
+    "operationId": "documents.listForContact",
+    "path": "/v1/contacts/{id}/documents",
+  },
+  {
+    "method": "GET",
+    "operationId": "documents.listTemplates",
+    "path": "/v1/document-templates",
+  },
+  {
+    "method": "POST",
     "operationId": "dynamicImages.create",
     "path": "/v1/dynamic-images",
   },

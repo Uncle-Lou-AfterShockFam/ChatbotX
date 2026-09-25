@@ -6957,7 +6957,8 @@
       "timeline": "Timeline",
       "contacts": "Contacts",
       "activity": "Change log",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "documents": "מסמכים"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7037,5 +7038,46 @@
     "changeCompany": "Change company",
     "noCompany": "No company",
     "deleteNote": "Delete note"
+  },
+  "documents": {
+    "title": "מסמכים",
+    "newTemplate": "תבנית חדשה",
+    "showArchived": "הצג בארכיון",
+    "noTemplates": "עדיין אין תבניות מסמכים",
+    "archived": "בארכיון",
+    "pickOrCreate": "בחרו תבנית משמאל או צרו תבנית חדשה.",
+    "name": "שם",
+    "namePlaceholder": "טופס הסכמה",
+    "saved": "התבנית נשמרה",
+    "deleteTitle": "למחוק את התבנית?",
+    "deleteConfirm": "מסמכים שכבר נוצרו ממנה יישמרו.",
+    "editorPlaceholder": "כתבו את המסמך. השתמשו בהוספת שדה כדי להוסיף פרטי איש קשר.",
+    "insertField": "הוספת שדה",
+    "insertSignature": "בלוק חתימה",
+    "signatureHint": "בלוק החתימה מסמן היכן איש הקשר חותם כשהמסמך נשלח לחתימה.",
+    "signatureLabel": "חתימה",
+    "dateSignedLabel": "תאריך",
+    "toolbar": {
+      "bold": "מודגש",
+      "italic": "נטוי",
+      "heading1": "כותרת 1",
+      "heading2": "כותרת 2",
+      "bulletList": "רשימת תבליטים",
+      "orderedList": "רשימה ממוספרת"
+    },
+    "status": {
+      "generated": "נוצר",
+      "sent": "נשלח",
+      "signed": "נחתם",
+      "failed": "נכשל"
+    },
+    "contact": {
+      "selectTemplate": "בחירת תבנית",
+      "noTemplates": "צרו קודם תבנית מסמך בהגדרות > מסמכים.",
+      "empty": "עדיין אין מסמכים לאיש קשר זה",
+      "generated": "המסמך נוצר",
+      "linkExpires": "הקישור בתוקף עד {date}",
+      "open": "פתיחת PDF"
+    }
   }
 }

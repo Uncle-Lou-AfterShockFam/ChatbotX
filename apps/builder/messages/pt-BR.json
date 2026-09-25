@@ -6957,7 +6957,8 @@
       "timeline": "Timeline",
       "contacts": "Contacts",
       "activity": "Change log",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "documents": "Documentos"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7037,5 +7038,46 @@
     "changeCompany": "Change company",
     "noCompany": "No company",
     "deleteNote": "Delete note"
+  },
+  "documents": {
+    "title": "Documentos",
+    "newTemplate": "Novo modelo",
+    "showArchived": "Mostrar arquivados",
+    "noTemplates": "Nenhum modelo de documento ainda",
+    "archived": "Arquivado",
+    "pickOrCreate": "Escolha um modelo à esquerda ou crie um novo.",
+    "name": "Nome",
+    "namePlaceholder": "Termo de consentimento",
+    "saved": "Modelo salvo",
+    "deleteTitle": "Excluir este modelo?",
+    "deleteConfirm": "Os documentos já gerados a partir dele são mantidos.",
+    "editorPlaceholder": "Escreva o documento. Use Inserir campo para adicionar dados do contato.",
+    "insertField": "Inserir campo",
+    "insertSignature": "Bloco de assinatura",
+    "signatureHint": "O bloco de assinatura marca onde o contato assina quando o documento é enviado para assinatura.",
+    "signatureLabel": "Assinatura",
+    "dateSignedLabel": "Data",
+    "toolbar": {
+      "bold": "Negrito",
+      "italic": "Itálico",
+      "heading1": "Título 1",
+      "heading2": "Título 2",
+      "bulletList": "Lista com marcadores",
+      "orderedList": "Lista numerada"
+    },
+    "status": {
+      "generated": "Gerado",
+      "sent": "Enviado",
+      "signed": "Assinado",
+      "failed": "Falhou"
+    },
+    "contact": {
+      "selectTemplate": "Escolha um modelo",
+      "noTemplates": "Crie primeiro um modelo de documento em Configurações > Documentos.",
+      "empty": "Nenhum documento para este contato ainda",
+      "generated": "Documento gerado",
+      "linkExpires": "Link válido até {date}",
+      "open": "Abrir PDF"
+    }
   }
 }

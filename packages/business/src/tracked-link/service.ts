@@ -1,45 +1,25 @@
 import { and, db, eq, sql } from "@chatbotx.io/database/client"
 import type { TrackedLinkModel } from "@chatbotx.io/database/schema"
 import { trackedLinkModel } from "@chatbotx.io/database/schema"
+import { isBase62Token, mintBase62Token } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
 import { MAX_TRACKED_LINK_URL_LENGTH } from "./url"
 
-/** Base62 alphabet: URL-safe with no escaping, no look-alike separators. */
-const ALPHABET =
-  "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 /** 11 base62 characters carry 65 bits, so 8 random bytes fit with margin. */
 export const TRACKED_LINK_TOKEN_LENGTH = 11
 export type TrackedLinkVisitKind = "click" | "prefetch"
 
 export const isTrackedLinkToken = (value: unknown): value is string =>
-  typeof value === "string" &&
-  value.length === TRACKED_LINK_TOKEN_LENGTH &&
-  [...value].every((ch) => ALPHABET.includes(ch))
+  isBase62Token(value, TRACKED_LINK_TOKEN_LENGTH)
 
 /**
  * 64 random bits rendered in base62. Not `createId()`: a snowflake is
  * sequential and guessable, and a guessable token would let anyone mark a
  * contact as having clicked.
  */
-/** Web Crypto, not `node:crypto`: the business barrel must stay Edge-Runtime safe. */
-const webRandomBytes = (n: number): Uint8Array =>
-  globalThis.crypto.getRandomValues(new Uint8Array(n))
-
 export const mintTrackedLinkToken = (
-  random: (bytes: number) => Uint8Array = webRandomBytes,
-): string => {
-  const bytes = random(8)
-  let value = 0n
-  for (const byte of bytes) {
-    value = value * 256n + BigInt(byte)
-  }
-  let out = ""
-  for (let i = 0; i < TRACKED_LINK_TOKEN_LENGTH; i++) {
-    out = ALPHABET[Number(value % 62n)] + out
-    value /= 62n
-  }
-  return out
-}
+  random?: (bytes: number) => Uint8Array,
+): string => mintBase62Token(8, TRACKED_LINK_TOKEN_LENGTH, random)
 
 const HTTP_URL = /^https?:\/\/\S+$/
 

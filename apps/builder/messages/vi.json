@@ -6957,7 +6957,8 @@
       "timeline": "Timeline",
       "contacts": "Contacts",
       "activity": "Change log",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "documents": "Tài liệu"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7037,5 +7038,46 @@
     "changeCompany": "Change company",
     "noCompany": "No company",
     "deleteNote": "Delete note"
+  },
+  "documents": {
+    "title": "Tài liệu",
+    "newTemplate": "Mẫu mới",
+    "showArchived": "Hiện mục đã lưu trữ",
+    "noTemplates": "Chưa có mẫu tài liệu nào",
+    "archived": "Đã lưu trữ",
+    "pickOrCreate": "Chọn một mẫu bên trái hoặc tạo mẫu mới.",
+    "name": "Tên",
+    "namePlaceholder": "Mẫu đồng ý",
+    "saved": "Đã lưu mẫu",
+    "deleteTitle": "Xóa mẫu này?",
+    "deleteConfirm": "Các tài liệu đã tạo từ mẫu này vẫn được giữ lại.",
+    "editorPlaceholder": "Soạn tài liệu. Dùng Chèn trường để thêm thông tin liên hệ.",
+    "insertField": "Chèn trường",
+    "insertSignature": "Khối chữ ký",
+    "signatureHint": "Khối chữ ký đánh dấu nơi liên hệ ký khi tài liệu được gửi đi ký.",
+    "signatureLabel": "Chữ ký",
+    "dateSignedLabel": "Ngày",
+    "toolbar": {
+      "bold": "In đậm",
+      "italic": "In nghiêng",
+      "heading1": "Tiêu đề 1",
+      "heading2": "Tiêu đề 2",
+      "bulletList": "Danh sách dấu đầu dòng",
+      "orderedList": "Danh sách đánh số"
+    },
+    "status": {
+      "generated": "Đã tạo",
+      "sent": "Đã gửi",
+      "signed": "Đã ký",
+      "failed": "Thất bại"
+    },
+    "contact": {
+      "selectTemplate": "Chọn một mẫu",
+      "noTemplates": "Hãy tạo mẫu tài liệu trong Cài đặt > Tài liệu trước.",
+      "empty": "Liên hệ này chưa có tài liệu nào",
+      "generated": "Đã tạo tài liệu",
+      "linkExpires": "Liên kết có hiệu lực đến {date}",
+      "open": "Mở PDF"
+    }
   }
 }

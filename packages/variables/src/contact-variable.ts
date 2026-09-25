@@ -110,7 +110,8 @@ const variableResolvers = [
 
 type GetAllProps = {
   contactId: string
-  contactInbox: ContactInboxModel | string
+  /** null = no channel context (a document rendered from the contact page). */
+  contactInbox: ContactInboxModel | string | null
   conversation?: ConversationModel | null
   appointmentId?: string
   workspace?: WorkspaceModel
@@ -130,8 +131,11 @@ const loadContact = async (contactId: string): Promise<ContactModel> => {
 }
 
 const loadInbox = async (
-  contactInbox: ContactInboxModel | string,
+  contactInbox: ContactInboxModel | string | null,
 ): Promise<ContactInboxModel | null> => {
+  if (contactInbox === null) {
+    return null
+  }
   if (typeof contactInbox !== "string") {
     return contactInbox
   }
@@ -205,32 +209,44 @@ export const contactVariableService = {
     }
   },
 
-  replaceAll: async (props: {
+  /**
+   * The resolved value of every `{{variable}}` in `text` this context knows;
+   * unknown placeholders are left out (the caller leaves them as-is). Split
+   * from replaceAll so a caller that must ESCAPE values before interpolating
+   * (documents: HTML) can use the same resolvers.
+   */
+  resolveMapping: async (props: {
     text: string
     variables: ReplaceVariableProps
-  }): Promise<string> => {
+  }): Promise<Record<string, string>> => {
     const { variables: context, text } = props
     // Temporal custom fields render in the contact's timezone, falling back to
     // the workspace timezone (then UTC) — an outgoing message should read in the
     // recipient's local time when we know it. See getContactTimezone.
     const renderTimezone = getContactTimezone(context)
-
-    try {
-      const mapping: Record<string, string> = {}
-      const variables = extractVariables(text)
-      for (const variable of variables) {
-        const resolver = variableResolvers.find((candidate) =>
-          candidate.matches(variable, context),
+    const mapping: Record<string, string> = {}
+    for (const variable of extractVariables(text)) {
+      const resolver = variableResolvers.find((candidate) =>
+        candidate.matches(variable, context),
+      )
+      if (resolver) {
+        mapping[variable] = await resolver.resolve(
+          variable,
+          context,
+          renderTimezone,
         )
-        if (resolver) {
-          mapping[variable] = await resolver.resolve(
-            variable,
-            context,
-            renderTimezone,
-          )
-        }
       }
+    }
+    return mapping
+  },
 
+  replaceAll: async (props: {
+    text: string
+    variables: ReplaceVariableProps
+  }): Promise<string> => {
+    const { text } = props
+    try {
+      const mapping = await contactVariableService.resolveMapping(props)
       // Prose: "Anh vui lòng…" opening a sentence, "Xin chào anh" inside one.
       return interpolate(text, mapping, { sentenceCase: true })
     } catch (error) {

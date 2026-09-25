@@ -27,6 +27,7 @@ import {
   dealTaskTemplatesPublicRouter,
 } from "@/features/deal-tasks/api/public"
 import { dealsPublicRouter } from "@/features/deals/api/public"
+import { documentsPublicRouter } from "@/features/documents/api/public"
 import { dynamicImagesPublicRouter } from "@/features/dynamic-images/api/public"
 import { emailTopicsPublicRouter } from "@/features/email-topics/api/public"
 import { errorLogsPublicRouter } from "@/features/error-logs/api/public"
@@ -95,6 +96,7 @@ export const publicRouter = {
     ...dealTasksPublicRouter,
     ...dealCommentsPublicRouter,
   },
+  documents: documentsPublicRouter,
   dynamicImages: dynamicImagesPublicRouter,
   emailTopics: emailTopicsPublicRouter,
   errorLogs: errorLogsPublicRouter,

@@ -43,6 +43,10 @@ export function SettingsTab({
         label: t("deals.pipelines"),
         value: "pipelines",
       },
+      {
+        label: t("documents.title"),
+        value: "documents",
+      },
       // {
       //   label: t("billing.title"),
       //   value: "billing",

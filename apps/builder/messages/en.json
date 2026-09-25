@@ -6957,7 +6957,8 @@
       "timeline": "Timeline",
       "contacts": "Contacts",
       "activity": "Change log",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "documents": "Documents"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7037,5 +7038,46 @@
     "changeCompany": "Change company",
     "noCompany": "No company",
     "deleteNote": "Delete note"
+  },
+  "documents": {
+    "title": "Documents",
+    "newTemplate": "New template",
+    "showArchived": "Show archived",
+    "noTemplates": "No document templates yet",
+    "archived": "Archived",
+    "pickOrCreate": "Choose a template on the left or create a new one.",
+    "name": "Name",
+    "namePlaceholder": "Consent form",
+    "saved": "Template saved",
+    "deleteTitle": "Delete this template?",
+    "deleteConfirm": "Documents already generated from it are kept.",
+    "editorPlaceholder": "Write the document. Use Insert field to add contact details.",
+    "insertField": "Insert field",
+    "insertSignature": "Signature block",
+    "signatureHint": "The signature block marks where the contact signs when the document is sent for signature.",
+    "signatureLabel": "Signature",
+    "dateSignedLabel": "Date",
+    "toolbar": {
+      "bold": "Bold",
+      "italic": "Italic",
+      "heading1": "Heading 1",
+      "heading2": "Heading 2",
+      "bulletList": "Bulleted list",
+      "orderedList": "Numbered list"
+    },
+    "status": {
+      "generated": "Generated",
+      "sent": "Sent",
+      "signed": "Signed",
+      "failed": "Failed"
+    },
+    "contact": {
+      "selectTemplate": "Choose a template",
+      "noTemplates": "Create a document template in Settings > Documents first.",
+      "empty": "No documents for this contact yet",
+      "generated": "Document generated",
+      "linkExpires": "Link valid until {date}",
+      "open": "Open PDF"
+    }
   }
 }

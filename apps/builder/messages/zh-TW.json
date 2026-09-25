@@ -6957,7 +6957,8 @@
       "timeline": "Timeline",
       "contacts": "Contacts",
       "activity": "Change log",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "documents": "文件"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7037,5 +7038,46 @@
     "changeCompany": "Change company",
     "noCompany": "No company",
     "deleteNote": "Delete note"
+  },
+  "documents": {
+    "title": "文件",
+    "newTemplate": "新增範本",
+    "showArchived": "顯示已封存",
+    "noTemplates": "尚無文件範本",
+    "archived": "已封存",
+    "pickOrCreate": "在左側選擇範本或建立新範本。",
+    "name": "名稱",
+    "namePlaceholder": "同意書",
+    "saved": "範本已儲存",
+    "deleteTitle": "刪除此範本？",
+    "deleteConfirm": "已由此範本產生的文件會保留。",
+    "editorPlaceholder": "撰寫文件。使用「插入欄位」加入聯絡人資料。",
+    "insertField": "插入欄位",
+    "insertSignature": "簽名區",
+    "signatureHint": "簽名區標示聯絡人在文件送出簽署時的簽名位置。",
+    "signatureLabel": "簽名",
+    "dateSignedLabel": "日期",
+    "toolbar": {
+      "bold": "粗體",
+      "italic": "斜體",
+      "heading1": "標題 1",
+      "heading2": "標題 2",
+      "bulletList": "項目符號清單",
+      "orderedList": "編號清單"
+    },
+    "status": {
+      "generated": "已產生",
+      "sent": "已傳送",
+      "signed": "已簽署",
+      "failed": "失敗"
+    },
+    "contact": {
+      "selectTemplate": "選擇範本",
+      "noTemplates": "請先在 設定 > 文件 中建立文件範本。",
+      "empty": "此聯絡人尚無文件",
+      "generated": "文件已產生",
+      "linkExpires": "連結有效至 {date}",
+      "open": "開啟 PDF"
+    }
   }
 }

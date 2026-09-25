@@ -6957,7 +6957,8 @@
       "timeline": "Timeline",
       "contacts": "Contacts",
       "activity": "Change log",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "documents": "Belgeler"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7037,5 +7038,46 @@
     "changeCompany": "Change company",
     "noCompany": "No company",
     "deleteNote": "Delete note"
+  },
+  "documents": {
+    "title": "Belgeler",
+    "newTemplate": "Yeni şablon",
+    "showArchived": "Arşivlenenleri göster",
+    "noTemplates": "Henüz belge şablonu yok",
+    "archived": "Arşivlendi",
+    "pickOrCreate": "Soldan bir şablon seçin veya yeni bir tane oluşturun.",
+    "name": "Ad",
+    "namePlaceholder": "Onay formu",
+    "saved": "Şablon kaydedildi",
+    "deleteTitle": "Bu şablon silinsin mi?",
+    "deleteConfirm": "Ondan zaten oluşturulmuş belgeler korunur.",
+    "editorPlaceholder": "Belgeyi yazın. Kişi bilgilerini eklemek için Alan ekle'yi kullanın.",
+    "insertField": "Alan ekle",
+    "insertSignature": "İmza bloğu",
+    "signatureHint": "İmza bloğu, belge imzaya gönderildiğinde kişinin nereye imza atacağını gösterir.",
+    "signatureLabel": "İmza",
+    "dateSignedLabel": "Tarih",
+    "toolbar": {
+      "bold": "Kalın",
+      "italic": "İtalik",
+      "heading1": "Başlık 1",
+      "heading2": "Başlık 2",
+      "bulletList": "Madde işaretli liste",
+      "orderedList": "Numaralı liste"
+    },
+    "status": {
+      "generated": "Oluşturuldu",
+      "sent": "Gönderildi",
+      "signed": "İmzalandı",
+      "failed": "Başarısız"
+    },
+    "contact": {
+      "selectTemplate": "Bir şablon seçin",
+      "noTemplates": "Önce Ayarlar > Belgeler bölümünde bir belge şablonu oluşturun.",
+      "empty": "Bu kişi için henüz belge yok",
+      "generated": "Belge oluşturuldu",
+      "linkExpires": "Bağlantı {date} tarihine kadar geçerli",
+      "open": "PDF'yi aç"
+    }
   }
 }

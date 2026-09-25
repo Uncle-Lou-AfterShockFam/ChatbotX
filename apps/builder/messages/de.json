@@ -6957,7 +6957,8 @@
       "timeline": "Timeline",
       "contacts": "Contacts",
       "activity": "Change log",
-      "conversations": "Conversations"
+      "conversations": "Conversations",
+      "documents": "Dokumente"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7037,5 +7038,46 @@
     "changeCompany": "Change company",
     "noCompany": "No company",
     "deleteNote": "Delete note"
+  },
+  "documents": {
+    "title": "Dokumente",
+    "newTemplate": "Neue Vorlage",
+    "showArchived": "Archivierte anzeigen",
+    "noTemplates": "Noch keine Dokumentvorlagen",
+    "archived": "Archiviert",
+    "pickOrCreate": "Wähle links eine Vorlage oder erstelle eine neue.",
+    "name": "Name",
+    "namePlaceholder": "Einwilligungserklärung",
+    "saved": "Vorlage gespeichert",
+    "deleteTitle": "Diese Vorlage löschen?",
+    "deleteConfirm": "Bereits daraus erstellte Dokumente bleiben erhalten.",
+    "editorPlaceholder": "Schreibe das Dokument. Mit „Feld einfügen“ fügst du Kontaktdaten ein.",
+    "insertField": "Feld einfügen",
+    "insertSignature": "Unterschriftsblock",
+    "signatureHint": "Der Unterschriftsblock markiert, wo der Kontakt unterschreibt, wenn das Dokument zur Unterschrift gesendet wird.",
+    "signatureLabel": "Unterschrift",
+    "dateSignedLabel": "Datum",
+    "toolbar": {
+      "bold": "Fett",
+      "italic": "Kursiv",
+      "heading1": "Überschrift 1",
+      "heading2": "Überschrift 2",
+      "bulletList": "Aufzählung",
+      "orderedList": "Nummerierte Liste"
+    },
+    "status": {
+      "generated": "Erstellt",
+      "sent": "Gesendet",
+      "signed": "Unterschrieben",
+      "failed": "Fehlgeschlagen"
+    },
+    "contact": {
+      "selectTemplate": "Vorlage wählen",
+      "noTemplates": "Lege zuerst unter Einstellungen > Dokumente eine Dokumentvorlage an.",
+      "empty": "Noch keine Dokumente für diesen Kontakt",
+      "generated": "Dokument erstellt",
+      "linkExpires": "Link gültig bis {date}",
+      "open": "PDF öffnen"
+    }
   }
 }
