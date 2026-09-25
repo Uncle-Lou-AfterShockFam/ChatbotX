@@ -69,7 +69,15 @@ export function DataTableToolbar<TData>({
           </Button>
         )}
       </div>
-      <div className="flex items-center justify-end gap-2">{children}</div>
+      {/* Wraps: right-aligned inside the table's overflow-auto column, a row
+          wider than a phone spilled past the LEFT edge, where no scroll
+          reaches (s202c, /flows at 390 px clipped its first button). */}
+      <div
+        className="flex flex-wrap items-center justify-end gap-2"
+        data-slot="data-table-toolbar-actions"
+      >
+        {children}
+      </div>
     </div>
   )
 }
