@@ -52,6 +52,7 @@ import { customFieldRelations } from "./custom-field"
 import { dealRelations } from "./deal"
 import { dealCommentRelations } from "./deal-comment"
 import { dealTaskRelations } from "./deal-task"
+import { documentRelations } from "./document"
 import { dynamicImageRelations } from "./dynamic-image"
 import { emailTopicRelations } from "./email-topic"
 import { auditLogRelations } from "./enterprise/audit-log"
@@ -218,6 +219,7 @@ export const relations = {
   ...dealRelations,
   ...dealCommentRelations,
   ...dealTaskRelations,
+  ...documentRelations,
   ...notificationRelations,
   ...pipelineMemberRelations,
   ...pipelineRelations,
