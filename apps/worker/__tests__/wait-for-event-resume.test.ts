@@ -115,7 +115,7 @@ describe("runWaitForEventResume", () => {
   })
 
   test("HOSTILE (skeptic HIGH): a slow but ALIVE run renews its claim every 2 min so the 10-min sweep never re-runs it; renewal stops with the run", async () => {
-    let finish: () => void = () => {}
+    let finish: (() => void) | undefined
     runFlowNode.mockImplementationOnce(
       () => new Promise<void>((resolve) => (finish = resolve)),
     )
@@ -127,7 +127,7 @@ describe("runWaitForEventResume", () => {
       generation: 1,
     })
     expect(smartDelayService.finishClaimedRun).not.toHaveBeenCalled()
-    finish()
+    finish?.()
     await run
     expect(smartDelayService.finishClaimedRun).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(10 * 60 * 1000)
