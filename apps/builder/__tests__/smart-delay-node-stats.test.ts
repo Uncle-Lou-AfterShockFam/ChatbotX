@@ -38,6 +38,8 @@ describe("buildSmartDelayNodeStats", () => {
     const rows: SmartDelayStepCountRow[] = [
       { stepId: "wait-step", status: "pending", total: 2 },
       { stepId: "wait-step", status: "scheduled", total: 3 },
+      // Claimed by a resume whose flow is still running: still waiting.
+      { stepId: "wait-step", status: "running", total: 1 },
       { stepId: "wait-step", status: "completed", total: 4 },
       { stepId: "wait-step", status: "failed", total: 5 },
       { stepId: "follow-up-step", status: "canceled", total: 6 },
@@ -45,7 +47,7 @@ describe("buildSmartDelayNodeStats", () => {
 
     expect(buildSmartDelayNodeStats(nodes, rows)).toEqual({
       "wait-node": {
-        waiting: 5,
+        waiting: 6,
         sent: 4,
       },
       "follow-up-node": {

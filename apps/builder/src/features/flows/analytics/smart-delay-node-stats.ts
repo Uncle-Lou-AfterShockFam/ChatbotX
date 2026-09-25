@@ -22,6 +22,8 @@ const SMART_DELAY_STATUS_BUCKETS: Record<
 > = {
   pending: "waiting",
   scheduled: "waiting",
+  // Claimed by a resume whose flow is still running: not sent yet.
+  running: "waiting",
   completed: "sent",
   canceled: null,
   failed: null,

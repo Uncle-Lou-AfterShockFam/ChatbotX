@@ -366,6 +366,9 @@ export type IntegrationJobResumeWaitForEvent = {
         customFieldId?: string
         // customFieldChanged: the value the field changed TO (null = cleared).
         newValue?: string | null
+        // ISO instant the event fired: a retry never resumes a wait created
+        // after it (absent on a pre-deploy job = never matches).
+        emittedAt?: string
       }
 }
 
