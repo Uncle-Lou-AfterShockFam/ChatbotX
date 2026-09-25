@@ -24,6 +24,7 @@
     "./deal-comment": "./src/deal-comment/index.ts",
     "./deal-task": "./src/deal-task/index.ts",
     "./documents": "./src/documents/index.ts",
+    "./form": "./src/form/index.ts",
     "./coexist": "./src/coexist/index.ts",
     "./coexist/history": "./src/coexist/history-window.ts",
     "./coupon": "./src/coupon/index.ts",
