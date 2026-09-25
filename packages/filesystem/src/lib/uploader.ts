@@ -15,6 +15,7 @@ import { mapWithConcurrency } from "@chatbotx.io/utils"
 import { AwsClient } from "aws4fetch"
 import { keys } from "../keys"
 import { buildCopySource } from "./copy-source"
+import { uploaderLogger } from "./logger"
 
 const env = keys()
 
@@ -347,9 +348,14 @@ export class Uploader {
   ): Promise<Awaited<ReturnType<Uploader["deleteObjects"]>>> {
     try {
       return await this.deleteObjects(keys)
-    } catch {
-      // Deliberately not rethrown: the per-key pass below re-attempts every
-      // key and surfaces its own first failure, which is the actionable one.
+    } catch (error) {
+      // Not rethrown: the per-key pass below re-attempts every key and
+      // surfaces its own first failure, which is the actionable one. Logged so
+      // how often (and why) the fallback runs stays visible.
+      uploaderLogger.warn(
+        { err: error, keys: keys.length },
+        "multi-object delete refused; falling back to per-key deletes",
+      )
       const results = await mapWithConcurrency(
         [...new Set(keys)],
         PER_KEY_FALLBACK_CONCURRENCY,

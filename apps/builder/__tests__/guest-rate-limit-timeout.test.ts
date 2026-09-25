@@ -68,6 +68,56 @@ describe("checkGuestRateLimit with a hung store (s201c)", () => {
     expect(results.filter((r) => r.limited)).toHaveLength(1)
   })
 
+  test("ONE budget covers every round trip: a slow-but-answering store cannot stack four timeouts", async () => {
+    vi.useFakeTimers()
+    try {
+      // Each call answers just under the budget: bounded per call, the
+      // ip + session path (4 round trips) would take ~4x STORE_TIMEOUT_MS.
+      const slow = <T>(value: T) =>
+        new Promise<T>((resolve) =>
+          setTimeout(() => resolve(value), STORE_TIMEOUT_MS - 100),
+        )
+      const store = {
+        setNumberIfNotExists: vi.fn(() => slow(false)),
+        incrementCounter: vi.fn(() => slow(2)),
+      }
+      let settled = false
+      const pending = checkGuestRateLimit({
+        webchatId: "wc-slow",
+        clientIp: "203.0.113.10",
+        guestConversationId: "gc-slow",
+        store,
+        now: 0,
+      }).then((result) => {
+        settled = true
+        return result
+      })
+      await vi.advanceTimersByTimeAsync(STORE_TIMEOUT_MS)
+      expect(settled).toBe(true)
+      expect((await pending).limited).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("a fast store with a session key is still the source of truth", async () => {
+    const store = {
+      setNumberIfNotExists: vi.fn(() => Promise.resolve(false)),
+      incrementCounter: vi.fn((key: string) =>
+        Promise.resolve(key.includes(":session:") ? 999 : 1),
+      ),
+    }
+    const result = await checkGuestRateLimit({
+      webchatId: "wc-fast",
+      clientIp: "203.0.113.11",
+      guestConversationId: "gc-fast",
+      store,
+      now: 0,
+    })
+    expect(result.limited).toBe(true)
+    expect(store.incrementCounter).toHaveBeenCalledTimes(2)
+  })
+
   test.each([
     0,
     -1,
