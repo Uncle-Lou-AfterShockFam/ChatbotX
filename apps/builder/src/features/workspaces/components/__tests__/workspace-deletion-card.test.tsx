@@ -18,6 +18,7 @@ const translations: Record<string, string> = {
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => translations[key] ?? key,
   useLocale: () => "en",
+  useTimeZone: () => "UTC",
 }))
 
 const capturedOptions: Record<string, { onSuccess?: () => void }> = {}
