@@ -1,1 +1,0 @@
-CREATE INDEX "DealTask_workspaceId_dueAt_idx" ON "DealTask" ("workspaceId","dueAt");
