@@ -13,7 +13,11 @@ const listeners = new Set<() => void>()
 let timer: number | undefined
 
 function readClock(): Date {
-  if (Date.now() - clock.getTime() >= RENDER_NOW_INTERVAL_MS) {
+  // Either direction: a clock that stepped BACK (NTP, a manual change, a
+  // faked test clock set after this module loaded) must not pin "now" in the
+  // future until the next tick (s206: relative-time.test failed after noon
+  // UTC only).
+  if (Math.abs(Date.now() - clock.getTime()) >= RENDER_NOW_INTERVAL_MS) {
     clock = new Date()
   }
   return clock
