@@ -819,7 +819,14 @@
       "endsWith": "Ends med",
       "isBetween": "Interval",
       "notBetween": "Ikke interval",
-      "used": "Used"
+      "used": "Used",
+      "isAnyOf": "Er en af",
+      "isNoneOf": "Er ingen af",
+      "hasAnyOf": "Har en af",
+      "hasAllOf": "Har alle",
+      "hasNoneOf": "Har ingen af",
+      "isExactly": "Er præcis",
+      "isNotExactly": "Er ikke præcis"
     },
     "contactFilter": {
       "allConditions": "Alle af den following betingelser",

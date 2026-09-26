@@ -4203,7 +4203,14 @@
       "endsWith": "מסתיים ב-",
       "isBetween": "טווח",
       "notBetween": "לא בטווח",
-      "used": "בשימוש"
+      "used": "בשימוש",
+      "isAnyOf": "אחד מ",
+      "isNoneOf": "אף אחד מ",
+      "hasAnyOf": "מכיל אחד מ",
+      "hasAllOf": "מכיל את כולם",
+      "hasNoneOf": "לא מכיל אף אחד מ",
+      "isExactly": "בדיוק",
+      "isNotExactly": "לא בדיוק"
     },
     "contactFilter": {
       "allConditions": "כל התנאים הבאים",

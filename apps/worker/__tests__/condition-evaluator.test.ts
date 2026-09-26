@@ -387,3 +387,95 @@ describe("ConditionEvaluator formSubmitted (s200)", () => {
     ).resolves.toBe(false)
   })
 })
+
+describe("ConditionEvaluator customFieldValueChanged on option fields (s203)", () => {
+  const evaluator = new ConditionEvaluator()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const run = (
+    operator: string,
+    value: unknown,
+    fieldType: "select" | "multiSelect",
+    newValue: unknown,
+  ) => {
+    customFieldFindBy.mockResolvedValue({ type: fieldType })
+    return evaluator.evaluate(
+      buildContext(
+        {
+          type: triggerEventTypes.enum.customFieldValueChanged,
+          sourceId: "cf-1",
+          operator,
+          value,
+        },
+        { customFieldId: "cf-1", newValue },
+      ),
+    )
+  }
+
+  const INTERESTS = '["Golf","Red, White"]'
+
+  test.each([
+    ["in", { options: ["Hiking", "Red, White"] }, true],
+    ["in", { options: ["Hiking"] }, false],
+    ["contains", { options: ["Golf", "Red, White"] }, true],
+    ["contains", { options: ["Golf", "Hiking"] }, false],
+    ["notIn", { options: ["Hiking"] }, true],
+    ["notIn", { options: ["Golf"] }, false],
+    ["eq", { options: ["Red, White", "Golf"] }, true],
+    ["eq", { options: ["Golf"] }, false],
+    ["ne", { options: ["Golf"] }, true],
+    ["isNotEmpty", "", true],
+    ["isEmpty", "", false],
+  ])("multiSelect %s %j -> %s", async (operator, value, expected) => {
+    await expect(run(operator, value, "multiSelect", INTERESTS)).resolves.toBe(
+      expected,
+    )
+  })
+
+  test("select eq / in / notIn compare the canonical option", async () => {
+    await expect(
+      run("eq", { text: "Silver" }, "select", "Silver"),
+    ).resolves.toBe(true)
+    await expect(run("eq", { text: "Gold" }, "select", "Silver")).resolves.toBe(
+      false,
+    )
+    await expect(
+      run("in", { options: ["Gold", "Silver"] }, "select", "Silver"),
+    ).resolves.toBe(true)
+    await expect(
+      run("notIn", { options: ["Silver"] }, "select", null),
+    ).resolves.toBe(true)
+  })
+
+  test("a cleared value (null) matches only the negatives", async () => {
+    await expect(
+      run("in", { options: ["Golf"] }, "multiSelect", null),
+    ).resolves.toBe(false)
+    await expect(
+      run("notIn", { options: ["Golf"] }, "multiSelect", null),
+    ).resolves.toBe(true)
+    await expect(run("isEmpty", "", "multiSelect", null)).resolves.toBe(true)
+  })
+
+  test("the wrong value shape fails closed", async () => {
+    // a list operator given one option, and an empty list
+    await expect(
+      run("in", { text: "Golf" }, "multiSelect", INTERESTS),
+    ).resolves.toBe(false)
+    await expect(
+      run("notIn", { options: [] }, "multiSelect", INTERESTS),
+    ).resolves.toBe(false)
+    await expect(
+      run("eq", { options: ["Gold"] }, "select", "Gold"),
+    ).resolves.toBe(false)
+  })
+
+  test("a pre-s203 text operator on a select keeps its text meaning", async () => {
+    await expect(
+      run("contains", { text: "ol" }, "select", "Gold"),
+    ).resolves.toBe(true)
+  })
+})

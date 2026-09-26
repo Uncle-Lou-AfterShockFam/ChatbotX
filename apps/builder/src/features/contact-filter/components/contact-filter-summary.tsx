@@ -8,6 +8,7 @@ import {
   getConditionOptions,
   getFieldConfigs,
 } from "./contact-filter-config"
+import { optionOperatorLabelKey } from "./custom-field-filter-config"
 
 type ContactFilterSummaryProps = {
   contactFilter?: ContactFilterCriteria | null
@@ -100,8 +101,16 @@ export function ContactFilterSummary({
               }
               return t(`condition.fields.${condition.field}`)
             })()
-          const conditionOperator =
-            operatorLabelByValue.get(condition.operator) ?? condition.operator
+          const optionLabelKey = optionOperatorLabelKey(
+            "customFieldType" in condition
+              ? condition.customFieldType
+              : undefined,
+            condition.operator,
+          )
+          const conditionOperator = optionLabelKey
+            ? t(optionLabelKey)
+            : (operatorLabelByValue.get(condition.operator) ??
+              condition.operator)
           const valueDisplay = formatConditionValueDisplay(
             "value" in condition ? condition.value : undefined,
             fieldConfig?.options,

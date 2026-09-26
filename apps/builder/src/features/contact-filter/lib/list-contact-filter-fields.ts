@@ -4,6 +4,10 @@ import {
   tagService,
 } from "@chatbotx.io/business"
 import {
+  isOptionFieldType,
+  OPTION_FIELD_OPERATORS,
+} from "@chatbotx.io/utils/custom-field"
+import {
   CONTACT_FILTER_FIELD_DEFINITIONS,
   convertCustomFieldTypeToConditionType,
 } from "@/features/contact-filter/schema"
@@ -34,11 +38,18 @@ export async function listContactFilterFieldsForAPI(props: {
     id: string
     name: string
     type: string
+    options?: string[] | null
   }) => ({
     id: field.id,
     name: field.name,
     type: field.type,
     valueType: convertCustomFieldTypeToConditionType(field.type),
+    ...(isOptionFieldType(field.type)
+      ? {
+          options: field.options ?? [],
+          operators: [...OPTION_FIELD_OPERATORS[field.type]],
+        }
+      : {}),
   })
 
   const staticFields = CONTACT_FILTER_FIELD_DEFINITIONS.filter(

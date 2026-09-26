@@ -366,3 +366,144 @@ export const multiSelectItems = (stored: string): string[] => {
 /** Human text for a stored multiSelect value: "Gold, Silver". */
 export const formatMultiSelectText = (stored: string): string =>
   multiSelectItems(stored).join(", ")
+
+// --- Filtering / branching on option fields (s203, PR3b). One table serves
+// the builder schema, the SQL builder and the trigger evaluator.
+
+/**
+ * Operators an option field accepts. select: `in` / `notIn` = is any / none
+ * of. multiSelect: `in` = has any of, `contains` = has all of, `notIn` = has
+ * none of, `eq` / `ne` = is / is not exactly this set. A contact with no value
+ * matches `ne`, `notIn` and `isEmpty` (the negatives), like every other field.
+ */
+export const OPTION_FIELD_OPERATORS = {
+  select: ["eq", "ne", "in", "notIn", "isEmpty", "isNotEmpty"],
+  multiSelect: ["in", "contains", "notIn", "eq", "ne", "isEmpty", "isNotEmpty"],
+} as const satisfies Record<OptionFieldType, readonly OperatorType[]>
+
+const isValuelessOptionOperator = (operator: string): boolean =>
+  operator === "isEmpty" || operator === "isNotEmpty"
+
+/** A select `eq` / `ne` compares one option; every other valued operator a list. */
+export const optionOperatorTakesList = (
+  type: OptionFieldType,
+  operator: string,
+): boolean =>
+  !(
+    isValuelessOptionOperator(operator) ||
+    (type === "select" && (operator === "eq" || operator === "ne"))
+  )
+
+/**
+ * Why an option-field condition is invalid, or null. Closed: an operator
+ * outside {@link OPTION_FIELD_OPERATORS}, a list where one option is expected
+ * (or the reverse), an empty / blank / over-long list are all refused.
+ */
+export const optionConditionIssue = (
+  type: OptionFieldType,
+  operator: string,
+  value: unknown,
+): string | null => {
+  if (!(OPTION_FIELD_OPERATORS[type] as readonly string[]).includes(operator)) {
+    return "Operator is not supported for this field"
+  }
+  if (isValuelessOptionOperator(operator)) {
+    return null
+  }
+  if (!optionOperatorTakesList(type, operator)) {
+    return typeof value === "string" && value.trim() !== ""
+      ? null
+      : "Operator requires one option"
+  }
+  if (!Array.isArray(value) || value.length === 0) {
+    return "Operator requires at least one option"
+  }
+  if (value.length > MAX_CUSTOM_FIELD_OPTIONS) {
+    return `At most ${MAX_CUSTOM_FIELD_OPTIONS} options`
+  }
+  return value.every((v) => typeof v === "string" && v.trim() !== "")
+    ? null
+    : "Options must be non-blank text"
+}
+
+/**
+ * Stored multiSelect text -> the items a condition compares. Mirrors the SQL
+ * builder's `optionItemsSql` exactly (a property test holds them together):
+ * blank -> none, a JSON array -> its elements (a non-string element never
+ * equals an option), any other text -> one legacy item.
+ */
+const conditionItems = (stored: string): unknown[] => {
+  const trimmed = stored.trim()
+  if (trimmed === "") {
+    return []
+  }
+  if (trimmed.startsWith("[")) {
+    try {
+      const parsed: unknown = JSON.parse(trimmed)
+      if (Array.isArray(parsed)) {
+        return parsed
+      }
+    } catch {
+      // legacy text that merely starts with "["
+    }
+  }
+  return [stored]
+}
+
+/**
+ * JS evaluation of a VALID option-field condition (check
+ * {@link optionConditionIssue} first; an unknown operator returns false) over
+ * the stored value (null = the contact has no value). Same answers as the SQL
+ * builder's option branch.
+ */
+export const matchesOptionCondition = (
+  type: OptionFieldType,
+  operator: string,
+  stored: string | null | undefined,
+  value: unknown,
+): boolean => {
+  const list = Array.isArray(value) ? (value as string[]) : [String(value)]
+  if (type === "select") {
+    const present = stored !== null && stored !== undefined && stored !== ""
+    switch (operator) {
+      case "eq":
+        return present && stored === list[0]
+      case "ne":
+        return !(present && stored === list[0])
+      case "in":
+        return present && list.includes(stored)
+      case "notIn":
+        return !(present && list.includes(stored))
+      case "isNotEmpty":
+        return present
+      case "isEmpty":
+        return !present
+      default:
+        return false
+    }
+  }
+  const items =
+    stored === null || stored === undefined ? [] : conditionItems(stored)
+  const has = (option: string) => items.includes(option)
+  const exact = () =>
+    items.every((item) => typeof item === "string" && list.includes(item)) &&
+    list.every(has)
+  switch (operator) {
+    case "in":
+      return list.some(has)
+    case "notIn":
+      return !list.some(has)
+    case "contains":
+      return list.every(has)
+    case "eq":
+      return exact()
+    case "ne":
+      return !exact()
+    case "isNotEmpty":
+      return items.length > 0
+    case "isEmpty":
+      return items.length === 0
+    default:
+      return false
+  }
+}

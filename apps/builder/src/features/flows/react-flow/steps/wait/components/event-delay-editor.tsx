@@ -11,7 +11,9 @@ import { Label } from "@chatbotx.io/ui/components/ui/label"
 import { useTranslations } from "next-intl"
 import { useEffect } from "react"
 import { useFormContext, useWatch } from "react-hook-form"
+import { FieldValuePickerPopover } from "@/features/custom-fields/components/field-value-picker-popover"
 import { CustomFieldSelect } from "@/features/custom-fields/custom-field-select"
+import { useCustomFieldStore } from "@/features/custom-fields/provider/custom-field-store-context"
 import { useTagSelectOptions } from "@/features/tags/provider/tag-hook"
 import DelayUnitSelect from "./delay-unit-select"
 
@@ -27,7 +29,18 @@ export function EventDelayEditor({ parentName }: EventDelayEditorProps) {
   const t = useTranslations()
   const { getValues, setValue } = useFormContext()
   const eventType = useWatch({ name: `${parentName}.eventType` })
+  const customFieldId = useWatch({ name: `${parentName}.customFieldId` })
   const tagOptions = useTagSelectOptions()
+  // s203: a select / multiSelect match value is picked from the options; the
+  // resume check compares the stored text exactly, so a multiSelect match is
+  // "the new value is exactly this set" (canonical JSON, written by the picker).
+  const optionField = useCustomFieldStore((state) =>
+    state.customFields.find(
+      (field) =>
+        field.id === customFieldId &&
+        (field.type === "select" || field.type === "multiSelect"),
+    ),
+  )
 
   // Switching from another delayType leaves the event fields undefined: seed
   // them once so the schema's defaults hold before the first save.
@@ -72,12 +85,29 @@ export function EventDelayEditor({ parentName }: EventDelayEditorProps) {
             label={t("flows.wait.eventCustomFieldLabel")}
             name={`${parentName}.customFieldId`}
           />
-          <InputField
-            description={t("flows.wait.eventMatchValueHelp")}
-            label={t("flows.wait.eventMatchValueLabel")}
-            name={`${parentName}.matchValue`}
-            placeholder="{{raw:order_id}}"
-          />
+          {optionField ? (
+            <FieldValuePickerPopover
+              kind={optionField.type as "select" | "multiSelect"}
+              name={`${parentName}.matchValue`}
+              options={optionField.options ?? []}
+            >
+              {(inputKey) => (
+                <InputField
+                  description={t("flows.wait.eventMatchValueHelp")}
+                  key={inputKey}
+                  label={t("flows.wait.eventMatchValueLabel")}
+                  name={`${parentName}.matchValue`}
+                />
+              )}
+            </FieldValuePickerPopover>
+          ) : (
+            <InputField
+              description={t("flows.wait.eventMatchValueHelp")}
+              label={t("flows.wait.eventMatchValueLabel")}
+              name={`${parentName}.matchValue`}
+              placeholder="{{raw:order_id}}"
+            />
+          )}
         </>
       )}
 

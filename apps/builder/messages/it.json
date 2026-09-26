@@ -93,7 +93,14 @@
       "endsWith": "Termina con",
       "isBetween": "Intervallo",
       "notBetween": "Fuori intervallo",
-      "used": "Utilizzato"
+      "used": "Utilizzato",
+      "isAnyOf": "È uno tra",
+      "isNoneOf": "Non è nessuno tra",
+      "hasAnyOf": "Ha uno tra",
+      "hasAllOf": "Ha tutti",
+      "hasNoneOf": "Non ha nessuno tra",
+      "isExactly": "È esattamente",
+      "isNotExactly": "Non è esattamente"
     },
     "contactFilter": {
       "allConditions": "Tutte le condizioni seguenti",

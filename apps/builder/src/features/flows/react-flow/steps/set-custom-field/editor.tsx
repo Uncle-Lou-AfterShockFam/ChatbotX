@@ -49,13 +49,20 @@ const SetCustomFieldStepEditor = ({ parentName }: { parentName: string }) => {
   // either a customField id/name (legacy lookup) or a `bot_field:<id>` token.
   const { customFields, botFields } = useCustomFieldStore((state) => state)
   const selectedFieldId = customFieldForm.watch("inputFieldId")
-  const selectedFieldType = findFieldByReference(selectedFieldId, {
+  const selectedField = findFieldByReference(selectedFieldId, {
     customFields,
     botFields,
-  })?.type
+  })
+  const selectedFieldType = selectedField?.type
   const isTemporalField =
     selectedFieldType === "date" || selectedFieldType === "datetime"
-  const isPickableField = isTemporalField || selectedFieldType === "boolean"
+  // s203: a select / multiSelect picks from its options (typing a value or a
+  // {{variable}} still works; the write path refuses an off-option value).
+  const isPickableField =
+    isTemporalField ||
+    selectedFieldType === "boolean" ||
+    selectedFieldType === "select" ||
+    selectedFieldType === "multiSelect"
 
   function onSubmit(values: SetCustomFieldStepSchema) {
     commitStep({
@@ -107,6 +114,7 @@ const SetCustomFieldStepEditor = ({ parentName }: { parentName: string }) => {
                 <FieldValuePickerPopover
                   kind={selectedFieldType as FieldValuePickerKind}
                   name="value"
+                  options={selectedField?.options ?? []}
                 >
                   {(inputKey) => (
                     <PlainTextEditorField

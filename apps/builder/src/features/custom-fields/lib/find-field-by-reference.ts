@@ -8,6 +8,8 @@ import type { CustomFieldResource } from "../schema/resource"
 
 export type FieldReferenceLookupResult = {
   type: CustomFieldType
+  /** s203: a select / multiSelect custom field's option list. */
+  options?: string[] | null
 }
 
 type FindFieldByReferenceInput = {
@@ -45,7 +47,9 @@ export function findFieldByReference(
       const field = customFields.find(
         (item) => item.id === parsed.key || item.name === parsed.key,
       )
-      return field ? { type: field.type as CustomFieldType } : undefined
+      return field
+        ? { type: field.type as CustomFieldType, options: field.options }
+        : undefined
     }
     default: {
       const exhaustiveCheck: never = parsed

@@ -961,7 +961,14 @@
       "endsWith": "ينتهي بـ",
       "isBetween": "بين",
       "notBetween": "ليس بين",
-      "used": "مستخدَم"
+      "used": "مستخدَم",
+      "isAnyOf": "أحد",
+      "isNoneOf": "ليس أيًا من",
+      "hasAnyOf": "يحتوي على أي من",
+      "hasAllOf": "يحتوي على الكل",
+      "hasNoneOf": "لا يحتوي على أي من",
+      "isExactly": "بالضبط",
+      "isNotExactly": "ليس بالضبط"
     },
     "contactFilter": {
       "allConditions": "جميع الشروط التالية",

@@ -545,6 +545,26 @@ describe("eventMatchesSpec: matchValue", () => {
     expect(eventMatchesSpec(legacy, fieldEvent)).toBe(true)
   })
 
+  test("s203: a multiSelect match is the exact canonical set the picker writes", () => {
+    const picked = { ...spec, matchValue: '["Golf","Red, White"]' }
+    // the write path stores canonical JSON in option order
+    expect(
+      eventMatchesSpec(picked, {
+        ...fieldEvent,
+        newValue: '["Golf","Red, White"]',
+      }),
+    ).toBe(true)
+    expect(
+      eventMatchesSpec(picked, { ...fieldEvent, newValue: '["Golf"]' }),
+    ).toBe(false)
+    expect(
+      eventMatchesSpec(picked, {
+        ...fieldEvent,
+        newValue: '["Golf","Hiking","Red, White"]',
+      }),
+    ).toBe(false)
+  })
+
   test("adversarial: long values and unresolved placeholders compare literally", () => {
     const long = "9".repeat(500)
     expect(

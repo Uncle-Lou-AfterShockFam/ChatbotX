@@ -961,7 +961,14 @@
       "endsWith": "Şununla biter",
       "isBetween": "Aralık",
       "notBetween": "Aralık dışında",
-      "used": "Kullanıldı"
+      "used": "Kullanıldı",
+      "isAnyOf": "Şunlardan biri",
+      "isNoneOf": "Şunlardan hiçbiri",
+      "hasAnyOf": "Şunlardan birine sahip",
+      "hasAllOf": "Hepsine sahip",
+      "hasNoneOf": "Hiçbirine sahip değil",
+      "isExactly": "Tam olarak",
+      "isNotExactly": "Tam olarak değil"
     },
     "contactFilter": {
       "allConditions": "Aşağıdaki koşulların tümü",
