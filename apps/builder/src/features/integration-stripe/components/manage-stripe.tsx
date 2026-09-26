@@ -1,7 +1,18 @@
 "use client"
 
 import type { StripeConnectionSummary } from "@chatbotx.io/business/integration-stripe"
+import {
+  type InvoiceMethod,
+  invoiceMethods,
+} from "@chatbotx.io/database/partials"
 import { Badge } from "@chatbotx.io/ui/components/ui/badge"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@chatbotx.io/ui/components/ui/select"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useHookFormAction } from "@next-safe-action/adapter-react-hook-form/hooks"
 import { useRouter } from "next/navigation"
@@ -14,13 +25,14 @@ import { DisconnectIntegrationDialog } from "@/features/common/components/discon
 import { AiIntegrationApiKeyDialog } from "@/features/integration-ai/components/ai-integration-api-key-dialog"
 import { connectStripeAction } from "../actions/connect.action"
 import { disconnectStripeAction } from "../actions/disconnect.action"
+import { setStripeDefaultMethodAction } from "../actions/set-default-method.action"
 import { connectStripeSchema } from "../schema"
 
 export function ManageStripe(props: {
   workspaceId: string
   connection: Pick<
     StripeConnectionSummary,
-    "accountId" | "accountName" | "livemode" | "keyLast4"
+    "accountId" | "accountName" | "livemode" | "keyLast4" | "defaultMethod"
   > | null
 }) {
   const [open, setOpen] = useState(false)
@@ -56,48 +68,95 @@ export function ManageStripe(props: {
         error.serverError && toast.error(error.serverError),
     },
   )
+  const { execute: saveDefaultMethod, isPending: savingMethod } = useAction(
+    setStripeDefaultMethodAction.bind(null, props.workspaceId),
+    {
+      onSuccess: () => {
+        router.refresh()
+        toast.success(t("stripe.defaultMethod.saved"))
+      },
+      onError: ({ error }) =>
+        error.serverError && toast.error(error.serverError),
+    },
+  )
   const { connection } = props
+  const methodOptions = invoiceMethods.options.map((value) => ({
+    value,
+    label: t(`invoices.method.${value}`),
+  }))
 
   return (
-    <SettingRow
-      description={
-        <>
-          <span>{t("stripe.setting.description")}</span>
-          {connection && (
-            <span className="flex flex-wrap items-center gap-2">
-              <span className="truncate">
-                {connection.accountName ?? connection.accountId}
+    <>
+      <SettingRow
+        description={
+          <>
+            <span>{t("stripe.setting.description")}</span>
+            {connection && (
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="truncate">
+                  {connection.accountName ?? connection.accountId}
+                </span>
+                <Badge variant={connection.livemode ? "default" : "secondary"}>
+                  {connection.livemode ? t("stripe.live") : t("stripe.test")}
+                </Badge>
+                <span>
+                  {t("stripe.keyEnding", { last4: connection.keyLast4 })}
+                </span>
               </span>
-              <Badge variant={connection.livemode ? "default" : "secondary"}>
-                {connection.livemode ? t("stripe.live") : t("stripe.test")}
-              </Badge>
-              <span>
-                {t("stripe.keyEnding", { last4: connection.keyLast4 })}
-              </span>
-            </span>
-          )}
-        </>
-      }
-      label={t("stripe.setting.label")}
-    >
-      {connection ? (
-        <DisconnectIntegrationDialog
-          featureLabel={featureName}
-          isPending={isPending}
-          onConfirm={disconnect}
-          onOpenChange={setDisconnectOpen}
-          open={disconnectOpen}
-        />
-      ) : (
-        <AiIntegrationApiKeyDialog
-          credentialLabel={t("stripe.fields.secretKey")}
-          form={form}
-          onOpenChange={setOpen}
-          onSubmit={handleSubmitWithAction}
-          open={open}
-          title={featureName}
-        />
+            )}
+          </>
+        }
+        label={t("stripe.setting.label")}
+      >
+        {connection ? (
+          <DisconnectIntegrationDialog
+            featureLabel={featureName}
+            isPending={isPending}
+            onConfirm={disconnect}
+            onOpenChange={setDisconnectOpen}
+            open={disconnectOpen}
+          />
+        ) : (
+          <AiIntegrationApiKeyDialog
+            credentialLabel={t("stripe.fields.secretKey")}
+            form={form}
+            onOpenChange={setOpen}
+            onSubmit={handleSubmitWithAction}
+            open={open}
+            title={featureName}
+          />
+        )}
+      </SettingRow>
+      {connection && (
+        <SettingRow
+          description={t("stripe.defaultMethod.description")}
+          label={t("stripe.defaultMethod.label")}
+        >
+          <Select
+            disabled={savingMethod}
+            items={methodOptions}
+            onValueChange={(value) =>
+              value && saveDefaultMethod({ method: value as InvoiceMethod })
+            }
+            value={connection.defaultMethod}
+          >
+            <SelectTrigger
+              aria-label={t("stripe.defaultMethod.label")}
+              className="w-72 max-w-full"
+              data-testid="stripe-default-method"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {methodOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </SettingRow>
       )}
-    </SettingRow>
+    </>
   )
 }

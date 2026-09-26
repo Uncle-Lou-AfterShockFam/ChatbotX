@@ -55,6 +55,7 @@ const step = {
   currency: "USD",
   dueInDays: 7,
   memo: "",
+  method: "default",
   states: [],
 }
 const props = (overrides: Record<string, unknown> = {}) =>
@@ -114,6 +115,7 @@ describe("createInvoice step", () => {
         { description: "Order for Lou", quantity: 2, unitAmount: "12.50" },
       ],
       dueDays: 7,
+      method: "default",
       sourceKey: invoiceSourceKey(prefix, "run-1"),
       reuseRecent: { sourcePrefix: prefix, withinMs: FLOW_INVOICE_REUSE_MS },
     })
@@ -170,5 +172,14 @@ describe("createInvoice step", () => {
       result: null,
     })
     expect(m.markCreated).not.toHaveBeenCalled()
+  })
+
+  test("the step's method reaches the service (stripeCheckout, s207b)", async () => {
+    await handleCreateInvoice(
+      props({ step: { ...step, method: "stripeCheckout" } }),
+    )
+    expect(m.create.mock.calls[0]?.[0]).toMatchObject({
+      method: "stripeCheckout",
+    })
   })
 })

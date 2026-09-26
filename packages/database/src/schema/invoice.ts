@@ -92,6 +92,17 @@ export const invoiceModel = pgTable(
     providerCustomerId: text(),
     hostedUrl: text(),
     pdfUrl: text(),
+    /** stripeCheckout: the secret of the stable `/pay/<token>` link (set on open). */
+    payToken: text(),
+    /**
+     * stripeCheckout: the ONE live Checkout Session. A new one is minted only
+     * after the previous one is expired, under a CAS on `checkoutGeneration`
+     * (s207b); `checkoutMintedAt` fixes the session's params so racing
+     * visitors replay the same Idempotency-Key with the same body.
+     */
+    checkoutSessionId: text(),
+    checkoutGeneration: integer().notNull().default(0),
+    checkoutMintedAt: timestamp(timestampConfig),
   },
   (table) => [
     uniqueIndex("Invoice_workspaceId_number_key").on(
@@ -103,6 +114,7 @@ export const invoiceModel = pgTable(
       table.sourceKey,
     ),
     uniqueIndex("Invoice_providerInvoiceId_key").on(table.providerInvoiceId),
+    uniqueIndex("Invoice_payToken_key").on(table.payToken),
     index("Invoice_workspaceId_createdAt_idx").on(
       table.workspaceId,
       table.createdAt,

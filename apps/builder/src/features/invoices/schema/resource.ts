@@ -5,6 +5,7 @@ import {
   INVOICE_MAX_QUANTITY,
   INVOICE_MEMO_MAX,
   invoiceMethods,
+  requestedInvoiceMethods,
   invoiceStatuses,
 } from "@chatbotx.io/database/partials"
 import { zodBigintAsString } from "@chatbotx.io/utils"
@@ -104,6 +105,11 @@ export const createInvoiceRequest = z
     dealId: zodBigintAsString()
       .optional()
       .describe("A deal to link the invoice to (see `deals.list`)."),
+    method: requestedInvoiceMethods
+      .optional()
+      .describe(
+        "How it is collected: `stripeInvoice` (a Stripe invoice), `stripeCheckout` (a hub pay link to a one-time Stripe Checkout, no card saved) or `default` (the workspace setting, also when omitted).",
+      ),
     idempotencyKey: z
       .string()
       .trim()

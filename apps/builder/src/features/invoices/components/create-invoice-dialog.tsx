@@ -12,12 +12,22 @@ import {
 } from "@chatbotx.io/ui/components/ui/dialog"
 import { Input } from "@chatbotx.io/ui/components/ui/input"
 import { Label } from "@chatbotx.io/ui/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@chatbotx.io/ui/components/ui/select"
 import { Textarea } from "@chatbotx.io/ui/components/ui/textarea"
 import { Loader2Icon, PlusIcon, XIcon } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useId, useState } from "react"
 import { toast } from "sonner"
 import { useCreateInvoice } from "../provider/invoice-hooks"
+
+const METHODS = ["default", "stripeInvoice", "stripeCheckout"] as const
+type Method = (typeof METHODS)[number]
 
 type Line = {
   key: number
@@ -54,6 +64,11 @@ export function CreateInvoiceDialog({
   const [currency, setCurrency] = useState("USD")
   const [dueInDays, setDueInDays] = useState("7")
   const [memo, setMemo] = useState("")
+  const [method, setMethod] = useState<Method>("default")
+  const methodOptions = METHODS.map((value) => ({
+    value,
+    label: t(`invoices.method.${value}`),
+  }))
   // One key per request CONTENT: a double submit of the same form reuses it,
   // an edited resubmit gets a new one (the server refuses a reused key with
   // different content).
@@ -64,6 +79,7 @@ export function CreateInvoiceDialog({
     if (next) {
       setLines([newLine(0)])
       setMemo("")
+      setMethod("default")
       setSubmitted(undefined)
     }
   }
@@ -88,6 +104,7 @@ export function CreateInvoiceDialog({
       currency: currency.trim().toUpperCase(),
       dueInDays: Math.max(0, Math.min(365, Number(dueInDays) || 0)),
       memo: memo.trim() || undefined,
+      method,
       lines: lines.map((line) => ({
         description: line.description.trim(),
         quantity: Number(line.quantity),
@@ -230,6 +247,33 @@ export function CreateInvoiceDialog({
                 value={dueInDays}
               />
             </div>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor={`${formId}-method`}>
+              {t("invoices.fields.method")}
+            </Label>
+            <Select
+              items={methodOptions}
+              onValueChange={(value) =>
+                setMethod((value as Method | null) ?? "default")
+              }
+              value={method}
+            >
+              <SelectTrigger
+                className="w-full"
+                data-testid="create-invoice-method"
+                id={`${formId}-method`}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {methodOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1">
             <Label htmlFor={`${formId}-memo`}>

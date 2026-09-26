@@ -32,7 +32,17 @@ export const STRIPE_WEBHOOK_EVENTS = [
   "invoice.voided",
   "invoice.marked_uncollectible",
   "charge.refunded",
+  // v2 (s207b, stripeCheckout)
+  "checkout.session.completed",
+  "checkout.session.async_payment_succeeded",
+  "checkout.session.async_payment_failed",
 ] as const satisfies readonly Stripe.WebhookEndpointCreateParams.EnabledEvent[]
+
+/**
+ * Bump with every change to `STRIPE_WEBHOOK_EVENTS`: an endpoint subscribed
+ * under an older version is updated in place (`ensureWebhookEvents`).
+ */
+export const STRIPE_WEBHOOK_EVENTS_VERSION = 2
 
 /** Signature tolerance for `constructEvent` (Stripe's default, stated). */
 export const STRIPE_WEBHOOK_TOLERANCE_SECONDS = 300

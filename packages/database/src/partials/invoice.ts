@@ -17,8 +17,22 @@ export const invoiceStatuses = z.enum([
 ])
 export type InvoiceStatus = z.infer<typeof invoiceStatuses>
 
-export const invoiceMethods = z.enum(["stripeInvoice"])
+/**
+ * How an invoice is collected. `stripeInvoice`: a real Stripe Invoice (Stripe
+ * hosts the page and the PDF). `stripeCheckout` (s207b): a one-off Checkout
+ * Session minted on each visit to the hub's stable `/pay/<token>` link; no
+ * card is saved. A request may also say `default`: the workspace's choice.
+ */
+export const invoiceMethods = z.enum(["stripeInvoice", "stripeCheckout"])
 export type InvoiceMethod = z.infer<typeof invoiceMethods>
+export const requestedInvoiceMethods = z.enum([
+  "default",
+  ...invoiceMethods.options,
+])
+export type RequestedInvoiceMethod = z.infer<typeof requestedInvoiceMethods>
+
+/** Base62, 22 characters = 128 random bits: the only secret in `/pay/<token>`. */
+export const INVOICE_PAY_TOKEN_LENGTH = 22
 
 /**
  * Allowed `from` states for each target state. A webhook that arrives out of
