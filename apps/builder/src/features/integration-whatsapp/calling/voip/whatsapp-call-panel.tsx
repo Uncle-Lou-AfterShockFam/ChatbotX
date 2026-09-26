@@ -3,6 +3,7 @@
 import { Avatar, AvatarFallback } from "@chatbotx.io/ui/components/ui/avatar"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
 import { cn } from "@chatbotx.io/ui/lib/utils"
+import { nameInitials } from "@chatbotx.io/utils/initials"
 import {
   MessageSquareTextIcon,
   MicIcon,
@@ -267,7 +268,7 @@ export function WhatsappCallPanel() {
   }
 
   const contactName = call.contactName ?? t("whatsapp.calls.unknownCaller")
-  const initials = contactName.slice(0, 2)
+  const initials = nameInitials(contactName)
   const isAnswering = call.phase === WhatsappVoipCallPhase.answering
   const isActive = call.phase === WhatsappVoipCallPhase.active
   const isEnded = call.phase === WhatsappVoipCallPhase.ended

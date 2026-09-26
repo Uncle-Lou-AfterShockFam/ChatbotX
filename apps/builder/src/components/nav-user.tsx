@@ -20,6 +20,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@chatbotx.io/ui/components/ui/sidebar"
+import { nameInitials } from "@chatbotx.io/utils/initials"
 import { CreditCard, Crown, Settings2, ShieldCheck } from "lucide-react"
 import Link from "next/link"
 import { useTranslations } from "next-intl"
@@ -69,7 +70,7 @@ export function NavUser({
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarImage alt={user.name} src={avatarUrl ?? ""} />
                   <AvatarFallback className="rounded-lg">
-                    {user.name.slice(0, 2) || "  "}
+                    {nameInitials(user.name) || "  "}
                   </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-start text-sm leading-tight">
@@ -93,7 +94,7 @@ export function NavUser({
                   <Avatar className="h-8 w-8 rounded-lg">
                     <AvatarImage alt={user.name} src={avatarUrl ?? ""} />
                     <AvatarFallback className="rounded-lg">
-                      {user.name.slice(0, 2) || "  "}
+                      {nameInitials(user.name) || "  "}
                     </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-start text-sm leading-tight">

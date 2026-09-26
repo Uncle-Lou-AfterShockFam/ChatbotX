@@ -2,6 +2,7 @@
 
 import { Avatar, AvatarFallback } from "@chatbotx.io/ui/components/ui/avatar"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
+import { nameInitials } from "@chatbotx.io/utils/initials"
 import { PhoneIcon, PhoneOffIcon } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useCountdownSeconds } from "./use-countdown-seconds"
@@ -30,7 +31,7 @@ function RingingCallRow({
     <div className="flex items-center gap-2 px-3 py-2">
       <Avatar className="size-8 shrink-0 border-2 border-white/30">
         <AvatarFallback className="bg-emerald-950 text-white text-xs">
-          {contactName.slice(0, 2)}
+          {nameInitials(contactName)}
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1 text-left">

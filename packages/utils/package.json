@@ -31,6 +31,7 @@
     "./form": "./src/form/index.ts",
     "./graph-error": "./src/graph-error.ts",
     "./id": "./src/id.ts",
+    "./initials": "./src/initials.ts",
     "./meta-capi": "./src/meta-capi.ts",
     "./referral": "./src/referral.ts",
     "./temporal-input": "./src/temporal-input/index.ts",

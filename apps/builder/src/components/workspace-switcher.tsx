@@ -5,7 +5,6 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@chatbotx.io/ui/components/ui/avatar"
-
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +21,7 @@ import {
   useSidebar,
 } from "@chatbotx.io/ui/components/ui/sidebar"
 import { cn } from "@chatbotx.io/ui/lib/utils"
+import { nameInitials } from "@chatbotx.io/utils/initials"
 import { ChevronDown, PlusCircle } from "lucide-react"
 import Link from "next/link"
 import { useTranslations } from "next-intl"
@@ -64,7 +64,7 @@ export function WorkspaceSwitcher({
                     src={activeWorkspace?.logo ?? ""}
                   />
                   <AvatarFallback className="rounded font-medium">
-                    {activeWorkspace?.name?.slice(0, 2) || "  "}
+                    {nameInitials(activeWorkspace?.name) || "  "}
                   </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-start text-sm leading-tight">
@@ -105,7 +105,7 @@ export function WorkspaceSwitcher({
                         src={workspace.logo ?? ""}
                       />
                       <AvatarFallback className="rounded font-medium">
-                        {workspace.name.slice(0, 2) || "  "}
+                        {nameInitials(workspace.name) || "  "}
                       </AvatarFallback>
                     </Avatar>
                     {workspace.name}

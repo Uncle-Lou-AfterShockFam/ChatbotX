@@ -14,6 +14,7 @@ import {
   TooltipTrigger,
 } from "@chatbotx.io/ui/components/ui/tooltip"
 import { cn } from "@chatbotx.io/ui/lib/utils"
+import { nameInitials } from "@chatbotx.io/utils/initials"
 import { isAfter } from "date-fns"
 import {
   MailIcon,
@@ -81,7 +82,7 @@ const assignedIcon = (
               <AvatarImage src={assignedAvatarUrl ?? ""} />
 
               <AvatarFallback className="text-[0.5rem]">
-                {conversation.assignedUser?.name?.slice(0, 2) ?? " "}
+                {nameInitials(conversation.assignedUser?.name) || " "}
               </AvatarFallback>
             </Avatar>
           }
@@ -212,7 +213,7 @@ export default function ConversationItem({
           src={avatarUrl}
         />
         <AvatarFallback className="bg-gray-300 dark:bg-zinc-100 dark:text-zinc-800">
-          {conversation.contact?.fullName?.slice(0, 2)}
+          {nameInitials(conversation.contact?.fullName)}
         </AvatarFallback>
       </Avatar>
     ),
