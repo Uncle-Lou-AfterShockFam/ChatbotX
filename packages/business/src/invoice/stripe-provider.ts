@@ -135,6 +135,62 @@ async function ensureCustomer(
 }
 
 /**
+ * Stripe refuses `send_invoice` for a customer without an email ("Missing
+ * email", s206b live proof), and most SMS-only contacts have none. Those get
+ * `charge_automatically` instead: with `auto_advance: false` Stripe never
+ * attempts a charge on its own, and the hosted page still takes a card. The
+ * email is read from the Stripe customer, not the contact: a cached customer
+ * created before the contact gained an email still has none.
+ */
+export async function chooseCollection(
+  stripe: Stripe,
+  customerId: string,
+  invoice: InvoiceModel,
+): Promise<{
+  params: Pick<
+    Stripe.InvoiceCreateParams,
+    "collection_method" | "days_until_due"
+  >
+  idempotencyKey: string
+}> {
+  let customer: Stripe.Customer | Stripe.DeletedCustomer
+  try {
+    customer = await stripe.customers.retrieve(customerId)
+  } catch (error) {
+    throw wrap(error, "retrieve customer")
+  }
+  if (customer.deleted) {
+    throw new InvoiceProviderError(
+      "The Stripe customer for this contact was deleted in Stripe",
+      false,
+    )
+  }
+  if (!customer.email) {
+    // A key of its own: a send_invoice create Stripe refused for this invoice
+    // must never answer the retry.
+    return {
+      params: { collection_method: "charge_automatically" },
+      idempotencyKey: `hub-inv-${invoice.id}-create-charge`,
+    }
+  }
+  return {
+    params: {
+      collection_method: "send_invoice",
+      days_until_due: Math.max(
+        1,
+        invoice.dueAt
+          ? Math.ceil(
+              (invoice.dueAt.getTime() - invoice.createdAt.getTime()) /
+                86_400_000,
+            )
+          : 1,
+      ),
+    },
+    idempotencyKey: `hub-inv-${invoice.id}-create`,
+  }
+}
+
+/**
  * Add the hub lines the Stripe draft does not carry yet. Re-entrant: a line
  * already on the invoice (metadata `hub_line_position`) is skipped, and each
  * create has its own Idempotency-Key.
@@ -213,22 +269,14 @@ export async function finalizeWithStripe(props: {
 
   let stripeInvoiceId = invoice.providerInvoiceId
   if (!stripeInvoiceId) {
+    const collection = await chooseCollection(stripe, customerId, invoice)
     let created: Stripe.Invoice
     try {
       created = await stripe.invoices.create(
         {
           customer: customerId,
           currency,
-          collection_method: "send_invoice",
-          days_until_due: Math.max(
-            1,
-            invoice.dueAt
-              ? Math.ceil(
-                  (invoice.dueAt.getTime() - invoice.createdAt.getTime()) /
-                    86_400_000,
-                )
-              : 1,
-          ),
+          ...collection.params,
           auto_advance: false,
           pending_invoice_items_behavior: "exclude",
           ...(invoice.memo ? { description: invoice.memo } : {}),
@@ -238,7 +286,7 @@ export async function finalizeWithStripe(props: {
             hub_invoice_number: String(invoice.number),
           },
         },
-        { idempotencyKey: `hub-inv-${invoice.id}-create` },
+        { idempotencyKey: collection.idempotencyKey },
       )
     } catch (error) {
       throw wrap(error, "create invoice")
