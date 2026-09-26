@@ -24,9 +24,8 @@ import {
 import { Switch } from "@chatbotx.io/ui/components/ui/switch"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
 import type { DataTableRowAction } from "@chatbotx.io/ui/types/data-table"
-import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
+import { formatWithFallback } from "@chatbotx.io/utils/datetime"
 import type { ColumnDef } from "@tanstack/react-table"
-import { formatInTimeZone } from "date-fns-tz"
 import {
   FolderUpIcon,
   MoreHorizontalIcon,
@@ -62,7 +61,7 @@ export function AutomatedResponsesTable({
   promises,
 }: AutomatedResponseTableProps) {
   const t = useTranslations()
-  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
+  const timeZone = useTimeZone()
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -189,7 +188,7 @@ export function AutomatedResponsesTable({
         ),
         cell: ({ row }) => (
           <div>
-            {formatInTimeZone(
+            {formatWithFallback(
               row.original.createdAt,
               timeZone,
               "yyyy/MM/dd HH:mm",

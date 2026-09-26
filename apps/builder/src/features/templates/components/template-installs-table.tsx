@@ -6,9 +6,8 @@ import { DataTable } from "@chatbotx.io/ui/components/data-table/data-table"
 import { DataTableColumnHeader } from "@chatbotx.io/ui/components/data-table/data-table-column-header"
 import { Badge } from "@chatbotx.io/ui/components/ui/badge"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
-import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
+import { formatWithFallback } from "@chatbotx.io/utils/datetime"
 import type { ColumnDef } from "@tanstack/react-table"
-import { formatInTimeZone } from "date-fns-tz"
 import { useTimeZone, useTranslations } from "next-intl"
 import { useMemo } from "react"
 import { InstallAutoUpdateCell } from "./install-auto-update-cell"
@@ -41,7 +40,7 @@ export function TemplateInstallsTable({
   installations,
 }: TemplateInstallsTableProps) {
   const t = useTranslations()
-  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
+  const timeZone = useTimeZone()
 
   const columns = useMemo<ColumnDef<TemplateInstallationModel>[]>(
     () => [
@@ -122,7 +121,7 @@ export function TemplateInstallsTable({
           />
         ),
         cell: ({ row }) =>
-          formatInTimeZone(
+          formatWithFallback(
             row.original.createdAt,
             timeZone,
             "yyyy/MM/dd HH:mm",
@@ -136,7 +135,7 @@ export function TemplateInstallsTable({
         header: t("templates.installs.completedAt"),
         cell: ({ row }) =>
           row.original.completedAt
-            ? formatInTimeZone(
+            ? formatWithFallback(
                 row.original.completedAt,
                 timeZone,
                 "yyyy/MM/dd HH:mm",

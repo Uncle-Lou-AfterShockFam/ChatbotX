@@ -5,7 +5,6 @@ import { DataTable } from "@chatbotx.io/ui/components/data-table/data-table"
 import { DataTableToolbar } from "@chatbotx.io/ui/components/data-table/data-table-toolbar"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
 import type { DataTableRowAction } from "@chatbotx.io/ui/types/data-table"
-import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
 import { useRouter } from "next/navigation"
 import { useTimeZone, useTranslations } from "next-intl"
 import { use, useMemo, useState } from "react"
@@ -21,7 +20,7 @@ type ErrorLogsTableProps = {
 
 export function ErrorLogsTable({ promises, workspaceId }: ErrorLogsTableProps) {
   const t = useTranslations()
-  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
+  const timeZone = useTimeZone()
   const router = useRouter()
 
   const [{ data, pageCount }] = use(promises)

@@ -11,8 +11,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@chatbotx.io/ui/components/ui/tooltip"
+import { formatWithFallback } from "@chatbotx.io/utils/datetime"
 import type { ColumnDef } from "@tanstack/react-table"
-import { formatInTimeZone } from "date-fns-tz"
 import type { useTranslations } from "next-intl"
 import { useUserAvatarUrl } from "@/lib/auth/avatar"
 import type { AuditLogResource } from "./schema"
@@ -50,7 +50,7 @@ function AuditUserCell({
 
 export function getAuditColumns(
   t: TranslationFn,
-  timeZone: string,
+  timeZone: string | undefined,
 ): ColumnDef<AuditLogResource>[] {
   return [
     {
@@ -128,7 +128,11 @@ export function getAuditColumns(
         />
       ),
       cell: ({ row }) =>
-        formatInTimeZone(row.original.createdAt, timeZone, "yyyy/MM/dd HH:mm"),
+        formatWithFallback(
+          row.original.createdAt,
+          timeZone,
+          "yyyy/MM/dd HH:mm",
+        ),
       size: 130,
       enableSorting: true,
       enableHiding: false,

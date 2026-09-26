@@ -16,9 +16,9 @@ import {
   TooltipTrigger,
 } from "@chatbotx.io/ui/components/ui/tooltip"
 import type { DataTableRowAction } from "@chatbotx.io/ui/types/data-table"
+import { formatWithFallback } from "@chatbotx.io/utils/datetime"
 import { errorLogProviderLabel } from "@chatbotx.io/utils/error-log"
 import type { ColumnDef } from "@tanstack/react-table"
-import { formatInTimeZone } from "date-fns-tz"
 import { EllipsisIcon } from "lucide-react"
 import type { useTranslations } from "next-intl"
 import type { Dispatch, SetStateAction } from "react"
@@ -30,7 +30,7 @@ type GetColumnsProps = {
   setRowAction: Dispatch<
     SetStateAction<DataTableRowAction<ErrorLogResource> | null>
   >
-  timeZone: string
+  timeZone: string | undefined
 }
 
 export function getColumns({
@@ -151,7 +151,11 @@ export function getColumns({
         <DataTableColumnHeader column={column} title={t("fields.date.label")} />
       ),
       cell: ({ row }) =>
-        formatInTimeZone(row.original.createdAt, timeZone, "yyyy/MM/dd HH:mm"),
+        formatWithFallback(
+          row.original.createdAt,
+          timeZone,
+          "yyyy/MM/dd HH:mm",
+        ),
       meta: {
         label: t("fields.date.label"),
       },

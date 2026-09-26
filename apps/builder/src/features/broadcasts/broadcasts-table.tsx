@@ -17,9 +17,8 @@ import {
   TooltipTrigger,
 } from "@chatbotx.io/ui/components/ui/tooltip"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
-import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
+import { formatWithFallback } from "@chatbotx.io/utils/datetime"
 import type { ColumnDef, Row } from "@tanstack/react-table"
-import { formatInTimeZone } from "date-fns-tz"
 import { CopyIcon, Loader2Icon, MoreHorizontalIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useTimeZone, useTranslations } from "next-intl"
@@ -73,7 +72,7 @@ export function BroadcastsTable({ promises, filtered }: BroadcastsTableProps) {
   const broadcastIds = useMemo(() => data.map((b) => b.id), [data])
 
   const t = useTranslations()
-  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
+  const timeZone = useTimeZone()
   const router = useRouter()
 
   const [rowAction, setRowAction] = useState<BroadcastRowAction | null>(null)
@@ -347,7 +346,7 @@ export function BroadcastsTable({ promises, filtered }: BroadcastsTableProps) {
         ),
         cell: ({ row }) => (
           <div>
-            {formatInTimeZone(
+            {formatWithFallback(
               row.original.schedulesAt,
               timeZone,
               "yyyy/MM/dd HH:mm",

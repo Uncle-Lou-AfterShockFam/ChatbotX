@@ -11,7 +11,6 @@ import {
   CardTitle,
 } from "@chatbotx.io/ui/components/ui/card"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
-import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
 import { useRouter } from "next/navigation"
 import { useTimeZone, useTranslations } from "next-intl"
 import { use, useMemo, useState } from "react"
@@ -44,7 +43,7 @@ export function AIAgentsTable({ workspaceId, promises }: AIAgentsTableProps) {
     use(promises)
 
   const t = useTranslations()
-  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
+  const timeZone = useTimeZone()
   const router = useRouter()
   const invalidateAIAgents = useInvalidateAIAgents()
 

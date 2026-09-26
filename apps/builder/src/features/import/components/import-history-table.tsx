@@ -14,9 +14,8 @@ import {
   DialogTrigger,
 } from "@chatbotx.io/ui/components/ui/dialog"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
-import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
+import { formatWithFallback } from "@chatbotx.io/utils/datetime"
 import type { ColumnDef } from "@tanstack/react-table"
-import { formatInTimeZone } from "date-fns-tz"
 import { useTimeZone, useTranslations } from "next-intl"
 import { use, useMemo } from "react"
 import type { listImports } from "../queries/list-imports.queries"
@@ -86,7 +85,7 @@ function ImportErrorSampleButton({ item }: { item: ListImportsItem }) {
 
 export function ImportHistoryTable({ promises }: ImportHistoryTableProps) {
   const t = useTranslations()
-  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
+  const timeZone = useTimeZone()
   const [{ data, pageCount }] = use(promises)
 
   const columns = useMemo<ColumnDef<ListImportsItem>[]>(
@@ -182,7 +181,7 @@ export function ImportHistoryTable({ promises }: ImportHistoryTableProps) {
           />
         ),
         cell: ({ row }) =>
-          formatInTimeZone(
+          formatWithFallback(
             row.original.createdAt,
             timeZone,
             "yyyy/MM/dd HH:mm",
@@ -196,7 +195,7 @@ export function ImportHistoryTable({ promises }: ImportHistoryTableProps) {
         header: t("fields.import.histories.completedAt"),
         cell: ({ row }) =>
           row.original.completedAt
-            ? formatInTimeZone(
+            ? formatWithFallback(
                 row.original.completedAt,
                 timeZone,
                 "yyyy/MM/dd HH:mm",

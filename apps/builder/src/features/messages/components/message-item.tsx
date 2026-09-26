@@ -29,8 +29,7 @@ import {
   TooltipTrigger,
 } from "@chatbotx.io/ui/components/ui/tooltip"
 import { cn } from "@chatbotx.io/ui/lib/utils"
-import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
-import { formatInTimeZone } from "date-fns-tz"
+import { formatWithFallback } from "@chatbotx.io/utils/datetime"
 import {
   BotIcon,
   ExternalLinkIcon,
@@ -96,7 +95,7 @@ export const MessageItem = (props: MessageItemProps) => {
     onEdit,
   } = props
   const t = useTranslations("messages")
-  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
+  const timeZone = useTimeZone()
   const [isEditing, setIsEditing] = useState(false)
 
   const variants: Record<"left" | "right" | "full", string> = {
@@ -151,7 +150,7 @@ export const MessageItem = (props: MessageItemProps) => {
   return (
     <MessageBubble
       className="group"
-      title={formatInTimeZone(
+      title={formatWithFallback(
         new Date(message.createdAt),
         timeZone,
         "yyyy/MM/dd HH:mm:ss",

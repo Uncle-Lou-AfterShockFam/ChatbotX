@@ -11,8 +11,7 @@ import {
 } from "@chatbotx.io/ui/components/ui/dialog"
 import { Progress } from "@chatbotx.io/ui/components/ui/progress"
 import { cn } from "@chatbotx.io/ui/lib/utils"
-import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
-import { formatInTimeZone } from "date-fns-tz"
+import { formatWithFallback } from "@chatbotx.io/utils/datetime"
 import { useRouter } from "next/navigation"
 import { useTimeZone, useTranslations } from "next-intl"
 import { use, useEffect } from "react"
@@ -82,7 +81,7 @@ function ImportErrorSampleButton({ item }: { item: ListImportsItem }) {
 
 function ImportHistoryRow({ item }: { item: ListImportsItem }) {
   const t = useTranslations()
-  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
+  const timeZone = useTimeZone()
   const statusKey = `fields.status.${item.status}` as const
   const percent =
     item.totalCount > 0
@@ -111,7 +110,7 @@ function ImportHistoryRow({ item }: { item: ListImportsItem }) {
 
       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
         <time dateTime={item.createdAt.toISOString()}>
-          {formatInTimeZone(item.createdAt, timeZone, "yyyy/MM/dd HH:mm")}
+          {formatWithFallback(item.createdAt, timeZone, "yyyy/MM/dd HH:mm")}
         </time>
         {item.totalCount > 0 ? (
           <span className="tabular-nums">

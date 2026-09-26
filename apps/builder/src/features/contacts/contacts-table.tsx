@@ -11,11 +11,10 @@ import {
   TooltipTrigger,
 } from "@chatbotx.io/ui/components/ui/tooltip"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
-import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
+import { formatWithFallback } from "@chatbotx.io/utils/datetime"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import type { Column, ColumnDef, Row } from "@tanstack/react-table"
 import { formatDistanceToNow } from "date-fns"
-import { formatInTimeZone } from "date-fns-tz"
 import { useSearchParams } from "next/navigation"
 import { useFormatter, useTimeZone, useTranslations } from "next-intl"
 import { use, useCallback, useEffect, useMemo, useState } from "react"
@@ -54,7 +53,7 @@ function ContactCard({
   workspaceId: string
 }) {
   const t = useTranslations()
-  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
+  const timeZone = useTimeZone()
   const contact = row.original
 
   return (
@@ -84,7 +83,7 @@ function ContactCard({
           <div className="flex items-baseline justify-between gap-3">
             <dt>{t("fields.createdAt.label")}</dt>
             <dd className="text-foreground">
-              {formatInTimeZone(contact.createdAt, timeZone, "yyyy/MM/dd")}
+              {formatWithFallback(contact.createdAt, timeZone, "yyyy/MM/dd")}
             </dd>
           </div>
         </dl>
@@ -127,7 +126,7 @@ export function ContactsTable({
   promises,
 }: ContactsTableProps) {
   const t = useTranslations()
-  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
+  const timeZone = useTimeZone()
   const formatter = useFormatter()
   const searchParams = useSearchParams()
   const searchParamsKey = searchParams.toString()
@@ -373,7 +372,7 @@ export function ContactsTable({
           />
         ),
         cell: ({ row }) =>
-          formatInTimeZone(row.original.createdAt, timeZone, "yyyy/MM/dd"),
+          formatWithFallback(row.original.createdAt, timeZone, "yyyy/MM/dd"),
         meta: {
           label: t("fields.createdAt.label"),
         },

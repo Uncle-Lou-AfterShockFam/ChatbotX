@@ -24,9 +24,8 @@ import {
   TooltipTrigger,
 } from "@chatbotx.io/ui/components/ui/tooltip"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
-import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
+import { formatWithFallback } from "@chatbotx.io/utils/datetime"
 import type { ColumnDef } from "@tanstack/react-table"
-import { formatInTimeZone } from "date-fns-tz"
 import {
   DownloadIcon,
   EyeIcon,
@@ -109,7 +108,7 @@ export default function AIFilesTable({ promises }: AIFilesTableProps) {
 
   const router = useRouter()
   const t = useTranslations()
-  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
+  const timeZone = useTimeZone()
 
   const columns = useMemo<ColumnDef<AIFileWithProcessing>[]>(
     () => [
@@ -215,7 +214,11 @@ export default function AIFilesTable({ promises }: AIFilesTableProps) {
         ),
         cell: ({ row }) => (
           <span className="text-muted-foreground">
-            {formatInTimeZone(row.original.createdAt, timeZone, "MMM dd, yyyy")}
+            {formatWithFallback(
+              row.original.createdAt,
+              timeZone,
+              "MMM dd, yyyy",
+            )}
           </span>
         ),
         enableSorting: true,

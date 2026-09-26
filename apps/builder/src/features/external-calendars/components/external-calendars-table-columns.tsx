@@ -15,8 +15,8 @@ import {
   TooltipTrigger,
 } from "@chatbotx.io/ui/components/ui/tooltip"
 import type { DataTableRowAction } from "@chatbotx.io/ui/types/data-table"
+import { formatWithFallback } from "@chatbotx.io/utils/datetime"
 import type { ColumnDef } from "@tanstack/react-table"
-import { formatInTimeZone } from "date-fns-tz"
 import {
   CalendarIcon,
   EllipsisVerticalIcon,
@@ -32,7 +32,7 @@ type Props = {
   setRowAction: Dispatch<
     SetStateAction<DataTableRowAction<ExternalCalendarResource> | null>
   >
-  timeZone: string
+  timeZone: string | undefined
 }
 
 export function getExternalCalendarColumns({
@@ -140,7 +140,11 @@ export function getExternalCalendarColumns({
         />
       ),
       cell: ({ row }) =>
-        formatInTimeZone(row.original.createdAt, timeZone, "yyyy/MM/dd HH:mm"),
+        formatWithFallback(
+          row.original.createdAt,
+          timeZone,
+          "yyyy/MM/dd HH:mm",
+        ),
     },
     {
       id: "actions",

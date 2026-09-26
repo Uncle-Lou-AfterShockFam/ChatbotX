@@ -8,9 +8,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@chatbotx.io/ui/components/ui/dialog"
-import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
+import { formatWithFallback } from "@chatbotx.io/utils/datetime"
 import { useQuery } from "@tanstack/react-query"
-import { formatInTimeZone } from "date-fns-tz"
 import { Loader2Icon, StarIcon } from "lucide-react"
 import { useTimeZone, useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
@@ -36,7 +35,7 @@ export function FlowVersionsDialog({
   onRestoreSuccess,
 }: FlowVersionsDialogProps) {
   const t = useTranslations()
-  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
+  const timeZone = useTimeZone()
   const [restoringId, setRestoringId] = useState<string | null>(null)
 
   const {
@@ -99,7 +98,7 @@ export function FlowVersionsDialog({
                 key={version.id}
               >
                 <span className="flex items-center gap-1.5 font-medium text-sm">
-                  {formatInTimeZone(
+                  {formatWithFallback(
                     version.createdAt,
                     timeZone,
                     "yyyy/MM/dd HH:mm",

@@ -3,7 +3,6 @@
 import { DataTable } from "@chatbotx.io/ui/components/data-table/data-table"
 import { DataTableToolbar } from "@chatbotx.io/ui/components/data-table/data-table-toolbar"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
-import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
 import { useTimeZone, useTranslations } from "next-intl"
 import { use, useMemo } from "react"
 import { getAuditColumns } from "./audit-logs-table-columns"
@@ -24,7 +23,7 @@ type AuditLogsTableProps = {
 
 export function AuditLogsTable({ promises, search }: AuditLogsTableProps) {
   const t = useTranslations()
-  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
+  const timeZone = useTimeZone()
   const [{ data, pageCount }, admins] = use(promises)
 
   const columns = useMemo(() => getAuditColumns(t, timeZone), [t, timeZone])

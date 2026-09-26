@@ -13,7 +13,6 @@ import {
   ToggleGroupItem,
 } from "@chatbotx.io/ui/components/ui/toggle-group"
 import { cn } from "@chatbotx.io/ui/lib/utils"
-import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
 import {
   addYears,
   format,
@@ -152,7 +151,7 @@ export function BroadcastsCalendar({
 }) {
   const t = useTranslations()
   const formatter = useFormatter()
-  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
+  const timeZone = useTimeZone()
   const [, setQuery] = useQueryStates(
     {
       range: broadcastsSearchParsers.range,

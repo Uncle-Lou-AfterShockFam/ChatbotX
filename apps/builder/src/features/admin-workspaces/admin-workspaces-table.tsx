@@ -7,9 +7,8 @@ import { DataTableToolbar } from "@chatbotx.io/ui/components/data-table/data-tab
 import { Badge } from "@chatbotx.io/ui/components/ui/badge"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
-import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
+import { formatWithFallback } from "@chatbotx.io/utils/datetime"
 import type { ColumnDef } from "@tanstack/react-table"
-import { formatInTimeZone } from "date-fns-tz"
 import Link from "next/link"
 import { useTimeZone, useTranslations } from "next-intl"
 import { use, useMemo } from "react"
@@ -47,7 +46,7 @@ function OwnerCell({
 export function AdminWorkspacesTable({ promises }: AdminWorkspacesTableProps) {
   const [{ data, pageCount }] = use(promises)
   const t = useTranslations()
-  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
+  const timeZone = useTimeZone()
 
   const columns = useMemo<
     ColumnDef<ListAdminWorkspacesResponse["data"][number]>[]
@@ -104,7 +103,7 @@ export function AdminWorkspacesTable({ promises }: AdminWorkspacesTableProps) {
           />
         ),
         cell: ({ row }) =>
-          formatInTimeZone(row.original.createdAt, timeZone, "PP"),
+          formatWithFallback(row.original.createdAt, timeZone, "PP"),
         enableSorting: false,
       },
       {
@@ -121,7 +120,7 @@ export function AdminWorkspacesTable({ promises }: AdminWorkspacesTableProps) {
             return (
               <Badge variant="secondary">
                 {t("platformAdmin.workspaces.supportEnabledUntil", {
-                  time: formatInTimeZone(activeUntil, timeZone, "PPp"),
+                  time: formatWithFallback(activeUntil, timeZone, "PPp"),
                 })}
               </Badge>
             )

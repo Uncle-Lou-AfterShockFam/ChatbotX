@@ -251,7 +251,7 @@ export function dayKey(date: Date): string {
 
 export function groupByDay<T extends { schedulesAt: Date }>(
   rows: T[],
-  timezone: string,
+  timezone: string | undefined,
 ): Map<string, T[]> {
   const zone = resolveFilterTimezone(timezone)
   const grouped = new Map<string, T[]>()
