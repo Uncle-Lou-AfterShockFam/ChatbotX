@@ -25,6 +25,7 @@ import {
 } from "vitest"
 
 const TOKEN_A = "RDBcheckout0000000000A"
+const SERVE = { canServe: () => Promise.resolve(true) }
 
 const m = vi.hoisted(() => {
   type Session = Record<string, unknown> & { id: string; status: string }
@@ -113,12 +114,11 @@ vi.mock("../../src/integration-stripe/service", () => {
   return {
     integrationStripeService: {
       credentialsByWorkspaceId: async (ws: string) => byWorkspace(ws),
-      credentialsByWorkspaceIdOrFail: async (ws: string) => {
+      credentialsByWorkspaceIdOrFail: (ws: string) => {
         const credentials = byWorkspace(ws)
-        if (!credentials) {
-          throw new Error("Stripe is not connected")
-        }
         return credentials
+          ? Promise.resolve(credentials)
+          : Promise.reject(new Error("Stripe is not connected"))
       },
       ensureWebhookEvents: async () => undefined,
     },
@@ -260,7 +260,7 @@ describe.skipIf(!databaseUrl)("/pay visits under concurrency (s207b)", () => {
   test("8 concurrent first visits: one Stripe session, generation 1, every link the same", async () => {
     const { invoiceId } = await seedOpenCheckoutInvoice(TOKEN_A)
     const visits = await Promise.all(
-      Array.from({ length: 8 }, () => visitCheckout(TOKEN_A)),
+      Array.from({ length: 8 }, () => visitCheckout(TOKEN_A, SERVE)),
     )
     const urls = new Set(
       visits.map((v) => (v.kind === "redirect" ? v.url : v.kind)),
@@ -276,12 +276,14 @@ describe.skipIf(!databaseUrl)("/pay visits under concurrency (s207b)", () => {
 
   test("8 concurrent visits on an expiring session leave exactly one open session, the one recorded", async () => {
     const { invoiceId } = await seedOpenCheckoutInvoice(TOKEN_A)
-    await visitCheckout(TOKEN_A)
+    await visitCheckout(TOKEN_A, SERVE)
     const first = m.stripe.sessions.get("cs_rdb_1")
     if (first) {
       first.expires_at = Math.floor((Date.now() + 60_000) / 1000)
     }
-    await Promise.all(Array.from({ length: 8 }, () => visitCheckout(TOKEN_A)))
+    await Promise.all(
+      Array.from({ length: 8 }, () => visitCheckout(TOKEN_A, SERVE)),
+    )
     const row = await invoiceRow(invoiceId)
     expect(openSessions().map((s) => s.id)).toEqual([row?.checkoutSessionId])
     expect(row?.checkoutGeneration).toBe(2)
@@ -291,12 +293,12 @@ describe.skipIf(!databaseUrl)("/pay visits under concurrency (s207b)", () => {
     const { workspaceId, invoiceId } = await seedOpenCheckoutInvoice(TOKEN_A)
     await Promise.all([
       ...Array.from({ length: 6 }, () =>
-        visitCheckout(TOKEN_A).catch(() => undefined),
+        visitCheckout(TOKEN_A, SERVE).catch(() => undefined),
       ),
       invoiceService.void({ workspaceId, id: invoiceId }),
     ])
     // Visits that started after the void answer closed; none reopens it.
-    expect((await visitCheckout(TOKEN_A)).kind).toBe("closed")
+    expect((await visitCheckout(TOKEN_A, SERVE)).kind).toBe("closed")
     expect((await invoiceRow(invoiceId))?.status).toBe("void")
     expect(openSessions()).toEqual([])
   })

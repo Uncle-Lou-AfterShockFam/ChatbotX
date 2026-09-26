@@ -55,7 +55,9 @@ test("a live session is a 303 to Stripe, never cached", async () => {
     "https://checkout.stripe.com/c/pay/cs_test_1",
   )
   expect(res.headers.get("cache-control")).toBe("private, no-store")
-  expect(visitCheckout).toHaveBeenCalledWith(TOKEN)
+  expect(visitCheckout).toHaveBeenCalledWith(TOKEN, {
+    canServe: expect.any(Function),
+  })
 })
 
 test.each([
@@ -78,21 +80,25 @@ test.each([
   expect(html).toContain("Invoice #4 (12.50 USD)")
 })
 
-test("an unknown token is a 404 and never consults the workspace", async () => {
+test("an unknown token is a 404", async () => {
   visitCheckout.mockResolvedValue({ kind: "notFound" })
   const res = await get("nope")
   expect(res.status).toBe(404)
-  expect(loadServableWorkspace).not.toHaveBeenCalled()
 })
 
-test("a workspace scheduled for deletion is 410, even with a live session", async () => {
-  visitCheckout.mockResolvedValue({
-    kind: "redirect",
-    url: "https://checkout.stripe.com/c/pay/cs_test_1",
-    invoice,
-  })
+test("the freeze gate is handed to the visit, which asks it before minting", async () => {
   loadServableWorkspace.mockResolvedValue({ servable: false })
+  visitCheckout.mockImplementation(
+    async (
+      _token: string,
+      options: { canServe: (ws: string) => Promise<boolean> },
+    ) =>
+      (await options.canServe("11"))
+        ? { kind: "redirect", url: "https://checkout.stripe.com/x", invoice }
+        : { kind: "frozen", invoice },
+  )
   const res = await get()
+  expect(loadServableWorkspace).toHaveBeenCalledWith("11")
   expect(res.status).toBe(410)
   expect(res.headers.get("location")).toBeNull()
 })

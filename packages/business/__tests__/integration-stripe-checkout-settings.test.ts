@@ -99,7 +99,8 @@ describe("ensureWebhookEvents", () => {
     expect(m.updates).toEqual([
       expect.objectContaining({ webhookEventsVersion: 2 }),
     ])
-    expect(creds.webhookEventsVersion).toBe(2)
+    // The caller's credentials are not mutated.
+    expect(creds.webhookEventsVersion).toBe(1)
   })
 
   test("a current endpoint is left alone (no Stripe call, no write)", async () => {
@@ -118,15 +119,30 @@ describe("ensureWebhookEvents", () => {
     expect(m.endpointUpdate).not.toHaveBeenCalled()
   })
 
-  test("a Stripe failure bumps nothing (the next call retries the upgrade)", async () => {
-    m.endpointUpdate.mockRejectedValue(new Error("No such webhook endpoint"))
-    const creds = credentials()
+  test("a transient Stripe failure is rethrown as is and bumps nothing (the next call retries)", async () => {
+    const down = new Error("socket hang up")
+    m.endpointUpdate.mockRejectedValue(down)
     const error = await integrationStripeService
-      .ensureWebhookEvents(creds)
+      .ensureWebhookEvents(credentials())
+      .catch((e: unknown) => e)
+    expect(error).toBe(down)
+    expect(m.updates).toEqual([])
+  })
+
+  test.each([
+    ["the endpoint was deleted in Stripe", { code: "resource_missing" }],
+    ["the key was revoked", { type: "StripeAuthenticationError" }],
+    ["the key lacks the permission", { type: "StripePermissionError" }],
+  ])("%s -> a validation error asking to reconnect, nothing bumped", async (_l, shape) => {
+    m.endpointUpdate.mockRejectedValue(
+      Object.assign(new Error("Stripe said no"), shape),
+    )
+    const error = await integrationStripeService
+      .ensureWebhookEvents(credentials())
       .catch((e: unknown) => e)
     expect(error).toMatchObject({ code: "validation" })
+    expect(String((error as Error).message)).toContain("reconnect Stripe")
     expect(m.updates).toEqual([])
-    expect(creds.webhookEventsVersion).toBe(1)
   })
 })
 

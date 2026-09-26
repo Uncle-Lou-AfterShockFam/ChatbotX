@@ -29,6 +29,12 @@ const m = vi.hoisted(() => {
     updates: [] as Record<string, unknown>[],
     deleteWheres: [] as unknown[],
     transactionError: null as Error | null,
+    /** db.query.invoiceEventModel.findFirst: a "marked" event of the invoice. */
+    markedEvent: null as { id: string } | null,
+    /** Fail only the Nth db.transaction (1-based); 0 = none. */
+    failTransactionNumber: 0,
+    transactions: 0,
+    deleteError: null as Error | null,
   }
   const selectChain: Record<string, unknown> = {}
   selectChain.from = () => selectChain
@@ -64,18 +70,29 @@ const m = vi.hoisted(() => {
     update: () => updateChain,
   }
   const db = {
+    query: {
+      invoiceEventModel: {
+        findFirst: () => Promise.resolve(state.markedEvent ?? undefined),
+      },
+    },
     select: () => selectChain,
     update: () => updateChain,
     transaction: async (cb: (t: unknown) => unknown) => {
       if (state.transactionError) {
         throw state.transactionError
       }
+      state.transactions += 1
+      if (state.transactions === state.failTransactionNumber) {
+        throw new Error("connection terminated")
+      }
       return await cb(tx)
     },
     delete: () => ({
       where: (w: unknown) => {
         state.deleteWheres.push(w)
-        return Promise.resolve()
+        return state.deleteError
+          ? Promise.reject(state.deleteError)
+          : Promise.resolve()
       },
     }),
   }
@@ -235,6 +252,10 @@ beforeEach(() => {
   m.state.updates = []
   m.state.deleteWheres = []
   m.state.transactionError = null
+  m.state.markedEvent = null
+  m.state.failTransactionNumber = 0
+  m.state.transactions = 0
+  m.state.deleteError = null
   m.credentials.mockResolvedValue({
     integrationId: INTEGRATION_ID,
     workspaceId: WORKSPACE_ID,
@@ -637,6 +658,7 @@ describe("stripeCheckout (s207b): checkout.session.* and refunds", () => {
   const session = (extra: Record<string, unknown> = {}) => ({
     id: SESSION_ID,
     object: "checkout.session",
+    mode: "payment",
     status: "complete",
     payment_status: "paid",
     amount_total: 1000,
@@ -821,5 +843,112 @@ describe("stripeCheckout (s207b): checkout.session.* and refunds", () => {
     })
     expect(result.outcome).toBe("noop")
     expect(m.piRetrieve).not.toHaveBeenCalled()
+  })
+
+  test("a non-Stripe error while resolving (a DB blip) asks Stripe to redeliver, records nothing", async () => {
+    m.sessionRetrieve.mockRejectedValue(new TypeError("pool exhausted"))
+    const result = await completed()
+    expect(result).toEqual({ outcome: "retry", detail: "resolution failed" })
+    expect(m.state.inserted).toEqual([])
+  })
+
+  test.each([
+    ["a rolled key", Stripe.errors.StripeAuthenticationError],
+    ["an under-scoped key", Stripe.errors.StripePermissionError],
+  ])("%s while re-reading asks Stripe to redeliver, records nothing", async (_l, ErrorClass) => {
+    m.sessionRetrieve.mockRejectedValue(new ErrorClass({ message: "no" }))
+    const result = await completed()
+    expect(result).toEqual({ outcome: "retry", detail: "stripe key rejected" })
+    expect(m.state.inserted).toEqual([])
+  })
+
+  test("a session that is not a one-time payment resolves to no invoice", async () => {
+    m.sessionRetrieve.mockResolvedValue(session({ mode: "subscription" }))
+    const result = await completed()
+    expect(result).toEqual({ outcome: "noop", detail: "unknown-invoice" })
+    expectNoSideEffects()
+  })
+
+  test("a refund that arrives before its payment was recorded is retried, never dropped", async () => {
+    m.state.hubRow = checkoutRow("open")
+    const result = await deliver({
+      id: "evt_ref_early",
+      type: "charge.refunded",
+      object: { id: "ch_1", object: "charge" },
+    })
+    expect(result).toEqual({
+      outcome: "retry",
+      detail: "payment not recorded yet",
+    })
+    expect(m.state.inserted).toEqual([])
+  })
+
+  test("the second event type for an ALREADY-MARKED payment neither marks nor emits again", async () => {
+    m.state.hubRow = checkoutRow("paid", { providerInvoiceId: "pi_1" })
+    m.state.transitionMatches = false
+    m.state.markedEvent = { id: "ev-earlier" }
+    const result = await completed("checkout.session.completed", "evt_cs_2")
+    expect(result).toEqual({ outcome: "noop", detail: "already-marked" })
+    expectNoSideEffects()
+  })
+
+  test("a fresh paid event records that its marks ran (outcome marked)", async () => {
+    await completed()
+    expect(m.state.updates).toEqual(
+      expect.arrayContaining([expect.objectContaining({ outcome: "marked" })]),
+    )
+  })
+
+  test("the duplicate-payment flag failing to write drops the dedup row and asks for a retry", async () => {
+    m.state.hubRow = checkoutRow("paid", { providerInvoiceId: "pi_first" })
+    m.state.transitionMatches = false
+    m.state.failTransactionNumber = 2
+    const result = await completed()
+    expect(result).toEqual({
+      outcome: "retry",
+      detail: "duplicate-payment flag",
+    })
+    expect(m.state.deleteWheres).toHaveLength(1)
+    expectNoSideEffects()
+  })
+
+  test("a dedup-row delete that fails after failed marks is logged as an error", async () => {
+    m.marks.mockRejectedValue(new Error("fields down"))
+    m.state.deleteError = new Error("db down")
+    const result = await completed()
+    expect(result.outcome).toBe("retry")
+    expect(m.loggerError).toHaveBeenCalledWith(
+      expect.objectContaining({ eventId: "evt_cs_1" }),
+      expect.stringContaining("redelivery will be skipped"),
+    )
+  })
+
+  test("a failed async payment on the RECORDED session frees the pay link", async () => {
+    m.state.hubRow = checkoutRow("open", {
+      checkoutSessionId: SESSION_ID,
+      checkoutGeneration: 2,
+    })
+    m.sessionRetrieve.mockResolvedValue(session({ payment_status: "unpaid" }))
+    await completed("checkout.session.async_payment_failed")
+    expect(m.state.updates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          checkoutSessionId: null,
+          checkoutMintedAt: null,
+          checkoutGeneration: 3,
+        }),
+      ]),
+    )
+  })
+
+  test("a failed async payment on an OLDER session leaves the current one alone", async () => {
+    m.state.hubRow = checkoutRow("open", { checkoutSessionId: "cs_newer" })
+    m.sessionRetrieve.mockResolvedValue(session({ payment_status: "unpaid" }))
+    await completed("checkout.session.async_payment_failed")
+    expect(m.state.updates).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ checkoutSessionId: null }),
+      ]),
+    )
   })
 })

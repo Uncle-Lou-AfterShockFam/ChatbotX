@@ -18,10 +18,10 @@ import {
   INVOICE_STATUS_TRANSITIONS,
   type InvoiceMethod,
   type InvoiceStatus,
-  type RequestedInvoiceMethod,
   minorToDecimalString,
   normalizeInvoiceCurrency,
   parseMoneyToMinor,
+  type RequestedInvoiceMethod,
 } from "@chatbotx.io/database/partials"
 import {
   contactModel,
@@ -677,17 +677,26 @@ class InvoiceService extends BaseService {
   /**
    * A checkout invoice is voided HERE first (a `/pay` visit then cannot
    * record a new session), then the session the void row names is expired.
-   * Refused when the recorded session already completed (paid at Stripe).
+   * Refused when the recorded session already holds a payment. Without the
+   * Stripe connection that minted the session (disconnected, or another
+   * account now), the void still happens and `lastError` says which session
+   * to expire by hand: refusing forever would help no one.
    */
   private async voidCheckout(
     ref: InvoiceRef,
     invoice: InvoiceModel,
   ): Promise<InvoiceWithLines> {
-    const credentials =
-      invoice.checkoutSessionId || invoice.status !== "draft"
-        ? await integrationStripeService.credentialsByWorkspaceId(
+    const current =
+      invoice.status === "draft"
+        ? null
+        : await integrationStripeService.credentialsByWorkspaceId(
             invoice.workspaceId,
           )
+    const credentials =
+      current &&
+      current.integrationId === invoice.integrationId &&
+      current.accountId === invoice.providerAccountId
+        ? current
         : null
     if (credentials) {
       try {
@@ -704,27 +713,35 @@ class InvoiceService extends BaseService {
       to: "void",
       set: { voidedAt: new Date() },
     })
-    if (voided) {
-      await this.audit("void", `voided invoice #${invoice.number}`)
-      if (credentials) {
-        await expireCheckoutAfterVoid({ credentials, invoice: voided }).catch(
-          async (error: unknown) => {
-            logger.error(
-              { err: error, invoiceId: voided.id },
-              "invoice: voided, but its checkout session could not be expired",
-            )
-            await db
-              .update(invoiceModel)
-              .set({
-                lastError: `Voided here, but checkout session ${voided.checkoutSessionId} could not be expired: expire it in Stripe`,
-                updatedAt: new Date(),
-              })
-              .where(eq(invoiceModel.id, voided.id))
-          },
-        )
-      }
+    if (!voided) {
+      return await this.get(ref)
+    }
+    await this.audit("void", `voided invoice #${invoice.number}`)
+    if (!voided.checkoutSessionId) {
+      return await this.get(ref)
+    }
+    const expireByHand = `Voided here, but checkout session ${voided.checkoutSessionId} (Stripe account ${voided.providerAccountId ?? "unknown"}) could not be expired: expire it in Stripe`
+    if (credentials) {
+      await expireCheckoutAfterVoid({ credentials, invoice: voided }).catch(
+        async (error: unknown) => {
+          logger.error(
+            { err: error, invoiceId: voided.id },
+            "invoice: voided, but its checkout session could not be expired",
+          )
+          await this.recordLastError(voided.id, expireByHand)
+        },
+      )
+    } else {
+      await this.recordLastError(voided.id, expireByHand)
     }
     return await this.get(ref)
+  }
+
+  private async recordLastError(invoiceId: string, message: string) {
+    await db
+      .update(invoiceModel)
+      .set({ lastError: message, updatedAt: new Date() })
+      .where(eq(invoiceModel.id, invoiceId))
   }
 
   /**

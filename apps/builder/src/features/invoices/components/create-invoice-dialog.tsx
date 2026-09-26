@@ -1,5 +1,9 @@
 "use client"
 
+import {
+  type RequestedInvoiceMethod,
+  requestedInvoiceMethods,
+} from "@chatbotx.io/database/partials"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
 import {
   Dialog,
@@ -25,9 +29,6 @@ import { useTranslations } from "next-intl"
 import { useId, useState } from "react"
 import { toast } from "sonner"
 import { useCreateInvoice } from "../provider/invoice-hooks"
-
-const METHODS = ["default", "stripeInvoice", "stripeCheckout"] as const
-type Method = (typeof METHODS)[number]
 
 type Line = {
   key: number
@@ -64,8 +65,8 @@ export function CreateInvoiceDialog({
   const [currency, setCurrency] = useState("USD")
   const [dueInDays, setDueInDays] = useState("7")
   const [memo, setMemo] = useState("")
-  const [method, setMethod] = useState<Method>("default")
-  const methodOptions = METHODS.map((value) => ({
+  const [method, setMethod] = useState<RequestedInvoiceMethod>("default")
+  const methodOptions = requestedInvoiceMethods.options.map((value) => ({
     value,
     label: t(`invoices.method.${value}`),
   }))
@@ -255,7 +256,7 @@ export function CreateInvoiceDialog({
             <Select
               items={methodOptions}
               onValueChange={(value) =>
-                setMethod((value as Method | null) ?? "default")
+                setMethod((value as RequestedInvoiceMethod | null) ?? "default")
               }
               value={method}
             >

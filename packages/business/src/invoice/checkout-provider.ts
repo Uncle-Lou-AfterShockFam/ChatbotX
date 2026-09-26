@@ -9,6 +9,7 @@ import type {
   InvoiceModel,
 } from "@chatbotx.io/database/types"
 import { isBase62Token, mintBase62Token } from "@chatbotx.io/utils"
+import { ChatbotXException } from "../errors"
 import { createStripeClient, type Stripe } from "../integration-stripe/client"
 import {
   integrationStripeService,
@@ -45,6 +46,8 @@ export const CHECKOUT_SESSION_TTL_MS = 23 * 60 * 60_000
  * claimed. The abandoned session's URL never reached anyone.
  */
 const PENDING_MINT_JOIN_MS = 10 * 60_000
+/** Stripe keeps an Idempotency-Key for 24 h; a replay needs the key alive. */
+const IDEMPOTENCY_REPLAY_MS = 23 * 60 * 60_000
 const MAX_VISIT_ROUNDS = 4
 
 export const isInvoicePayToken = (value: unknown): value is string =>
@@ -82,10 +85,13 @@ export async function prepareCheckoutInvoice(props: {
   try {
     await integrationStripeService.ensureWebhookEvents(credentials)
   } catch (error) {
-    throw new InvoiceProviderError(
-      error instanceof Error ? error.message : "webhook endpoint update failed",
-      true,
-    )
+    // A validation error (the key or the endpoint is gone) needs a human;
+    // anything else (Stripe unreachable) is worth a retry.
+    const needsReconnect =
+      error instanceof ChatbotXException && error.code === "validation"
+    throw needsReconnect
+      ? new InvoiceProviderError(error.message, false)
+      : wrapStripeError(error, "update webhook endpoint")
   }
   const stripe = createStripeClient(credentials.auth.secretKey)
   const providerCustomerId = await ensureCustomer(stripe, credentials, invoice)
@@ -106,8 +112,40 @@ type SessionState =
   | { state: "gone" }
 
 /**
+ * A `complete` session holds a payment unless it is `unpaid` and its
+ * PaymentIntent already failed (an async method that bounced: Stripe leaves
+ * the session complete forever). Sessions are card-only, so that is a
+ * backstop; a pending PaymentIntent still counts as a payment.
+ */
+async function completedHoldsPayment(
+  stripe: Stripe,
+  session: Stripe.Checkout.Session,
+): Promise<boolean> {
+  if (session.payment_status !== "unpaid") {
+    return true
+  }
+  const paymentIntentId =
+    typeof session.payment_intent === "string"
+      ? session.payment_intent
+      : session.payment_intent?.id
+  if (!paymentIntentId) {
+    return false
+  }
+  let paymentIntent: Stripe.PaymentIntent
+  try {
+    paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
+  } catch (error) {
+    throw wrapStripeError(error, "retrieve payment intent")
+  }
+  return (
+    paymentIntent.status !== "requires_payment_method" &&
+    paymentIntent.status !== "canceled"
+  )
+}
+
+/**
  * Read a recorded session; one that is open but about to lapse is expired
- * here. `complete` = the person paid (or an async payment is pending): never
+ * here. `complete` = the person paid (or a payment is still settling): never
  * mint another session then, the webhook settles the invoice.
  */
 async function settleRecordedSession(
@@ -121,7 +159,9 @@ async function settleRecordedSession(
     throw wrapStripeError(error, "retrieve checkout session")
   }
   if (session.status === "complete") {
-    return { state: "complete" }
+    return (await completedHoldsPayment(stripe, session))
+      ? { state: "complete" }
+      : { state: "gone" }
   }
   if (session.status !== "open") {
     return { state: "gone" }
@@ -175,6 +215,9 @@ function sessionParams(
   }
   return {
     mode: "payment",
+    // Cards settle at once: no async method (ACH, SEPA) whose later failure
+    // would leave a completed-but-unpaid session behind the link.
+    payment_method_types: ["card"],
     ...(invoice.providerCustomerId
       ? { customer: invoice.providerCustomerId }
       : {}),
@@ -245,7 +288,11 @@ async function mintSession(props: {
   }
   const [stored] = await db
     .update(invoiceModel)
-    .set({ checkoutSessionId: session.id, updatedAt: new Date() })
+    .set({
+      checkoutSessionId: session.id,
+      lastError: null,
+      updatedAt: new Date(),
+    })
     .where(
       and(
         eq(invoiceModel.id, invoice.id),
@@ -256,6 +303,43 @@ async function mintSession(props: {
     )
     .returning({ id: invoiceModel.id })
   return { recorded: !!stored, session }
+}
+
+/**
+ * Before a stale pending generation is abandoned: its minter may have created
+ * a session and crashed before recording it. Replaying the create with that
+ * generation's key and body returns that session (or Stripe's cached error),
+ * which is then expired, so it can never be paid. Best effort: its URL never
+ * reached anyone.
+ */
+async function expireAbandonedGeneration(
+  stripe: Stripe,
+  invoice: InvoiceModel,
+  lines: InvoiceLineItemModel[],
+): Promise<void> {
+  if (
+    !invoice.checkoutMintedAt ||
+    invoice.checkoutGeneration === 0 ||
+    Date.now() - invoice.checkoutMintedAt.getTime() > IDEMPOTENCY_REPLAY_MS
+  ) {
+    return
+  }
+  try {
+    const replayed = await stripe.checkout.sessions.create(
+      sessionParams(invoice, lines, invoice.checkoutMintedAt),
+      {
+        idempotencyKey: `hub-inv-${invoice.id}-cs-${invoice.checkoutGeneration}`,
+      },
+    )
+    if (replayed.status === "open") {
+      await expireSession(stripe, replayed.id)
+    }
+  } catch (error) {
+    logger.warn(
+      { err: error, invoiceId: invoice.id },
+      "invoice: could not replay an abandoned checkout generation",
+    )
+  }
 }
 
 /** Claim the next generation from exactly the state this visit read. */
@@ -291,6 +375,8 @@ export type CheckoutVisit =
   | { kind: "closed"; invoice: InvoiceModel }
   /** Stripe is disconnected, replaced, or unreachable: try again later. */
   | { kind: "unavailable"; invoice: InvoiceModel }
+  /** The workspace is frozen (scheduled for deletion): nothing is minted. */
+  | { kind: "frozen"; invoice: InvoiceModel }
   | { kind: "notFound" }
 
 const loadByToken = async (token: string) =>
@@ -304,17 +390,59 @@ const loadByToken = async (token: string) =>
  * session, minting the next one when there is none. A link-preview fetch
  * only mints an unpaid session; it never changes what the invoice owes.
  */
-export async function visitCheckout(token: string): Promise<CheckoutVisit> {
+export async function visitCheckout(
+  token: string,
+  options: {
+    /**
+     * The public-surface freeze gate, asked BEFORE anything is minted: a
+     * frozen workspace gets no new Stripe session.
+     */
+    canServe: (workspaceId: string) => Promise<boolean>
+  },
+): Promise<CheckoutVisit> {
   if (!isInvoicePayToken(token)) {
     return { kind: "notFound" }
   }
-  let row = await loadByToken(token)
+  const row = await loadByToken(token)
   if (row?.method !== "stripeCheckout") {
     return { kind: "notFound" }
   }
-  const lines = row.lineItems
+  if (!(await options.canServe(row.workspaceId))) {
+    return { kind: "frozen", invoice: row }
+  }
+  try {
+    return await visitRounds(token, row)
+  } catch (error) {
+    if (error instanceof InvoiceProviderError && !error.retryable) {
+      // A Stripe refusal every visit would repeat (a deleted customer, a
+      // total mismatch): put it where the operator looks, not only in a 503.
+      try {
+        await db
+          .update(invoiceModel)
+          .set({ lastError: error.message, updatedAt: new Date() })
+          .where(
+            and(eq(invoiceModel.id, row.id), eq(invoiceModel.status, "open")),
+          )
+          .returning({ id: invoiceModel.id })
+      } catch (writeError) {
+        logger.error(
+          { err: writeError, invoiceId: row.id },
+          "invoice: checkout visit error could not be recorded",
+        )
+      }
+    }
+    throw error
+  }
+}
+
+async function visitRounds(
+  token: string,
+  first: NonNullable<Awaited<ReturnType<typeof loadByToken>>>,
+): Promise<CheckoutVisit> {
+  let row: Awaited<ReturnType<typeof loadByToken>> = first
+  const lines = first.lineItems
   const credentials = await integrationStripeService.credentialsByWorkspaceId(
-    row.workspaceId,
+    first.workspaceId,
   )
   for (let round = 0; round < MAX_VISIT_ROUNDS && row; round += 1) {
     if (row.status === "paid" || row.status === "refunded") {
@@ -344,10 +472,13 @@ export async function visitCheckout(token: string): Promise<CheckoutVisit> {
       }
       // Expired: nothing of this generation is payable any more.
       await claimGeneration(row)
+    } else if (!row.checkoutMintedAt) {
+      await claimGeneration(row)
     } else if (
-      !row.checkoutMintedAt ||
-      Date.now() - row.checkoutMintedAt.getTime() > PENDING_MINT_JOIN_MS
+      Date.now() - row.checkoutMintedAt.getTime() >
+      PENDING_MINT_JOIN_MS
     ) {
+      await expireAbandonedGeneration(stripe, row, lines)
       await claimGeneration(row)
     } else {
       const minted = await mintSession({
@@ -410,7 +541,10 @@ export async function assertCheckoutNotPaid(props: {
   } catch (error) {
     throw wrapStripeError(error, "retrieve checkout session")
   }
-  if (session.status === "complete") {
+  if (
+    session.status === "complete" &&
+    (await completedHoldsPayment(stripe, session))
+  ) {
     throw new InvoiceProviderError(
       "This invoice was just paid at Stripe; it cannot be voided",
       false,

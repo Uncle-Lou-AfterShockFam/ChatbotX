@@ -1,5 +1,6 @@
 "use client"
 
+import { requestedInvoiceMethods } from "@chatbotx.io/database/partials"
 import { CREATE_INVOICE_MAX_LINES } from "@chatbotx.io/flow-config"
 import { InputField } from "@chatbotx.io/ui/components/form/input-field"
 import { InputNumberField } from "@chatbotx.io/ui/components/form/input-number-field"
@@ -21,9 +22,10 @@ const CreateInvoiceStepEditor = ({ parentName }: { parentName: string }) => {
   })
   const methodOptions = useMemo(
     () =>
-      (["default", "stripeInvoice", "stripeCheckout"] as const).map(
-        (value) => ({ value, label: t(`invoices.method.${value}`) }),
-      ),
+      requestedInvoiceMethods.options.map((value) => ({
+        value,
+        label: t(`invoices.method.${value}`),
+      })),
     [t],
   )
 

@@ -93,6 +93,12 @@ const isStripeAuthError = (error: unknown): boolean =>
   ((error as { type: unknown }).type === "StripeAuthenticationError" ||
     (error as { type: unknown }).type === "StripePermissionError")
 
+const isStripeMissingError = (error: unknown): boolean =>
+  !!error &&
+  typeof error === "object" &&
+  "code" in error &&
+  (error as { code: unknown }).code === "resource_missing"
+
 export type StripeCredentials = {
   integrationId: string
   workspaceId: string
@@ -213,10 +219,14 @@ class IntegrationStripeService extends BaseService {
         enabled_events: [...STRIPE_WEBHOOK_EVENTS],
       })
     } catch (error) {
-      throw validationException(
-        "stripe",
-        `Could not update the Stripe webhook endpoint: ${stripeErrorMessage(error)}`,
-      )
+      if (isStripeAuthError(error) || isStripeMissingError(error)) {
+        // Retrying cannot help: the key or the endpoint is gone.
+        throw validationException(
+          "stripe",
+          `The Stripe webhook endpoint cannot be updated (${stripeErrorMessage(error)}): reconnect Stripe in Settings > Integrations`,
+        )
+      }
+      throw error
     }
     await db
       .update(integrationStripeModel)
@@ -237,7 +247,6 @@ class IntegrationStripeService extends BaseService {
           ),
         ),
       )
-    credentials.webhookEventsVersion = STRIPE_WEBHOOK_EVENTS_VERSION
   }
 
   /**

@@ -10,6 +10,7 @@ import {
   createStripeClient,
   STRIPE_WEBHOOK_TOLERANCE_SECONDS,
   type Stripe,
+  Stripe as StripeSdk,
 } from "../integration-stripe/client"
 import {
   integrationStripeService,
@@ -64,6 +65,10 @@ type Resolution = {
   failedWhileOpen: boolean
   /** stripeCheckout: the PaymentIntent that paid (becomes providerInvoiceId). */
   paymentIntentId: string | null
+  /** stripeCheckout: the session the event is about. */
+  sessionId?: string
+  /** Not decidable yet (a refund before its payment was recorded): 503. */
+  retryLater?: boolean
 }
 
 const UNRESOLVED: Resolution = {
@@ -118,6 +123,10 @@ async function resolveCheckoutSession(
     return UNRESOLVED
   }
   const session = await stripe.checkout.sessions.retrieve(signed.id)
+  // The hub only mints one-time payment sessions.
+  if (session.mode !== "payment") {
+    return UNRESOLVED
+  }
   const hubInvoice = await findCheckoutInvoice(credentials, session.metadata)
   if (!hubInvoice) {
     return UNRESOLVED
@@ -129,6 +138,7 @@ async function resolveCheckoutSession(
       confirmed: true,
       failedWhileOpen: session.payment_status === "unpaid",
       paymentIntentId,
+      sessionId: session.id,
     }
   }
   const paidInFull =
@@ -148,6 +158,7 @@ async function resolveCheckoutSession(
     confirmed: paidInFull && !!paymentIntentId,
     failedWhileOpen: false,
     paymentIntentId,
+    sessionId: session.id,
   }
 }
 
@@ -209,6 +220,11 @@ async function resolveCheckoutRefund(
     credentials,
     paymentIntent.metadata,
   )
+  if (hubInvoice && !hubInvoice.providerInvoiceId) {
+    // Refunded before the payment event was applied (that one is still in
+    // Stripe's retry queue): decide once the invoice is paid, never drop it.
+    return { ...UNRESOLVED, hubInvoice, retryLater: true }
+  }
   if (!hubInvoice || hubInvoice.providerInvoiceId !== paymentIntentId) {
     return UNRESOLVED
   }
@@ -347,6 +363,61 @@ async function markAndEmit(props: {
   }
 }
 
+/** InvoiceEvent outcome of the checkout payment whose marks + emit ran. */
+const MARKED_OUTCOME = "marked"
+
+/** Drop an event's dedup row so Stripe's redelivery is processed again. */
+async function dropDedupRow(
+  credentials: StripeCredentials,
+  eventId: string,
+): Promise<void> {
+  try {
+    await db
+      .delete(invoiceEventModel)
+      .where(
+        and(
+          eq(invoiceEventModel.integrationId, credentials.integrationId),
+          eq(invoiceEventModel.providerEventId, eventId),
+        ),
+      )
+  } catch (error) {
+    // The redelivery will now read as a duplicate: say so, loudly.
+    logger.error(
+      { err: error, eventId },
+      "stripe webhook: dedup row not removed; this event's redelivery will be skipped",
+    )
+  }
+}
+
+/**
+ * An async payment on the invoice's recorded session failed: that session
+ * stays `complete` at Stripe forever, so free the link (the next visit
+ * mints a fresh session) instead of answering "processing" for good.
+ */
+async function releaseFailedSession(
+  hubInvoice: InvoiceModel,
+  sessionId: string | undefined,
+): Promise<void> {
+  if (!sessionId || hubInvoice.checkoutSessionId !== sessionId) {
+    return
+  }
+  await db
+    .update(invoiceModel)
+    .set({
+      checkoutSessionId: null,
+      checkoutMintedAt: null,
+      checkoutGeneration: hubInvoice.checkoutGeneration + 1,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(invoiceModel.id, hubInvoice.id),
+        eq(invoiceModel.status, "open"),
+        eq(invoiceModel.checkoutSessionId, sessionId),
+      ),
+    )
+}
+
 /**
  * A confirmed checkout payment the invoice did not take: either a redelivery
  * of the payment it already recorded (returns the row, marks re-run), or a
@@ -359,7 +430,11 @@ async function settleUnappliedCheckoutPayment(props: {
   event: Stripe.Event
   hubInvoice: InvoiceModel
   paymentIntentId: string
-}): Promise<InvoiceModel | null> {
+}): Promise<
+  | { kind: "remark"; row: InvoiceModel }
+  | { kind: "already-marked" }
+  | { kind: "duplicate-payment" }
+> {
   const { credentials, event, hubInvoice, paymentIntentId } = props
   const [current] = await db
     .select()
@@ -367,7 +442,13 @@ async function settleUnappliedCheckoutPayment(props: {
     .where(eq(invoiceModel.id, hubInvoice.id))
     .limit(1)
   if (current?.providerInvoiceId === paymentIntentId) {
-    return current
+    const marked = await db.query.invoiceEventModel.findFirst({
+      where: { invoiceId: current.id, outcome: MARKED_OUTCOME },
+      columns: { id: true },
+    })
+    return marked
+      ? { kind: "already-marked" }
+      : { kind: "remark", row: current }
   }
   logger.error(
     {
@@ -396,7 +477,7 @@ async function settleUnappliedCheckoutPayment(props: {
       })
       .where(eq(invoiceModel.id, hubInvoice.id))
   })
-  return null
+  return { kind: "duplicate-payment" }
 }
 
 /**
@@ -453,10 +534,35 @@ export async function handleStripeWebhook(props: {
     if (isRetryableStripeError(error)) {
       return { outcome: "retry", detail: "stripe unreachable" }
     }
+    // Only a Stripe answer about the object (a 404, a bad request) may be
+    // recorded as final; a database blip or a bug must never drop a payment.
+    if (!(error instanceof StripeSdk.errors.StripeError)) {
+      logger.error(
+        { err: error, eventId: event.id },
+        "stripe webhook: resolution failed, asking Stripe to redeliver",
+      )
+      return { outcome: "retry", detail: "resolution failed" }
+    }
+    // A rolled, revoked or under-scoped key: the event is real (its
+    // signature checked out) but cannot be confirmed. Recording it would
+    // drop it for good; keep Stripe redelivering until Stripe is reconnected.
+    if (
+      error instanceof StripeSdk.errors.StripeAuthenticationError ||
+      error instanceof StripeSdk.errors.StripePermissionError
+    ) {
+      logger.error(
+        { err: error, eventId: event.id },
+        "stripe webhook: the stored key cannot read Stripe; reconnect Stripe",
+      )
+      return { outcome: "retry", detail: "stripe key rejected" }
+    }
     logger.warn(
       { err: error, eventId: event.id },
       "stripe webhook: invoice lookup failed",
     )
+  }
+  if (resolution.retryLater) {
+    return { outcome: "retry", detail: "payment not recorded yet" }
   }
   let { hubInvoice } = resolution
   const { confirmed, paymentIntentId } = resolution
@@ -515,17 +621,32 @@ export async function handleStripeWebhook(props: {
     return { outcome: "noop", detail: outcomeLabel }
   }
 
-  if (target === "paid" && paymentIntentId && !applied) {
-    const settled = await settleUnappliedCheckoutPayment({
-      credentials,
-      event,
-      hubInvoice,
-      paymentIntentId,
-    })
-    if (!settled) {
-      return { outcome: "noop", detail: "duplicate-payment" }
+  if (event.type === "checkout.session.async_payment_failed") {
+    await releaseFailedSession(hubInvoice, resolution.sessionId)
+  }
+  const checkoutPaid = target === "paid" && !!paymentIntentId
+  if (checkoutPaid && !applied && paymentIntentId) {
+    let settled: Awaited<ReturnType<typeof settleUnappliedCheckoutPayment>>
+    try {
+      settled = await settleUnappliedCheckoutPayment({
+        credentials,
+        event,
+        hubInvoice,
+        paymentIntentId,
+      })
+    } catch (error) {
+      // The flag must not be lost: let Stripe redeliver and flag again.
+      await dropDedupRow(credentials, event.id)
+      logger.error(
+        { err: error, eventId: event.id, invoiceId: hubInvoice.id },
+        "stripe webhook: could not flag an unapplied checkout payment, asking Stripe to redeliver",
+      )
+      return { outcome: "retry", detail: "duplicate-payment flag" }
     }
-    hubInvoice = settled
+    if (settled.kind !== "remark") {
+      return { outcome: "noop", detail: settled.kind }
+    }
+    hubInvoice = settled.row
   }
 
   try {
@@ -537,20 +658,32 @@ export async function handleStripeWebhook(props: {
     })
   } catch (error) {
     // Let Stripe redeliver: drop the dedup row so the retry is not a duplicate.
-    await db
-      .delete(invoiceEventModel)
-      .where(
-        and(
-          eq(invoiceEventModel.integrationId, credentials.integrationId),
-          eq(invoiceEventModel.providerEventId, event.id),
-        ),
-      )
-      .catch(() => undefined)
+    await dropDedupRow(credentials, event.id)
     logger.warn(
       { err: error, eventId: event.id, invoiceId: hubInvoice.id },
       "stripe webhook: contact marks failed, asking Stripe to redeliver",
     )
     return { outcome: "retry", detail: "contact marks" }
+  }
+  if (checkoutPaid) {
+    // Two event types can carry one checkout payment (completed and
+    // async_payment_succeeded): the marks and invoicePaid run once.
+    try {
+      await db
+        .update(invoiceEventModel)
+        .set({ outcome: MARKED_OUTCOME, updatedAt: new Date() })
+        .where(
+          and(
+            eq(invoiceEventModel.integrationId, credentials.integrationId),
+            eq(invoiceEventModel.providerEventId, event.id),
+          ),
+        )
+    } catch (error) {
+      logger.error(
+        { err: error, eventId: event.id },
+        "stripe webhook: could not record that the payment was marked",
+      )
+    }
   }
   return {
     outcome: applied ? "applied" : "noop",

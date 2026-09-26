@@ -1,3 +1,4 @@
+import Stripe from "stripe"
 import { beforeEach, describe, expect, test, vi } from "vitest"
 
 /**
@@ -16,6 +17,7 @@ const WS = "11"
 const INTEGRATION = "77"
 const TOKEN = "0123456789ABCDEFGHIJKL"
 const JUST_PAID = /just paid/
+const SERVE = { canServe: () => Promise.resolve(true) }
 
 type Row = Record<string, unknown>
 
@@ -102,6 +104,11 @@ const m = vi.hoisted(() => {
       // Stripe serialises one key (a concurrent duplicate gets a 409 the SDK
       // retries), so the key is looked up only once the request "lands".
       const seen = stripe.keys.get(opts.idempotencyKey)
+      if (m.createError && !seen) {
+        const error = m.createError
+        m.createError = null
+        throw error
+      }
       if (seen) {
         if (seen.body !== body) {
           throw new Error("idempotency key reused with different parameters")
@@ -128,6 +135,10 @@ const m = vi.hoisted(() => {
       }
       stripe.sessions.set(id, session)
       stripe.keys.set(opts.idempotencyKey, { body, id })
+      if (m.loseNextResponse) {
+        m.loseNextResponse = false
+        throw new Error("socket hang up after Stripe created the session")
+      }
       return { ...session }
     },
     retrieve: (id: string) => {
@@ -157,6 +168,12 @@ const m = vi.hoisted(() => {
     stripe,
     sessionsApi,
     amountOverride: null as number | null,
+    /** The next create fails with this (Stripe caches it under the key). */
+    createError: null as Error | null,
+    /** The next create stores its session, then the response is lost. */
+    loseNextResponse: false,
+    /** PaymentIntent statuses for paymentIntents.retrieve. */
+    piStatus: new Map<string, string>(),
     credentials: vi.fn(),
     ensureEvents: vi.fn(),
     ensureCustomer: vi.fn(),
@@ -175,7 +192,13 @@ vi.mock("../src/integration-stripe/client", async (importOriginal) => ({
   ...(await importOriginal<
     typeof import("../src/integration-stripe/client")
   >()),
-  createStripeClient: () => ({ checkout: { sessions: m.sessionsApi } }),
+  createStripeClient: () => ({
+    checkout: { sessions: m.sessionsApi },
+    paymentIntents: {
+      retrieve: (id: string) =>
+        Promise.resolve({ id, status: m.piStatus.get(id) ?? "succeeded" }),
+    },
+  }),
 }))
 vi.mock("../src/integration-stripe/service", () => ({
   integrationStripeService: {
@@ -257,6 +280,9 @@ beforeEach(() => {
   m.stripe.expires = 0
   m.stripe.counter = 0
   m.amountOverride = null
+  m.createError = null
+  m.loseNextResponse = false
+  m.piStatus.clear()
   m.credentials.mockResolvedValue(CREDENTIALS)
 })
 
@@ -267,19 +293,19 @@ describe("visitCheckout: token and row gates", () => {
     ["a non-base62 character", "0123456789ABCDEFGHIJK-"],
     ["empty", ""],
   ])("a malformed token (%s) is not found without a database read", async (_l, token) => {
-    expect(await visitCheckout(token)).toEqual({ kind: "notFound" })
+    expect(await visitCheckout(token, SERVE)).toEqual({ kind: "notFound" })
     expect(m.state.reads).toBe(0)
   })
 
   test("an unknown token is not found", async () => {
-    expect(await visitCheckout("ZZZZZZZZZZZZZZZZZZZZZZ")).toEqual({
+    expect(await visitCheckout("ZZZZZZZZZZZZZZZZZZZZZZ", SERVE)).toEqual({
       kind: "notFound",
     })
   })
 
   test("a stripeInvoice row behind a token is not found (never a checkout)", async () => {
     m.state.row = openRow({ method: "stripeInvoice" })
-    expect(await visitCheckout(TOKEN)).toEqual({ kind: "notFound" })
+    expect(await visitCheckout(TOKEN, SERVE)).toEqual({ kind: "notFound" })
     expect(m.stripe.creates).toBe(0)
   })
 
@@ -290,7 +316,7 @@ describe("visitCheckout: token and row gates", () => {
     ["uncollectible", "closed"],
   ])("a %s invoice answers %s and mints nothing", async (status, kind) => {
     m.state.row = openRow({ status })
-    expect((await visitCheckout(TOKEN)).kind).toBe(kind)
+    expect((await visitCheckout(TOKEN, SERVE)).kind).toBe(kind)
     expect(m.stripe.creates).toBe(0)
   })
 
@@ -300,7 +326,7 @@ describe("visitCheckout: token and row gates", () => {
     ["another Stripe account", { ...CREDENTIALS, accountId: "acct_2" }],
   ])("%s -> unavailable, nothing minted", async (_l, credentials) => {
     m.credentials.mockResolvedValue(credentials)
-    expect((await visitCheckout(TOKEN)).kind).toBe("unavailable")
+    expect((await visitCheckout(TOKEN, SERVE)).kind).toBe("unavailable")
     expect(m.stripe.creates).toBe(0)
   })
 })
@@ -308,7 +334,7 @@ describe("visitCheckout: token and row gates", () => {
 describe("visitCheckout: minting and reuse", () => {
   test("the first visit claims generation 1, mints one session and records it", async () => {
     const before = Date.now()
-    const visit = await visitCheckout(TOKEN)
+    const visit = await visitCheckout(TOKEN, SERVE)
     expect(visit).toMatchObject({
       kind: "redirect",
       url: "https://checkout.stripe.com/c/pay/cs_test_1",
@@ -356,18 +382,18 @@ describe("visitCheckout: minting and reuse", () => {
   })
 
   test("a second visit reuses the live session: no create, no expire", async () => {
-    await visitCheckout(TOKEN)
-    const again = await visitCheckout(TOKEN)
+    await visitCheckout(TOKEN, SERVE)
+    const again = await visitCheckout(TOKEN, SERVE)
     expect(again).toMatchObject({ kind: "redirect" })
     expect(m.stripe.creates).toBe(1)
     expect(m.stripe.expires).toBe(0)
   })
 
   test("a session under 30 min from expiry is expired FIRST, then generation 2 mints a new one", async () => {
-    await visitCheckout(TOKEN)
+    await visitCheckout(TOKEN, SERVE)
     const first = m.stripe.sessions.get("cs_test_1") as Row
     first.expires_at = Math.floor((Date.now() + 29 * 60_000) / 1000)
-    const visit = await visitCheckout(TOKEN)
+    const visit = await visitCheckout(TOKEN, SERVE)
     expect(visit).toMatchObject({
       kind: "redirect",
       url: expect.stringContaining("cs_test_2"),
@@ -381,24 +407,24 @@ describe("visitCheckout: minting and reuse", () => {
   })
 
   test("a session Stripe already expired is replaced by the next generation", async () => {
-    await visitCheckout(TOKEN)
+    await visitCheckout(TOKEN, SERVE)
     ;(m.stripe.sessions.get("cs_test_1") as Row).status = "expired"
-    await visitCheckout(TOKEN)
+    await visitCheckout(TOKEN, SERVE)
     expect(m.state.row?.checkoutSessionId).toBe("cs_test_2")
     expect(liveSessions()).toHaveLength(1)
   })
 
   test("a COMPLETED session (paid, webhook pending) answers processing and is never replaced", async () => {
-    await visitCheckout(TOKEN)
+    await visitCheckout(TOKEN, SERVE)
     ;(m.stripe.sessions.get("cs_test_1") as Row).status = "complete"
-    const visit = await visitCheckout(TOKEN)
+    const visit = await visitCheckout(TOKEN, SERVE)
     expect(visit.kind).toBe("processing")
     expect(m.stripe.creates).toBe(1)
     expect(m.state.row?.checkoutGeneration).toBe(1)
   })
 
   test("a session that completes while being expired answers processing, no new session", async () => {
-    await visitCheckout(TOKEN)
+    await visitCheckout(TOKEN, SERVE)
     const first = m.stripe.sessions.get("cs_test_1") as Row
     first.expires_at = Math.floor((Date.now() + 60_000) / 1000)
     const realExpire = m.sessionsApi.expire
@@ -407,7 +433,7 @@ describe("visitCheckout: minting and reuse", () => {
       return realExpire(id)
     }
     try {
-      expect((await visitCheckout(TOKEN)).kind).toBe("processing")
+      expect((await visitCheckout(TOKEN, SERVE)).kind).toBe("processing")
     } finally {
       m.sessionsApi.expire = realExpire
     }
@@ -417,7 +443,7 @@ describe("visitCheckout: minting and reuse", () => {
   test("a young pending generation (claimed, never recorded) is JOINED through the same key", async () => {
     const mintedAt = new Date(Date.now() - 60_000)
     m.state.row = openRow({ checkoutGeneration: 3, checkoutMintedAt: mintedAt })
-    const visit = await visitCheckout(TOKEN)
+    const visit = await visitCheckout(TOKEN, SERVE)
     expect(visit.kind).toBe("redirect")
     expect([...m.stripe.keys.keys()]).toEqual(["hub-inv-501-cs-3"])
     expect(m.state.row?.checkoutGeneration).toBe(3)
@@ -428,14 +454,22 @@ describe("visitCheckout: minting and reuse", () => {
       checkoutGeneration: 3,
       checkoutMintedAt: new Date(Date.now() - 11 * 60_000),
     })
-    await visitCheckout(TOKEN)
-    expect([...m.stripe.keys.keys()]).toEqual(["hub-inv-501-cs-4"])
+    await visitCheckout(TOKEN, SERVE)
+    // The abandoned generation is replayed (its crashed minter may have made
+    // a session) and expired before generation 4 mints.
+    expect([...m.stripe.keys.keys()]).toEqual([
+      "hub-inv-501-cs-3",
+      "hub-inv-501-cs-4",
+    ])
     expect(m.state.row?.checkoutGeneration).toBe(4)
+    expect(liveSessions().map((s) => s.id)).toEqual([
+      m.state.row?.checkoutSessionId,
+    ])
   })
 
   test("a session total that is not the hub total is expired and the visit fails", async () => {
     m.amountOverride = 1
-    const error = await visitCheckout(TOKEN).catch((e: unknown) => e)
+    const error = await visitCheckout(TOKEN, SERVE).catch((e: unknown) => e)
     expect(error).toBeInstanceOf(InvoiceProviderError)
     expect(m.stripe.sessions.get("cs_test_1")?.status).toBe("expired")
     expect(m.state.row?.checkoutSessionId).toBeNull()
@@ -445,8 +479,8 @@ describe("visitCheckout: minting and reuse", () => {
 describe("visitCheckout: races", () => {
   test("two concurrent first visits land on the SAME session; one Stripe object, one live", async () => {
     const [a, b] = await Promise.all([
-      visitCheckout(TOKEN),
-      visitCheckout(TOKEN),
+      visitCheckout(TOKEN, SERVE),
+      visitCheckout(TOKEN, SERVE),
     ])
     expect(a).toMatchObject({ kind: "redirect" })
     expect(b).toMatchObject({ kind: "redirect" })
@@ -460,12 +494,12 @@ describe("visitCheckout: races", () => {
   })
 
   test("five concurrent visits on an expiring session still leave exactly one live session", async () => {
-    await visitCheckout(TOKEN)
+    await visitCheckout(TOKEN, SERVE)
     ;(m.stripe.sessions.get("cs_test_1") as Row).expires_at = Math.floor(
       (Date.now() + 60_000) / 1000,
     )
     const visits = await Promise.all(
-      Array.from({ length: 5 }, () => visitCheckout(TOKEN)),
+      Array.from({ length: 5 }, () => visitCheckout(TOKEN, SERVE)),
     )
     const urls = new Set(
       visits.map((v) => (v.kind === "redirect" ? v.url : v.kind)),
@@ -479,7 +513,7 @@ describe("visitCheckout: races", () => {
     m.state.beforeCreateResolves = () => {
       m.state.row = { ...(m.state.row as Row), status: "void" }
     }
-    const visit = await visitCheckout(TOKEN)
+    const visit = await visitCheckout(TOKEN, SERVE)
     expect(visit.kind).toBe("closed")
     expect(m.stripe.sessions.get("cs_test_1")?.status).toBe("expired")
     expect(liveSessions()).toHaveLength(0)
@@ -515,7 +549,9 @@ describe("prepareCheckoutInvoice", () => {
   })
 
   test("a webhook upgrade failure is a retryable provider error; no customer is made", async () => {
-    m.ensureEvents.mockRejectedValue(new Error("Stripe down"))
+    m.ensureEvents.mockRejectedValue(
+      new Stripe.errors.StripeConnectionError({ message: "Stripe down" }),
+    )
     const error = await prepareCheckoutInvoice({
       credentials: CREDENTIALS,
       invoice: openRow({ status: "draft" }) as never,
@@ -540,7 +576,7 @@ describe("prepareCheckoutInvoice", () => {
 
 describe("checkout void helpers", () => {
   test("assertCheckoutNotPaid refuses a completed session, allows open or none", async () => {
-    await visitCheckout(TOKEN)
+    await visitCheckout(TOKEN, SERVE)
     const row = m.state.row as never
     await expect(
       assertCheckoutNotPaid({ credentials: CREDENTIALS, invoice: row }),
@@ -558,7 +594,7 @@ describe("checkout void helpers", () => {
   })
 
   test("expireCheckoutAfterVoid expires the open session; an expired one is fine; a completed one is logged", async () => {
-    await visitCheckout(TOKEN)
+    await visitCheckout(TOKEN, SERVE)
     const row = m.state.row as never
     await expireCheckoutAfterVoid({ credentials: CREDENTIALS, invoice: row })
     expect(m.stripe.sessions.get("cs_test_1")?.status).toBe("expired")
@@ -566,5 +602,90 @@ describe("checkout void helpers", () => {
     ;(m.stripe.sessions.get("cs_test_1") as Row).status = "complete"
     await expireCheckoutAfterVoid({ credentials: CREDENTIALS, invoice: row })
     expect(m.loggerError).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("probe findings (s207b review)", () => {
+  test("a frozen workspace mints nothing: no claim, no Stripe call", async () => {
+    const visit = await visitCheckout(TOKEN, {
+      canServe: () => Promise.resolve(false),
+    })
+    expect(visit.kind).toBe("frozen")
+    expect(m.stripe.creates).toBe(0)
+    expect(m.state.row?.checkoutGeneration).toBe(0)
+  })
+
+  test("a Stripe refusal every visit would repeat is written to lastError; a later success clears it", async () => {
+    m.createError = Object.assign(new Error("No such customer: 'cus_1'"), {})
+    const error = await visitCheckout(TOKEN, SERVE).catch((e: unknown) => e)
+    expect(error).toMatchObject({ retryable: false })
+    expect(String(m.state.row?.lastError)).toContain("No such customer")
+    expect(m.state.row?.status).toBe("open")
+    // The cached error answers this generation's key: a new generation heals.
+    m.state.row = {
+      ...(m.state.row as Row),
+      checkoutMintedAt: new Date(Date.now() - 11 * 60_000),
+    }
+    const visit = await visitCheckout(TOKEN, SERVE)
+    expect(visit.kind).toBe("redirect")
+    expect(m.state.row?.lastError).toBeNull()
+  })
+
+  test("a session created but never recorded (lost response) is expired before the next generation", async () => {
+    m.loseNextResponse = true
+    await expect(visitCheckout(TOKEN, SERVE)).rejects.toThrow()
+    const lost = [...m.stripe.sessions.values()][0]
+    expect(lost?.status).toBe("open")
+    expect(m.state.row?.checkoutSessionId).toBeNull()
+    // Eleven minutes later the pending generation is stale.
+    vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 11 * 60_000 })
+    const visit = await visitCheckout(TOKEN, SERVE)
+    expect(visit.kind).toBe("redirect")
+    vi.useRealTimers()
+    expect(m.stripe.sessions.get(lost?.id as string)?.status).toBe("expired")
+    expect(liveSessions().map((x) => x.id)).toEqual([
+      m.state.row?.checkoutSessionId,
+    ])
+  })
+
+  test("sessions are card-only (no async method can strand the link)", async () => {
+    await visitCheckout(TOKEN, SERVE)
+    const params = m.stripe.sessions.get("cs_test_1")?.params as Row
+    expect(params.payment_method_types).toEqual(["card"])
+  })
+
+  test.each([
+    ["requires_payment_method", "redirect"],
+    ["canceled", "redirect"],
+    ["processing", "processing"],
+  ])("a complete but UNPAID session whose PaymentIntent is %s answers %s", async (piStatus, kind) => {
+    await visitCheckout(TOKEN, SERVE)
+    Object.assign(m.stripe.sessions.get("cs_test_1") as Row, {
+      status: "complete",
+      payment_status: "unpaid",
+      payment_intent: "pi_async",
+    })
+    m.piStatus.set("pi_async", piStatus)
+    const visit = await visitCheckout(TOKEN, SERVE)
+    expect(visit.kind).toBe(kind)
+    if (kind === "redirect") {
+      expect(m.state.row?.checkoutSessionId).toBe("cs_test_2")
+    }
+  })
+
+  test("assertCheckoutNotPaid lets a void through when the async payment failed", async () => {
+    await visitCheckout(TOKEN, SERVE)
+    Object.assign(m.stripe.sessions.get("cs_test_1") as Row, {
+      status: "complete",
+      payment_status: "unpaid",
+      payment_intent: "pi_async",
+    })
+    m.piStatus.set("pi_async", "requires_payment_method")
+    await expect(
+      assertCheckoutNotPaid({
+        credentials: CREDENTIALS,
+        invoice: m.state.row as never,
+      }),
+    ).resolves.toBeUndefined()
   })
 })

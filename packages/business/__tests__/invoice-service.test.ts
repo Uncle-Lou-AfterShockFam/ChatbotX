@@ -835,6 +835,7 @@ describe("stripeCheckout (s207b): finalize and void", () => {
     m.state.stored = storedInvoice("open", {
       method: "stripeCheckout",
       checkoutSessionId: "cs_test_1",
+      providerAccountId: "acct_test_1",
     })
     const order: string[] = []
     m.assertCheckoutNotPaid.mockImplementation(() => {
@@ -858,6 +859,7 @@ describe("stripeCheckout (s207b): finalize and void", () => {
     m.state.stored = storedInvoice("open", {
       method: "stripeCheckout",
       checkoutSessionId: "cs_test_1",
+      providerAccountId: "acct_test_1",
     })
     m.assertCheckoutNotPaid.mockRejectedValue(
       new InvoiceProviderError("This invoice was just paid at Stripe", false),
@@ -874,6 +876,7 @@ describe("stripeCheckout (s207b): finalize and void", () => {
     m.state.stored = storedInvoice("open", {
       method: "stripeCheckout",
       checkoutSessionId: "cs_test_1",
+      providerAccountId: "acct_test_1",
     })
     m.expireAfterVoid.mockRejectedValue(new Error("Stripe down"))
     const invoice = await invoiceService.void({ workspaceId: WS, id: "9" })
@@ -887,5 +890,26 @@ describe("stripeCheckout (s207b): finalize and void", () => {
     expect(invoice.status).toBe("void")
     expect(credentialsSpy).not.toHaveBeenCalled()
     expect(m.assertCheckoutNotPaid).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    [
+      "another Stripe account is connected now",
+      { ...CREDENTIALS, accountId: "acct_other" },
+    ],
+    ["Stripe is disconnected", null],
+  ])("void when %s: never refused, voids here and says which session to expire by hand", async (_l, credentials) => {
+    credentialsSpy.mockResolvedValue(credentials)
+    m.state.stored = storedInvoice("open", {
+      method: "stripeCheckout",
+      checkoutSessionId: "cs_test_1",
+      providerAccountId: "acct_test_1",
+    })
+    const invoice = await invoiceService.void({ workspaceId: WS, id: "9" })
+    expect(invoice.status).toBe("void")
+    expect(m.assertCheckoutNotPaid).not.toHaveBeenCalled()
+    expect(m.expireAfterVoid).not.toHaveBeenCalled()
+    expect(invoice.lastError).toContain("cs_test_1")
+    expect(invoice.lastError).toContain("acct_test_1")
   })
 })

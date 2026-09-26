@@ -1,3 +1,4 @@
+import { escapeHtml } from "@chatbotx.io/business/documents"
 import { visitCheckout } from "@chatbotx.io/business/invoice"
 import type { InvoiceModel } from "@chatbotx.io/database/types"
 import { NextResponse } from "next/server"
@@ -27,14 +28,6 @@ const PAGE_HEADERS = {
   "X-Robots-Tag": "noindex, nofollow",
   "Referrer-Policy": "no-referrer",
 }
-
-const escapeHtml = (value: string) =>
-  value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;")
 
 const invoiceLabel = (invoice: InvoiceModel) =>
   `Invoice #${invoice.number} (${invoice.total} ${invoice.currency})`
@@ -72,7 +65,10 @@ export async function GET(request: Request, context: RouteContext) {
   const { token } = await context.params
   let visit: Awaited<ReturnType<typeof visitCheckout>>
   try {
-    visit = await visitCheckout(token)
+    visit = await visitCheckout(token, {
+      canServe: async (workspaceId) =>
+        (await loadServableWorkspace(workspaceId)).servable,
+    })
   } catch (error) {
     logger.error(error, `pay link failed for token ${token.slice(0, 4)}...`)
     return payPage({
@@ -81,18 +77,15 @@ export async function GET(request: Request, context: RouteContext) {
       body: "Payments are not available right now. Please try again in a few minutes.",
     })
   }
-  if (visit.kind === "notFound") {
-    return notFound()
-  }
-  const { servable } = await loadServableWorkspace(visit.invoice.workspaceId)
-  if (!servable) {
-    return payPage({
-      status: 410,
-      title: "Link closed",
-      body: "This payment link is no longer available.",
-    })
-  }
   switch (visit.kind) {
+    case "notFound":
+      return notFound()
+    case "frozen":
+      return payPage({
+        status: 410,
+        title: "Link closed",
+        body: "This payment link is no longer available.",
+      })
     case "redirect":
       return NextResponse.redirect(visit.url, {
         status: 303,
