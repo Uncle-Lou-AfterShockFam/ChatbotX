@@ -117,6 +117,7 @@ const m = vi.hoisted(() => {
     sessionRetrieve: vi.fn(),
     piRetrieve: vi.fn(),
     marks: vi.fn(),
+    prerender: vi.fn(async () => undefined),
     emitPaid: vi.fn(),
     emitFailed: vi.fn(),
     emitCreated: vi.fn(),
@@ -169,6 +170,9 @@ vi.mock("../src/integration-stripe/client", async (importOriginal) => {
 vi.mock("../src/invoice/contact-marks", () => ({
   markInvoiceOnContact: (...a: unknown[]) => m.marks(...a),
   markInvoiceCreated: vi.fn(),
+}))
+vi.mock("../src/invoice/document", () => ({
+  prerenderInvoiceReceipt: (...a: unknown[]) => m.prerender(...a),
 }))
 vi.mock("@chatbotx.io/events", () => ({
   emitInvoicePaid: (...a: unknown[]) => m.emitPaid(...a),
@@ -418,6 +422,8 @@ describe("handleStripeWebhook: dedup, confirmation and the transition", () => {
       "21",
       expect.objectContaining({ invoiceId: HUB_ID, status: "paid" }),
     )
+    // A stripeInvoice has Stripe's own PDF: no hub receipt.
+    expect(m.prerender).not.toHaveBeenCalled()
     expect(m.retrieve).toHaveBeenCalledWith(STRIPE_INVOICE_ID)
   })
 
@@ -711,6 +717,14 @@ describe("stripeCheckout (s207b): checkout.session.* and refunds", () => {
       status: "paid",
     })
     expect(m.emitPaid).toHaveBeenCalledTimes(1)
+    // s210b: the receipt PDF is pre-rendered, not awaited.
+    expect(m.prerender).toHaveBeenCalledWith(HUB_ID)
+  })
+
+  test("a receipt pre-render that never settles does not hold the webhook", async () => {
+    m.prerender.mockReturnValue(new Promise(() => undefined))
+    const result = await completed()
+    expect(result.outcome).toBe("applied")
   })
 
   test("async_payment_succeeded settles the same way", async () => {
@@ -902,6 +916,7 @@ describe("stripeCheckout (s207b): checkout.session.* and refunds", () => {
     const result = await completed("checkout.session.completed", "evt_cs_2")
     expect(result).toEqual({ outcome: "noop", detail: "already-marked" })
     expectNoSideEffects()
+    expect(m.prerender).not.toHaveBeenCalled()
   })
 
   test("a fresh paid event records that its marks ran (outcome marked)", async () => {

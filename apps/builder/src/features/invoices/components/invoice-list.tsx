@@ -15,6 +15,7 @@ import {
   BanIcon,
   CopyIcon,
   ExternalLinkIcon,
+  FileTextIcon,
   Loader2Icon,
   RotateCwIcon,
 } from "lucide-react"
@@ -68,6 +69,12 @@ export function InvoiceList({
       currency: row.currency,
     })
 
+  // A due DATE, the hub convention since s192: its UTC day.
+  const due = (row: InvoiceResource) =>
+    row.dueAt
+      ? format.dateTime(row.dueAt, { dateStyle: "medium", timeZone: "UTC" })
+      : "-"
+
   const copyLink = async (url: string) => {
     try {
       await navigator.clipboard.writeText(url)
@@ -118,8 +125,13 @@ export function InvoiceList({
               <TableHead className="text-right">
                 {t("invoices.fields.total")}
               </TableHead>
-              <TableHead>{t("invoices.fields.created")}</TableHead>
-              <TableHead>{t("invoices.fields.due")}</TableHead>
+              {/* Below sm the dates fold under the number so Actions stay on screen. */}
+              <TableHead className="hidden sm:table-cell">
+                {t("invoices.fields.created")}
+              </TableHead>
+              <TableHead className="hidden sm:table-cell">
+                {t("invoices.fields.due")}
+              </TableHead>
               <TableHead className="text-right">
                 <span className="sr-only">{t("actions.actions")}</span>
               </TableHead>
@@ -128,7 +140,14 @@ export function InvoiceList({
           <TableBody>
             {rows.map((row) => (
               <TableRow data-testid={`invoice-row-${row.id}`} key={row.id}>
-                <TableCell className="font-medium">#{row.number}</TableCell>
+                <TableCell className="font-medium">
+                  #{row.number}
+                  {row.dueAt ? (
+                    <p className="whitespace-nowrap font-normal text-muted-foreground text-xs sm:hidden">
+                      {t("invoices.fields.due")} {due(row)}
+                    </p>
+                  ) : null}
+                </TableCell>
                 <TableCell>
                   <Badge variant={STATUS_VARIANT[row.status]}>
                     {t(`invoices.status.${row.status}`)}
@@ -146,17 +165,11 @@ export function InvoiceList({
                 <TableCell className="text-right tabular-nums">
                   {money(row)}
                 </TableCell>
-                <TableCell className="whitespace-nowrap">
+                <TableCell className="hidden whitespace-nowrap sm:table-cell">
                   {format.dateTime(row.createdAt, { dateStyle: "medium" })}
                 </TableCell>
-                <TableCell className="whitespace-nowrap">
-                  {row.dueAt
-                    ? format.dateTime(row.dueAt, {
-                        dateStyle: "medium",
-                        // A due DATE, the hub convention since s192: its UTC day.
-                        timeZone: "UTC",
-                      })
-                    : "-"}
+                <TableCell className="hidden whitespace-nowrap sm:table-cell">
+                  {due(row)}
                 </TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-1">
@@ -186,6 +199,24 @@ export function InvoiceList({
                           <ExternalLinkIcon className="size-4" />
                         </Button>
                       </>
+                    ) : null}
+                    {row.pdfUrl ? (
+                      <Button
+                        aria-label={t("invoices.openPdf")}
+                        data-testid={`invoice-pdf-${row.id}`}
+                        render={
+                          // biome-ignore lint/a11y/useAnchorContent: the Button renders its icon into this anchor
+                          <a
+                            href={row.pdfUrl}
+                            rel="noopener noreferrer"
+                            target="_blank"
+                          />
+                        }
+                        size="icon"
+                        variant="ghost"
+                      >
+                        <FileTextIcon className="size-4" />
+                      </Button>
                     ) : null}
                     {row.status === "draft" ? (
                       <Button

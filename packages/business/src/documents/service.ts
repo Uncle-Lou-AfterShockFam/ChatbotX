@@ -5,6 +5,8 @@ import {
   desc,
   eq,
   gte,
+  like,
+  notLike,
 } from "@chatbotx.io/database/client"
 import {
   CONTACT_DOCUMENT_LINK_TTL_DAYS,
@@ -13,6 +15,8 @@ import {
   DOCUMENT_TEMPLATE_MAX_HTML_BYTES,
   DOCUMENT_TEMPLATE_MAX_NAME,
   type DocumentTemplateStatus,
+  INVOICE_DOCUMENT_GENERATE_PER_MINUTE,
+  INVOICE_DOCUMENT_REF_PREFIX,
 } from "@chatbotx.io/database/partials"
 import {
   contactDocumentModel,
@@ -289,6 +293,13 @@ export class DocumentService extends BaseService {
         "ref must be 1-100 of A-Z a-z 0-9 . _ : -",
       )
     }
+    // The hub's invoice PDFs are served by pay link: never plant one.
+    if (ref.startsWith(INVOICE_DOCUMENT_REF_PREFIX)) {
+      throw validationException(
+        "ref",
+        `refs starting with "${INVOICE_DOCUMENT_REF_PREFIX}" are reserved`,
+      )
+    }
     const existing = await this.findByRef({ contactId, ref, tx })
     if (existing) {
       if (existing.workspaceId !== workspaceId) {
@@ -330,10 +341,43 @@ export class DocumentService extends BaseService {
       }
       throw err
     }
-    const rendered = await htmlToPdf(html)
+    return await this.storeRenderedPdf({
+      workspaceId,
+      contactId,
+      templateId,
+      title: template.name,
+      ref,
+      html,
+      field: "templateId",
+      now,
+      tx,
+    })
+  }
+
+  /**
+   * Render `html` and store it as the contact's `ref` document: Gotenberg,
+   * the private object, then the row. The (contactId, ref) unique index
+   * arbitrates a race: the loser deletes its orphan object and returns the
+   * winner's row. Failures throw a `validationException` on `field`. The
+   * caller has already looked up `ref` and passed the generate budget.
+   */
+  async storeRenderedPdf(props: {
+    workspaceId: string
+    contactId: string
+    templateId: string | null
+    title: string
+    ref: string
+    html: string
+    field: string
+    now: Date
+    tx: DatabaseClient
+  }): Promise<{ document: ContactDocumentModel; created: boolean }> {
+    const { workspaceId, contactId, templateId, title, ref, field, now, tx } =
+      props
+    const rendered = await htmlToPdf(props.html)
     if (!rendered.ok) {
       throw validationException(
-        "templateId",
+        field,
         `Could not render the PDF (${rendered.error})`,
       )
     }
@@ -345,7 +389,7 @@ export class DocumentService extends BaseService {
         ContentType: "application/pdf",
       })
     } catch {
-      throw validationException("templateId", "Could not store the PDF")
+      throw validationException(field, "Could not store the PDF")
     }
     let row: ContactDocumentModel | undefined
     try {
@@ -356,7 +400,7 @@ export class DocumentService extends BaseService {
           workspaceId,
           contactId,
           templateId,
-          title: template.name,
+          title,
           ref,
           status: "generated",
           path,
@@ -388,13 +432,24 @@ export class DocumentService extends BaseService {
     return { document: winner, created: false }
   }
 
-  /** 429-style refusal past DOCUMENT_GENERATE_PER_MINUTE renders in this workspace. */
-  private async assertGenerateBudget(props: {
+  /**
+   * 429-style refusal past the per-minute renders of this workspace: template
+   * documents (DOCUMENT_GENERATE_PER_MINUTE) and invoice PDFs
+   * (INVOICE_DOCUMENT_GENERATE_PER_MINUTE) are counted apart.
+   */
+  async assertGenerateBudget(props: {
     workspaceId: string
     now: Date
     tx: DatabaseClient
+    kind?: "template" | "invoice"
   }): Promise<void> {
-    const { workspaceId, now, tx } = props
+    const { workspaceId, now, tx, kind = "template" } = props
+    const invoice = kind === "invoice"
+    const field = invoice ? "invoice" : "templateId"
+    const limit = invoice
+      ? INVOICE_DOCUMENT_GENERATE_PER_MINUTE
+      : DOCUMENT_GENERATE_PER_MINUTE
+    const prefix = `${INVOICE_DOCUMENT_REF_PREFIX}%`
     const recent = await tx
       .select({ id: contactDocumentModel.id })
       .from(contactDocumentModel)
@@ -402,18 +457,21 @@ export class DocumentService extends BaseService {
         and(
           eq(contactDocumentModel.workspaceId, workspaceId),
           gte(contactDocumentModel.createdAt, new Date(now.getTime() - 60_000)),
+          invoice
+            ? like(contactDocumentModel.ref, prefix)
+            : notLike(contactDocumentModel.ref, prefix),
         ),
       )
-      .limit(DOCUMENT_GENERATE_PER_MINUTE)
-    if (recent.length >= DOCUMENT_GENERATE_PER_MINUTE) {
+      .limit(limit)
+    if (recent.length >= limit) {
       throw validationException(
-        "templateId",
-        `Too many documents generated in the last minute (limit ${DOCUMENT_GENERATE_PER_MINUTE}); try again shortly`,
+        field,
+        `Too many documents generated in the last minute (limit ${limit}); try again shortly`,
       )
     }
   }
 
-  private async findByRef(props: {
+  async findByRef(props: {
     contactId: string
     ref: string
     tx: DatabaseClient

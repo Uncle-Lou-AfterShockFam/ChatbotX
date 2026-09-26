@@ -18,6 +18,7 @@ import {
 } from "../integration-stripe/service"
 import { logger } from "../logger"
 import { markInvoiceOnContact } from "./contact-marks"
+import { prerenderInvoiceReceipt } from "./document"
 import { invoiceEventMetadata, invoiceService } from "./service"
 import { isRetryableStripeError } from "./stripe-provider"
 
@@ -690,6 +691,11 @@ export async function handleStripeWebhook(props: {
       "stripe webhook: contact marks failed, asking Stripe to redeliver",
     )
     return { outcome: "retry", detail: "contact marks" }
+  }
+  if (checkoutPaid) {
+    // Not awaited: Gotenberg must not hold Stripe's delivery open. It
+    // never rejects (it logs its own failure); the catch is belt and braces.
+    prerenderInvoiceReceipt(hubInvoice.id).catch(() => undefined)
   }
   return {
     outcome: applied ? "applied" : "noop",

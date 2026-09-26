@@ -37,9 +37,14 @@ export const payPage = (props: {
   title: string
   body: string
   invoice?: InvoiceModel
+  /** A same-site path shown as a link under the text (the receipt PDF). */
+  link?: { href: string; label: string }
 }) => {
   const heading = props.invoice ? invoiceLabel(props.invoice) : props.title
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(props.title)}</title><style>body{font-family:system-ui,-apple-system,Helvetica,Arial,sans-serif;margin:0;padding:48px 16px;background:#f6f7f9;color:#111}main{max-width:420px;margin:0 auto;background:#fff;border-radius:12px;padding:28px 24px;box-shadow:0 1px 3px rgba(0,0,0,.08)}h1{font-size:18px;margin:0 0 12px}p{margin:0;line-height:1.5;color:#444}</style></head><body><main><h1>${escapeHtml(heading)}</h1><p>${escapeHtml(props.body)}</p></main></body></html>`
+  const link = props.link
+    ? `<p class="link"><a href="${escapeHtml(props.link.href)}">${escapeHtml(props.link.label)}</a></p>`
+    : ""
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(props.title)}</title><style>body{font-family:system-ui,-apple-system,Helvetica,Arial,sans-serif;margin:0;padding:48px 16px;background:#f6f7f9;color:#111}main{max-width:420px;margin:0 auto;background:#fff;border-radius:12px;padding:28px 24px;box-shadow:0 1px 3px rgba(0,0,0,.08)}h1{font-size:18px;margin:0 0 12px}p{margin:0;line-height:1.5;color:#444}.link{margin-top:16px}a{color:#1d4ed8}</style></head><body><main><h1>${escapeHtml(heading)}</h1><p>${escapeHtml(props.body)}</p>${link}</main></body></html>`
   return new NextResponse(html, { status: props.status, headers: PAGE_HEADERS })
 }
 
@@ -97,6 +102,11 @@ export async function GET(request: Request, context: RouteContext) {
         title: "Paid",
         body: "This invoice is paid. Thank you!",
         invoice: visit.invoice,
+        // A refunded invoice reads "paid" here but has no receipt document.
+        link:
+          visit.invoice.status === "paid"
+            ? { href: `/pay/${token}/pdf`, label: "Download receipt (PDF)" }
+            : undefined,
       })
     case "processing":
       return payPage({

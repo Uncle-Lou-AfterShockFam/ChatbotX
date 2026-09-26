@@ -29,5 +29,12 @@ export const CONTACT_DOCUMENT_REF_REGEX = /^[A-Za-z0-9._:-]{1,100}$/
  * starve the rest.
  */
 export const DOCUMENT_GENERATE_PER_MINUTE = 30
+/**
+ * Refs the hub reserves for its own invoice / receipt PDFs (s210b): a caller
+ * may not plant one, and their renders (reachable by an anonymous pay link)
+ * have a budget of their own so they cannot starve template generation.
+ */
+export const INVOICE_DOCUMENT_REF_PREFIX = "invoice:"
+export const INVOICE_DOCUMENT_GENERATE_PER_MINUTE = 30
 /** Download link lifetime for a generated document. */
 export const CONTACT_DOCUMENT_LINK_TTL_DAYS = 30

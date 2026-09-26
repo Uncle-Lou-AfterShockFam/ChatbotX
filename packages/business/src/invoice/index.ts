@@ -1,5 +1,6 @@
 export * from "./checkout-provider"
 export * from "./contact-marks"
+export * from "./document"
 export * from "./schema"
 export * from "./service"
 export * from "./stripe-provider"
