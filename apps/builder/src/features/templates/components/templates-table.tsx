@@ -12,8 +12,9 @@ import {
   DropdownMenuTrigger,
 } from "@chatbotx.io/ui/components/ui/dropdown-menu"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
+import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
 import type { ColumnDef } from "@tanstack/react-table"
-import { format } from "date-fns"
+import { formatInTimeZone } from "date-fns-tz"
 import {
   MoreHorizontalIcon,
   PencilIcon,
@@ -21,7 +22,7 @@ import {
   Trash2Icon,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useTranslations } from "next-intl"
+import { useTimeZone, useTranslations } from "next-intl"
 import { useMemo, useState } from "react"
 import { DeleteTemplateDialog } from "./delete-template-dialog"
 import { ShareTemplateDialog } from "./share-template-dialog"
@@ -38,6 +39,7 @@ export function TemplatesTable({
   isSuperAdmin,
 }: TemplatesTableProps) {
   const t = useTranslations()
+  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
   const router = useRouter()
   const [deletingTemplate, setDeletingTemplate] =
     useState<TemplateModel | null>(null)
@@ -109,7 +111,12 @@ export function TemplatesTable({
             title={t("fields.createdAt.label")}
           />
         ),
-        cell: ({ row }) => format(row.original.createdAt, "yyyy/MM/dd HH:mm"),
+        cell: ({ row }) =>
+          formatInTimeZone(
+            row.original.createdAt,
+            timeZone,
+            "yyyy/MM/dd HH:mm",
+          ),
         enableSorting: true,
         enableHiding: false,
       },
@@ -162,7 +169,7 @@ export function TemplatesTable({
         enableHiding: false,
       },
     ],
-    [t, router, workspaceId, isSuperAdmin],
+    [t, router, workspaceId, isSuperAdmin, timeZone],
   )
 
   const { table } = useDataTable({

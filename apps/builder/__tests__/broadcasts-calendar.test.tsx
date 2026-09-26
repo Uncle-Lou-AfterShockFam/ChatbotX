@@ -13,6 +13,9 @@ vi.mock("next-intl", () => ({
   // under test (`dayKey` is `format(date, "yyyy-MM-dd")`). Using `toISOString()`
   // here would project every fixture onto UTC and make the expectations depend
   // on the runner's offset.
+  // The process zone, so the instant-keyed `groupByDay` agrees with the
+  // local-time fixtures and the local-time `useFormatter` mock above.
+  useTimeZone: () => Intl.DateTimeFormat().resolvedOptions().timeZone,
   useFormatter: () => ({
     dateTime: (date: Date, options?: Record<string, unknown>) => {
       if (options?.hour) {

@@ -5,8 +5,9 @@ import { DataTable } from "@chatbotx.io/ui/components/data-table/data-table"
 import { DataTableToolbar } from "@chatbotx.io/ui/components/data-table/data-table-toolbar"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
 import type { DataTableRowAction } from "@chatbotx.io/ui/types/data-table"
+import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
 import { useRouter } from "next/navigation"
-import { useTranslations } from "next-intl"
+import { useTimeZone, useTranslations } from "next-intl"
 import React, { useMemo, useState } from "react"
 import { useWorkspaceId } from "@/hooks/routing"
 import { getWebchatColumns } from "./columns/webchat-columns"
@@ -27,10 +28,14 @@ export function WebchatTable({
   const workspaceId = useWorkspaceId()
   const router = useRouter()
   const t = useTranslations()
+  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
 
   const [rowAction, setRowAction] =
     useState<DataTableRowAction<IntegrationWebchatModel> | null>(null)
-  const columns = useMemo(() => getWebchatColumns({ t, setRowAction }), [t])
+  const columns = useMemo(
+    () => getWebchatColumns({ t, setRowAction, timeZone }),
+    [t, timeZone],
+  )
 
   const { table } = useDataTable({
     data,

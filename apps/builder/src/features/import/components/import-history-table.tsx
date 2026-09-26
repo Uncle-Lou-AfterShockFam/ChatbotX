@@ -14,9 +14,10 @@ import {
   DialogTrigger,
 } from "@chatbotx.io/ui/components/ui/dialog"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
+import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
 import type { ColumnDef } from "@tanstack/react-table"
-import { format } from "date-fns"
-import { useTranslations } from "next-intl"
+import { formatInTimeZone } from "date-fns-tz"
+import { useTimeZone, useTranslations } from "next-intl"
 import { use, useMemo } from "react"
 import type { listImports } from "../queries/list-imports.queries"
 import type { ListImportsItem } from "../schema/query"
@@ -85,6 +86,7 @@ function ImportErrorSampleButton({ item }: { item: ListImportsItem }) {
 
 export function ImportHistoryTable({ promises }: ImportHistoryTableProps) {
   const t = useTranslations()
+  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
   const [{ data, pageCount }] = use(promises)
 
   const columns = useMemo<ColumnDef<ListImportsItem>[]>(
@@ -179,7 +181,12 @@ export function ImportHistoryTable({ promises }: ImportHistoryTableProps) {
             title={t("fields.createdAt.label")}
           />
         ),
-        cell: ({ row }) => format(row.original.createdAt, "yyyy/MM/dd HH:mm"),
+        cell: ({ row }) =>
+          formatInTimeZone(
+            row.original.createdAt,
+            timeZone,
+            "yyyy/MM/dd HH:mm",
+          ),
         enableSorting: true,
         enableHiding: false,
       },
@@ -189,13 +196,17 @@ export function ImportHistoryTable({ promises }: ImportHistoryTableProps) {
         header: t("fields.import.histories.completedAt"),
         cell: ({ row }) =>
           row.original.completedAt
-            ? format(row.original.completedAt, "yyyy/MM/dd HH:mm")
+            ? formatInTimeZone(
+                row.original.completedAt,
+                timeZone,
+                "yyyy/MM/dd HH:mm",
+              )
             : "—",
         enableSorting: false,
         enableHiding: false,
       },
     ],
-    [t],
+    [t, timeZone],
   )
 
   const { table } = useDataTable({

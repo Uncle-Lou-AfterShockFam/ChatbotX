@@ -18,7 +18,7 @@ import {
 import type { DataTableRowAction } from "@chatbotx.io/ui/types/data-table"
 import { errorLogProviderLabel } from "@chatbotx.io/utils/error-log"
 import type { ColumnDef } from "@tanstack/react-table"
-import { format } from "date-fns"
+import { formatInTimeZone } from "date-fns-tz"
 import { EllipsisIcon } from "lucide-react"
 import type { useTranslations } from "next-intl"
 import type { Dispatch, SetStateAction } from "react"
@@ -30,11 +30,13 @@ type GetColumnsProps = {
   setRowAction: Dispatch<
     SetStateAction<DataTableRowAction<ErrorLogResource> | null>
   >
+  timeZone: string
 }
 
 export function getColumns({
   t,
   setRowAction,
+  timeZone,
 }: GetColumnsProps): ColumnDef<ErrorLogResource>[] {
   return [
     {
@@ -148,7 +150,8 @@ export function getColumns({
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title={t("fields.date.label")} />
       ),
-      cell: ({ row }) => format(row.original.createdAt, "yyyy/MM/dd HH:mm"),
+      cell: ({ row }) =>
+        formatInTimeZone(row.original.createdAt, timeZone, "yyyy/MM/dd HH:mm"),
       meta: {
         label: t("fields.date.label"),
       },

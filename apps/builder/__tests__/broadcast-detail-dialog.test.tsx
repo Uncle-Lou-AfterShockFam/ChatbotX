@@ -11,6 +11,7 @@ const { mockListTemplateDetails } = vi.hoisted(() => ({
 /** Echoes the key back so assertions never depend on the English copy. */
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
+  useTimeZone: () => "UTC",
   useFormatter: () => ({ number: (value: number) => String(value) }),
 }))
 

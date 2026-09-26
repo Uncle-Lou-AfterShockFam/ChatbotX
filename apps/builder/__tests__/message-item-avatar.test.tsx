@@ -7,6 +7,7 @@ import type { MessageResourceWithRelations } from "@/features/messages/schema/re
 /** Echoes the key back so assertions never depend on the English copy. */
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
+  useTimeZone: () => "UTC",
 }))
 
 // MessageItem -> MessageActions -> MediaLibraryTrigger, which imports its

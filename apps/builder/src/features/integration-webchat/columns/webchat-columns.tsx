@@ -16,7 +16,7 @@ import {
 } from "@chatbotx.io/ui/components/ui/tooltip"
 import type { DataTableRowAction } from "@chatbotx.io/ui/types/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
-import { format } from "date-fns"
+import { formatInTimeZone } from "date-fns-tz"
 import { CodeIcon, ExternalLinkIcon, MoreHorizontalIcon } from "lucide-react"
 import Link from "next/link"
 import type { useTranslations } from "next-intl"
@@ -27,11 +27,13 @@ type WebchatColumnsProps = {
     action: DataTableRowAction<IntegrationWebchatModel> | null,
   ) => void
   t: ReturnType<typeof useTranslations>
+  timeZone: string
 }
 
 export function getWebchatColumns({
   setRowAction,
   t,
+  timeZone,
 }: WebchatColumnsProps): ColumnDef<IntegrationWebchatModel>[] {
   return [
     {
@@ -69,7 +71,9 @@ export function getWebchatColumns({
       cell: ({ row }) => {
         const date = row.getValue("updatedAt") as Date
         return (
-          <div className="text-sm">{format(date, "MM/dd/yyyy h:mm a")}</div>
+          <div className="text-sm">
+            {formatInTimeZone(date, timeZone, "MM/dd/yyyy h:mm a")}
+          </div>
         )
       },
       enableHiding: false,

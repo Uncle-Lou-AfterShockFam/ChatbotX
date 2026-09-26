@@ -7,10 +7,11 @@ import { DataTableToolbar } from "@chatbotx.io/ui/components/data-table/data-tab
 import { Badge } from "@chatbotx.io/ui/components/ui/badge"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
+import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
 import type { ColumnDef } from "@tanstack/react-table"
-import { format } from "date-fns"
+import { formatInTimeZone } from "date-fns-tz"
 import Link from "next/link"
-import { useTranslations } from "next-intl"
+import { useTimeZone, useTranslations } from "next-intl"
 import { use, useMemo } from "react"
 import type {
   ListAdminWorkspacesResponse,
@@ -46,6 +47,7 @@ function OwnerCell({
 export function AdminWorkspacesTable({ promises }: AdminWorkspacesTableProps) {
   const [{ data, pageCount }] = use(promises)
   const t = useTranslations()
+  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
 
   const columns = useMemo<
     ColumnDef<ListAdminWorkspacesResponse["data"][number]>[]
@@ -101,7 +103,8 @@ export function AdminWorkspacesTable({ promises }: AdminWorkspacesTableProps) {
             title={t("fields.createdAt.label")}
           />
         ),
-        cell: ({ row }) => format(row.original.createdAt, "PP"),
+        cell: ({ row }) =>
+          formatInTimeZone(row.original.createdAt, timeZone, "PP"),
         enableSorting: false,
       },
       {
@@ -118,7 +121,7 @@ export function AdminWorkspacesTable({ promises }: AdminWorkspacesTableProps) {
             return (
               <Badge variant="secondary">
                 {t("platformAdmin.workspaces.supportEnabledUntil", {
-                  time: format(activeUntil, "PPp"),
+                  time: formatInTimeZone(activeUntil, timeZone, "PPp"),
                 })}
               </Badge>
             )
@@ -152,7 +155,7 @@ export function AdminWorkspacesTable({ promises }: AdminWorkspacesTableProps) {
         enableHiding: false,
       },
     ],
-    [t],
+    [t, timeZone],
   )
 
   const { table } = useDataTable({

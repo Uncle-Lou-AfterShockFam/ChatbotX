@@ -17,11 +17,12 @@ import {
   TooltipTrigger,
 } from "@chatbotx.io/ui/components/ui/tooltip"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
+import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
 import type { ColumnDef, Row } from "@tanstack/react-table"
-import { format } from "date-fns"
+import { formatInTimeZone } from "date-fns-tz"
 import { CopyIcon, Loader2Icon, MoreHorizontalIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useTranslations } from "next-intl"
+import { useTimeZone, useTranslations } from "next-intl"
 import React, { useCallback, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { useCopyToClipboard } from "usehooks-ts"
@@ -72,6 +73,7 @@ export function BroadcastsTable({ promises, filtered }: BroadcastsTableProps) {
   const broadcastIds = useMemo(() => data.map((b) => b.id), [data])
 
   const t = useTranslations()
+  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
   const router = useRouter()
 
   const [rowAction, setRowAction] = useState<BroadcastRowAction | null>(null)
@@ -344,7 +346,13 @@ export function BroadcastsTable({ promises, filtered }: BroadcastsTableProps) {
           />
         ),
         cell: ({ row }) => (
-          <div>{format(row.original.schedulesAt, "yyyy/MM/dd HH:mm")}</div>
+          <div>
+            {formatInTimeZone(
+              row.original.schedulesAt,
+              timeZone,
+              "yyyy/MM/dd HH:mm",
+            )}
+          </div>
         ),
         meta: {
           label: t("fields.scheduledAt.label"),
@@ -395,7 +403,7 @@ export function BroadcastsTable({ promises, filtered }: BroadcastsTableProps) {
         enableHiding: false,
       },
     ],
-    [t, router, workspaceId, handleCopyId],
+    [t, router, workspaceId, handleCopyId, timeZone],
   )
 
   const { table } = useDataTable({

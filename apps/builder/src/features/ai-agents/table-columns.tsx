@@ -15,7 +15,7 @@ import {
   TooltipTrigger,
 } from "@chatbotx.io/ui/components/ui/tooltip"
 import type { ColumnDef, Row } from "@tanstack/react-table"
-import { format } from "date-fns"
+import { formatInTimeZone } from "date-fns-tz"
 import {
   BrainIcon,
   EllipsisVerticalIcon,
@@ -43,11 +43,13 @@ type GetAIAgentsColumnsProps = {
     SetStateAction<AIAgentDataTableRowAction<AIAgentModel> | null>
   >
   t: ReturnType<typeof useTranslations>
+  timeZone: string
 }
 
 export function getAIAgentsColumns({
   setRowAction,
   t,
+  timeZone,
 }: GetAIAgentsColumnsProps): ColumnDef<AIAgentModel>[] {
   return [
     {
@@ -92,7 +94,7 @@ export function getAIAgentsColumns({
       cell: ({ row }) => (
         <div>
           {row?.original.updatedAt
-            ? format(row?.original.updatedAt, "MM/dd/yyyy")
+            ? formatInTimeZone(row?.original.updatedAt, timeZone, "MM/dd/yyyy")
             : ""}
         </div>
       ),

@@ -9,6 +9,7 @@ import { TenantProvider } from "@/features/tenant/tenant-settings-provider"
 /** Echoes the key back so assertions never depend on the English copy. */
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
+  useTimeZone: () => "UTC",
   useLocale: () => "en",
 }))
 

@@ -29,7 +29,8 @@ import {
   TooltipTrigger,
 } from "@chatbotx.io/ui/components/ui/tooltip"
 import { cn } from "@chatbotx.io/ui/lib/utils"
-import { format } from "date-fns"
+import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
+import { formatInTimeZone } from "date-fns-tz"
 import {
   BotIcon,
   ExternalLinkIcon,
@@ -43,7 +44,7 @@ import {
 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
-import { useTranslations } from "next-intl"
+import { useTimeZone, useTranslations } from "next-intl"
 import { useState } from "react"
 import type { AttachmentResource } from "@/features/attachments/schema/resource"
 import { useAttachmentUrl } from "@/features/attachments/utils"
@@ -95,6 +96,7 @@ export const MessageItem = (props: MessageItemProps) => {
     onEdit,
   } = props
   const t = useTranslations("messages")
+  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
   const [isEditing, setIsEditing] = useState(false)
 
   const variants: Record<"left" | "right" | "full", string> = {
@@ -149,7 +151,11 @@ export const MessageItem = (props: MessageItemProps) => {
   return (
     <MessageBubble
       className="group"
-      title={format(new Date(message.createdAt), "yyyy/MM/dd HH:mm:ss")}
+      title={formatInTimeZone(
+        new Date(message.createdAt),
+        timeZone,
+        "yyyy/MM/dd HH:mm:ss",
+      )}
       variant={variant}
     >
       {variant === "left" && avatarUrl && !whatsappCall && (

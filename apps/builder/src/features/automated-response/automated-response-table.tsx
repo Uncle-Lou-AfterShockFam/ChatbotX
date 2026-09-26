@@ -24,8 +24,9 @@ import {
 import { Switch } from "@chatbotx.io/ui/components/ui/switch"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
 import type { DataTableRowAction } from "@chatbotx.io/ui/types/data-table"
+import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
 import type { ColumnDef } from "@tanstack/react-table"
-import { format } from "date-fns"
+import { formatInTimeZone } from "date-fns-tz"
 import {
   FolderUpIcon,
   MoreHorizontalIcon,
@@ -34,7 +35,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useTranslations } from "next-intl"
+import { useTimeZone, useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import React, { use, useMemo } from "react"
 import { toast } from "sonner"
@@ -61,6 +62,7 @@ export function AutomatedResponsesTable({
   promises,
 }: AutomatedResponseTableProps) {
   const t = useTranslations()
+  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -186,7 +188,13 @@ export function AutomatedResponsesTable({
           />
         ),
         cell: ({ row }) => (
-          <div>{format(row.original.createdAt, "yyyy/MM/dd HH:mm")}</div>
+          <div>
+            {formatInTimeZone(
+              row.original.createdAt,
+              timeZone,
+              "yyyy/MM/dd HH:mm",
+            )}
+          </div>
         ),
         meta: {
           label: t("fields.createdAt.label"),
@@ -242,7 +250,7 @@ export function AutomatedResponsesTable({
         enableHiding: false,
       },
     ],
-    [workspaceId, basePath, t, allFlows, searchParams, type],
+    [workspaceId, basePath, t, allFlows, searchParams, type, timeZone],
   )
 
   const { table } = useDataTable({

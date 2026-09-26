@@ -215,6 +215,33 @@ const LOCALE_METHODS = new Set([
 const VIEWER_ZONE = /^\/\/ zone: viewer\b(.*)$/
 const VIEWER_REASON = /^ \(\S.*\)$/
 
+/**
+ * s203c: date-fns formats in the PROCESS zone and takes no `timeZone` option,
+ * so the same split applies (every table's "created" column threw #418 on
+ * `/error-logs`). A render uses `formatInTimeZone(date, timeZone, pattern)`
+ * from date-fns-tz. Otherwise the call sits directly under a reasoned
+ * `// zone: viewer (<reason>)` (client code, the viewer's zone on purpose) or
+ * `// zone: wall-clock (<reason>)` (fields built in the local zone and read
+ * back in it, e.g. a calendar day key, where no instant crosses a zone).
+ * Resolved by symbol, so aliases, `formatDate` and namespace imports count.
+ */
+const DATE_FNS_FORMATTERS = new Set(["format", "lightFormat", "formatRelative"])
+const DATE_FNS_DECLARATION = /\/node_modules\/date-fns\//
+const LOCAL_ZONE = /^\/\/ zone: (viewer|wall-clock)\b(.*)$/
+
+function isDateFnsDeclaration(decl: ts.Declaration): boolean {
+  if (DATE_FNS_DECLARATION.test(decl.getSourceFile().fileName)) {
+    return true
+  }
+  // Fixtures declare the package as an ambient module.
+  for (let n: ts.Node | undefined = decl; n; n = n.parent) {
+    if (ts.isModuleDeclaration(n) && n.name.text === "date-fns") {
+      return true
+    }
+  }
+  return false
+}
+
 type Dateness = "date" | "other" | "unknown"
 
 const hasAnyFlag = (t: ts.Type, flags: ts.TypeFlags[]) =>
@@ -316,7 +343,70 @@ function scanZones(program: ts.Program, paths: ReadonlySet<string>): Scan {
         }
       }
     }
+    /** One reference to a date-fns formatter: a reasoned local-zone comment or a finding. */
+    const dateFns = (node: ts.Identifier) => {
+      const parent = node.parent
+      if (ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent)) {
+        return
+      }
+      let symbol = checker.getSymbolAtLocation(node)
+      // biome-ignore lint/suspicious/noBitwiseOperators: SymbolFlags is a bit set; the API has no other test
+      if (symbol && (symbol.flags & ts.SymbolFlags.Alias) !== 0) {
+        symbol = checker.getAliasedSymbol(symbol)
+      }
+      const decl = symbol?.declarations?.[0]
+      if (
+        !(
+          decl &&
+          DATE_FNS_FORMATTERS.has(symbol?.getName() ?? "") &&
+          isDateFnsDeclaration(decl)
+        )
+      ) {
+        return
+      }
+      calls++
+      const callee =
+        ts.isPropertyAccessExpression(parent) && parent.name === node
+          ? parent
+          : node
+      const call = callee.parent
+      if (!(ts.isCallExpression(call) && call.expression === callee)) {
+        report(
+          node,
+          "date-fns formatter used as a value; the gate cannot verify it",
+        )
+        return
+      }
+      const above = LOCAL_ZONE.exec((lines[lineOf(call) - 1] ?? "").trim())
+      if (!above) {
+        report(
+          node,
+          "date-fns formats in the process zone: use formatInTimeZone, or `// zone: viewer|wall-clock (<reason>)`",
+        )
+      } else if (!VIEWER_REASON.test(above[2] ?? "")) {
+        report(node, `\`// zone: ${above[1]}\` without a (reason)`)
+      }
+    }
+    // Resolving a symbol per identifier is too slow across `src`; only a
+    // formatter's own name or a local alias of one can reference it.
+    const candidates = new Set(DATE_FNS_FORMATTERS)
+    candidates.add("formatDate")
+    for (const statement of sf.statements) {
+      const bindings = ts.isImportDeclaration(statement)
+        ? statement.importClause?.namedBindings
+        : undefined
+      if (bindings && ts.isNamedImports(bindings)) {
+        for (const spec of bindings.elements) {
+          if (candidates.has((spec.propertyName ?? spec.name).text)) {
+            candidates.add(spec.name.text)
+          }
+        }
+      }
+    }
     const visit = (node: ts.Node) => {
+      if (ts.isIdentifier(node) && candidates.has(node.text)) {
+        dateFns(node)
+      }
       const access =
         ts.isPropertyAccessExpression(node) ||
         (ts.isElementAccessExpression(node) &&
@@ -382,6 +472,13 @@ describe("Date#toLocale*String and Intl.DateTimeFormat pass a zone (s202c)", () 
 
 describe("the zone scanner itself (s202c)", () => {
   const FILE = "/virtual/x.tsx"
+  // An ambient stand-in for the package, so fixtures resolve `"date-fns"`.
+  const DATE_FNS_FILE = "/virtual/date-fns.d.ts"
+  const DATE_FNS_STUB = `declare module "date-fns" {
+  export function format(d: Date, p: string): string
+  export function lightFormat(d: Date, p: string): string
+  export { format as formatDate }
+}`
   // Deliberately NOT tsconfig.json: these fixtures only need the ES + DOM
   // globals (Date, Intl), and a minimal program keeps each scan fast.
   const options: ts.CompilerOptions = {
@@ -400,16 +497,23 @@ describe("the zone scanner itself (s202c)", () => {
     if (name === FILE) {
       return ts.createSourceFile(name, source, lang, true, ts.ScriptKind.TSX)
     }
+    if (name === DATE_FNS_FILE) {
+      return ts.createSourceFile(name, DATE_FNS_STUB, lang, true)
+    }
     if (!libCache.has(name)) {
       libCache.set(name, baseGet(name, lang, ...rest))
     }
     return libCache.get(name)
   }
   const baseExists = host.fileExists.bind(host)
-  host.fileExists = (name) => name === FILE || baseExists(name)
+  host.fileExists = (name) =>
+    name === FILE || name === DATE_FNS_FILE || baseExists(name)
   const scan = (text: string) => {
     source = text
-    return scanZones(ts.createProgram([FILE], options, host), new Set([FILE]))
+    return scanZones(
+      ts.createProgram([FILE, DATE_FNS_FILE], options, host),
+      new Set([FILE]),
+    )
   }
 
   test("a Date formatted without a zone fails, with a zone passes", () => {
@@ -512,5 +616,66 @@ describe("the zone scanner itself (s202c)", () => {
         "declare const timeZone: string\nnew Date().toLocaleString(timeZone)",
       ).findings,
     ).toHaveLength(1)
+  })
+
+  const dateFnsModule = ""
+
+  test("a date-fns format call needs a reasoned local-zone comment (s203c)", () => {
+    const call = 'import { format } from "date-fns"\nformat(new Date(), "yyyy")'
+    expect(scan(dateFnsModule + call).findings).toHaveLength(1)
+    expect(
+      scan(
+        `${dateFnsModule}import { format } from "date-fns"\n// zone: wall-clock (day key)\nformat(new Date(), "yyyy")`,
+      ).findings,
+    ).toEqual([])
+    expect(
+      scan(
+        `${dateFnsModule}import { format } from "date-fns"\n// zone: viewer (client-only label)\nformat(new Date(), "yyyy")`,
+      ).findings,
+    ).toEqual([])
+    expect(
+      scan(
+        `${dateFnsModule}import { format } from "date-fns"\n// zone: wall-clock\nformat(new Date(), "yyyy")`,
+      ).findings,
+    ).toHaveLength(1)
+  })
+
+  test("aliases, formatDate, lightFormat and namespace imports are followed", () => {
+    expect(
+      scan(
+        `${dateFnsModule}import { format as f } from "date-fns"\nf(new Date(), "y")`,
+      ).findings,
+    ).toHaveLength(1)
+    expect(
+      scan(
+        `${dateFnsModule}import { formatDate } from "date-fns"\nformatDate(new Date(), "y")`,
+      ).findings,
+    ).toHaveLength(1)
+    expect(
+      scan(
+        `${dateFnsModule}import { lightFormat } from "date-fns"\nlightFormat(new Date(), "y")`,
+      ).findings,
+    ).toHaveLength(1)
+    expect(
+      scan(
+        `${dateFnsModule}import * as dfns from "date-fns"\ndfns.format(new Date(), "y")`,
+      ).findings,
+    ).toHaveLength(1)
+  })
+
+  test("a date-fns formatter passed as a value fails", () => {
+    expect(
+      scan(
+        `${dateFnsModule}import { format } from "date-fns"\nconst dates: Date[] = []\ndates.map((d) => d).map(String).concat([format].map(String))`,
+      ).findings,
+    ).toHaveLength(1)
+  })
+
+  test("a local function named format is not date-fns", () => {
+    expect(
+      scan(
+        'function format(d: Date, p: string) { return p }\nformat(new Date(), "y")',
+      ).findings,
+    ).toEqual([])
   })
 })

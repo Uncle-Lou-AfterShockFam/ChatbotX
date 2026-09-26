@@ -6,9 +6,10 @@ import { DataTable } from "@chatbotx.io/ui/components/data-table/data-table"
 import { DataTableColumnHeader } from "@chatbotx.io/ui/components/data-table/data-table-column-header"
 import { Badge } from "@chatbotx.io/ui/components/ui/badge"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
+import { DEFAULT_FILTER_TIMEZONE } from "@chatbotx.io/utils/datetime"
 import type { ColumnDef } from "@tanstack/react-table"
-import { format } from "date-fns"
-import { useTranslations } from "next-intl"
+import { formatInTimeZone } from "date-fns-tz"
+import { useTimeZone, useTranslations } from "next-intl"
 import { useMemo } from "react"
 import { InstallAutoUpdateCell } from "./install-auto-update-cell"
 import { InstallProgressRefresher } from "./install-progress-refresher"
@@ -40,6 +41,7 @@ export function TemplateInstallsTable({
   installations,
 }: TemplateInstallsTableProps) {
   const t = useTranslations()
+  const timeZone = useTimeZone() ?? DEFAULT_FILTER_TIMEZONE
 
   const columns = useMemo<ColumnDef<TemplateInstallationModel>[]>(
     () => [
@@ -119,7 +121,12 @@ export function TemplateInstallsTable({
             title={t("fields.createdAt.label")}
           />
         ),
-        cell: ({ row }) => format(row.original.createdAt, "yyyy/MM/dd HH:mm"),
+        cell: ({ row }) =>
+          formatInTimeZone(
+            row.original.createdAt,
+            timeZone,
+            "yyyy/MM/dd HH:mm",
+          ),
         enableSorting: true,
         enableHiding: false,
       },
@@ -129,7 +136,11 @@ export function TemplateInstallsTable({
         header: t("templates.installs.completedAt"),
         cell: ({ row }) =>
           row.original.completedAt
-            ? format(row.original.completedAt, "yyyy/MM/dd HH:mm")
+            ? formatInTimeZone(
+                row.original.completedAt,
+                timeZone,
+                "yyyy/MM/dd HH:mm",
+              )
             : "—",
         enableSorting: false,
         enableHiding: false,
@@ -149,7 +160,7 @@ export function TemplateInstallsTable({
         enableHiding: false,
       },
     ],
-    [t, workspaceId],
+    [t, workspaceId, timeZone],
   )
 
   const { table } = useDataTable({

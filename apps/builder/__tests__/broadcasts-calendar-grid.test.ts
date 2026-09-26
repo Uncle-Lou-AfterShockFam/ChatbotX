@@ -352,15 +352,32 @@ describe("getCalendarQueryRange", () => {
 })
 
 describe("groupByDay", () => {
-  test("groups rows by local day", () => {
+  test("groups rows by their day in the given zone", () => {
     const rows = [
-      { id: "a", schedulesAt: new Date("2026-08-31T09:00:00") },
-      { id: "b", schedulesAt: new Date("2026-08-31T18:30:00") },
-      { id: "c", schedulesAt: new Date("2026-09-02T10:00:00") },
+      { id: "a", schedulesAt: new Date("2026-08-31T09:00:00Z") },
+      { id: "b", schedulesAt: new Date("2026-08-31T18:30:00Z") },
+      { id: "c", schedulesAt: new Date("2026-09-02T10:00:00Z") },
     ]
-    const grouped = groupByDay(rows)
+    const grouped = groupByDay(rows, "UTC")
     expect(grouped.get("2026-08-31")?.map((r) => r.id)).toEqual(["a", "b"])
     expect(grouped.get("2026-09-02")?.map((r) => r.id)).toEqual(["c"])
+  })
+
+  test("keys by the user's zone, not the process zone", () => {
+    // 18:30 UTC is already the next day in Saigon (UTC+7).
+    const rows = [
+      { id: "a", schedulesAt: new Date("2026-08-31T09:00:00Z") },
+      { id: "b", schedulesAt: new Date("2026-08-31T18:30:00Z") },
+    ]
+    const grouped = groupByDay(rows, "Asia/Ho_Chi_Minh")
+    expect(grouped.get("2026-08-31")?.map((r) => r.id)).toEqual(["a"])
+    expect(grouped.get("2026-09-01")?.map((r) => r.id)).toEqual(["b"])
+  })
+
+  test("an unusable zone degrades to UTC, like getCalendarQueryRange", () => {
+    const rows = [{ id: "a", schedulesAt: new Date("2026-08-31T23:30:00Z") }]
+    const grouped = groupByDay(rows, "Not/AZone")
+    expect(grouped.get("2026-08-31")?.map((r) => r.id)).toEqual(["a"])
   })
 })
 
