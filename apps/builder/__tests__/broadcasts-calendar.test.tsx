@@ -6,6 +6,10 @@ import { afterEach, describe, expect, test, vi } from "vitest"
 import { BroadcastsCalendar } from "@/features/broadcasts/components/broadcasts-calendar"
 import { MAX_CUSTOM_RANGE_DAYS } from "@/features/broadcasts/lib/calendar-grid"
 
+const userZone = vi.hoisted(() => ({
+  current: undefined as string | undefined,
+}))
+
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string, values?: Record<string, unknown>) =>
     values ? `${key}:${JSON.stringify(values)}` : key,
@@ -15,7 +19,9 @@ vi.mock("next-intl", () => ({
   // on the runner's offset.
   // The process zone, so the instant-keyed `groupByDay` agrees with the
   // local-time fixtures and the local-time `useFormatter` mock above.
-  useTimeZone: () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+  // A test can set `userZone.current` to a zone other than the process zone.
+  useTimeZone: () =>
+    userZone.current ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
   useFormatter: () => ({
     dateTime: (date: Date, options?: Record<string, unknown>) => {
       if (options?.hour) {
@@ -305,6 +311,7 @@ afterEach(() => {
   container = null
   root = null
   setQuery.mockReset()
+  userZone.current = undefined
 })
 
 const makeRow = (
@@ -1125,5 +1132,41 @@ describe("BroadcastsCalendar day view", () => {
       />,
     )
     expect(el.textContent).toContain("broadcasts.calendar.emptyDay")
+  })
+})
+
+describe("BroadcastsCalendar in a user zone other than the process zone (s205c)", () => {
+  // 11:00 UTC is Aug 16 01:00 in Kiritimati (UTC+14) and Aug 14 23:00 in
+  // Etc/GMT+12 (UTC-12). Every process zone sits between them, so at least
+  // one of the two puts the instant on a different day than the process does.
+  const INSTANT = new Date("2026-08-15T11:00:00Z")
+  const dayIn = (timeZone: string) =>
+    new Intl.DateTimeFormat("en-US", { day: "numeric", timeZone }).format(
+      INSTANT,
+    )
+  const processDay = dayIn(Intl.DateTimeFormat().resolvedOptions().timeZone)
+  const userZoneName =
+    dayIn("Pacific/Kiritimati") === processDay
+      ? "Etc/GMT+12"
+      : "Pacific/Kiritimati"
+
+  test("a broadcast sits on its day in the user's zone, not the server's", () => {
+    userZone.current = userZoneName
+    const el = renderCalendar(
+      <BroadcastsCalendar
+        broadcasts={[makeRow("b-zone", "scheduled", INSTANT, "Zone check")]}
+        date="2026-08-01"
+        endDate="2026-08-01"
+        range="month"
+      />,
+    )
+
+    expect(dayIn(userZoneName)).not.toBe(processDay)
+    expect(
+      findCurrentMonthDayCell(el, dayIn(userZoneName)).textContent,
+    ).toContain("Zone check")
+    expect(findCurrentMonthDayCell(el, processDay).textContent).not.toContain(
+      "Zone check",
+    )
   })
 })
