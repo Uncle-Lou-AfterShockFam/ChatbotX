@@ -200,6 +200,22 @@ export const optionOperatorLabelKey = (
     ? OPTION_OPERATOR_LABEL_KEYS[customFieldType][operator]
     : undefined
 
+/**
+ * The option type a saved condition is evaluated as: its `customFieldType`
+ * when `valueType` names the same option type (what the builder saves), else
+ * undefined (a pre-s203 `valueType: "text"` row keeps its text meaning, and
+ * so its text wording).
+ */
+export const conditionOptionType = (condition: {
+  customFieldType?: string
+  valueType?: string
+}): string | undefined =>
+  condition.customFieldType !== undefined &&
+  isOptionFieldType(condition.customFieldType) &&
+  condition.valueType === condition.customFieldType
+    ? condition.customFieldType
+    : undefined
+
 /** A condition chip's operator label: the option-field wording, else the shared one. */
 export const resolveOperatorLabel = (
   customFieldType: string | undefined,

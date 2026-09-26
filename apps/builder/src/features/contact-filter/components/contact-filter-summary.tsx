@@ -8,7 +8,10 @@ import {
   getConditionOptions,
   getFieldConfigs,
 } from "./contact-filter-config"
-import { resolveOperatorLabel } from "./custom-field-filter-config"
+import {
+  conditionOptionType,
+  resolveOperatorLabel,
+} from "./custom-field-filter-config"
 
 type ContactFilterSummaryProps = {
   contactFilter?: ContactFilterCriteria | null
@@ -102,9 +105,9 @@ export function ContactFilterSummary({
               return t(`condition.fields.${condition.field}`)
             })()
           const conditionOperator = resolveOperatorLabel(
-            "customFieldType" in condition
-              ? condition.customFieldType
-              : undefined,
+            conditionOptionType(
+              condition as { customFieldType?: string; valueType?: string },
+            ),
             condition.operator,
             operatorLabelByValue,
             t,

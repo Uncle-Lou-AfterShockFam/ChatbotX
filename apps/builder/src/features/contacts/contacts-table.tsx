@@ -31,6 +31,7 @@ import { getUserName } from "../users/schema/resource"
 import { ContactNameCell } from "./components/contact-name-cell"
 import { CONTACTS_DEFAULT_PER_PAGE } from "./constants"
 import { ContactListAction } from "./contacts-list-action"
+import { listInputKey, seedForFirstKey } from "./lib/seed-first-key"
 import type { listContacts } from "./queries/list-contacts.queries"
 import type { ExportContactsFilter } from "./schema/action"
 import type { ListContactsResponse } from "./schema/query"
@@ -173,13 +174,25 @@ export function ContactsTable({
   // existed only to skip re-fetching on mount for that same reason.
   // `placeholderData: keepPreviousData` keeps the previous page on screen
   // (rather than a blank/loading table) while a new page/filter/sort loads.
-  const { data: contactsResponse } = useQuery(
+  // Only the FIRST input's key is seeded: react-query applies `initialData`
+  // to every new key, and under the client's 30 s `staleTime` a changed
+  // filter / page / sort then counts as fresh and never fetches (s203: the
+  // filter panel showed its chips over the unfiltered list).
+  const [initialInputKey] = useState(() => listInputKey(listContactsInput))
+  const { data: fetchedResponse } = useQuery(
     orpc.contactsAPIs.listContactsByPOSTAuthenticatedAPI.queryOptions({
       input: listContactsInput,
-      initialData: initialResponse,
+      initialData: seedForFirstKey(
+        listInputKey(listContactsInput),
+        initialInputKey,
+        initialResponse,
+      ),
       placeholderData: keepPreviousData,
     }),
   )
+  // Never undefined in practice (the first key is seeded, later keys keep
+  // the previous data as a placeholder); the fallback satisfies the type.
+  const contactsResponse = fetchedResponse ?? initialResponse
   const tableData = contactsResponse.data
   const tablePageCount = contactsResponse.pageCount
   const tableTotalCount = contactsResponse.totalCount

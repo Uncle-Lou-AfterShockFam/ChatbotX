@@ -8,11 +8,13 @@ import {
   getFieldConfigs,
 } from "@/features/contact-filter/components/contact-filter-config"
 import {
+  conditionOptionType,
   customFieldOperatorRequiresArrayValue,
   getCustomFieldConditionOptions,
   getCustomFieldValueInputConfig,
   optionOperatorLabelKey,
   relabelOptionOperators,
+  resolveOperatorLabel,
 } from "@/features/contact-filter/components/custom-field-filter-config"
 import {
   convertCustomFieldTypeToConditionType,
@@ -243,5 +245,29 @@ describe("customFieldValueChanged value (s203)", () => {
     expect(parse({ options: "Golf" })).toBe(false)
     expect(parse({ text: "Golf" })).toBe(true)
     expect(parse("")).toBe(true)
+  })
+})
+
+describe("saved-condition operator wording (s203 live proof: the flow canvas)", () => {
+  const shared = new Map([
+    ["in", "In"],
+    ["contains", "Contains"],
+  ])
+
+  test("an option-typed row reads in its own words, a legacy text row does not", () => {
+    const typed = conditionOptionType({
+      customFieldType: "multiSelect",
+      valueType: "multiSelect",
+    })
+    expect(resolveOperatorLabel(typed, "contains", shared, t)).toBe(
+      "fields.operator.hasAllOf",
+    )
+    const legacy = conditionOptionType({
+      customFieldType: "multiSelect",
+      valueType: "text",
+    })
+    expect(legacy).toBeUndefined()
+    expect(resolveOperatorLabel(legacy, "contains", shared, t)).toBe("Contains")
+    expect(resolveOperatorLabel(undefined, "gt", shared, t)).toBe("gt")
   })
 })
