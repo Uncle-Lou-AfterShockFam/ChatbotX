@@ -153,7 +153,11 @@ const enqueueClaimedBatch = async (claimed: SmartDelayRow[]) => {
     // stuck-sweep recovers it on a later tick.
     const results = await Promise.allSettled(
       terminalRows.map((row) =>
-        smartDelayService.claimForRun({ id: row.id, to: "completed" }),
+        smartDelayService.claimForRun({
+          id: row.id,
+          triggerAt: row.triggerAt,
+          to: "completed",
+        }),
       ),
     )
     const failed = results.filter((result) => result.status === "rejected")

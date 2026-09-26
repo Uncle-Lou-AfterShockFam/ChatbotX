@@ -114,58 +114,35 @@ class SmartDelayService extends BaseService {
   }
 
   /**
-   * Mark a row scheduled before its immediate job is enqueued. `ifPending`
-   * makes it a pending -> scheduled CAS: a waitForEvent row can be claimed
-   * (completed) by its event between insert and this call, and an
-   * unconditional write would resurrect it so its timeout edge ran too
-   * (double resume). Other types keep the unconditional write: upsertFollowUp
-   * re-arms a SCHEDULED row back to pending, and a CAS there could skip the
-   * re-armed row's job. False = not marked: do not enqueue.
+   * Mark a freshly written row scheduled before its immediate job is enqueued:
+   * a pending -> scheduled CAS on the caller's own triggerAt. False = not
+   * marked, do not enqueue. A miss means the row moved on since the caller
+   * wrote it, and every such mover owns what happens next:
+   * - canceled (company stop / workspace freeze) or completed: an unguarded
+   *   write would resurrect it and the job would run for a stopped contact;
+   * - claimed by its event (waitForEvent): its timeout must not run too;
+   * - claimed by the scanner (claimDueRows), which enqueues it itself;
+   * - re-armed by a newer upsertFollowUp (a different triggerAt), whose own
+   *   mark enqueues the job at the NEW time instead of this stale one.
    */
   async markScheduled(props: {
     tx?: DatabaseClient
     id: string
-    ifPending?: boolean
+    triggerAt: Date
   }): Promise<boolean> {
-    const { tx = db, id, ifPending = false } = props
+    const { tx = db, id, triggerAt } = props
     const rows = await tx
       .update(contactOnSmartDelayModel)
       .set({ status: smartDelayStatuses.enum.scheduled })
       .where(
-        ifPending
-          ? and(
-              eq(contactOnSmartDelayModel.id, id),
-              eq(
-                contactOnSmartDelayModel.status,
-                smartDelayStatuses.enum.pending,
-              ),
-            )
-          : eq(contactOnSmartDelayModel.id, id),
+        and(
+          eq(contactOnSmartDelayModel.id, id),
+          eq(contactOnSmartDelayModel.status, smartDelayStatuses.enum.pending),
+          eq(contactOnSmartDelayModel.triggerAt, triggerAt),
+        ),
       )
       .returning({ id: contactOnSmartDelayModel.id })
     return rows.length > 0
-  }
-
-  async markCompleted(props: {
-    tx?: DatabaseClient
-    id: string
-  }): Promise<void> {
-    await this.markStatus({
-      tx: props.tx,
-      id: props.id,
-      status: smartDelayStatuses.enum.completed,
-    })
-  }
-
-  async markCanceled(props: {
-    tx?: DatabaseClient
-    id: string
-  }): Promise<void> {
-    await this.markStatus({
-      tx: props.tx,
-      id: props.id,
-      status: smartDelayStatuses.enum.canceled,
-    })
   }
 
   async findById(props: {
@@ -254,13 +231,18 @@ class SmartDelayService extends BaseService {
   /**
    * Terminal claim of a scheduled row (follow-up decided, terminal wait):
    * nothing runs after it, so the row goes straight to its final status.
+   * `triggerAt` is the one the caller decided on: upsertFollowUp re-arms a
+   * row in place (new triggerAt / createdAt), so a job that read the row
+   * before a re-arm must not complete or cancel the newer arm with its stale
+   * decision (a reply check against the old createdAt).
    */
   async claimForRun(props: {
     tx?: DatabaseClient
     id: string
+    triggerAt: Date
     to: "completed" | "canceled"
   }): Promise<boolean> {
-    const { tx = db, id, to } = props
+    const { tx = db, id, triggerAt, to } = props
     const rows = await tx
       .update(contactOnSmartDelayModel)
       .set({ status: smartDelayStatuses.enum[to] })
@@ -271,6 +253,7 @@ class SmartDelayService extends BaseService {
             contactOnSmartDelayModel.status,
             smartDelayStatuses.enum.scheduled,
           ),
+          eq(contactOnSmartDelayModel.triggerAt, triggerAt),
         ),
       )
       .returning({ id: contactOnSmartDelayModel.id })
@@ -566,14 +549,17 @@ class SmartDelayService extends BaseService {
   // may complete/cancel a row between the caller's read and this write — an
   // unguarded reset would resurrect it and re-run its side effects.
   // `triggerAtBefore` (sweep path) additionally skips rows that were
-  // rescheduled to a fresh future triggerAt in that same window.
+  // rescheduled to a fresh future triggerAt in that same window; `triggerAt`
+  // (one row's failed immediate enqueue) skips a row a newer follow-up arm
+  // re-armed and scheduled meanwhile, whose own job is already queued.
   // Returns how many rows were actually reset.
   async resetToPending(props: {
     tx?: DatabaseClient
     ids: string[]
     triggerAtBefore?: Date
+    triggerAt?: Date
   }): Promise<number> {
-    const { tx = db, ids, triggerAtBefore } = props
+    const { tx = db, ids, triggerAtBefore, triggerAt } = props
     if (ids.length === 0) {
       return 0
     }
@@ -590,6 +576,9 @@ class SmartDelayService extends BaseService {
           ),
           triggerAtBefore
             ? lt(contactOnSmartDelayModel.triggerAt, triggerAtBefore)
+            : undefined,
+          triggerAt
+            ? eq(contactOnSmartDelayModel.triggerAt, triggerAt)
             : undefined,
         ),
       )
@@ -712,18 +701,6 @@ class SmartDelayService extends BaseService {
       .where(activeForContacts(workspaceId, contactIds))
       .limit(1)
     return rows.length > 0
-  }
-
-  private async markStatus(props: {
-    tx?: DatabaseClient
-    id: string
-    status: SmartDelayStatus
-  }): Promise<void> {
-    const { tx = db, id, status } = props
-    await tx
-      .update(contactOnSmartDelayModel)
-      .set({ status })
-      .where(eq(contactOnSmartDelayModel.id, id))
   }
 }
 
