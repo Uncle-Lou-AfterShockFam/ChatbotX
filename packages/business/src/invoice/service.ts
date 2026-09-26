@@ -313,6 +313,9 @@ class InvoiceService extends BaseService {
             and(
               eq(invoiceModel.workspaceId, props.workspaceId),
               eq(invoiceModel.contactId, props.contactId),
+              // Only the SAME content is a duplicate; a different order
+              // through the same step inside the window is a new invoice.
+              eq(invoiceModel.requestHash, requestHash),
               like(
                 invoiceModel.sourceKey,
                 `${props.reuseRecent.sourcePrefix}%`,
@@ -501,7 +504,7 @@ class InvoiceService extends BaseService {
       )
       .returning()
     if (!opened) {
-      await this.voidAtStripeIfVoidedMeanwhile(invoice, result.status)
+      await this.voidAtStripeIfVoidedMeanwhile(invoice, result)
     }
     if (opened?.status === "open") {
       try {
@@ -527,14 +530,14 @@ class InvoiceService extends BaseService {
    */
   private async voidAtStripeIfVoidedMeanwhile(
     invoice: InvoiceModel,
-    stripeStatus: string | null,
+    stripe: { providerInvoiceId: string; status: string | null },
   ): Promise<void> {
     const [current] = await db
       .select({ status: invoiceModel.status })
       .from(invoiceModel)
       .where(eq(invoiceModel.id, invoice.id))
       .limit(1)
-    if (current?.status !== "void" || stripeStatus !== "open") {
+    if (current?.status !== "void" || stripe.status !== "open") {
       return
     }
     try {
@@ -542,23 +545,21 @@ class InvoiceService extends BaseService {
         await integrationStripeService.credentialsByWorkspaceIdOrFail(
           invoice.workspaceId,
         )
-      const [withId] = await db
-        .select()
-        .from(invoiceModel)
-        .where(eq(invoiceModel.id, invoice.id))
-        .limit(1)
-      if (withId) {
-        await voidWithStripe({ credentials, invoice: withId })
-      }
+      // The id Stripe just returned, never a re-read: the row may not carry it.
+      await voidWithStripe({
+        credentials,
+        invoice: { ...invoice, providerInvoiceId: stripe.providerInvoiceId },
+      })
     } catch (error) {
       logger.error(
-        { err: error, invoiceId: invoice.id },
+        { err: error, invoiceId: invoice.id, stripe: stripe.providerInvoiceId },
         "invoice: voided during finalize, but the Stripe invoice could not be voided",
       )
       await db
         .update(invoiceModel)
         .set({
-          lastError: "Voided here while Stripe opened it: void it in Stripe",
+          providerInvoiceId: stripe.providerInvoiceId,
+          lastError: `Voided here while Stripe opened ${stripe.providerInvoiceId}: void it in Stripe`,
           updatedAt: new Date(),
         })
         .where(eq(invoiceModel.id, invoice.id))

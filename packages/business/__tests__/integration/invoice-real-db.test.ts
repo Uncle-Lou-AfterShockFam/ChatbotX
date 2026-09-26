@@ -307,6 +307,29 @@ describe.skipIf(!databaseUrl)("invoiceService.create under concurrency", () => {
     expect(await countRows("Invoice", workspaceId)).toBe(1)
   })
 
+  test("flow reuse window: DIFFERENT content through the same step is a new invoice", async () => {
+    const { workspaceId, contactId } = await seedWorkspace()
+    const prefix = "flow:00112233445566778899aabbccddeeff:"
+    const reuseRecent = { sourcePrefix: prefix, withinMs: 600_000 }
+    const first = await invoiceService.create(
+      createInput(workspaceId, contactId, {
+        sourceKey: `${prefix}run-x`,
+        reuseRecent,
+      }),
+    )
+    const second = await invoiceService.create(
+      createInput(workspaceId, contactId, {
+        sourceKey: `${prefix}run-y`,
+        reuseRecent,
+        lines: [
+          { description: "Other order", quantity: 1, unitAmount: "40.00" },
+        ],
+      }),
+    )
+    expect(second.id).not.toBe(first.id)
+    expect(second.total).toBe("40.00")
+  })
+
   test("flow reuse window never reuses a VOID invoice or another contact's", async () => {
     const { workspaceId, contactId } = await seedWorkspace()
     const otherContact = mintId()

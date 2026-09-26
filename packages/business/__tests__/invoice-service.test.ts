@@ -680,16 +680,16 @@ describe("invoiceService.finalize: Stripe status mapping and the void race (s205
       m.state.updateMatches = false
       return Promise.resolve(FINALIZED)
     })
-    // create: contact lookup; then the race re-read: status, then the row.
+    // create: contact lookup; then the race re-read of the status. The row
+    // itself carries NO Stripe id: the void must use the one Stripe returned.
     m.state.limitResults = [
       [{ id: CONTACT, companyId: "31" }],
       [{ status: "void" }],
-      [{ id: "1001", providerInvoiceId: "in_1", status: "void" }],
     ]
     await invoiceService.create(validInput())
     expect(m.voidStripe).toHaveBeenCalledTimes(1)
     expect(m.voidStripe.mock.calls[0]?.[0].invoice).toMatchObject({
-      providerInvoiceId: "in_1",
+      providerInvoiceId: FINALIZED.providerInvoiceId,
     })
   })
 
