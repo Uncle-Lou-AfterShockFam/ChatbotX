@@ -3,7 +3,9 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query"
+import { client } from "@/lib/orpc/orpc"
 import { orpc } from "@/lib/orpc/query"
+import { fetchAllListPages } from "@/lib/query/fetch-all-list-pages"
 import type { TimelineKind } from "../schema/resource"
 
 /** react-query hooks for the Contact / Company 360 routes (s195). */
@@ -130,12 +132,26 @@ export const useContactConversation = (
   )
 
 export const useContactDeals = (workspaceId: string, contactId: string) =>
-  useQuery(
-    orpc.dealsAPI.privateListWorkspaceDealsAPI.queryOptions({
-      input: { workspaceId, contactId, page: 1, perPage: 200 },
-      select: (res) => res.data,
+  useQuery({
+    // Every deal, newest first, not one call the server caps at 50 (s205).
+    queryKey: orpc.dealsAPI.privateListWorkspaceDealsAPI.key({
+      type: "query",
+      input: { workspaceId, contactId },
     }),
-  )
+    queryFn: ({ signal }) =>
+      fetchAllListPages(
+        (page) =>
+          client.dealsAPI.privateListWorkspaceDealsAPI(
+            {
+              workspaceId,
+              contactId,
+              ...page,
+            },
+            { signal },
+          ),
+        { desc: true },
+      ),
+  })
 
 export const useContact = (workspaceId: string, contactId: string | null) =>
   useQuery(

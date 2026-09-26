@@ -1,5 +1,6 @@
 import { ORPCError } from "@orpc/client"
 import { beforeEach, describe, expect, test, vi } from "vitest"
+import { listRows, pagedServer } from "@/lib/query/testing/paged-server"
 
 const mocks = vi.hoisted(() => ({
   listWorkspaceMembersAuthenticatedAPI: vi.fn(),
@@ -26,7 +27,7 @@ beforeEach(() => {
 })
 
 describe("getAllWorkspaceMembers", () => {
-  test("fetches workspace members with workspaceId and maxPerPage", async () => {
+  test("fetches workspace members with workspaceId, page by page", async () => {
     mocks.listWorkspaceMembersAuthenticatedAPI.mockResolvedValueOnce({
       data: [{ id: "member-1", name: "Alice" }],
     })
@@ -37,11 +38,28 @@ describe("getAllWorkspaceMembers", () => {
 
     expect(mocks.listWorkspaceMembersAuthenticatedAPI).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
-      perPage: 999_999_999,
+      page: 1,
+      perPage: 50,
+      sort: [{ id: "id", desc: false }],
     })
     expect(store.getState().workspaceMembers).toEqual([
       { id: "member-1", name: "Alice" },
     ])
+  })
+
+  test("pages past the server's 50-row cap: all 120 land (s205)", async () => {
+    mocks.listWorkspaceMembersAuthenticatedAPI.mockImplementation(
+      pagedServer(listRows(1, 121)),
+    )
+
+    const store = createUserStore({ workspaceId: "workspace-1" })
+    await store.getState().getAllWorkspaceMembers()
+
+    expect(store.getState().workspaceMembers).toHaveLength(120)
+    expect(store.getState().workspaceMembers.at(-1)).toMatchObject({
+      id: "120",
+    })
+    expect(mocks.listWorkspaceMembersAuthenticatedAPI).toHaveBeenCalledTimes(3)
   })
 
   test("is a no-op when workspaceId is empty", async () => {

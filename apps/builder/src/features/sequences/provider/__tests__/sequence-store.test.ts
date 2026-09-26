@@ -1,5 +1,6 @@
 import { ORPCError } from "@orpc/client"
 import { beforeEach, describe, expect, test, vi } from "vitest"
+import { listRows, pagedServer } from "@/lib/query/testing/paged-server"
 
 const mocks = vi.hoisted(() => ({
   listSequencesWorkspaceAuthAPI: vi.fn(),
@@ -20,7 +21,7 @@ beforeEach(() => {
 })
 
 describe("getAllActiveSequences", () => {
-  test("fetches active sequences for the given workspaceId with maxPerPage", async () => {
+  test("fetches active sequences for the given workspaceId, page by page", async () => {
     mocks.listSequencesWorkspaceAuthAPI.mockResolvedValueOnce({
       data: [{ id: "1", name: "Welcome" }],
     })
@@ -31,10 +32,25 @@ describe("getAllActiveSequences", () => {
 
     expect(mocks.listSequencesWorkspaceAuthAPI).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
-      perPage: 999_999_999,
       active: true,
+      page: 1,
+      perPage: 50,
+      sort: [{ id: "id", desc: false }],
     })
     expect(store.getState().sequences).toEqual([{ id: "1", name: "Welcome" }])
+  })
+
+  test("pages past the server's 50-row cap: all 120 land (s205)", async () => {
+    mocks.listSequencesWorkspaceAuthAPI.mockImplementation(
+      pagedServer(listRows(1, 121)),
+    )
+
+    const store = createSequenceStore()
+    await store.getState().getAllActiveSequences("workspace-1")
+
+    expect(store.getState().sequences).toHaveLength(120)
+    expect(store.getState().sequences.at(-1)).toMatchObject({ id: "120" })
+    expect(mocks.listSequencesWorkspaceAuthAPI).toHaveBeenCalledTimes(3)
   })
 })
 

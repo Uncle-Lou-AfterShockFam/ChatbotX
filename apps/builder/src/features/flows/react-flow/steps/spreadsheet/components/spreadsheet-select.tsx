@@ -4,7 +4,9 @@ import { ComboboxField } from "@chatbotx.io/ui/components/form/combobox-field"
 import { useQuery } from "@tanstack/react-query"
 import { useTranslations } from "next-intl"
 import { useWorkspaceId } from "@/hooks/routing"
+import { client } from "@/lib/orpc/orpc"
 import { orpc } from "@/lib/orpc/query"
+import { fetchAllListPages } from "@/lib/query/fetch-all-list-pages"
 
 type SpreadsheetSelectProps = {
   name: string
@@ -22,12 +24,24 @@ export const SpreadsheetSelect = ({
   const workspaceId = useWorkspaceId()
   const t = useTranslations()
 
-  const { data } = useQuery(
-    orpc.spreadsheetsAPI.listSpreadsheetsAuthenticatedAPI.queryOptions({
-      input: { workspaceId, perPage: 9999 },
+  // Every page, not one call the server caps at 50 rows (s205).
+  const { data } = useQuery({
+    queryKey: orpc.spreadsheetsAPI.listSpreadsheetsAuthenticatedAPI.key({
+      type: "query",
+      input: { workspaceId },
     }),
-  )
-  const options = (data?.data ?? []).map((spreadsheet) => ({
+    queryFn: ({ signal }) =>
+      fetchAllListPages((page) =>
+        client.spreadsheetsAPI.listSpreadsheetsAuthenticatedAPI(
+          {
+            workspaceId,
+            ...page,
+          },
+          { signal },
+        ),
+      ),
+  })
+  const options = (data ?? []).map((spreadsheet) => ({
     label: spreadsheet.name,
     value: spreadsheet.id,
   }))

@@ -79,6 +79,9 @@ class InboxService extends BaseService {
       db.query.inboxModel.findMany({
         ...pagination,
         where,
+        // A stable order: callers page through every inbox (s205), and
+        // unordered offset pages can repeat or skip rows.
+        orderBy: { id: "asc" },
         with: input.includes?.includes("integration")
           ? InboxService.withIntegrations
           : undefined,
@@ -86,8 +89,7 @@ class InboxService extends BaseService {
       db.$count(inboxModel, relationsFilterToSQL(inboxModel, where)),
     ])
 
-    const limit = input.perPage ?? 10
-    const pageCount = Math.ceil(totalRows / limit)
+    const pageCount = Math.ceil(totalRows / pagination.limit)
 
     return { data, pageCount }
   }

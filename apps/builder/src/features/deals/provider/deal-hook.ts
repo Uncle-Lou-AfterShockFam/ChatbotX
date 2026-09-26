@@ -1,6 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useMemo } from "react"
+import { client } from "@/lib/orpc/orpc"
 import { orpc } from "@/lib/orpc/query"
+import { fetchAllListPages } from "@/lib/query/fetch-all-list-pages"
 import type { BoardStatusFilter } from "../schema/query"
 
 export const useDealBoard = (
@@ -39,13 +41,26 @@ export const useOwnerOptions = (
   workspaceId: string,
   options?: { enabled?: boolean },
 ): { label: string; value: string }[] => {
-  const { data } = useQuery(
-    orpc.workspaceMembersAPI.listWorkspaceMembersAuthenticatedAPI.queryOptions({
-      input: { workspaceId, perPage: 100, page: 1 },
-      enabled: options?.enabled ?? true,
-      select: (res) => res.data,
-    }),
-  )
+  // Every member, not one call the server caps at 50 rows (s205).
+  const { data } = useQuery({
+    queryKey: orpc.workspaceMembersAPI.listWorkspaceMembersAuthenticatedAPI.key(
+      {
+        type: "query",
+        input: { workspaceId },
+      },
+    ),
+    queryFn: ({ signal }) =>
+      fetchAllListPages((page) =>
+        client.workspaceMembersAPI.listWorkspaceMembersAuthenticatedAPI(
+          {
+            workspaceId,
+            ...page,
+          },
+          { signal },
+        ),
+      ),
+    enabled: options?.enabled ?? true,
+  })
   return useMemo(
     () =>
       (data ?? []).map((member) => ({

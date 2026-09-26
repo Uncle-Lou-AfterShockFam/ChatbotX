@@ -1,7 +1,7 @@
 import { createStore } from "zustand/vanilla"
 import { getClientErrorMessage } from "@/lib/orpc/client-error"
 import { client } from "@/lib/orpc/orpc"
-import { maxPerPage } from "@/lib/shared-request"
+import { fetchAllListPages } from "@/lib/query/fetch-all-list-pages"
 import type { EmailTopicResource } from "../schema/resource"
 
 export type EmailTopicState = {
@@ -48,11 +48,15 @@ export const createEmailTopicStore = (props: Partial<EmailTopicState>) =>
       set({ loading: true, error: null })
 
       try {
-        const { data } =
-          await client.emailTopicsAPI.privateListWorkspaceEmailTopicsAPI({
-            workspaceId,
-            perPage: maxPerPage,
-          })
+        // Newest first, as the endpoint's default order was.
+        const data = await fetchAllListPages(
+          (page) =>
+            client.emailTopicsAPI.privateListWorkspaceEmailTopicsAPI({
+              workspaceId,
+              ...page,
+            }),
+          { desc: true },
+        )
 
         set({ emailTopics: data, loading: false })
       } catch (error: unknown) {

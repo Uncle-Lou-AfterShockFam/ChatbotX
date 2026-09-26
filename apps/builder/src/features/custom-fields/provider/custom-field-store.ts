@@ -2,43 +2,8 @@ import { createStore } from "zustand/vanilla"
 import type { BotFieldResource } from "@/features/bot-fields/schema/resource"
 import { getClientErrorMessage } from "@/lib/orpc/client-error"
 import { client } from "@/lib/orpc/orpc"
-import { fetchAllPages } from "@/lib/query/fetch-all-pages"
+import { fetchAllListPages } from "@/lib/query/fetch-all-list-pages"
 import type { CustomFieldResource } from "../schema/resource"
-
-/**
- * The list endpoints cap a page at 50 (`maxLimit` in
- * `@chatbotx.io/database/utils`), so a single `perPage: maxPerPage` call
- * silently returned the first 50 fields only: a workspace with more never saw
- * the rest in any picker or contact panel (s201). Page through all of them,
- * ordered by id so offset pages are stable.
- */
-const FIELD_PAGE_SIZE = 50
-const FIELD_MAX_PAGES = 40
-
-export const fetchAllFieldPages = async <T extends { id: string }>(
-  fetchPage: (input: {
-    page: number
-    perPage: number
-    sort: { id: string; desc: boolean }[]
-  }) => Promise<{ data: T[] }>,
-): Promise<T[]> => {
-  const rows = await fetchAllPages<number, T>({
-    initialPageParam: 1,
-    maxPages: FIELD_MAX_PAGES,
-    fetchPage: async (page) => {
-      const { data } = await fetchPage({
-        page,
-        perPage: FIELD_PAGE_SIZE,
-        sort: [{ id: "id", desc: false }],
-      })
-      return {
-        items: data,
-        nextPageParam: data.length < FIELD_PAGE_SIZE ? undefined : page + 1,
-      }
-    },
-  })
-  return [...new Map(rows.map((row) => [row.id, row])).values()]
-}
 
 export type CustomFieldState = {
   loading: boolean
@@ -114,7 +79,7 @@ export const createCustomFieldStore = (props: Partial<CustomFieldState>) =>
       set({ loading: true, error: null })
 
       try {
-        const data = await fetchAllFieldPages((page) =>
+        const data = await fetchAllListPages((page) =>
           client.customFieldsAPI.privateListCustomFieldsAPI({
             workspaceId,
             ...page,
@@ -142,7 +107,7 @@ export const createCustomFieldStore = (props: Partial<CustomFieldState>) =>
       set({ botFieldsLoading: true, botFieldsError: null })
 
       try {
-        const data = await fetchAllFieldPages((page) =>
+        const data = await fetchAllListPages((page) =>
           client.botFieldAPIs.privateListBotFieldsAPI({ workspaceId, ...page }),
         )
         set({ botFields: data, botFieldsInitialized: true })

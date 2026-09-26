@@ -317,6 +317,7 @@ describe("InboxService.list", () => {
         workspaceId: "workspace-1",
         status: "connected",
       },
+      orderBy: { id: "asc" },
       with: undefined,
     })
     expect(mocks.count).toHaveBeenCalledTimes(1)

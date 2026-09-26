@@ -8,7 +8,7 @@ import type { InboxWithIntegrations } from "@chatbotx.io/database/types"
 import { getIdFromParams } from "@chatbotx.io/utils"
 import { notFound, redirect } from "next/navigation"
 import { InboxListLandingPage } from "@/features/inboxes/components/landing-inbox-list"
-import { maxPerPage } from "@/lib/shared-request"
+import { fetchAllListPages } from "@/lib/query/fetch-all-list-pages"
 import { loadServableWorkspace } from "@/lib/workspace/load-servable-workspace"
 
 export default async function LandingPage({
@@ -37,11 +37,9 @@ export default async function LandingPage({
     return notFound()
   }
 
-  const { data: inboxes } = await inboxService.list({
-    workspaceId,
-    includes: ["integration"],
-    perPage: maxPerPage,
-  })
+  const inboxes = await fetchAllListPages((page) =>
+    inboxService.list({ workspaceId, includes: ["integration"], ...page }),
+  )
   const refConfig = { type: "reflink" as const, name: qrCode.name }
   const inboxLinks = getInboxLinks(
     appUrl,

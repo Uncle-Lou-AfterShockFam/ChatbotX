@@ -1,7 +1,7 @@
 import { createStore } from "zustand/vanilla"
 import { getClientErrorMessage } from "@/lib/orpc/client-error"
 import { client } from "@/lib/orpc/orpc"
-import { maxPerPage } from "@/lib/shared-request"
+import { fetchAllListPages } from "@/lib/query/fetch-all-list-pages"
 import type { ListFlowsResponse } from "../schema/query"
 
 type FlowStateFilter = {
@@ -77,12 +77,25 @@ export const createFlowStore = (props: Partial<FlowState>) =>
       try {
         set({ loading: true, error: null })
 
-        const { data } = await client.flowsAPI.privateListFlowsAPI({
-          workspaceId,
-          perPage: maxPerPage,
-          active: true,
-          ...filter,
-        })
+        // A startType filter reads version graphs, so the server filters the
+        // whole workspace list anyway: ask once, unpaged, instead of making
+        // it rescan per page (s205 review). Otherwise page past the cap.
+        const data = filter.startType
+          ? (
+              await client.flowsAPI.privateListFlowsAPI({
+                workspaceId,
+                active: true,
+                ...filter,
+              })
+            ).data
+          : await fetchAllListPages((page) =>
+              client.flowsAPI.privateListFlowsAPI({
+                workspaceId,
+                active: true,
+                ...filter,
+                ...page,
+              }),
+            )
 
         set({ flows: data })
       } catch (error: unknown) {

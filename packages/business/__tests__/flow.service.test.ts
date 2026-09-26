@@ -3,6 +3,8 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 
 const {
+  mockListWithVersions,
+  mockCountFlows,
   mockAudit,
   mockCreateId,
   mockDbTransaction,
@@ -32,6 +34,8 @@ const {
   const mockUpdate = vi.fn(() => ({ set: mockUpdateSet }))
 
   return {
+    mockListWithVersions: vi.fn(),
+    mockCountFlows: vi.fn(),
     mockAudit: vi.fn(),
     mockCreateId: vi.fn(),
     mockDbTransaction: vi.fn(),
@@ -79,7 +83,11 @@ vi.mock("@chatbotx.io/database/client", () => ({
 // builders, which read schema models this file does not mock. flowService only
 // uses `listIdsByIds` (covered elsewhere), so a stub keeps that chain out.
 vi.mock("@chatbotx.io/database/repositories", () => ({
-  flowRepository: { listIdsByIds: vi.fn(async () => []) },
+  flowRepository: {
+    listIdsByIds: vi.fn(async () => []),
+    listWithVersions: mockListWithVersions,
+    count: mockCountFlows,
+  },
   whatsappMessageTemplateRepository: { listIdsByIntegration: vi.fn() },
 }))
 
@@ -616,4 +624,138 @@ describe("flowService.createPublished", () => {
       "created a new flow (#flow-1)",
     )
   })
+})
+
+describe("flowService.list: startType filters BEFORE paging (s205)", () => {
+  // 120 flows; every other one starts with a sendText step. The old code
+  // filtered each 50-row DB page, so page 1 held 25 matches and a client
+  // paging until a short page stopped there with 35 matches unseen.
+  const flow = (i: number) => ({
+    id: String(i),
+    flowVersions: [
+      {
+        nodes: [
+          {
+            data: {
+              isStartNode: true,
+              details: { steps: [{ stepType: i % 2 ? "sendText" : "other" }] },
+            },
+          },
+        ],
+      },
+    ],
+  })
+  const all = Array.from({ length: 120 }, (_, i) => flow(i + 1))
+
+  afterEach(() => {
+    mockListWithVersions.mockReset()
+    mockCountFlows.mockReset()
+  })
+
+  test("every page is full until the matches run out; pageCount is exact", async () => {
+    mockListWithVersions.mockResolvedValue(all)
+
+    const pages = await Promise.all(
+      [1, 2].map((page) =>
+        flowService.list({
+          workspaceId: "ws-1",
+          startType: "sendText",
+          page,
+          perPage: 50,
+        }),
+      ),
+    )
+
+    expect(pages[0].data).toHaveLength(50)
+    expect(pages[1].data).toHaveLength(10)
+    expect(pages[0].pageCount).toBe(2)
+    expect(pages[1].data.at(-1)?.id).toBe("119")
+    // The DB read is unpaged so the filter sees every flow.
+    expect(mockListWithVersions).toHaveBeenCalledWith(
+      expect.objectContaining({ page: null, perPage: null }),
+    )
+    expect(mockCountFlows).not.toHaveBeenCalled()
+  })
+
+  test("the server cap still applies to a filtered page", async () => {
+    mockListWithVersions.mockResolvedValue(all)
+
+    const result = await flowService.list({
+      workspaceId: "ws-1",
+      startType: "sendText",
+      page: 1,
+      perPage: 999_999_999,
+    })
+
+    expect(result.data).toHaveLength(50)
+    expect(result.pageCount).toBe(2)
+  })
+
+  test("a page past the end is empty, not an error", async () => {
+    mockListWithVersions.mockResolvedValue(all)
+
+    const result = await flowService.list({
+      workspaceId: "ws-1",
+      startType: "sendText",
+      page: 5,
+      perPage: 50,
+    })
+
+    expect(result.data).toEqual([])
+  })
+
+  test("no startType keeps the DB-paged path and its count", async () => {
+    mockListWithVersions.mockResolvedValue(all.slice(0, 50))
+    mockCountFlows.mockResolvedValue(120)
+
+    const result = await flowService.list({
+      workspaceId: "ws-1",
+      page: 1,
+      perPage: 50,
+    })
+
+    expect(result.data).toHaveLength(50)
+    expect(result.pageCount).toBe(3)
+    expect(mockListWithVersions).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 1, perPage: 50 }),
+    )
+  })
+
+  test("sendWaTemplateMessage without an integration is empty", async () => {
+    mockListWithVersions.mockResolvedValue(all)
+
+    const result = await flowService.list({
+      workspaceId: "ws-1",
+      startType: "sendWaTemplateMessage",
+      page: 1,
+      perPage: 50,
+    })
+
+    expect(result).toMatchObject({ data: [], pageCount: 0 })
+  })
+})
+
+test("flowService.list: startType with no page/perPage returns the whole filtered list (s205)", async () => {
+  const nodes = [
+    {
+      data: {
+        isStartNode: true,
+        details: { steps: [{ stepType: "sendText" }] },
+      },
+    },
+  ]
+  mockListWithVersions.mockResolvedValueOnce(
+    Array.from({ length: 75 }, (_, i) => ({
+      id: String(i + 1),
+      flowVersions: [{ nodes }],
+    })),
+  )
+
+  const result = await flowService.list({
+    workspaceId: "ws-1",
+    startType: "sendText",
+  })
+
+  expect(result.data).toHaveLength(75)
+  expect(result.pageCount).toBe(1)
 })

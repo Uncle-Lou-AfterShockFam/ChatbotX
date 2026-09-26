@@ -1,5 +1,6 @@
 import { ORPCError } from "@orpc/client"
 import { beforeEach, describe, expect, test, vi } from "vitest"
+import { listRows, pagedServer } from "@/lib/query/testing/paged-server"
 
 const mocks = vi.hoisted(() => ({
   listInboxesAuthenticatedAPI: vi.fn(),
@@ -20,7 +21,7 @@ beforeEach(() => {
 })
 
 describe("getAllInboxes", () => {
-  test("fetches inboxes for the workspace with includes and maxPerPage", async () => {
+  test("fetches inboxes for the workspace with includes, page by page", async () => {
     mocks.listInboxesAuthenticatedAPI.mockResolvedValueOnce({
       data: [{ id: "inbox-1", name: "Support" }],
     })
@@ -32,11 +33,26 @@ describe("getAllInboxes", () => {
     expect(mocks.listInboxesAuthenticatedAPI).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       includes: ["integration"],
-      perPage: 999_999_999,
+      page: 1,
+      perPage: 50,
+      sort: [{ id: "id", desc: false }],
     })
     expect(store.getState().inboxes).toEqual([
       { id: "inbox-1", name: "Support" },
     ])
+  })
+
+  test("pages past the server's 50-row cap: all 120 land (s205)", async () => {
+    mocks.listInboxesAuthenticatedAPI.mockImplementation(
+      pagedServer(listRows(1, 121)),
+    )
+
+    const store = createInboxStore({ workspaceId: "workspace-1" })
+    await store.getState().getAllInboxes()
+
+    expect(store.getState().inboxes).toHaveLength(120)
+    expect(store.getState().inboxes.at(-1)).toMatchObject({ id: "120" })
+    expect(mocks.listInboxesAuthenticatedAPI).toHaveBeenCalledTimes(3)
   })
 
   test("is a no-op when workspaceId is empty", async () => {

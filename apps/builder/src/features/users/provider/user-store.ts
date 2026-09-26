@@ -3,7 +3,7 @@ import type { ListInboxTeamsResponse } from "@/enterprise/features/inbox-teams/s
 import type { ListWorkspaceMembersResponse } from "@/features/workspace-members/schema/query"
 import { getClientErrorMessage } from "@/lib/orpc/client-error"
 import { client } from "@/lib/orpc/orpc"
-import { maxPerPage } from "@/lib/shared-request"
+import { fetchAllListPages } from "@/lib/query/fetch-all-list-pages"
 
 export type UserState = {
   loadingWorkspaceMembers: boolean
@@ -67,10 +67,12 @@ export const createUserStore = (props: Partial<UserState>) =>
       set({ loadingWorkspaceMembers: true, error: null })
 
       try {
-        const { data } =
-          await client.workspaceMembersAPI.listWorkspaceMembersAuthenticatedAPI(
-            { workspaceId, perPage: maxPerPage },
-          )
+        const data = await fetchAllListPages((page) =>
+          client.workspaceMembersAPI.listWorkspaceMembersAuthenticatedAPI({
+            workspaceId,
+            ...page,
+          }),
+        )
 
         set({ workspaceMembers: data })
       } catch (error: unknown) {
