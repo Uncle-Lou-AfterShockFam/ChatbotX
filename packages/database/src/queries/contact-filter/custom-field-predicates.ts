@@ -11,6 +11,7 @@ import {
   getFieldIntervalValue,
   resolveFieldValueNegation,
 } from "./field-value-predicates"
+import { isMalformedOptionCondition } from "./option-field-predicates"
 import type { ContactWhere } from "./types"
 
 export function buildCustomFieldWhere(condition: {
@@ -23,6 +24,11 @@ export function buildCustomFieldWhere(condition: {
 }): ContactWhere {
   if (!condition.customFieldId) {
     return {}
+  }
+  // s203: a malformed select / multiSelect condition matches nobody (FALSE),
+  // including its negation, instead of being dropped (see the helper).
+  if (isMalformedOptionCondition(condition)) {
+    return { RAW: () => sql`FALSE` }
   }
   const comparison = buildCustomFieldComparison(
     condition.customFieldId,

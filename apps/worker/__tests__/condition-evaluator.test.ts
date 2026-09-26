@@ -473,6 +473,14 @@ describe("ConditionEvaluator customFieldValueChanged on option fields (s203)", (
     ).resolves.toBe(false)
   })
 
+  test("a text operator over an option list never matches (fails closed)", async () => {
+    for (const newValue of ["Gold", "Silver", ""]) {
+      await expect(
+        run("notContains", { options: ["Gold"] }, "select", newValue),
+      ).resolves.toBe(false)
+    }
+  })
+
   test("a pre-s203 text operator on a select keeps its text meaning", async () => {
     await expect(
       run("contains", { text: "ol" }, "select", "Gold"),

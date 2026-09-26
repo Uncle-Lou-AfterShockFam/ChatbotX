@@ -1,3 +1,4 @@
+import { OPTION_ARRAY_PATTERN_SOURCE } from "@chatbotx.io/utils/custom-field"
 import type { SQL } from "drizzle-orm"
 import { PgDialect } from "drizzle-orm/pg-core"
 import { describe, expect, test } from "vitest"
@@ -8,7 +9,12 @@ import {
 import { contactModel } from "../src/schema"
 
 /** s203: select / multiSelect conditions render their own SQL shape. */
-const render = (customFieldType: string, operator: string, value?: unknown) => {
+const render = (
+  customFieldType: string,
+  operator: string,
+  value?: unknown,
+  valueType = customFieldType,
+) => {
   const where = applyContactFilter({
     operator: "and",
     conditions: [
@@ -16,7 +22,7 @@ const render = (customFieldType: string, operator: string, value?: unknown) => {
         field: "customField",
         customFieldId: "cf-1",
         customFieldType,
-        valueType: customFieldType === "multiSelect" ? "multiSelect" : "select",
+        valueType,
         operator,
         ...(value === undefined ? {} : { value }),
       },
@@ -35,7 +41,8 @@ describe("applyContactFilter — option fields (s203)", () => {
   test("multiSelect in = any-of over the guarded items, EXISTS", () => {
     const q = render("multiSelect", "in", ["Golf", "Red, White"])
     expect(q?.sql.startsWith("EXISTS")).toBe(true)
-    expect(q?.sql).toContain("pg_input_is_valid")
+    expect(q?.params).toContain(OPTION_ARRAY_PATTERN_SOURCE)
+    expect(q?.sql).not.toContain("pg_input_is_valid")
     expect(q?.sql).toContain("jsonb_array_elements(")
     expect(q?.params).toContain('["Golf","Red, White"]')
   })
@@ -68,17 +75,53 @@ describe("applyContactFilter — option fields (s203)", () => {
     ).toBe(true)
   })
 
-  test("a pre-s203 text condition on an option field keeps its text meaning", () => {
-    expect(render("select", "contains", "Go")?.sql).toContain("ILIKE")
-    const legacyEq = render("multiSelect", "eq", '["Golf"]')
+  test("a pre-s203 condition (valueType text) on an option field keeps its text meaning", () => {
+    expect(render("select", "contains", "Go", "text")?.sql).toContain("ILIKE")
+    const legacyEq = render("select", "eq", "Gold", "text")
     expect(legacyEq?.sql).not.toContain("jsonb")
-    expect(legacyEq?.params).toContain('["Golf"]')
+    expect(legacyEq?.params).toContain("Gold")
   })
 
-  test("an invalid option condition is dropped, never compiled", () => {
-    expect(render("multiSelect", "in", [])).toBeUndefined()
-    expect(render("multiSelect", "in", "Golf")).toBeUndefined()
-    expect(render("select", "in", [" "])).toBeUndefined()
+  test("a malformed option condition is FALSE (never dropped), negatives included", () => {
+    for (const [type, op, value] of [
+      ["multiSelect", "in", []],
+      ["multiSelect", "in", "Golf"],
+      ["multiSelect", "notIn", "Golf"],
+      ["multiSelect", "notIn", [""]],
+      ["multiSelect", "startsWith", "Go"],
+      ["select", "in", [" "]],
+      ["select", "eq", ["Gold"]],
+      ["select", "ne", ""],
+    ] as const) {
+      expect(render(type, op, value)?.sql, `${type} ${op}`).toBe("FALSE")
+    }
+    // an option valueType on a field of another type is not option-shaped
+    expect(render("shortText", "in", ["a"], "multiSelect")).toBeUndefined()
+  })
+
+  test("AND with a malformed option condition never widens the audience", () => {
+    const where = applyContactFilter({
+      operator: "and",
+      conditions: [
+        {
+          field: "customField",
+          customFieldId: "cf-1",
+          customFieldType: "multiSelect",
+          valueType: "multiSelect",
+          operator: "notIn",
+          value: "Golf",
+        },
+        {
+          field: "customField",
+          customFieldId: "cf-2",
+          customFieldType: "shortText",
+          valueType: "text",
+          operator: "eq",
+          value: "vip",
+        },
+      ],
+    } as never) as { AND?: unknown[] }
+    expect(where.AND).toHaveLength(2)
   })
 
   test("a flow Condition step on a multiSelect has a predicate (never the all-dropped false)", () => {
@@ -98,6 +141,7 @@ describe("applyContactFilter — option fields (s203)", () => {
       }) as never
     expect(contactFilterHasPredicate(criteria("contains", ["Golf"]))).toBe(true)
     expect(contactFilterHasPredicate(criteria("notIn", ["Golf"]))).toBe(true)
-    expect(contactFilterHasPredicate(criteria("in", []))).toBe(false)
+    // malformed -> FALSE: still a predicate, so the step answers "no match"
+    expect(contactFilterHasPredicate(criteria("in", []))).toBe(true)
   })
 })

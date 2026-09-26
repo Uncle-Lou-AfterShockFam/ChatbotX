@@ -39,6 +39,13 @@ describe("optionConditionIssue (s203)", () => {
     expect(
       optionConditionIssue("multiSelect", "in", { 0: "Golf" }),
     ).not.toBeNull()
+    // text Postgres cannot carry is refused, never thrown at query time
+    expect(
+      optionConditionIssue("multiSelect", "in", ["a\u0000b"]),
+    ).not.toBeNull()
+    expect(optionConditionIssue("multiSelect", "in", ["\uD800"])).not.toBeNull()
+    expect(optionConditionIssue("select", "eq", "a\u0000b")).not.toBeNull()
+    expect(optionConditionIssue("select", "in", ["😀"])).toBeNull()
     const tooMany = Array.from(
       { length: MAX_CUSTOM_FIELD_OPTIONS + 1 },
       (_, i) => `o${i}`,
@@ -54,6 +61,8 @@ describe("optionConditionIssue (s203)", () => {
     expect(optionOperatorTakesList("select", "notIn")).toBe(true)
     expect(optionOperatorTakesList("multiSelect", "eq")).toBe(true)
     expect(optionOperatorTakesList("multiSelect", "isEmpty")).toBe(false)
+    expect(optionOperatorTakesList("select", "contains")).toBe(false)
+    expect(optionOperatorTakesList("multiSelect", "startsWith")).toBe(false)
   })
 })
 
@@ -108,7 +117,15 @@ describe("matchesOptionCondition (s203)", () => {
     expect(m("[Golf", "in", ["[Golf"])).toBe(true) // malformed JSON = one item
     expect(m('{"a":1}', "in", ["a"])).toBe(false)
     expect(m('["Golf",1]', "eq", ["Golf"])).toBe(false) // non-string never equals
-    expect(m('["Golf",1]', "in", ["Golf"])).toBe(true)
+    // only a flat JSON string array is a list (the SQL's shared pattern)
+    expect(m('["Golf",1]', "in", ["Golf"])).toBe(false)
+    expect(m('["Golf",1]', "in", ['["Golf",1]'])).toBe(true)
+    expect(m('[["Golf"]]', "in", ["Golf"])).toBe(false)
+    expect(m('\uFEFF["Golf"]', "in", ["Golf"])).toBe(false)
+    expect(m(' \t["Golf"]\n', "in", ["Golf"])).toBe(true)
+    expect(m('["Golf","\\u0000"]', "in", ["Golf"])).toBe(false)
+    expect(m('["Caf\\u00e9"]', "in", ["Café"])).toBe(true)
+    expect(m("\u00A0", "isEmpty", undefined)).toBe(false)
     expect(m("   ", "isEmpty", undefined)).toBe(true)
   })
 

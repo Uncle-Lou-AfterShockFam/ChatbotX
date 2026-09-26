@@ -9,8 +9,8 @@ import {
 import type { WorkspaceModel } from "@chatbotx.io/database/types"
 import {
   isOptionFieldType,
+  isOptionOperator,
   matchesOptionCondition,
-  OPTION_FIELD_OPERATORS,
   type OptionFieldType,
   optionConditionIssue,
 } from "@chatbotx.io/utils/custom-field"
@@ -265,10 +265,14 @@ export class ConditionEvaluator {
     actualValue: unknown,
     expectedValue: unknown,
   ): boolean | undefined {
-    if (
-      !(OPTION_FIELD_OPERATORS[type] as readonly string[]).includes(operator)
-    ) {
-      return
+    const listValue =
+      typeof expectedValue === "object" &&
+      expectedValue !== null &&
+      "options" in expectedValue
+    if (!isOptionOperator(type, operator)) {
+      // A pre-s203 text operator keeps its text meaning, but never over an
+      // option list (text-comparing "[object Object]" would match anything).
+      return listValue ? false : undefined
     }
     let expected: unknown = expectedValue
     if (typeof expectedValue === "object" && expectedValue !== null) {

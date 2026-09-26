@@ -7,7 +7,6 @@ import {
   operatorTypes,
 } from "@chatbotx.io/database/partials"
 import {
-  isOptionFieldType,
   MAX_CUSTOM_FIELD_OPTIONS,
   optionConditionIssue,
 } from "@chatbotx.io/utils/custom-field"
@@ -136,26 +135,35 @@ export const customFieldConditionSchema = z
       .optional(),
   })
   .superRefine((condition, ctx) => {
-    // s203: an option field (select / multiSelect) has its own closed
-    // operator table and value shapes, shared with the SQL builder and the
-    // trigger evaluator. A text operator saved before s203 still RUNS (the
-    // SQL keeps its text meaning) but is refused here, on the next save.
-    const optionValueType =
+    // s203: an option-typed condition (valueType select / multiSelect, what
+    // the builder saves) has its own closed operator table and value shapes,
+    // shared with the SQL builder and the trigger evaluator. A condition saved
+    // before s203 on a select field carries valueType "text" and still
+    // validates (and runs) with the text rules, so an old broadcast / flow
+    // filter reads back intact.
+    if (
       condition.valueType === formFieldTypes.enum.select ||
       condition.valueType === formFieldTypes.enum.multiSelect
-    if (
-      optionValueType ||
-      (condition.customFieldType &&
-        isOptionFieldType(condition.customFieldType))
     ) {
-      const type = condition.customFieldType
       const issue =
-        type && isOptionFieldType(type) && type === condition.valueType
-          ? optionConditionIssue(type, condition.operator, condition.value)
+        condition.customFieldType === condition.valueType
+          ? optionConditionIssue(
+              condition.valueType,
+              condition.operator,
+              condition.value,
+            )
           : "Option operators need a select or multi-select field"
       if (issue) {
         ctx.addIssue({ code: "custom", message: issue, path: ["operator"] })
       }
+      return
+    }
+    if (Array.isArray(condition.value) && condition.value.length !== 2) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Only option fields take a list of values",
+        path: ["value"],
+      })
       return
     }
 

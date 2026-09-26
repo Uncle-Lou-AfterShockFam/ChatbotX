@@ -53,6 +53,24 @@ const FIXED: Record<string, string | null> = {
   nested: '[["Golf"]]',
   quoted: '"Golf"',
   bracketText: "[Golf",
+  // s203 blind probe: every row below once threw or made SQL and JS disagree.
+  deepNest: `${"[".repeat(100_000)}${"]".repeat(100_000)}`,
+  deepOpen: "[".repeat(25_000),
+  bom: '\uFEFF["Golf"]',
+  nbspLead: '\u00A0["Golf"]',
+  ideographicLead: '\u3000["Golf"]',
+  verticalTab: '\u000B["Golf"]',
+  lineSep: '\u2028["Golf"]',
+  bomOnly: "\uFEFF",
+  nbspOnly: "\u00A0",
+  jsonWhitespace: ' \t["Golf"]\n ',
+  nulEscape: '["Golf","\\u0000"]',
+  surrogateEscape: '["Golf","\\ud800"]',
+  pairedEscape: '["\\ud83d\\ude00"]',
+  hugeNumber: '["Golf",1e1000000]',
+  accentEscape: '["Caf\\u00e9"]',
+  emptyItem: '[""]',
+  nullItem: "[null]",
 }
 
 /** Deterministic PRNG (Park-Miller) so a failure reproduces. */
@@ -112,6 +130,7 @@ describe.skipIf(!databaseUrl)(
       const predicate = buildOptionFieldPredicate({
         column: probe.value,
         customFieldType: type,
+        valueType: type,
         operator: positiveOperator,
         value,
       })
@@ -156,7 +175,7 @@ describe.skipIf(!databaseUrl)(
         expect.arrayContaining(["all", "comma"]),
       )
       const golfAny = await sqlMatches("multiSelect", "in", ["Golf"])
-      for (const id of ["golf", "comma", "all", "legacy", "mixed"]) {
+      for (const id of ["golf", "comma", "all", "legacy"]) {
         expect(golfAny).toContain(id)
       }
       for (const id of [
@@ -166,6 +185,7 @@ describe.skipIf(!databaseUrl)(
         "object",
         "nested",
         "quoted",
+        "mixed", // a non-string element: not a flat string array -> legacy
       ]) {
         expect(golfAny).not.toContain(id)
       }
@@ -185,6 +205,32 @@ describe.skipIf(!databaseUrl)(
       expect(empty).not.toContain("malformed")
     })
 
+    test("no stored value makes the SQL throw (deep nesting, bad escapes)", async () => {
+      for (const operator of OPTION_FIELD_OPERATORS.multiSelect) {
+        await expect(
+          sqlMatches(
+            "multiSelect",
+            operator,
+            valueFor("multiSelect", operator, ["Golf"]),
+          ),
+        ).resolves.toBeDefined()
+      }
+      const golfAny = await sqlMatches("multiSelect", "in", ["Golf"])
+      for (const id of [
+        "bom",
+        "nbspLead",
+        "nulEscape",
+        "hugeNumber",
+        "deepNest",
+      ]) {
+        expect(golfAny).not.toContain(id) // not a flat string array -> legacy
+      }
+      expect(golfAny).toContain("jsonWhitespace")
+      expect(await sqlMatches("multiSelect", "in", ["Café"])).toContain(
+        "accentEscape",
+      )
+    })
+
     test("SQL and the JS evaluator agree on every operator (seeded property)", async () => {
       const next = rng(2030)
       for (const type of ["select", "multiSelect"] as const) {
@@ -193,6 +239,13 @@ describe.skipIf(!databaseUrl)(
             let list = subset(next)
             if (list.length === 0) {
               list = [OPTIONS[round % OPTIONS.length] as string]
+            }
+            if (round % 4 === 1) {
+              // hostile filter text, compared literally on both sides
+              list = ['["Golf"]', "\uFEFFGolf", "%_'$1?|", "Café"].slice(
+                0,
+                1 + (round % 3),
+              )
             }
             if (type === "select" && round % 3 === 0) {
               list = ["Golf", "[Golf", '"Golf"', "5"].slice(0, 1 + (round % 4))

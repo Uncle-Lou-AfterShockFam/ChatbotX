@@ -17,25 +17,41 @@ const optionListValue = z.object({
     .max(MAX_CUSTOM_FIELD_OPTIONS),
 })
 
-export const customFieldValueChanged = z.object({
-  id: z.string().optional(),
-  type: z.literal(triggerEventTypes.enum.customFieldValueChanged),
-  sourceId: z.string().min(1, "Custom field is required"),
-  operator: z.string(),
-  value: z.unknown().superRefine((value, ctx) => {
+export const customFieldValueChanged = z
+  .object({
+    id: z.string().optional(),
+    type: z.literal(triggerEventTypes.enum.customFieldValueChanged),
+    sourceId: z.string().min(1, "Custom field is required"),
+    operator: z.string(),
+    value: z.unknown().superRefine((value, ctx) => {
+      if (
+        value !== null &&
+        typeof value === "object" &&
+        "options" in value &&
+        !optionListValue.safeParse(value).success
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Pick at least one option",
+        })
+      }
+    }),
+  })
+  // `in` / `notIn` exist only on option fields and always compare a list:
+  // saving one with no option picked would never fire.
+  .superRefine((condition, ctx) => {
     if (
-      value !== null &&
-      typeof value === "object" &&
-      "options" in value &&
-      !optionListValue.safeParse(value).success
+      (condition.operator === operatorTypes.enum.in ||
+        condition.operator === operatorTypes.enum.notIn) &&
+      !optionListValue.safeParse(condition.value).success
     ) {
       ctx.addIssue({
         code: "custom",
         message: "Pick at least one option",
+        path: ["value"],
       })
     }
-  }),
-})
+  })
 export type CustomFieldValueChanged = z.infer<typeof customFieldValueChanged>
 
 export const defaultFn = (): CustomFieldValueChanged => ({

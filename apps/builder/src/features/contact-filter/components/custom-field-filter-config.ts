@@ -4,6 +4,7 @@ import {
 } from "@chatbotx.io/database/partials"
 import {
   isOptionFieldType,
+  isOptionOperator,
   OPTION_FIELD_OPERATORS,
   type OptionFieldType,
   optionOperatorTakesList,
@@ -199,6 +200,17 @@ export const optionOperatorLabelKey = (
     ? OPTION_OPERATOR_LABEL_KEYS[customFieldType][operator]
     : undefined
 
+/** A condition chip's operator label: the option-field wording, else the shared one. */
+export const resolveOperatorLabel = (
+  customFieldType: string | undefined,
+  operator: string,
+  operatorLabelByValue: Map<string, string>,
+  t: (key: string) => string,
+): string => {
+  const key = optionOperatorLabelKey(customFieldType, operator)
+  return key ? t(key) : (operatorLabelByValue.get(operator) ?? operator)
+}
+
 /** Relabels option-field operators (see {@link optionOperatorLabelKey}). */
 export const relabelOptionOperators = (
   options: ConditionOption[],
@@ -250,7 +262,14 @@ export const getCustomFieldValueInputConfig = (
   if (isValuelessOperator(operator)) {
     return { kind: "none", defaultValue: "" }
   }
-  if (config.customFieldType && isOptionFieldType(config.customFieldType)) {
+  // s203: an option field picks from its options; an operator outside its
+  // table (a condition saved before s203, e.g. a select `contains`) keeps the
+  // text input it was saved with.
+  if (
+    config.customFieldType &&
+    isOptionFieldType(config.customFieldType) &&
+    isOptionOperator(config.customFieldType, operator ?? "")
+  ) {
     const kind = optionOperatorTakesList(config.customFieldType, operator ?? "")
       ? "multiSelect"
       : "select"

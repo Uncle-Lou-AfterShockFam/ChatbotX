@@ -112,6 +112,10 @@ describe("option-field filter config (s203)", () => {
     expect(customFieldOperatorRequiresArrayValue("notIn", tier)).toBe(true)
     expect(customFieldOperatorRequiresArrayValue("ne", tier)).toBe(false)
     expect(customFieldOperatorRequiresArrayValue("isBetween")).toBe(true)
+    // a pre-s203 text operator on a select keeps a text input (never a list
+    // picker handed a string: that crashed the dialog)
+    expect(getCustomFieldValueInputConfig(tier, "contains")?.kind).toBe("text")
+    expect(customFieldOperatorRequiresArrayValue("contains", tier)).toBe(false)
   })
 
   test("multiSelect list operators read in their own words", () => {
@@ -159,13 +163,30 @@ describe("customFieldConditionSchema on option fields (s203)", () => {
     expect(ok({ ...ms, operator: "in", value: [] })).toBe(false)
     expect(ok({ ...sel, operator: "eq", value: ["Gold"] })).toBe(false)
     expect(ok({ ...sel, operator: "contains", value: "Go" })).toBe(false)
-    // a pre-s203 select condition (valueType text) is refused on its next save
+    // a pre-s203 select condition (valueType text) still reads back and saves
     expect(
       ok({
         customFieldType: "select",
         valueType: "text",
         operator: "eq",
         value: "Gold",
+      }),
+    ).toBe(true)
+    expect(
+      ok({
+        customFieldType: "select",
+        valueType: "text",
+        operator: "contains",
+        value: "Go",
+      }),
+    ).toBe(true)
+    // ...but never with an option operator or a list
+    expect(
+      ok({
+        customFieldType: "select",
+        valueType: "text",
+        operator: "in",
+        value: ["Gold"],
       }),
     ).toBe(false)
     // an option valueType without the option field type
@@ -197,9 +218,23 @@ describe("customFieldValueChanged value (s203)", () => {
     customFieldValueChanged.safeParse({
       type: "customFieldValueChanged",
       sourceId: "cf-1",
-      operator: "in",
+      operator: "hasAnyValue",
       value,
     }).success
+
+  test("in / notIn need a picked option list", () => {
+    const withOp = (operator: string, value: unknown) =>
+      customFieldValueChanged.safeParse({
+        type: "customFieldValueChanged",
+        sourceId: "cf-1",
+        operator,
+        value,
+      }).success
+    expect(withOp("in", "")).toBe(false)
+    expect(withOp("notIn", { text: "Gold" })).toBe(false)
+    expect(withOp("in", { options: ["Gold"] })).toBe(true)
+    expect(withOp("eq", { text: "Gold" })).toBe(true)
+  })
 
   test("an option list must be non-empty text", () => {
     expect(parse({ options: ["Golf"] })).toBe(true)

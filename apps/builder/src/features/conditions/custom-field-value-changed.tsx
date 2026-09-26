@@ -106,8 +106,17 @@ export const CustomFieldValueChanged = ({
       <CustomFieldSelect
         label=""
         name={`${parentName}.sourceId`}
-        onValueChange={() => {
+        onValueChange={(nextFieldId) => {
           form.resetField(`${parentName}.value`)
+          // s203: an operator carried over from another field type (e.g. a
+          // text `notContains` onto a select) would match every change: start
+          // the new field on its own first operator.
+          const nextType = customFields.find(
+            (field) => field.id === nextFieldId,
+          )?.type
+          const [firstOperator] =
+            mappingConditions[convertCustomFieldTypeToConditionType(nextType)]
+          form.setValue(`${parentName}.operator`, firstOperator ?? "")
         }}
       />
       {customFieldId && (

@@ -384,15 +384,25 @@ export const OPTION_FIELD_OPERATORS = {
 const isValuelessOptionOperator = (operator: string): boolean =>
   operator === "isEmpty" || operator === "isNotEmpty"
 
-/** A select `eq` / `ne` compares one option; every other valued operator a list. */
+/** Whether `operator` is in the option table of `type`. */
+export const isOptionOperator = (
+  type: OptionFieldType,
+  operator: string,
+): boolean =>
+  (OPTION_FIELD_OPERATORS[type] as readonly string[]).includes(operator)
+
+/**
+ * A select `eq` / `ne` compares one option; every other valued operator of the
+ * table a list. False for an operator outside the table (a pre-s203 text
+ * operator keeps its text input).
+ */
 export const optionOperatorTakesList = (
   type: OptionFieldType,
   operator: string,
 ): boolean =>
-  !(
-    isValuelessOptionOperator(operator) ||
-    (type === "select" && (operator === "eq" || operator === "ne"))
-  )
+  isOptionOperator(type, operator) &&
+  !isValuelessOptionOperator(operator) &&
+  !(type === "select" && (operator === "eq" || operator === "ne"))
 
 /**
  * Why an option-field condition is invalid, or null. Closed: an operator
@@ -404,16 +414,17 @@ export const optionConditionIssue = (
   operator: string,
   value: unknown,
 ): string | null => {
-  if (!(OPTION_FIELD_OPERATORS[type] as readonly string[]).includes(operator)) {
+  if (!isOptionOperator(type, operator)) {
     return "Operator is not supported for this field"
   }
   if (isValuelessOptionOperator(operator)) {
     return null
   }
   if (!optionOperatorTakesList(type, operator)) {
-    return typeof value === "string" && value.trim() !== ""
-      ? null
-      : "Operator requires one option"
+    if (typeof value !== "string" || value.trim() === "") {
+      return "Operator requires one option"
+    }
+    return isStorableText(value) ? null : "Options must be non-blank text"
   }
   if (!Array.isArray(value) || value.length === 0) {
     return "Operator requires at least one option"
@@ -421,34 +432,54 @@ export const optionConditionIssue = (
   if (value.length > MAX_CUSTOM_FIELD_OPTIONS) {
     return `At most ${MAX_CUSTOM_FIELD_OPTIONS} options`
   }
-  return value.every((v) => typeof v === "string" && v.trim() !== "")
+  return value.every(
+    (v) => typeof v === "string" && v.trim() !== "" && isStorableText(v),
+  )
     ? null
     : "Options must be non-blank text"
 }
 
+// A stored value the option conditions read as a list: a flat JSON array of
+// strings, nothing else (no nesting, numbers, NUL / surrogate escapes). One
+// pattern source, compiled by JS here and handed to Postgres `~` as a
+// parameter by the SQL builder, so both sides split legacy text from a list
+// identically and `::jsonb` only ever sees input that parses. Only features
+// JS regexps and Postgres AREs share: bracket classes, `(?:)`, `\t\n\r`.
+// Whitespace is JSON's four characters, never `\s` (collation-dependent in
+// Postgres) or `trim()` (unicode spaces).
+const JSON_WS = "[ \\t\\n\\r]*"
+const JSON_UNICODE_ESCAPE =
+  "u(?:000[1-9a-fA-F]|00[1-9a-fA-F][0-9a-fA-F]|0[1-9a-fA-F][0-9a-fA-F]{2}|[1-9a-cA-CeEfF][0-9a-fA-F]{3}|[dD][0-7][0-9a-fA-F]{2})"
+const JSON_STRING = `"(?:[^"\\\\\\x01-\\x1f]|\\\\(?:["\\\\/bfnrt]|${JSON_UNICODE_ESCAPE}))*"`
+
+/** Matches a stored value that holds no item (JSON whitespace only). */
+export const OPTION_BLANK_PATTERN_SOURCE = `^${JSON_WS}$`
+
+/** Matches a stored value that is a flat JSON array of strings. */
+export const OPTION_ARRAY_PATTERN_SOURCE = `^${JSON_WS}\\[${JSON_WS}(?:${JSON_STRING}${JSON_WS}(?:,${JSON_WS}${JSON_STRING}${JSON_WS})*)?\\]${JSON_WS}$`
+
+const OPTION_BLANK_PATTERN = new RegExp(OPTION_BLANK_PATTERN_SOURCE)
+const OPTION_ARRAY_PATTERN = new RegExp(OPTION_ARRAY_PATTERN_SOURCE)
+
 /**
  * Stored multiSelect text -> the items a condition compares. Mirrors the SQL
- * builder's `optionItemsSql` exactly (a property test holds them together):
- * blank -> none, a JSON array -> its elements (a non-string element never
- * equals an option), any other text -> one legacy item.
+ * builder's `optionItemsSql` exactly (a real-Postgres property test holds
+ * them together): blank -> none, a flat JSON string array -> its items, any
+ * other text (legacy, malformed, nested) -> one legacy item.
  */
-const conditionItems = (stored: string): unknown[] => {
-  const trimmed = stored.trim()
-  if (trimmed === "") {
+const conditionItems = (stored: string): string[] => {
+  if (OPTION_BLANK_PATTERN.test(stored)) {
     return []
   }
-  if (trimmed.startsWith("[")) {
-    try {
-      const parsed: unknown = JSON.parse(trimmed)
-      if (Array.isArray(parsed)) {
-        return parsed
-      }
-    } catch {
-      // legacy text that merely starts with "["
-    }
+  if (OPTION_ARRAY_PATTERN.test(stored)) {
+    return JSON.parse(stored) as string[]
   }
   return [stored]
 }
+
+/** A filter value Postgres can carry: no NUL, no lone surrogate. */
+const isStorableText = (value: string): boolean =>
+  !value.includes("\u0000") && value.isWellFormed()
 
 /**
  * JS evaluation of a VALID option-field condition (check
@@ -486,8 +517,7 @@ export const matchesOptionCondition = (
     stored === null || stored === undefined ? [] : conditionItems(stored)
   const has = (option: string) => items.includes(option)
   const exact = () =>
-    items.every((item) => typeof item === "string" && list.includes(item)) &&
-    list.every(has)
+    items.every((item) => list.includes(item)) && list.every(has)
   switch (operator) {
     case "in":
       return list.some(has)
