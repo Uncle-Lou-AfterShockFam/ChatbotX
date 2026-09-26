@@ -220,9 +220,11 @@ async function resolveCheckoutRefund(
     credentials,
     paymentIntent.metadata,
   )
-  if (hubInvoice && !hubInvoice.providerInvoiceId) {
+  if (hubInvoice?.status === "open" && !hubInvoice.providerInvoiceId) {
     // Refunded before the payment event was applied (that one is still in
     // Stripe's retry queue): decide once the invoice is paid, never drop it.
+    // Only while the invoice can still become paid: a refund of a payment a
+    // void invoice never took (the flagged duplicate) is final, not retried.
     return { ...UNRESOLVED, hubInvoice, retryLater: true }
   }
   if (!hubInvoice || hubInvoice.providerInvoiceId !== paymentIntentId) {
@@ -649,6 +651,30 @@ export async function handleStripeWebhook(props: {
     hubInvoice = settled.row
   }
 
+  if (checkoutPaid) {
+    // Two event types can carry one checkout payment (completed and
+    // async_payment_succeeded): claim the marks for THIS event before they
+    // run, so the other one reads "already marked". A failed claim retries
+    // before anything is emitted; a failed mark drops the row (and the claim).
+    try {
+      await db
+        .update(invoiceEventModel)
+        .set({ outcome: MARKED_OUTCOME, updatedAt: new Date() })
+        .where(
+          and(
+            eq(invoiceEventModel.integrationId, credentials.integrationId),
+            eq(invoiceEventModel.providerEventId, event.id),
+          ),
+        )
+    } catch (error) {
+      await dropDedupRow(credentials, event.id)
+      logger.error(
+        { err: error, eventId: event.id },
+        "stripe webhook: could not claim the payment marks, asking Stripe to redeliver",
+      )
+      return { outcome: "retry", detail: "marks claim" }
+    }
+  }
   try {
     await markAndEmit({
       target,
@@ -664,26 +690,6 @@ export async function handleStripeWebhook(props: {
       "stripe webhook: contact marks failed, asking Stripe to redeliver",
     )
     return { outcome: "retry", detail: "contact marks" }
-  }
-  if (checkoutPaid) {
-    // Two event types can carry one checkout payment (completed and
-    // async_payment_succeeded): the marks and invoicePaid run once.
-    try {
-      await db
-        .update(invoiceEventModel)
-        .set({ outcome: MARKED_OUTCOME, updatedAt: new Date() })
-        .where(
-          and(
-            eq(invoiceEventModel.integrationId, credentials.integrationId),
-            eq(invoiceEventModel.providerEventId, event.id),
-          ),
-        )
-    } catch (error) {
-      logger.error(
-        { err: error, eventId: event.id },
-        "stripe webhook: could not record that the payment was marked",
-      )
-    }
   }
   return {
     outcome: applied ? "applied" : "noop",

@@ -35,6 +35,8 @@ const m = vi.hoisted(() => {
     failTransactionNumber: 0,
     transactions: 0,
     deleteError: null as Error | null,
+    /** The "marked" outcome claim fails. */
+    failMarkedClaim: false,
   }
   const selectChain: Record<string, unknown> = {}
   selectChain.from = () => selectChain
@@ -55,6 +57,15 @@ const m = vi.hoisted(() => {
           ? [{ ...state.hubRow, ...updateChain.pending }]
           : [],
       ),
+    // An update awaited without .returning() (the event outcome writes).
+    // biome-ignore lint/suspicious/noThenProperty: awaited query-builder stub
+    then: (
+      resolve: (v: unknown) => unknown,
+      reject: (e: unknown) => unknown,
+    ) =>
+      state.failMarkedClaim && updateChain.pending.outcome === "marked"
+        ? reject(new Error("db down"))
+        : resolve(undefined),
   }
   const tx = {
     insert: () => ({
@@ -256,6 +267,7 @@ beforeEach(() => {
   m.state.failTransactionNumber = 0
   m.state.transactions = 0
   m.state.deleteError = null
+  m.state.failMarkedClaim = false
   m.credentials.mockResolvedValue({
     integrationId: INTEGRATION_ID,
     workspaceId: WORKSPACE_ID,
@@ -950,5 +962,24 @@ describe("stripeCheckout (s207b): checkout.session.* and refunds", () => {
         expect.objectContaining({ checkoutSessionId: null }),
       ]),
     )
+  })
+
+  test("a refund of a payment a VOID invoice never took is final (recorded), never retried", async () => {
+    m.state.hubRow = checkoutRow("void")
+    const result = await deliver({
+      id: "evt_ref_void",
+      type: "charge.refunded",
+      object: { id: "ch_1", object: "charge" },
+    })
+    expect(result).toEqual({ outcome: "noop", detail: "unknown-invoice" })
+    expect(m.state.inserted).toHaveLength(1)
+  })
+
+  test("the marks claim failing retries BEFORE anything is marked or emitted", async () => {
+    m.state.failMarkedClaim = true
+    const result = await completed()
+    expect(result).toEqual({ outcome: "retry", detail: "marks claim" })
+    expect(m.state.deleteWheres).toHaveLength(1)
+    expectNoSideEffects()
   })
 })

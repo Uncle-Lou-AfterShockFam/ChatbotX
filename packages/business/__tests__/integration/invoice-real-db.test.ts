@@ -47,6 +47,9 @@ vi.mock("../../src/integration-stripe/service", () => {
     workspaceId,
     accountId: "acct_rdb",
     livemode: false,
+    defaultMethod: "stripeInvoice",
+    webhookEndpointId: "we_rdb",
+    webhookEventsVersion: 2,
     auth: {
       secretKey: ["sk", "test", "realDbSuiteKey0123456789"].join("_"),
       webhookSecret: "whsec_realDbSuiteSecret0123456789ab",
