@@ -13,19 +13,14 @@ import {
   ToggleGroupItem,
 } from "@chatbotx.io/ui/components/ui/toggle-group"
 import { cn } from "@chatbotx.io/ui/lib/utils"
-import {
-  addYears,
-  format,
-  isSameMonth,
-  isToday,
-  startOfDay,
-  subYears,
-} from "date-fns"
+import { currentTemporalLiteral } from "@chatbotx.io/utils/datetime"
+import { addYears, format, isSameMonth, startOfDay, subYears } from "date-fns"
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
 import { useFormatter, useTimeZone, useTranslations } from "next-intl"
 import { useQueryStates } from "nuqs"
 import { type ReactNode, useMemo, useRef, useState } from "react"
 import type { DateRange } from "react-day-picker"
+import { useRenderNow } from "@/hooks/use-render-now"
 import { BroadcastDetailDialog } from "../broadcast-detail-dialog"
 import {
   broadcastStatusConfig,
@@ -169,6 +164,10 @@ export function BroadcastsCalendar({
     () => groupByDay(broadcasts, timeZone),
     [broadcasts, timeZone],
   )
+  // "Today" is the user's day, keyed like `groupByDay`, from the request's
+  // `now` while hydrating (s209: `isToday` read the browser's zone and clock).
+  const todayKey = currentTemporalLiteral("date", timeZone, useRenderNow())
+  const isToday = (day: Date) => dayKey(day) === todayKey
   const [selected, setSelected] = useState<BroadcastCalendarRow | null>(null)
   const [jumpOpen, setJumpOpen] = useState(false)
   const [customPopoverOpen, setCustomPopoverOpen] = useState(false)
