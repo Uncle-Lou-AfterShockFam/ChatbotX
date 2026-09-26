@@ -137,7 +137,8 @@ jobs:
   # They are the only gate on the smart-delay claim / cancel races (fork #47,
   # #53, #57) — a revert of #57's SKIP LOCKED + re-check passes every mocked
   # test. `test:db` sets REQUIRE_REAL_DB=1, so a missing database fails loudly
-  # instead of skipping to a silent green.
+  # instead of skipping to a silent green. No Turbo cache step: test:db runs
+  # vitest directly through pnpm --filter, not through turbo.
   test-db:
     name: Tests (real Postgres)
     runs-on: ubuntu-latest
@@ -175,6 +176,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # The script directly, not `pnpm db:migrate`: that wraps it in
+      # `dotenv -e ../../.env`, and CI has no .env (DATABASE_URL is job env).
       - name: Apply migrations
         working-directory: packages/database
         run: node ./scripts/run-migrations.mjs
