@@ -23,6 +23,7 @@ import {
 } from "@chatbotx.io/ui/components/ui/dropdown-menu"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
 import { formatDate } from "@chatbotx.io/ui/lib/format"
+import { nameInitials } from "@chatbotx.io/utils/initials"
 import type { ColumnDef } from "@tanstack/react-table"
 import { EllipsisVerticalIcon, Loader, ScrollTextIcon } from "lucide-react"
 import { useLocale, useTimeZone, useTranslations } from "next-intl"
@@ -107,7 +108,7 @@ function PlayerNameCell({
     >
       <Avatar className="size-8">
         <AvatarImage alt={name} className="object-cover" src={avatarUrl} />
-        <AvatarFallback>{name.slice(0, 2)}</AvatarFallback>
+        <AvatarFallback>{nameInitials(name)}</AvatarFallback>
       </Avatar>
       <span className="font-medium">{name}</span>
       {isExecuting && (

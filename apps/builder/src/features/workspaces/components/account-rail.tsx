@@ -4,6 +4,7 @@ import {
   AvatarImage,
 } from "@chatbotx.io/ui/components/ui/avatar"
 import { cn } from "@chatbotx.io/ui/lib/utils"
+import { nameInitials } from "@chatbotx.io/utils/initials"
 import {
   CreditCardIcon,
   CrownIcon,
@@ -71,7 +72,7 @@ export const AccountRail = async ({
   const cloud = isCloud()
   const notice = buildPlanNotice(planStatus, trialEndsAt)
   const displayName = user.name?.trim() || user.email
-  const initials = displayName.slice(0, 2).toUpperCase()
+  const initials = nameInitials(displayName).toUpperCase()
   const avatarUrl = getUserAvatarUrl(user.image, storageUrl)
 
   const usageLabels = buildUsageLabels(t)

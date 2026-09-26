@@ -11,6 +11,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@chatbotx.io/ui/components/ui/tooltip"
+import { nameInitials } from "@chatbotx.io/utils/initials"
 import Link from "next/link"
 import { InboxIcon } from "@/features/inboxes/components/inbox-icon"
 import { useAvatarUrl } from "../utils"
@@ -56,7 +57,7 @@ export function ContactNameCell({
         <Avatar className={`${avatarClassName} shrink-0`}>
           <AvatarImage alt={name} className="object-cover" src={avatarUrl} />
           <AvatarFallback className="bg-gray-300 text-sm dark:bg-zinc-100 dark:text-zinc-800">
-            {name.slice(0, 2) || "?"}
+            {nameInitials(name) || "?"}
           </AvatarFallback>
         </Avatar>
         {channel && (

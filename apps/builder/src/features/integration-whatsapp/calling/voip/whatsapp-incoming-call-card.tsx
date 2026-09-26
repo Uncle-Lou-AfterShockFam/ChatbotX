@@ -2,6 +2,7 @@
 
 import { Avatar, AvatarFallback } from "@chatbotx.io/ui/components/ui/avatar"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
+import { nameInitials } from "@chatbotx.io/utils/initials"
 import { PhoneIcon, PhoneOffIcon } from "lucide-react"
 import { useTranslations } from "next-intl"
 
@@ -40,7 +41,7 @@ export function WhatsappIncomingCallCard({
   onReject,
 }: WhatsappIncomingCallCardProps) {
   const t = useTranslations()
-  const initials = contactName.slice(0, 2)
+  const initials = nameInitials(contactName)
 
   return (
     <>

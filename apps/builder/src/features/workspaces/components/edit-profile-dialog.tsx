@@ -13,6 +13,7 @@ import {
 import { Form } from "@chatbotx.io/ui/components/ui/form"
 import { Label } from "@chatbotx.io/ui/components/ui/label"
 import { cn } from "@chatbotx.io/ui/lib/utils"
+import { nameInitials } from "@chatbotx.io/utils/initials"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Loader2Icon, PencilIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
@@ -56,7 +57,7 @@ export function EditProfileDialog({
   const image = form.watch("image")
   const avatarUrl = useUserAvatarUrl(image)
   const displayName = form.watch("name")?.trim() || user.email
-  const initials = displayName.slice(0, 2).toUpperCase()
+  const initials = nameInitials(displayName).toUpperCase()
 
   const onSubmit = form.handleSubmit(async (values) => {
     const { error } = await authClient.updateUser({

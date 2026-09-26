@@ -14,6 +14,7 @@ import {
   TabsTrigger,
 } from "@chatbotx.io/ui/components/ui/tabs"
 import { formatMultiSelectText } from "@chatbotx.io/utils/custom-field"
+import { nameInitials } from "@chatbotx.io/utils/initials"
 import { useQuery } from "@tanstack/react-query"
 import {
   AtSignIcon,
@@ -92,7 +93,7 @@ export function ContactView({
   const data = contact.data ?? null
   const avatarUrl = useAvatarUrl(data)
   const name = data?.fullName || data?.email || data?.phoneNumber || ""
-  const initials = (data?.fullName ?? name).slice(0, 2)
+  const initials = nameInitials(data?.fullName ?? name)
 
   const editable: ContactEditableField[] = useMemo(
     () =>

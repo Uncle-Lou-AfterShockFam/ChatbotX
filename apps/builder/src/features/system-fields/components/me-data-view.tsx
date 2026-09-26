@@ -33,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@chatbotx.io/ui/components/ui/table"
+import { nameInitials } from "@chatbotx.io/utils/initials"
 import {
   AtSign,
   Clock,
@@ -160,7 +161,7 @@ export function MeDataView({ data }: MeDataViewProps) {
                 <AvatarImage alt={contactName} src={data.contact.avatarUrl} />
               ) : null}
               <AvatarFallback>
-                {contactName.slice(0, 2).toUpperCase()}
+                {nameInitials(contactName).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <CardTitle className="truncate text-xl">{contactName}</CardTitle>

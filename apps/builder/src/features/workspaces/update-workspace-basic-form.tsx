@@ -5,6 +5,7 @@ import { Button } from "@chatbotx.io/ui/components/ui/button"
 import { Card, CardContent } from "@chatbotx.io/ui/components/ui/card"
 import { Form } from "@chatbotx.io/ui/components/ui/form"
 import { Input } from "@chatbotx.io/ui/components/ui/input"
+import { nameInitials } from "@chatbotx.io/utils/initials"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useHookFormAction } from "@next-safe-action/adapter-react-hook-form/hooks"
 import { CopyIcon, Loader2Icon } from "lucide-react"
@@ -73,7 +74,7 @@ export function UpdateWorkspaceBasicForm({
   const logoPath = form.watch("logo")
   const logoUrl = getWorkspaceLogoUrl({ logo: logoPath ?? null }, storageUrl)
   const displayName = nameValue?.trim() || workspace.name
-  const initials = displayName.slice(0, 2).toUpperCase()
+  const initials = nameInitials(displayName).toUpperCase()
 
   return (
     <Card>
