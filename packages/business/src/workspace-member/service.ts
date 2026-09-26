@@ -1,9 +1,9 @@
 import {
   and,
+  countWithRelationsFilter,
   type DatabaseClient,
   db,
   eq,
-  relationsFilterToSQL,
   type SQL,
   sql,
 } from "@chatbotx.io/database/client"
@@ -478,15 +478,16 @@ export class WorkspaceMemberService extends BaseService {
   ): Promise<ListWorkspaceMembersResult> {
     const pagination = getPaginationWithDefaults(input)
 
+    const keyword = input.keyword?.trim()
+    const pattern = keyword ? likeContains(keyword) : undefined
+    // One filter for the page AND its count, so they always agree. The count
+    // must resolve the `user` relation: a bare relationsFilterToSQL cannot,
+    // and every keyword search threw (s207). Name only, never email: a
+    // substring match on email would let any caller of this list (an
+    // inbox-scoped token included) spell out a teammate's hidden address.
     const where = {
       workspaceId: input.workspaceId,
-      user: input.keyword
-        ? {
-            name: {
-              ilike: likeContains(input.keyword),
-            },
-          }
-        : undefined,
+      user: pattern ? { name: { ilike: pattern } } : undefined,
     }
 
     const [data, totalRows] = await Promise.all([
@@ -500,10 +501,11 @@ export class WorkspaceMemberService extends BaseService {
           user: true,
         },
       }),
-      db.$count(
-        workspaceMemberModel,
-        relationsFilterToSQL(workspaceMemberModel, where),
-      ),
+      countWithRelationsFilter({
+        table: workspaceMemberModel,
+        tsName: "workspaceMemberModel",
+        where,
+      }),
     ])
     const pageCount = Math.ceil(totalRows / pagination.limit)
 

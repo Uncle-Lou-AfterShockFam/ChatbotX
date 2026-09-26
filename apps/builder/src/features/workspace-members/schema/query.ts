@@ -28,7 +28,7 @@ export const listWorkspaceMembersRequest = basePaginationRequest.extend({
     .nullish()
     .default(null)
     .describe(
-      "Case-insensitive substring match against the member's name or email.",
+      "Case-insensitive substring match against the member's name (never the email).",
     ),
 })
 export type ListWorkspaceMembersRequest = z.infer<

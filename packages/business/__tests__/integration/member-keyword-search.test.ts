@@ -4,8 +4,9 @@
  * Member keyword search (`/space/<id>/agents?keyword=`), against a REAL
  * Postgres. Before s207 every keyword threw `Unknown relational filter field:
  * "user"`: the page count fed the relational `user` filter to a bare
- * relationsFilterToSQL. The keyword matches the member's name OR email
- * (case-insensitive, `%` / `_` literal), and the count agrees with the rows.
+ * relationsFilterToSQL. The keyword matches the member's NAME only
+ * (case-insensitive, `%` / `_` literal; never the email, which the list does
+ * not return and a substring search would leak), and the count agrees.
  *
  * Seeds run under `SET LOCAL session_replication_role = replica` (no
  * Workspace / Tenant rows) and are deleted afterwards. Run with
@@ -66,7 +67,7 @@ async function seedWorkspace() {
   const grace = await seedMember({
     workspaceId,
     name: "Grace Hopper",
-    email: `cobol_fan-${workspaceId}@example.test`,
+    email: `grace-${workspaceId}@example.test`,
   })
   const percent = await seedMember({
     workspaceId,
@@ -119,64 +120,74 @@ afterAll(async () => {
   await db.$client.end()
 })
 
-describe("workspaceMemberService.listPaginated keyword (real Postgres)", () => {
-  test("a name keyword returns the member and a matching page count", async () => {
-    const { workspaceId, ada } = await seedWorkspace()
+describe.skipIf(!databaseUrl)(
+  "workspaceMemberService.listPaginated keyword (real Postgres)",
+  () => {
+    test("a name keyword returns the member and a matching page count", async () => {
+      const { workspaceId, ada } = await seedWorkspace()
 
-    expect(await search(workspaceId, "lovelace")).toEqual({
-      ids: [ada],
-      pageCount: 1,
+      expect(await search(workspaceId, "lovelace")).toEqual({
+        ids: [ada],
+        pageCount: 1,
+      })
     })
-  })
 
-  test("an email keyword matches, including a member with no name", async () => {
-    const { workspaceId, unnamed } = await seedWorkspace()
+    test("an email keyword matches, including a member with no name", async () => {
+      const { workspaceId, unnamed } = await seedWorkspace()
 
-    expect(await search(workspaceId, "NAMELESS-")).toEqual({
-      ids: [unnamed],
-      pageCount: 1,
+      expect(await search(workspaceId, "NAMELESS-")).toEqual({
+        ids: [unnamed],
+        pageCount: 1,
+      })
     })
-  })
 
-  test("the count spans pages and stays inside the workspace", async () => {
-    const { workspaceId, ada, grace, percent, unnamed } = await seedWorkspace()
+    test("the count spans pages and stays inside the workspace", async () => {
+      const { workspaceId, ada, grace, percent, unnamed } =
+        await seedWorkspace()
 
-    // Every seeded email in this workspace carries its id; the lookalike in
-    // the other workspace carries it too and must not be counted.
-    const all = await search(workspaceId, `-${workspaceId}@`)
-    expect(all.pageCount).toBe(2)
-    expect(all.ids).toEqual([ada, grace])
+      // Every seeded email in this workspace carries its id; the lookalike in
+      // the other workspace carries it too and must not be counted.
+      const all = await search(workspaceId, `-${workspaceId}@`)
+      expect(all.pageCount).toBe(2)
+      expect(all.ids).toEqual([ada, grace])
 
-    const everyone = await search(workspaceId, null)
-    expect(everyone.pageCount).toBe(2)
-    expect([ada, grace, percent, unnamed]).toEqual(
-      expect.arrayContaining(everyone.ids),
-    )
-  })
-
-  test("% and _ are literal, not wildcards", async () => {
-    const { workspaceId, grace, percent } = await seedWorkspace()
-
-    expect(await search(workspaceId, "0%")).toEqual({
-      ids: [percent],
-      pageCount: 1,
+      const everyone = await search(workspaceId, null)
+      expect(everyone.pageCount).toBe(2)
+      expect([ada, grace, percent, unnamed]).toEqual(
+        expect.arrayContaining(everyone.ids),
+      )
     })
-    expect(await search(workspaceId, "l_f")).toEqual({
-      ids: [grace],
-      pageCount: 1,
-    })
-    // As wildcards these would match "Ada Lovelace".
-    expect(await search(workspaceId, "a%e")).toEqual({ ids: [], pageCount: 0 })
-    expect(await search(workspaceId, "a_a")).toEqual({ ids: [], pageCount: 0 })
-  })
 
-  test("a blank keyword is no filter; no match is an empty page", async () => {
-    const { workspaceId } = await seedWorkspace()
+    test("% and _ are literal, not wildcards", async () => {
+      const { workspaceId, grace, percent } = await seedWorkspace()
 
-    expect((await search(workspaceId, "   ")).pageCount).toBe(2)
-    expect(await search(workspaceId, "zzz-no-such-member")).toEqual({
-      ids: [],
-      pageCount: 0,
+      expect(await search(workspaceId, "0%")).toEqual({
+        ids: [percent],
+        pageCount: 1,
+      })
+      expect(await search(workspaceId, "l_f")).toEqual({
+        ids: [grace],
+        pageCount: 1,
+      })
+      // As wildcards these would match "Ada Lovelace".
+      expect(await search(workspaceId, "a%e")).toEqual({
+        ids: [],
+        pageCount: 0,
+      })
+      expect(await search(workspaceId, "a_a")).toEqual({
+        ids: [],
+        pageCount: 0,
+      })
     })
-  })
-})
+
+    test("a blank keyword is no filter; no match is an empty page", async () => {
+      const { workspaceId } = await seedWorkspace()
+
+      expect((await search(workspaceId, "   ")).pageCount).toBe(2)
+      expect(await search(workspaceId, "zzz-no-such-member")).toEqual({
+        ids: [],
+        pageCount: 0,
+      })
+    })
+  },
+)
