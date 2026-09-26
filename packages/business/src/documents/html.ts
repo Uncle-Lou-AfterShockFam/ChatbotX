@@ -112,11 +112,13 @@ const DOCUMENT_CSP =
 /**
  * The full page Gotenberg renders: a fixed print stylesheet around the
  * merged body. Self-contained (no remote fonts or images): Gotenberg runs
- * with network fetches denied.
+ * with network fetches denied. `signing: false` leaves `{{signature, r1}}`
+ * text unsized: a page that is never sent for signature (an invoice).
  */
 export const wrapDocumentHtml = (
   title: string,
   body: string,
+  options: { signing?: boolean; extraCss?: string } = {},
 ): string => `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${DOCUMENT_CSP}"><title>${escapeHtml(title)}</title>
 <style>
@@ -129,4 +131,4 @@ table { border-collapse: collapse; width: 100%; } td, th { border: 1px solid #99
 .doc-sign-line { border-top: 1px solid #111; padding-top: 1.5mm; font-size: 9.5pt; color: #444; }
 .doc-ph-sig { font-size: 22pt; color: #fff; white-space: nowrap; }
 .doc-ph-date { font-size: 13pt; color: #fff; white-space: nowrap; }
-</style></head><body>${sizeSigningPlaceholders(body)}</body></html>`
+${options.extraCss ?? ""}</style></head><body>${options.signing === false ? body : sizeSigningPlaceholders(body)}</body></html>`

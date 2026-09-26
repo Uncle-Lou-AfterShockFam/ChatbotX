@@ -136,3 +136,21 @@ test("invoice values on the page are HTML-escaped", async () => {
   expect(html).not.toContain("<b>")
   expect(html).toContain("&lt;script&gt;")
 })
+
+test("a paid page links the receipt PDF; a refunded one does not", async () => {
+  visitCheckout.mockResolvedValue({
+    kind: "paid",
+    invoice: { ...invoice, status: "paid" },
+  })
+  const paid = await (await get()).text()
+  expect(paid).toContain(`href="/pay/${TOKEN}/pdf"`)
+  expect(paid).toContain("Download receipt (PDF)")
+
+  visitCheckout.mockResolvedValue({
+    kind: "paid",
+    invoice: { ...invoice, status: "refunded" },
+  })
+  const refunded = await (await get()).text()
+  expect(refunded).toContain("is paid")
+  expect(refunded).not.toContain("/pdf")
+})

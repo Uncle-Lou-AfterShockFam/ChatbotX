@@ -27,6 +27,7 @@ export type ApiRateLimitScope =
   | "documenso-webhook-rate-limit"
   | "stripe-webhook-rate-limit"
   | "invoice-pay-link-rate-limit"
+  | "invoice-pdf-rate-limit"
 
 type ApiRateLimitInput = {
   scope: ApiRateLimitScope

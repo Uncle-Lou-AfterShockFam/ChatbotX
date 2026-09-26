@@ -5,6 +5,7 @@ import {
   INVOICE_MAX_QUANTITY,
   INVOICE_MEMO_MAX,
   invoiceMethods,
+  invoicePdfUrl,
   invoiceStatuses,
   requestedInvoiceMethods,
 } from "@chatbotx.io/database/partials"
@@ -33,6 +34,7 @@ export const invoiceResource = z.object({
   dealId: z.string().nullable(),
   /** The provider's pay page; null while draft. */
   hostedUrl: z.string().nullable(),
+  /** Stripe's PDF (stripeInvoice) or the hub's `/pay/<token>/pdf` (stripeCheckout, open or paid). */
   pdfUrl: z.string().nullable(),
   dueAt: z.date().nullable(),
   paidAt: z.date().nullable(),
@@ -168,7 +170,7 @@ export const toInvoiceResource = <
   companyId: row.companyId,
   dealId: row.dealId,
   hostedUrl: row.hostedUrl,
-  pdfUrl: row.pdfUrl,
+  pdfUrl: invoicePdfUrl(row),
   dueAt: row.dueAt,
   paidAt: row.paidAt,
   voidedAt: row.voidedAt,

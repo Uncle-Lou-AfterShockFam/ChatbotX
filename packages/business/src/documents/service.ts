@@ -330,10 +330,43 @@ export class DocumentService extends BaseService {
       }
       throw err
     }
-    const rendered = await htmlToPdf(html)
+    return await this.storeRenderedPdf({
+      workspaceId,
+      contactId,
+      templateId,
+      title: template.name,
+      ref,
+      html,
+      field: "templateId",
+      now,
+      tx,
+    })
+  }
+
+  /**
+   * Render `html` and store it as the contact's `ref` document: Gotenberg,
+   * the private object, then the row. The (contactId, ref) unique index
+   * arbitrates a race: the loser deletes its orphan object and returns the
+   * winner's row. Failures throw a `validationException` on `field`. The
+   * caller has already looked up `ref` and passed the generate budget.
+   */
+  async storeRenderedPdf(props: {
+    workspaceId: string
+    contactId: string
+    templateId: string | null
+    title: string
+    ref: string
+    html: string
+    field: string
+    now: Date
+    tx: DatabaseClient
+  }): Promise<{ document: ContactDocumentModel; created: boolean }> {
+    const { workspaceId, contactId, templateId, title, ref, field, now, tx } =
+      props
+    const rendered = await htmlToPdf(props.html)
     if (!rendered.ok) {
       throw validationException(
-        "templateId",
+        field,
         `Could not render the PDF (${rendered.error})`,
       )
     }
@@ -345,7 +378,7 @@ export class DocumentService extends BaseService {
         ContentType: "application/pdf",
       })
     } catch {
-      throw validationException("templateId", "Could not store the PDF")
+      throw validationException(field, "Could not store the PDF")
     }
     let row: ContactDocumentModel | undefined
     try {
@@ -356,7 +389,7 @@ export class DocumentService extends BaseService {
           workspaceId,
           contactId,
           templateId,
-          title: template.name,
+          title,
           ref,
           status: "generated",
           path,
@@ -389,12 +422,13 @@ export class DocumentService extends BaseService {
   }
 
   /** 429-style refusal past DOCUMENT_GENERATE_PER_MINUTE renders in this workspace. */
-  private async assertGenerateBudget(props: {
+  async assertGenerateBudget(props: {
     workspaceId: string
     now: Date
     tx: DatabaseClient
+    field?: string
   }): Promise<void> {
-    const { workspaceId, now, tx } = props
+    const { workspaceId, now, tx, field = "templateId" } = props
     const recent = await tx
       .select({ id: contactDocumentModel.id })
       .from(contactDocumentModel)
@@ -407,13 +441,13 @@ export class DocumentService extends BaseService {
       .limit(DOCUMENT_GENERATE_PER_MINUTE)
     if (recent.length >= DOCUMENT_GENERATE_PER_MINUTE) {
       throw validationException(
-        "templateId",
+        field,
         `Too many documents generated in the last minute (limit ${DOCUMENT_GENERATE_PER_MINUTE}); try again shortly`,
       )
     }
   }
 
-  private async findByRef(props: {
+  async findByRef(props: {
     contactId: string
     ref: string
     tx: DatabaseClient

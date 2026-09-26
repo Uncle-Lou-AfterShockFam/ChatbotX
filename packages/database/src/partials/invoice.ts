@@ -199,3 +199,39 @@ export function decimalStringToMinor(value: string, currency: string): bigint {
   }
   return minor
 }
+
+/**
+ * The hub's own PDF of a stripeCheckout invoice (s210b): an INVOICE while it
+ * is open, a RECEIPT once paid, served at `/pay/<token>/pdf`.
+ */
+export type InvoiceDocumentKind = "invoice" | "receipt"
+
+/** The document an invoice in `status` has, or null (draft, void, ...). */
+const INVOICE_DOCUMENT_KINDS: Partial<
+  Record<InvoiceStatus, InvoiceDocumentKind>
+> = { open: "invoice", paid: "receipt" }
+
+export const invoiceDocumentKind = (
+  status: InvoiceStatus,
+): InvoiceDocumentKind | null => INVOICE_DOCUMENT_KINDS[status] ?? null
+
+const TRAILING_SLASHES = /\/+$/
+
+/**
+ * The PDF link an API/UI row shows: Stripe's for a stripeInvoice, the hub's
+ * `/pay/<token>/pdf` for an open or paid stripeCheckout invoice, else null.
+ */
+export const invoicePdfUrl = (invoice: {
+  method: InvoiceMethod
+  status: InvoiceStatus
+  hostedUrl: string | null
+  pdfUrl: string | null
+}): string | null => {
+  if (invoice.method !== "stripeCheckout") {
+    return invoice.pdfUrl
+  }
+  if (!(invoice.hostedUrl && invoiceDocumentKind(invoice.status))) {
+    return null
+  }
+  return `${invoice.hostedUrl.replace(TRAILING_SLASHES, "")}/pdf`
+}
