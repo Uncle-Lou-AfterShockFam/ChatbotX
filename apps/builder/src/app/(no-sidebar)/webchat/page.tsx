@@ -153,7 +153,8 @@ export default async function WebchatPage(props: WebchatPageProps) {
     <GuestSessionStoreProvider
       accessToken={accessToken}
       config={config}
-      parentOrigin={embeddingOrigin}
+      // Only the host the token binds, never the embedder's path or query.
+      parentOrigin={getHostFromOrigin(embeddingOrigin)}
       serverGuestConversationId={guestConversationId}
       workspaceLogoUrl={workspaceLogoUrl}
     >
