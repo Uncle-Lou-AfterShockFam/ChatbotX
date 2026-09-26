@@ -145,28 +145,6 @@ class SmartDelayService extends BaseService {
     return rows.length > 0
   }
 
-  async markCompleted(props: {
-    tx?: DatabaseClient
-    id: string
-  }): Promise<void> {
-    await this.markStatus({
-      tx: props.tx,
-      id: props.id,
-      status: smartDelayStatuses.enum.completed,
-    })
-  }
-
-  async markCanceled(props: {
-    tx?: DatabaseClient
-    id: string
-  }): Promise<void> {
-    await this.markStatus({
-      tx: props.tx,
-      id: props.id,
-      status: smartDelayStatuses.enum.canceled,
-    })
-  }
-
   async findById(props: {
     tx?: DatabaseClient
     id: string
@@ -723,18 +701,6 @@ class SmartDelayService extends BaseService {
       .where(activeForContacts(workspaceId, contactIds))
       .limit(1)
     return rows.length > 0
-  }
-
-  private async markStatus(props: {
-    tx?: DatabaseClient
-    id: string
-    status: SmartDelayStatus
-  }): Promise<void> {
-    const { tx = db, id, status } = props
-    await tx
-      .update(contactOnSmartDelayModel)
-      .set({ status })
-      .where(eq(contactOnSmartDelayModel.id, id))
   }
 }
 

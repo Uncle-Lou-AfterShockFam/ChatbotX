@@ -229,15 +229,6 @@ describe("smartDelayService", () => {
     )
   })
 
-  test("markCompleted and markCanceled update the row status", async () => {
-    await smartDelayService.markCompleted({ id: "row-1" })
-    expect(mockDbSet).toHaveBeenCalledWith({ status: "completed" })
-
-    await smartDelayService.markCanceled({ id: "row-1" })
-    expect(mockDbSet).toHaveBeenCalledWith({ status: "canceled" })
-    expect(mockDbWhere).toHaveBeenCalledTimes(2)
-  })
-
   test("claimDueRows claims a bounded, lock-skipping batch up to the window", async () => {
     mockDbReturning.mockResolvedValueOnce([
       { ...smartDelayRow, status: "scheduled" },
