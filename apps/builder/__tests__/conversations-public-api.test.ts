@@ -10,7 +10,15 @@ type RouteConfig = {
 
 type CapturedProcedure = {
   route: RouteConfig
-  input?: { safeParse: (value: unknown) => { success: boolean } }
+  input?: {
+    safeParse: (value: unknown) => {
+      success: boolean
+      data?: {
+        contactFilter?: { conditions: { value?: unknown }[] }
+        sort?: unknown
+      }
+    }
+  }
   handler?: (...args: any[]) => any
 }
 
@@ -352,4 +360,43 @@ test.each([
 ])("GET /v1/conversations rejects a malformed JSON %s instead of dropping it", (key, value) => {
   const procedure = findProcedure("GET", "/v1/conversations")
   expect(procedure.input?.safeParse({ [key]: value }).success).toBe(false)
+})
+
+// oRPC's OpenAPIHandler already URL-decodes query values; a second
+// decodeURIComponent threw on a literal `%` (false 422) and rewrote `%41` to
+// `A` (a silent mis-filter). s208.
+describe("GET /v1/conversations parses JSON query values exactly once", () => {
+  const procedure = findProcedure("GET", "/v1/conversations")
+  const filterWith = (value: string) =>
+    JSON.stringify({
+      operator: "and",
+      conditions: [{ field: "fullName", operator: "contains", value }],
+    })
+
+  test.each([
+    "50%",
+    "100% off",
+    "%",
+  ])("a contactFilter value %j is accepted", (value) => {
+    const result = procedure.input?.safeParse({
+      contactFilter: filterWith(value),
+    })
+    expect(result?.success).toBe(true)
+    expect(result?.data?.contactFilter?.conditions[0]?.value).toBe(value)
+  })
+
+  test("a contactFilter value %41 stays literal, never decoded to A", () => {
+    const result = procedure.input?.safeParse({
+      contactFilter: filterWith("%41"),
+    })
+    expect(result?.success).toBe(true)
+    expect(result?.data?.contactFilter?.conditions[0]?.value).toBe("%41")
+  })
+
+  test("a sort id containing % is kept, not silently dropped", () => {
+    const sort = [{ id: "50%", desc: true }]
+    const result = procedure.input?.safeParse({ sort: JSON.stringify(sort) })
+    expect(result?.success).toBe(true)
+    expect(result?.data?.sort).toEqual(sort)
+  })
 })

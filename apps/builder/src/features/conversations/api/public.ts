@@ -39,7 +39,9 @@ function jsonQueryParam<T>(schema: z.ZodType<T>) {
       return
     }
     try {
-      return JSON.parse(decodeURIComponent(String(val)))
+      // oRPC already URL-decoded the query value; decoding again throws on a
+      // literal `%` and rewrites `%41` to `A` (s208).
+      return JSON.parse(String(val))
     } catch {
       ctx.addIssue({
         code: "custom",
