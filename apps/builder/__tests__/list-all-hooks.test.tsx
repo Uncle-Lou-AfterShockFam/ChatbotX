@@ -89,11 +89,19 @@ const members = listRows(1, 121).map((r) => ({
   user: { name: r.name },
 }))
 
-describe.each([
-  ["useTags", mocks.tags, () => useTags("ws1").data],
-  ["useCompanies", mocks.companies, () => useCompanies("ws1").data],
-  ["useAIAgents", mocks.agents, () => useAIAgents("ws1").data],
-])("%s", (_, mock, useData) => {
+type LoadAllCase = [
+  string,
+  typeof mocks.tags,
+  () => unknown[] | undefined,
+  boolean,
+]
+
+describe.each<LoadAllCase>([
+  ["useTags", mocks.tags, () => useTags("ws1").data, false],
+  // Companies and agents stay newest first, as their endpoints defaulted.
+  ["useCompanies", mocks.companies, () => useCompanies("ws1").data, true],
+  ["useAIAgents", mocks.agents, () => useAIAgents("ws1").data, true],
+])("%s", (_, mock, useData, desc) => {
   test("all 120 rows land in 3 calls, not the first 50", async () => {
     mock.mockImplementation(pagedServer(listRows(1, 121)))
 
@@ -101,12 +109,16 @@ describe.each([
 
     await vi.waitFor(() => expect(result.value).toHaveLength(120))
     expect(mock).toHaveBeenCalledTimes(3)
-    expect(mock).toHaveBeenNthCalledWith(3, {
-      workspaceId: "ws1",
-      page: 3,
-      perPage: 50,
-      sort: [{ id: "id", desc: false }],
-    })
+    expect(mock).toHaveBeenNthCalledWith(
+      3,
+      {
+        workspaceId: "ws1",
+        page: 3,
+        perPage: 50,
+        sort: [{ id: "id", desc }],
+      },
+      { signal: expect.any(AbortSignal) },
+    )
   })
 })
 
@@ -133,7 +145,14 @@ test("useContactDeals: every deal, newest first", async () => {
   })
 })
 
-test.each([
+type InvalidateCase = [
+  string,
+  typeof mocks.tags,
+  (workspaceId: string) => { data: unknown[] | undefined },
+  () => () => Promise<void>,
+]
+
+test.each<InvalidateCase>([
   ["tags", mocks.tags, useTags, useInvalidateTags],
   ["companies", mocks.companies, useCompanies, useInvalidateCompanies],
 ])("invalidating %s refetches the paged query", async (_, mock, useList, useInvalidate) => {

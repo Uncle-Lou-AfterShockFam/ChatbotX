@@ -48,11 +48,14 @@ export const createEmailTopicStore = (props: Partial<EmailTopicState>) =>
       set({ loading: true, error: null })
 
       try {
-        const data = await fetchAllListPages((page) =>
-          client.emailTopicsAPI.privateListWorkspaceEmailTopicsAPI({
-            workspaceId,
-            ...page,
-          }),
+        // Newest first, as the endpoint's default order was.
+        const data = await fetchAllListPages(
+          (page) =>
+            client.emailTopicsAPI.privateListWorkspaceEmailTopicsAPI({
+              workspaceId,
+              ...page,
+            }),
+          { desc: true },
         )
 
         set({ emailTopics: data, loading: false })

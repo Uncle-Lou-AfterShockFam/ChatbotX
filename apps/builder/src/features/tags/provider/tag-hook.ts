@@ -16,12 +16,15 @@ export const useTags = (
       type: "query",
       input: { workspaceId: workspaceId ?? "" },
     }),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       fetchAllListPages((page) =>
-        client.tagsAPI.privateListWorkspaceTagsAPI({
-          workspaceId: workspaceId ?? "",
-          ...page,
-        }),
+        client.tagsAPI.privateListWorkspaceTagsAPI(
+          {
+            workspaceId: workspaceId ?? "",
+            ...page,
+          },
+          { signal },
+        ),
       ),
     enabled: Boolean(workspaceId) && (options?.enabled ?? true),
   })

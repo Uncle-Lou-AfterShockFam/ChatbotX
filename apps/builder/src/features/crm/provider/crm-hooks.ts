@@ -138,14 +138,17 @@ export const useContactDeals = (workspaceId: string, contactId: string) =>
       type: "query",
       input: { workspaceId, contactId },
     }),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       fetchAllListPages(
         (page) =>
-          client.dealsAPI.privateListWorkspaceDealsAPI({
-            workspaceId,
-            contactId,
-            ...page,
-          }),
+          client.dealsAPI.privateListWorkspaceDealsAPI(
+            {
+              workspaceId,
+              contactId,
+              ...page,
+            },
+            { signal },
+          ),
         { desc: true },
       ),
   })

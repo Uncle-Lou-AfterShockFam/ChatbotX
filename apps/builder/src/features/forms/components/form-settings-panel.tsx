@@ -67,12 +67,15 @@ export function FormSettingsPanel(props: {
       type: "query",
       input: { workspaceId: props.workspaceId },
     }),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       fetchAllListPages((page) =>
-        client.inboxesAPI.listInboxesAuthenticatedAPI({
-          workspaceId: props.workspaceId,
-          ...page,
-        }),
+        client.inboxesAPI.listInboxesAuthenticatedAPI(
+          {
+            workspaceId: props.workspaceId,
+            ...page,
+          },
+          { signal },
+        ),
       ),
     select: (rows) => rows.filter((inbox) => inbox.channel === "api"),
   })

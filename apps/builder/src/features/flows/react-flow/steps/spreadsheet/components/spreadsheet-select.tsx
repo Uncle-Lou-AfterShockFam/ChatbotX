@@ -30,12 +30,15 @@ export const SpreadsheetSelect = ({
       type: "query",
       input: { workspaceId },
     }),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       fetchAllListPages((page) =>
-        client.spreadsheetsAPI.listSpreadsheetsAuthenticatedAPI({
-          workspaceId,
-          ...page,
-        }),
+        client.spreadsheetsAPI.listSpreadsheetsAuthenticatedAPI(
+          {
+            workspaceId,
+            ...page,
+          },
+          { signal },
+        ),
       ),
   })
   const options = (data ?? []).map((spreadsheet) => ({

@@ -12,12 +12,17 @@ export const useAIAgents = (workspaceId: string | undefined) =>
       type: "query",
       input: { workspaceId: workspaceId ?? "" },
     }),
-    queryFn: () =>
-      fetchAllListPages((page) =>
-        client.aiAgentsAPI.listAIAgentsAPI({
-          workspaceId: workspaceId ?? "",
-          ...page,
-        }),
+    queryFn: ({ signal }) =>
+      fetchAllListPages(
+        (page) =>
+          client.aiAgentsAPI.listAIAgentsAPI(
+            {
+              workspaceId: workspaceId ?? "",
+              ...page,
+            },
+            { signal },
+          ),
+        { desc: true },
       ),
     enabled: Boolean(workspaceId),
   })

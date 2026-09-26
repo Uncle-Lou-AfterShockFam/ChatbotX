@@ -37,7 +37,7 @@ describe("getAllEmailTopics", () => {
         workspaceId: "workspace-1",
         page: 1,
         perPage: 50,
-        sort: [{ id: "id", desc: false }],
+        sort: [{ id: "id", desc: true }],
       },
     )
     expect(store.getState().loading).toBe(false)

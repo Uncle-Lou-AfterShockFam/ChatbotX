@@ -16,12 +16,17 @@ export const useCompanies = (
       type: "query",
       input: { workspaceId: workspaceId ?? "" },
     }),
-    queryFn: () =>
-      fetchAllListPages((page) =>
-        client.companiesAPI.privateListWorkspaceCompaniesAPI({
-          workspaceId: workspaceId ?? "",
-          ...page,
-        }),
+    queryFn: ({ signal }) =>
+      fetchAllListPages(
+        (page) =>
+          client.companiesAPI.privateListWorkspaceCompaniesAPI(
+            {
+              workspaceId: workspaceId ?? "",
+              ...page,
+            },
+            { signal },
+          ),
+        { desc: true },
       ),
     enabled: Boolean(workspaceId) && (options?.enabled ?? true),
   })

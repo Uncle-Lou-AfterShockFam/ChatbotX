@@ -49,12 +49,15 @@ export const useOwnerOptions = (
         input: { workspaceId },
       },
     ),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       fetchAllListPages((page) =>
-        client.workspaceMembersAPI.listWorkspaceMembersAuthenticatedAPI({
-          workspaceId,
-          ...page,
-        }),
+        client.workspaceMembersAPI.listWorkspaceMembersAuthenticatedAPI(
+          {
+            workspaceId,
+            ...page,
+          },
+          { signal },
+        ),
       ),
     enabled: options?.enabled ?? true,
   })
