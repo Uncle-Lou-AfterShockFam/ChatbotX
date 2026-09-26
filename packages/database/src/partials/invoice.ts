@@ -215,8 +215,6 @@ export const invoiceDocumentKind = (
   status: InvoiceStatus,
 ): InvoiceDocumentKind | null => INVOICE_DOCUMENT_KINDS[status] ?? null
 
-const TRAILING_SLASHES = /\/+$/
-
 /**
  * The PDF link an API/UI row shows: Stripe's for a stripeInvoice, the hub's
  * `/pay/<token>/pdf` for an open or paid stripeCheckout invoice, else null.
@@ -233,5 +231,5 @@ export const invoicePdfUrl = (invoice: {
   if (!(invoice.hostedUrl && invoiceDocumentKind(invoice.status))) {
     return null
   }
-  return `${invoice.hostedUrl.replace(TRAILING_SLASHES, "")}/pdf`
+  return `${invoice.hostedUrl}/pdf`
 }

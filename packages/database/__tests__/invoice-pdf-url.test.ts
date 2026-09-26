@@ -48,14 +48,6 @@ describe("invoicePdfUrl", () => {
         pdfUrl: null,
       }),
     ).toBe(`${pay}/pdf`)
-    expect(
-      invoicePdfUrl({
-        method: "stripeCheckout",
-        status,
-        hostedUrl: `${pay}/`,
-        pdfUrl: null,
-      }),
-    ).toBe(`${pay}/pdf`)
   })
   test.each([
     "draft",

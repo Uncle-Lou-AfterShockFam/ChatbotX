@@ -92,6 +92,8 @@ vi.mock("@chatbotx.io/database/client", () => ({
   eq: (f: unknown, v: unknown) => ({ f, v }),
   gte: (f: unknown, v: unknown) => ({ gte: [f, v] }),
   desc: (f: unknown) => ({ desc: f }),
+  like: (f: unknown, v: unknown) => ({ like: [f, v] }),
+  notLike: (f: unknown, v: unknown) => ({ notLike: [f, v] }),
 }))
 vi.mock("@chatbotx.io/database/schema", () => ({
   contactDocumentModel: { contactId: "contactId", ref: "ref" },
@@ -131,6 +133,7 @@ const PUBLIC_PREFIX_RE = /^public\//
 const ARCHIVED_RE = /archived/
 const MAY_NOT_CONTAIN_RE = /may not contain/
 const TOO_MANY_RE = /Too many documents/
+const RESERVED_RE = /reserved/
 const DUPLICATE_RE = /duplicate key/
 const RENDER_TIMEOUT_RE = /Could not render the PDF \(timeout\)/
 const WS = "11701868563365888"
@@ -427,6 +430,18 @@ describe("documentService hardening (skeptic + blind probe s197c)", () => {
     await expect(
       documentService.generateForContact({ ...base, ref: "busy" }),
     ).rejects.toThrow(TOO_MANY_RE)
+    expect(m.htmlToPdf).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    "invoice:501:receipt",
+    "invoice:501:invoice",
+    "invoice:x",
+  ])("the hub-reserved ref %s is refused before any lookup (s210b)", async (ref) => {
+    await expect(
+      documentService.generateForContact({ ...base, ref }),
+    ).rejects.toThrow(RESERVED_RE)
+    expect(m.state.calls).toEqual([])
     expect(m.htmlToPdf).not.toHaveBeenCalled()
   })
 

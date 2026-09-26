@@ -248,7 +248,7 @@ describe("ensureInvoiceDocument", () => {
       kind: "receipt",
     })
     expect(m.assertGenerateBudget).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceId: "11", field: "invoice" }),
+      expect.objectContaining({ workspaceId: "11", kind: "invoice" }),
     )
     const call = m.storeRenderedPdf.mock.calls[0]?.[0]
     expect(call).toMatchObject({

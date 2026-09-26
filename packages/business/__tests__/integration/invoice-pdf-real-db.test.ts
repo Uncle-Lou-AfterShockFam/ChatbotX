@@ -75,6 +75,7 @@ vi.mock("../../src/audit/dispatcher", () => ({
 const databaseUrl = requireRealDatabaseUrl()
 
 const { visitInvoicePdf } = await import("../../src/invoice/document")
+const { documentService } = await import("../../src/documents/service")
 
 let nextId = 9_210_000_000_000_000n
 function mintId(): string {
@@ -115,6 +116,24 @@ async function seedCheckoutInvoice(status: "open" | "paid") {
     VALUES (${mintId()}, ${invoiceId}, 0, 'Consult', 2, '5.00', '10.00'),
            (${mintId()}, ${invoiceId}, 1, 'Report', 1, '2.50', '2.50')`)
   return { workspaceId, contactId, invoiceId }
+}
+
+/** `count` documents created now on the contact, refs `<prefix><n>`. */
+async function seedRecentDocuments(
+  workspaceId: string,
+  contactId: string,
+  prefix: string,
+  count: number,
+) {
+  for (let i = 0; i < count; i += 1) {
+    const id = mintId()
+    await asReplica(sql`
+      INSERT INTO "ContactDocument" (id, "workspaceId", "contactId", title,
+        ref, status, path, "fileSize", token, "tokenExpiresAt")
+      VALUES (${id}, ${workspaceId}, ${contactId}, 'seed', ${`${prefix}${i}`},
+        'generated', ${`workspaces/${workspaceId}/documents/${contactId}/${id}.pdf`},
+        1, ${`RDB${id}`}, now() + interval '1 day')`)
+  }
 }
 
 async function documentRows(contactId: string) {
@@ -202,6 +221,33 @@ describe.skipIf(!databaseUrl)(
       expect(again).toMatchObject({ kind: "pdf", title: "Receipt #3" })
       expect(m.renders).toBe(renders)
       expect(await documentRows(contactId)).toHaveLength(1)
+    })
+
+    test("template renders do not spend the invoice budget, and invoice renders do not spend the template one", async () => {
+      const { workspaceId, contactId } = await seedCheckoutInvoice("open")
+      const now = new Date()
+      // At its TEMPLATE limit, the workspace still renders the invoice PDF.
+      await seedRecentDocuments(workspaceId, contactId, "manual:", 30)
+      await expect(
+        documentService.assertGenerateBudget({ workspaceId, now, tx: db }),
+      ).rejects.toThrow("Too many documents")
+      expect((await visitInvoicePdf(TOKEN, SERVE)).kind).toBe("pdf")
+      // At its INVOICE limit (29 seeded + the one above), templates still generate.
+      await seedRecentDocuments(workspaceId, contactId, "invoice:seed", 29)
+      await expect(
+        documentService.assertGenerateBudget({
+          workspaceId,
+          now,
+          tx: db,
+          kind: "invoice",
+        }),
+      ).rejects.toThrow("Too many documents")
+      await asReplica(sql`
+        DELETE FROM "ContactDocument"
+         WHERE "workspaceId" = ${workspaceId} AND ref LIKE 'manual:%'`)
+      await expect(
+        documentService.assertGenerateBudget({ workspaceId, now, tx: db }),
+      ).resolves.toBeUndefined()
     })
   },
 )

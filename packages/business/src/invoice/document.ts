@@ -1,5 +1,6 @@
 import { and, db, eq } from "@chatbotx.io/database/client"
 import {
+  INVOICE_DOCUMENT_REF_PREFIX,
   type InvoiceDocumentKind,
   invoiceDocumentKind,
 } from "@chatbotx.io/database/partials"
@@ -26,9 +27,9 @@ import { isInvoicePayToken } from "./checkout-provider"
 export const invoiceDocumentRef = (
   invoiceId: string,
   kind: InvoiceDocumentKind,
-): string => `invoice:${invoiceId}:${kind}`
+): string => `${INVOICE_DOCUMENT_REF_PREFIX}${invoiceId}:${kind}`
 
-export const invoiceDocumentTitle = (
+const invoiceDocumentTitle = (
   number: number,
   kind: InvoiceDocumentKind,
 ): string => `${kind === "receipt" ? "Receipt" : "Invoice"} #${number}`
@@ -176,7 +177,7 @@ export async function ensureInvoiceDocument(props: {
     workspaceId: invoice.workspaceId,
     now,
     tx: db,
-    field: "invoice",
+    kind: "invoice",
   })
   const { document } = await documentService.storeRenderedPdf({
     workspaceId: invoice.workspaceId,

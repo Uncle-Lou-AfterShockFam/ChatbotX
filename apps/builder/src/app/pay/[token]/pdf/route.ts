@@ -12,6 +12,9 @@ import { loadServableWorkspace } from "@/lib/workspace/load-servable-workspace"
  * same credential as the pay link. Open -> the invoice, paid -> the receipt;
  * rendered once and stored on the contact, served from here (never a
  * redirect to storage). Never touches Stripe.
+ * The link does not expire (unlike the row's own 30-day `/f/<token>`): a
+ * receipt must stay reachable from the pay link the person already has; it
+ * stops when the invoice leaves open/paid (void, refunded) or is deleted.
  */
 type RouteContext = { params: Promise<{ token: string }> }
 
