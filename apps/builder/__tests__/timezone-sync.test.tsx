@@ -85,4 +85,15 @@ describe("TimezoneSync", () => {
     expect(setUserTimezone).toHaveBeenCalledTimes(1)
     expect(refresh).toHaveBeenCalledTimes(1)
   })
+
+  test("does nothing inside an iframe: the cookie cannot land there and a refresh re-renders with the hub as referer (s209)", async () => {
+    const top = vi.spyOn(window, "top", "get").mockReturnValue({} as Window)
+    try {
+      await render(otherTimezone)
+      expect(setUserTimezone).not.toHaveBeenCalled()
+      expect(refresh).not.toHaveBeenCalled()
+    } finally {
+      top.mockRestore()
+    }
+  })
 })

@@ -9,16 +9,12 @@ import { WebchatMessageInput } from "./webchat-message-input"
 import { WebchatMessageList } from "./webchat-message-list"
 import { WebchatRealtime } from "./webchat-realtime"
 
-export const WebchatWrapper = ({
-  referral,
-  parentOrigin,
-}: {
-  referral?: string
-  parentOrigin?: string | null
-}) => {
-  const { guestConversationId, accessToken, config } = useGuestSessionStore(
-    (state) => state,
-  )
+export const WebchatWrapper = ({ referral }: { referral?: string }) => {
+  // `parentOrigin` comes from the store, frozen at mount beside the token it
+  // was minted with: a later server re-render (TimezoneSync's refresh on a
+  // top-level open) carries the hub as Referer and must not change it (s209).
+  const { guestConversationId, accessToken, config, parentOrigin } =
+    useGuestSessionStore((state) => state)
 
   const brandColorStyle = {
     "--primary": config.brandColor,

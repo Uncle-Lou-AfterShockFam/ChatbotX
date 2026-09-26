@@ -67,17 +67,3 @@ export const getParentOriginFromUrl = (url: string | null | undefined) => {
     return null
   }
 }
-
-export const getClientEmbeddingOrigin = () => {
-  if (typeof window === "undefined") {
-    return null
-  }
-
-  const searchParams = new URLSearchParams(window.location.search)
-  return (
-    searchParams.get(PARENT_ORIGIN_PARAM) ||
-    searchParams.get("domain") ||
-    document.referrer ||
-    null
-  )
-}
