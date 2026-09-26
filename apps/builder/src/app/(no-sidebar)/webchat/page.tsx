@@ -153,6 +153,7 @@ export default async function WebchatPage(props: WebchatPageProps) {
     <GuestSessionStoreProvider
       accessToken={accessToken}
       config={config}
+      parentOrigin={embeddingOrigin}
       serverGuestConversationId={guestConversationId}
       workspaceLogoUrl={workspaceLogoUrl}
     >

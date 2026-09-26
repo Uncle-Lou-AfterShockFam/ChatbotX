@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import type { IntegrationWebchatModel } from "@chatbotx.io/database/types"
+import ky from "ky"
 import { beforeEach, describe, expect, test, vi } from "vitest"
 import {
   getParentOriginFromUrl,
@@ -188,6 +189,78 @@ describe("webchat guest session store", () => {
         buildGuestStorageKey("workspace-1", "webchat-2"),
       ),
     ).toBe(true)
+  })
+})
+
+describe("webchat guest requests carry the server's embedding origin (s209)", () => {
+  // The token is minted from the page request's Referer; the send action
+  // gets that same value. History and postbacks must present it too, not
+  // whatever the iframe's own URL or document.referrer say.
+  const SERVER_ORIGIN = "https://shop.example/"
+  const IFRAME_URL =
+    "https://builder.test/webchat?parentOrigin=https%3A%2F%2Fother.example"
+
+  beforeEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+    vi.stubGlobal("window", { location: new URL(IFRAME_URL) })
+    vi.stubGlobal("document", { referrer: "https://other.example/" })
+  })
+
+  const spyGet = () =>
+    vi.spyOn(ky, "get").mockReturnValue({
+      json: async () => ({ data: [], nextCursor: null }),
+    } as never)
+
+  test("history GET sends the server origin as parentOrigin", async () => {
+    const get = spyGet()
+    const store = createGuestSessionStore(
+      createWebchatConfig(),
+      "token",
+      undefined,
+      SERVER_ORIGIN,
+    )
+
+    await store.getState().loadMoreMessages("workspace-1:guest", 20)
+
+    const url = new URL(String(get.mock.calls[0]?.[0]), "https://builder.test")
+    expect(url.searchParams.get("parentOrigin")).toBe(SERVER_ORIGIN)
+  })
+
+  test("history GET omits parentOrigin when the page had no referer", async () => {
+    const get = spyGet()
+    const store = createGuestSessionStore(
+      createWebchatConfig(),
+      "token",
+      undefined,
+      null,
+    )
+
+    await store.getState().loadMoreMessages("workspace-1:guest", 20)
+
+    const url = new URL(String(get.mock.calls[0]?.[0]), "https://builder.test")
+    expect(url.searchParams.has("parentOrigin")).toBe(false)
+  })
+
+  test("a postback sends the server origin as parentOrigin", async () => {
+    const post = vi.spyOn(ky, "post").mockResolvedValue({} as never)
+    const store = createGuestSessionStore(
+      createWebchatConfig(),
+      "token",
+      undefined,
+      SERVER_ORIGIN,
+    )
+
+    await store.getState().sendPostback({
+      buttonType: "postback",
+      label: "Yes",
+      postback: "YES",
+    } as never)
+
+    const options = post.mock.calls[0]?.[1] as {
+      json: { parentOrigin?: string }
+    }
+    expect(options.json.parentOrigin).toBe(SERVER_ORIGIN)
   })
 })
 

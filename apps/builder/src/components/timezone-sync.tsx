@@ -22,7 +22,10 @@ export function TimezoneSync({ timezone }: { timezone: string }) {
   const synced = useRef(false)
 
   useEffect(() => {
-    if (synced.current) {
+    // Never inside an iframe (the webchat widget): a third-party frame
+    // cannot keep the cookie, and the refresh would re-render the embedded
+    // page with the hub itself as the referer (s209).
+    if (synced.current || window.top !== window.self) {
       return
     }
     const browserTimezone = getBrowserTimezone()

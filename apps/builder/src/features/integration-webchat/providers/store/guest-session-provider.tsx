@@ -24,6 +24,8 @@ export type GuestSessionStoreProviderProps = {
   children: ReactNode
   config: WebchatClientConfig
   accessToken?: string | null
+  /** The server-seen embedding origin; see GuestSessionState.parentOrigin. */
+  parentOrigin?: string | null
   serverGuestConversationId: string
   /** Resolved server-side; see GuestSessionState.workspaceLogoUrl. */
   workspaceLogoUrl?: string
@@ -33,6 +35,7 @@ export const GuestSessionStoreProvider = ({
   children,
   config,
   accessToken = null,
+  parentOrigin = null,
   serverGuestConversationId,
   workspaceLogoUrl,
 }: GuestSessionStoreProviderProps) => {
@@ -42,6 +45,7 @@ export const GuestSessionStoreProvider = ({
       config,
       accessToken,
       workspaceLogoUrl,
+      parentOrigin,
     )
   }
 
