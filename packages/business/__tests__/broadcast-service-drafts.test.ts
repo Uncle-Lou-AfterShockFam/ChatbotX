@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest"
+import { EXCLUDED_FIELD_CONDITION } from "@chatbotx.io/database/queries/contact-filter/excluded-field"
 
 const findManyBroadcast = vi.fn()
 const findFirstBroadcast = vi.fn()
@@ -151,6 +152,66 @@ beforeEach(() => {
   mockDispatchAuditRecord.mockClear()
 })
 
+describe("broadcastService.scheduleDraft refuses a stored filter it cannot send (s208)", () => {
+  const schedule = (canViewEmailAndPhone: boolean) =>
+    broadcastService.scheduleDraft({
+      workspaceId: "ws-1",
+      broadcastId: "b-1",
+      schedulesType: "now",
+      schedulesAt: new Date(),
+      canViewEmailAndPhone,
+    })
+
+  test.each([
+    ["a malformed operator", { operator: "xor", conditions: [] }],
+    ["an unknown field", { operator: "and", conditions: [{ field: "nope" }] }],
+    ["a non-object", "{bad"],
+  ])("%s rejects with a contactFilter 422 and no launch audit", async (_label, contactFilter) => {
+    updateReturning.mockResolvedValue([{ id: "b-1", contactFilter }])
+
+    await expect(schedule(true)).rejects.toMatchObject({
+      field: "contactFilter",
+      httpStatusCode: 422,
+    })
+    expect(mockDispatchAuditRecord).not.toHaveBeenCalled()
+  })
+
+  test("an email/phone condition rejects a member who cannot use it", async () => {
+    const contactFilter = {
+      operator: "and",
+      conditions: [{ field: "email", operator: "isNotEmpty" }],
+    }
+    updateReturning.mockResolvedValue([{ id: "b-1", contactFilter }])
+    pruneFilter.mockImplementation(() => ({
+      operator: "and",
+      conditions: [EXCLUDED_FIELD_CONDITION],
+    }))
+
+    await expect(schedule(false)).rejects.toMatchObject({
+      field: "contactFilter",
+      httpStatusCode: 422,
+    })
+    expect(pruneFilter).toHaveBeenCalledWith(contactFilter, false)
+    expect(mockDispatchAuditRecord).not.toHaveBeenCalled()
+  })
+
+  test("control: a valid filter and a null (everyone) filter both schedule", async () => {
+    updateReturning.mockResolvedValueOnce([
+      {
+        id: "b-1",
+        contactFilter: {
+          operator: "and",
+          conditions: [{ field: "fullName", operator: "isNotEmpty" }],
+        },
+      },
+    ])
+    await expect(schedule(false)).resolves.toEqual({ id: "b-1" })
+
+    updateReturning.mockResolvedValueOnce([{ id: "b-1", contactFilter: null }])
+    await expect(schedule(false)).resolves.toEqual({ id: "b-1" })
+  })
+})
+
 describe("broadcastService.scheduleDraft", () => {
   test("moves a draft to scheduled, scoped to the workspace and draft status", async () => {
     updateReturning.mockResolvedValue([{ id: "b-1" }])
@@ -161,6 +222,7 @@ describe("broadcastService.scheduleDraft", () => {
       broadcastId: "b-1",
       schedulesType: "future",
       schedulesAt,
+      canViewEmailAndPhone: true,
     })
 
     expect(result).toEqual({ id: "b-1" })
@@ -188,6 +250,7 @@ describe("broadcastService.scheduleDraft", () => {
       workspaceId: "ws-1",
       broadcastId: "b-1",
       schedulesType: "now",
+      canViewEmailAndPhone: true,
       schedulesAt: new Date("2026-09-01T09:00:00Z"),
     })
 
@@ -204,6 +267,7 @@ describe("broadcastService.scheduleDraft", () => {
         workspaceId: "ws-1",
         broadcastId: "b-1",
         schedulesType: "now",
+        canViewEmailAndPhone: true,
         schedulesAt: new Date(),
       }),
     ).rejects.toThrow("Broadcast is not a draft")
@@ -221,6 +285,7 @@ describe("broadcastService.scheduleDraft", () => {
       workspaceId: "ws-1",
       broadcastId: "b-1",
       schedulesType: "now",
+      canViewEmailAndPhone: true,
       schedulesAt: new Date(),
     })
 
@@ -244,6 +309,7 @@ describe("broadcastService.scheduleDraft", () => {
       workspaceId: "ws-1",
       broadcastId: "b-1",
       schedulesType: "now",
+      canViewEmailAndPhone: true,
       schedulesAt: new Date(),
     })
 
@@ -261,6 +327,7 @@ describe("broadcastService.scheduleDraft", () => {
       workspaceId: "ws-1",
       broadcastId: "b-1",
       schedulesType: "now",
+      canViewEmailAndPhone: true,
       schedulesAt: new Date(),
     })
 
@@ -284,6 +351,7 @@ describe("broadcastService.scheduleDraft", () => {
         workspaceId: "ws-1",
         broadcastId: "b-1",
         schedulesType: "now",
+        canViewEmailAndPhone: true,
         schedulesAt: new Date(),
       }),
     ).rejects.toThrow("Select a template or flow for at least one page")
@@ -302,6 +370,7 @@ describe("broadcastService.scheduleDraft", () => {
         workspaceId: "ws-1",
         broadcastId: "b-1",
         schedulesType: "now",
+        canViewEmailAndPhone: true,
         schedulesAt: new Date(),
       }),
     ).rejects.toThrow("Select a template or flow for at least one page")
@@ -317,6 +386,7 @@ describe("broadcastService.scheduleDraft", () => {
         workspaceId: "ws-1",
         broadcastId: "b-1",
         schedulesType: "now",
+        canViewEmailAndPhone: true,
         schedulesAt: new Date(),
       }),
     ).rejects.toThrow("Select a template or flow for at least one page")
@@ -330,6 +400,7 @@ describe("broadcastService.scheduleDraft", () => {
       workspaceId: "ws-1",
       broadcastId: "b-1",
       schedulesType: "now",
+      canViewEmailAndPhone: true,
       schedulesAt: new Date(),
     })
 
