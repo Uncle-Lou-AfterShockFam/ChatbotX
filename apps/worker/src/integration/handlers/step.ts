@@ -240,6 +240,7 @@ async function handleWait({
   metadata,
   sendFrom,
   appointmentId,
+  runStartedAt,
 }: ExecuteStepProps<WaitStepSchema>): Promise<ExecuteStepResult> {
   if (!(targetId && step)) {
     return { status: "skip", result: null }
@@ -294,6 +295,7 @@ async function handleWait({
       return { status: "skip", result: null }
     }
     await scheduleSmartDelayResume({
+      runStartedAt,
       type: smartDelayTypes.enum.waitForEvent,
       triggerAt,
       workspaceId: conversation.workspaceId,
@@ -322,6 +324,7 @@ async function handleWait({
   }
 
   await scheduleSmartDelayResume({
+    runStartedAt,
     type: smartDelayTypes.enum.waitNode,
     triggerAt,
     workspaceId: conversation.workspaceId,

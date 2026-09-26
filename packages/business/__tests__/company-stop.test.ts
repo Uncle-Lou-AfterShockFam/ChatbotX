@@ -10,6 +10,7 @@ const {
   mockRemoveSequences,
   mockCancelActiveForContacts,
   mockHasActiveForContacts,
+  mockHasActiveForCompany,
   mockQueueRemove,
   mockMarkBroadcastFailed,
   mockEnsureTag,
@@ -50,6 +51,7 @@ const {
     mockRemoveSequences: vi.fn(),
     mockCancelActiveForContacts: vi.fn(),
     mockHasActiveForContacts: vi.fn(async () => false),
+    mockHasActiveForCompany: vi.fn(async () => false),
     mockQueueRemove: vi.fn(),
     mockMarkBroadcastFailed: vi.fn(),
     mockEnsureTag: vi.fn(),
@@ -102,6 +104,7 @@ vi.mock("../src/smart-delay/service", () => ({
   smartDelayService: {
     cancelActiveForContacts: mockCancelActiveForContacts,
     hasActiveForContacts: mockHasActiveForContacts,
+    hasActiveForCompany: mockHasActiveForCompany,
   },
 }))
 vi.mock("../src/broadcast/service", () => ({
@@ -120,6 +123,7 @@ const { stopCompany, stopCompanyForContact } = await import(
 
 const WS = "ws-1"
 const COMPANY = "company-1"
+const STOPPED_AT = new Date("2026-09-20T12:00:00.000Z")
 
 function companyRow(
   overrides: Partial<{ stoppedAt: Date | null; stopOnReply: boolean }> = {},
@@ -140,6 +144,7 @@ describe("stopCompany", () => {
     mockRemoveSequences.mockResolvedValue([{ id: "d1" }, { id: "d2" }])
     mockCancelActiveForContacts.mockResolvedValue([])
     mockHasActiveForContacts.mockResolvedValue(false)
+    mockHasActiveForCompany.mockResolvedValue(false)
     mockQueueRemove.mockResolvedValue(undefined)
     mockMarkBroadcastFailed.mockResolvedValue(1)
     mockEnsureTag.mockResolvedValue("tag-stopped")
@@ -203,7 +208,7 @@ describe("stopCompany", () => {
     expect(mockAudit).toHaveBeenCalledTimes(1)
   })
 
-  test("already stopped: no-op, nothing else touched", async () => {
+  test("already stopped, no firable wait left: one join check, no contact list", async () => {
     mockTxSelectFor.mockResolvedValue([companyRow({ stoppedAt: new Date() })])
     const result = await stopCompany({
       workspaceId: WS,
@@ -212,12 +217,62 @@ describe("stopCompany", () => {
     })
     expect(result).toEqual({ status: "already_stopped", companyId: COMPANY })
     expect(mockTxUpdateWhere).not.toHaveBeenCalled()
+    expect(mockHasActiveForCompany).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: WS, companyId: COMPANY }),
+    )
     expect(mockListContactIds).not.toHaveBeenCalled()
+    expect(mockCancelActiveForContacts).not.toHaveBeenCalled()
+    expect(mockRemoveSequences).not.toHaveBeenCalled()
     expect(mockBulkAttach).not.toHaveBeenCalled()
   })
 
-  test("already stopped + force: re-runs the cascade", async () => {
+  test("already stopped with a wait a partial stop left behind: the smart-delay phase re-runs", async () => {
+    mockTxSelectFor.mockResolvedValue([companyRow({ stoppedAt: STOPPED_AT })])
+    mockHasActiveForCompany.mockResolvedValueOnce(true)
+    mockCancelActiveForContacts
+      .mockResolvedValueOnce([{ id: "sd-left", triggerAt: new Date(0) }])
+      .mockResolvedValue([])
+    const result = await stopCompany({
+      workspaceId: WS,
+      companyId: COMPANY,
+      reason: "contact_replied",
+    })
+    expect(result).toEqual({ status: "already_stopped", companyId: COMPANY })
+    // Only rows created up to the stop: a reaction flow keeps its waits.
+    expect(mockHasActiveForCompany).toHaveBeenCalledWith({
+      workspaceId: WS,
+      companyId: COMPANY,
+      createdBefore: STOPPED_AT,
+    })
+    expect(mockCancelActiveForContacts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: WS,
+        contactIds: ["c-1", "c-2"],
+        createdBefore: STOPPED_AT,
+      }),
+    )
+    expect(mockRemoveSequences).not.toHaveBeenCalled()
+    expect(mockBulkAttach).not.toHaveBeenCalled()
+  })
+
+  test("a failing re-sweep is logged and still answers already_stopped", async () => {
     mockTxSelectFor.mockResolvedValue([companyRow({ stoppedAt: new Date() })])
+    mockHasActiveForCompany.mockRejectedValueOnce(new Error("db down"))
+    const result = await stopCompany({
+      workspaceId: WS,
+      companyId: COMPANY,
+      reason: "api",
+    })
+    expect(result).toEqual({ status: "already_stopped", companyId: COMPANY })
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: "smart-delays", companyId: COMPANY }),
+      "company-stop: cascade phase failed",
+    )
+    expect(mockCancelActiveForContacts).not.toHaveBeenCalled()
+  })
+
+  test("already stopped + force: re-runs the cascade, sparing waits created after the stop", async () => {
+    mockTxSelectFor.mockResolvedValue([companyRow({ stoppedAt: STOPPED_AT })])
     const result = await stopCompany({
       workspaceId: WS,
       companyId: COMPANY,
@@ -226,6 +281,16 @@ describe("stopCompany", () => {
     })
     expect(result.status).toBe("stopped")
     expect(mockBulkAttach).toHaveBeenCalledTimes(1)
+    expect(mockCancelActiveForContacts).toHaveBeenCalledWith(
+      expect.objectContaining({ createdBefore: STOPPED_AT }),
+    )
+  })
+
+  test("a first stop cancels every active wait (nothing post-stop exists yet)", async () => {
+    await stopCompany({ workspaceId: WS, companyId: COMPANY, reason: "api" })
+    expect(mockCancelActiveForContacts).toHaveBeenCalledWith(
+      expect.objectContaining({ createdBefore: undefined }),
+    )
   })
 
   test("stopOnReply off: a reply or the tag is skipped, the API and a deal still stop", async () => {

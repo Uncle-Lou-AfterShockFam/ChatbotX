@@ -8,7 +8,10 @@ import { normalizeError } from "universal-error-normalizer"
 import { logger } from "../../lib/logger"
 import { type ClaimCheck, ClaimLostError } from "./claim-lost"
 import { runFlowNode } from "./flow"
-import type { buildSendFlowResumeJob } from "./smart-delay"
+import {
+  type buildSendFlowResumeJob,
+  wasCompanyStoppedSince,
+} from "./smart-delay"
 
 /**
  * How often an in-flight run renews its claim. The scanner sweeps `running`
@@ -64,7 +67,10 @@ async function withClaimWriteRetry<T>(write: () => Promise<T>): Promise<T> {
  * lands: that step, and whatever it dispatches, can run twice.
  */
 export async function runClaimedSmartDelay(
-  claimed: Pick<SmartDelayRow, "id" | "claimGeneration">,
+  claimed: Pick<
+    SmartDelayRow,
+    "id" | "claimGeneration" | "workspaceId" | "contactInboxId" | "createdAt"
+  >,
   resumeJob: ReturnType<typeof buildSendFlowResumeJob>,
   parentJob?: Job,
 ): Promise<void> {
@@ -99,9 +105,27 @@ export async function runClaimedSmartDelay(
     }
   }
   try {
+    // The contact's company was stopped after this wait was written: the stop
+    // canceled every active row, but one it skipped (a partial stop) or one
+    // written around its cancel pass can still be claimed here.
+    if (await wasCompanyStoppedSince(claimed, claimed.createdAt)) {
+      await withClaimWriteRetry(() =>
+        smartDelayService.finishClaimedRun({
+          id: smartDelayId,
+          generation,
+          to: "canceled",
+        }),
+      )
+      logger.info(
+        { smartDelayId, generation },
+        "Smart delay run canceled: the contact's company was stopped",
+      )
+      return
+    }
     await runFlowNode(resumeJob.data.data, {
       flowExecutionKey: parentJob?.id,
       claimCheck,
+      startedAt: parentJob ? new Date(parentJob.timestamp) : undefined,
     })
   } catch (error) {
     if (error instanceof ClaimLostError) {

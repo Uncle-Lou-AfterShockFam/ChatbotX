@@ -73,7 +73,7 @@ export const COMPANY_STOPPED_BROADCAST_REASON = "company-stopped"
 
 type ClaimOutcome =
   | { kind: "claimed"; stopOnReply: boolean }
-  | { kind: "already_stopped" }
+  | { kind: "already_stopped"; stoppedAt: Date }
   | { kind: "skipped" }
 
 /**
@@ -106,7 +106,7 @@ async function claimCompanyStop(props: {
       throw notFoundException("Company not found")
     }
     if (row.stoppedAt) {
-      return { kind: "already_stopped" }
+      return { kind: "already_stopped", stoppedAt: row.stoppedAt }
     }
     if (!(row.stopOnReply || props.force || FORCED_REASONS.has(props.reason))) {
       return { kind: "skipped" }
@@ -164,6 +164,8 @@ async function removeSequenceEnrollments(props: {
 async function cancelSmartDelays(props: {
   workspaceId: string
   contactIds: string[]
+  /** Re-sweep only: leave the waits of flows started after the stop. */
+  createdBefore?: Date
 }): Promise<number> {
   return await runSmartDelayCancelLoop({
     workspaceId: props.workspaceId,
@@ -175,11 +177,13 @@ async function cancelSmartDelays(props: {
         workspaceId: props.workspaceId,
         contactIds: props.contactIds,
         limit,
+        createdBefore: props.createdBefore,
       }),
     hasRemaining: () =>
       smartDelayService.hasActiveForContacts({
         workspaceId: props.workspaceId,
         contactIds: props.contactIds,
+        createdBefore: props.createdBefore,
       }),
   })
 }
@@ -233,6 +237,58 @@ async function phase<T>(
   }
 }
 
+/**
+ * An already-stopped company can still hold firable waits: a `partial` stop
+ * whose smart-delay phase gave up on a locked row. Only rows created up to the
+ * stop count: a flow started after it (the `company-stopped` tag trigger)
+ * keeps its waits. Every later non-force
+ * trigger re-runs just that phase when a one-join check finds such a row; the
+ * answer stays `already_stopped` and a failure is only logged (the next
+ * trigger tries again).
+ */
+async function resweepSmartDelays(props: {
+  workspaceId: string
+  companyId: string
+  stoppedAt: Date
+}): Promise<void> {
+  const { workspaceId, companyId, stoppedAt } = props
+  const failed: CompanyStopPhase[] = []
+  const hasLeft = await phase(
+    "smart-delays",
+    { workspaceId, companyId, failed },
+    () =>
+      smartDelayService.hasActiveForCompany({
+        workspaceId,
+        companyId,
+        createdBefore: stoppedAt,
+      }),
+    false,
+  )
+  if (!hasLeft) {
+    return
+  }
+  const smartDelaysCanceled = await phase(
+    "smart-delays",
+    { workspaceId, companyId, failed },
+    async () =>
+      cancelSmartDelays({
+        workspaceId,
+        contactIds: await companyService.listContactIds({
+          workspaceId,
+          companyId,
+        }),
+        createdBefore: stoppedAt,
+      }),
+    0,
+    (error) =>
+      error instanceof SmartDelayCancelIncompleteError ? error.canceled : 0,
+  )
+  logger.info(
+    { workspaceId, companyId, smartDelaysCanceled, failedPhases: failed },
+    "company-stop: re-swept waits of an already-stopped company",
+  )
+}
+
 export async function stopCompany(props: {
   workspaceId: string
   companyId: string
@@ -252,6 +308,11 @@ export async function stopCompany(props: {
     force,
   })
   if (claim.kind === "already_stopped" && !force) {
+    await resweepSmartDelays({
+      workspaceId,
+      companyId,
+      stoppedAt: claim.stoppedAt,
+    })
     return { status: "already_stopped", companyId }
   }
   if (claim.kind === "skipped") {
@@ -274,7 +335,15 @@ export async function stopCompany(props: {
   const smartDelaysCanceled = await phase(
     "smart-delays",
     ctx,
-    () => cancelSmartDelays({ workspaceId, contactIds }),
+    () =>
+      cancelSmartDelays({
+        workspaceId,
+        contactIds,
+        // A forced re-run of an already-stopped company leaves the waits of
+        // flows started after the stop (the tag trigger's), like the re-sweep.
+        createdBefore:
+          claim.kind === "already_stopped" ? claim.stoppedAt : undefined,
+      }),
     0,
     // Rows it did cancel before giving up still count.
     (error) =>

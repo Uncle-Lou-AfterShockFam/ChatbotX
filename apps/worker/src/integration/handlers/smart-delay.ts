@@ -118,6 +118,55 @@ const smartDelayPersistenceHandlers: Record<
   },
 }
 
+/**
+ * Was the contact's company stopped AFTER `since`? A stop is permanent and
+ * must end the waits that existed or were being written when it ran, but a
+ * flow started after it (the `company-stopped` tag trigger) keeps its waits.
+ */
+export async function wasCompanyStoppedSince(
+  row: Pick<SmartDelayRow, "workspaceId" | "contactInboxId">,
+  since: Date,
+): Promise<boolean> {
+  const stoppedAt = await smartDelayService.companyStoppedAt({
+    workspaceId: row.workspaceId,
+    contactInboxId: row.contactInboxId,
+  })
+  return stoppedAt !== null && stoppedAt.getTime() > since.getTime()
+}
+
+/**
+ * A wait written by a run that started before its contact's company was
+ * stopped is canceled at once: the step may have passed its claimCheck before
+ * the stop and written the row after the stop's cancel pass. Checking after
+ * the write closes that window (see `companyStoppedAt`). A failed check is
+ * logged and the row kept: every resume re-checks against its createdAt.
+ */
+async function cancelIfStoppedSinceRun(
+  row: SmartDelayRow,
+  runStartedAt: Date | undefined,
+): Promise<boolean> {
+  if (!runStartedAt) {
+    return false
+  }
+  try {
+    if (!(await wasCompanyStoppedSince(row, runStartedAt))) {
+      return false
+    }
+    await smartDelayService.cancelIfNotStarted({ id: row.id })
+    logger.info(
+      { rowId: row.id, contactInboxId: row.contactInboxId },
+      "Smart delay canceled at creation: the contact's company was stopped during this run",
+    )
+    return true
+  } catch (err) {
+    logger.warn(
+      { err, rowId: row.id },
+      "Stopped-company check failed at creation; the resume re-checks",
+    )
+    return false
+  }
+}
+
 export async function scheduleSmartDelayResume(props: {
   type: SmartDelayType
   triggerAt: Date
@@ -135,6 +184,8 @@ export async function scheduleSmartDelayResume(props: {
   /** waitForEvent only. */
   eventNodeId?: string | null
   eventSpec?: WaitForEventSpec | null
+  /** ExecuteStepProps.runStartedAt of the step writing this wait. */
+  runStartedAt?: Date
 }): Promise<void> {
   const rowId = createId()
   const row: SmartDelayRow = {
@@ -160,6 +211,10 @@ export async function scheduleSmartDelayResume(props: {
 
   // Insert tracking record first so a crash during enqueue still has a recovery path via scanner.
   const persistedRow = await smartDelayPersistenceHandlers[props.type](row)
+
+  if (await cancelIfStoppedSinceRun(persistedRow, props.runStartedAt)) {
+    return
+  }
 
   const diffMs = persistedRow.triggerAt.getTime() - Date.now()
   if (diffMs > ENQUEUE_DELAY_MS) {

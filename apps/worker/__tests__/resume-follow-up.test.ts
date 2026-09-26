@@ -7,6 +7,8 @@ const { contactInboxService, integrationQueueAdd, smartDelayService } =
     },
     integrationQueueAdd: vi.fn(),
     smartDelayService: {
+      companyStoppedAt: vi.fn(async (): Promise<Date | null> => null),
+      cancelIfNotStarted: vi.fn(async () => true),
       claimForRun: vi.fn(),
       findById: vi.fn(),
     },
@@ -81,6 +83,55 @@ describe("runFollowUpResume", () => {
       to: "canceled",
     })
     expect(integrationQueueAdd).not.toHaveBeenCalled()
+  })
+
+  test("company stopped after the follow-up was armed: canceled, the flow never continues", async () => {
+    smartDelayService.companyStoppedAt.mockResolvedValueOnce(
+      new Date("2026-07-16T00:00:30.000Z"),
+    )
+
+    await runFollowUpResume({ smartDelayId: "smart-delay-1" })
+
+    expect(smartDelayService.claimForRun).toHaveBeenCalledWith({
+      id: "smart-delay-1",
+      triggerAt: new Date("2026-07-16T00:01:00.000Z"),
+      to: "canceled",
+    })
+    expect(smartDelayService.claimForRun).toHaveBeenCalledTimes(1)
+    expect(integrationQueueAdd).not.toHaveBeenCalled()
+  })
+
+  test("a stop stamped between the check and the claim: completed, but never continued", async () => {
+    smartDelayService.companyStoppedAt
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(new Date("2026-07-16T00:00:30.000Z"))
+
+    await runFollowUpResume({ smartDelayId: "smart-delay-1" })
+
+    expect(smartDelayService.claimForRun).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "completed" }),
+    )
+    expect(integrationQueueAdd).not.toHaveBeenCalled()
+  })
+
+  test("company stopped before the follow-up was armed (a flow reacting to the stop): continues", async () => {
+    smartDelayService.companyStoppedAt.mockResolvedValue(
+      new Date("2026-07-15T23:00:00.000Z"),
+    )
+
+    await runFollowUpResume({ smartDelayId: "smart-delay-1" })
+
+    expect(integrationQueueAdd).toHaveBeenCalledTimes(1)
+    smartDelayService.companyStoppedAt.mockResolvedValue(null)
+  })
+
+  test("a failing stopped-company check continues (no claim budget on this path)", async () => {
+    smartDelayService.companyStoppedAt.mockRejectedValue(new Error("db down"))
+
+    await runFollowUpResume({ smartDelayId: "smart-delay-1" })
+
+    expect(integrationQueueAdd).toHaveBeenCalledTimes(1)
+    smartDelayService.companyStoppedAt.mockResolvedValue(null)
   })
 
   test("continues the flow when the contact stayed silent", async () => {

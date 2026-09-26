@@ -315,6 +315,7 @@ async function startIntegrationWorker() {
                 await runFlowNode(job.data.data, {
                   flowExecutionKey:
                     job.data.data.flowExecutionKey ?? getFlowExecutionKey(job),
+                  startedAt: new Date(job.timestamp),
                 })
                 return
               }
@@ -329,12 +330,14 @@ async function startIntegrationWorker() {
               case IntegrationJobAction.runFlowPostback: {
                 await runFlowPostback(job.data.data, {
                   flowExecutionKey: getFlowExecutionKey(job),
+                  startedAt: new Date(job.timestamp),
                 })
                 return
               }
               case IntegrationJobAction.runFlowQuickReply: {
                 await runFlowQuickReply(job.data.data, {
                   flowExecutionKey: getFlowExecutionKey(job),
+                  startedAt: new Date(job.timestamp),
                 })
                 return
               }

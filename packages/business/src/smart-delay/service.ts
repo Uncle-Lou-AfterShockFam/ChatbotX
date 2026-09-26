@@ -17,7 +17,9 @@ import {
   smartDelayTypes,
 } from "@chatbotx.io/database/partials"
 import {
+  companyModel,
   contactInboxModel,
+  contactModel,
   contactOnSmartDelayModel,
 } from "@chatbotx.io/database/schema"
 import { BaseService } from "../base.service"
@@ -57,11 +59,22 @@ const activeInWorkspace = (workspaceId: string) =>
     ]),
   )
 
-/** Needs the `ContactInbox` join on `contactInboxId`. */
-const activeForContacts = (workspaceId: string, contactIds: string[]) =>
+/**
+ * Needs the `ContactInbox` join on `contactInboxId`. `createdBefore` keeps a
+ * re-sweep of an already-stopped company off the waits of flows that started
+ * after the stop (they are allowed to run).
+ */
+const activeForContacts = (
+  workspaceId: string,
+  contactIds: string[],
+  createdBefore?: Date,
+) =>
   and(
     activeInWorkspace(workspaceId),
     inArray(contactInboxModel.contactId, contactIds),
+    createdBefore
+      ? lte(contactOnSmartDelayModel.createdAt, createdBefore)
+      : undefined,
   )
 
 /** Claims a resume may take (initial + retries + recoveries) before the row is `failed`. */
@@ -139,6 +152,63 @@ class SmartDelayService extends BaseService {
           eq(contactOnSmartDelayModel.id, id),
           eq(contactOnSmartDelayModel.status, smartDelayStatuses.enum.pending),
           eq(contactOnSmartDelayModel.triggerAt, triggerAt),
+        ),
+      )
+      .returning({ id: contactOnSmartDelayModel.id })
+    return rows.length > 0
+  }
+
+  /**
+   * When the company of the contact behind this ContactInbox was stopped, or
+   * null (no company, a live one, another workspace). A stop is permanent and
+   * cancels the waits that existed or were being written when it ran; a flow
+   * that starts AFTER it (the `company-stopped` tag trigger) keeps its waits,
+   * so callers compare this instant with the row's createdAt / the run's
+   * start. Read it AFTER the row write: stopCompany commits `stoppedAt` before
+   * its cancel pass, so either this read sees the stamp or the pass sees the row.
+   */
+  async companyStoppedAt(props: {
+    tx?: DatabaseClient
+    workspaceId: string
+    contactInboxId: string
+  }): Promise<Date | null> {
+    const { tx = db, workspaceId, contactInboxId } = props
+    const [row] = await tx
+      .select({ stoppedAt: companyModel.stoppedAt })
+      .from(contactInboxModel)
+      .innerJoin(contactModel, eq(contactModel.id, contactInboxModel.contactId))
+      .innerJoin(companyModel, eq(companyModel.id, contactModel.companyId))
+      .where(
+        and(
+          eq(contactInboxModel.id, contactInboxId),
+          eq(companyModel.workspaceId, workspaceId),
+          isNotNull(companyModel.stoppedAt),
+        ),
+      )
+      .limit(1)
+    return row?.stoppedAt ?? null
+  }
+
+  /**
+   * Cancel a row nothing has started yet (pending / scheduled); a running row
+   * belongs to its claim and a terminal one is left alone. Returns whether it
+   * canceled.
+   */
+  async cancelIfNotStarted(props: {
+    tx?: DatabaseClient
+    id: string
+  }): Promise<boolean> {
+    const { tx = db, id } = props
+    const rows = await tx
+      .update(contactOnSmartDelayModel)
+      .set({ status: smartDelayStatuses.enum.canceled })
+      .where(
+        and(
+          eq(contactOnSmartDelayModel.id, id),
+          inArray(contactOnSmartDelayModel.status, [
+            smartDelayStatuses.enum.pending,
+            smartDelayStatuses.enum.scheduled,
+          ]),
         ),
       )
       .returning({ id: contactOnSmartDelayModel.id })
@@ -393,7 +463,8 @@ class SmartDelayService extends BaseService {
   }
 
   /**
-   * The flow of a claimed (running) row finished: running -> completed, but
+   * The flow of a claimed (running) row finished: running -> completed (or
+   * canceled: its contact's company was stopped before the flow ran), but
    * only for the generation that ran. A stale retry whose row was re-claimed
    * (and re-run) by another path cannot complete that newer run.
    */
@@ -401,11 +472,12 @@ class SmartDelayService extends BaseService {
     tx?: DatabaseClient
     id: string
     generation: number
+    to?: "completed" | "canceled"
   }): Promise<boolean> {
-    const { tx = db, id, generation } = props
+    const { tx = db, id, generation, to = "completed" } = props
     const rows = await tx
       .update(contactOnSmartDelayModel)
-      .set({ status: smartDelayStatuses.enum.completed })
+      .set({ status: smartDelayStatuses.enum[to] })
       .where(
         and(
           eq(contactOnSmartDelayModel.id, id),
@@ -654,8 +726,9 @@ class SmartDelayService extends BaseService {
     workspaceId: string
     contactIds: string[]
     limit: number
+    createdBefore?: Date
   }): Promise<Pick<SmartDelayRow, "id" | "triggerAt">[]> {
-    const { tx = db, workspaceId, contactIds, limit } = props
+    const { tx = db, workspaceId, contactIds, limit, createdBefore } = props
     if (contactIds.length === 0) {
       return []
     }
@@ -666,7 +739,7 @@ class SmartDelayService extends BaseService {
         contactInboxModel,
         eq(contactInboxModel.id, contactOnSmartDelayModel.contactInboxId),
       )
-      .where(activeForContacts(workspaceId, contactIds))
+      .where(activeForContacts(workspaceId, contactIds, createdBefore))
       .orderBy(contactOnSmartDelayModel.triggerAt)
       .limit(limit)
       .for("update", { skipLocked: true, of: contactOnSmartDelayModel })
@@ -681,13 +754,47 @@ class SmartDelayService extends BaseService {
       })
   }
 
+  /**
+   * Non-locking: does any CURRENT contact of the company still have a firable
+   * row? One join (no contact-id list), for the per-reply re-sweep check.
+   */
+  async hasActiveForCompany(props: {
+    tx?: DatabaseClient
+    workspaceId: string
+    companyId: string
+    createdBefore?: Date
+  }): Promise<boolean> {
+    const { tx = db, workspaceId, companyId, createdBefore } = props
+    const rows = await tx
+      .select({ id: contactOnSmartDelayModel.id })
+      .from(contactOnSmartDelayModel)
+      .innerJoin(
+        contactInboxModel,
+        eq(contactInboxModel.id, contactOnSmartDelayModel.contactInboxId),
+      )
+      .innerJoin(contactModel, eq(contactModel.id, contactInboxModel.contactId))
+      .where(
+        and(
+          activeInWorkspace(workspaceId),
+          eq(contactModel.workspaceId, workspaceId),
+          eq(contactModel.companyId, companyId),
+          createdBefore
+            ? lte(contactOnSmartDelayModel.createdAt, createdBefore)
+            : undefined,
+        ),
+      )
+      .limit(1)
+    return rows.length > 0
+  }
+
   /** Non-locking twin of `cancelActiveForContacts`' filter. */
   async hasActiveForContacts(props: {
     tx?: DatabaseClient
     workspaceId: string
     contactIds: string[]
+    createdBefore?: Date
   }): Promise<boolean> {
-    const { tx = db, workspaceId, contactIds } = props
+    const { tx = db, workspaceId, contactIds, createdBefore } = props
     if (contactIds.length === 0) {
       return false
     }
@@ -698,7 +805,7 @@ class SmartDelayService extends BaseService {
         contactInboxModel,
         eq(contactInboxModel.id, contactOnSmartDelayModel.contactInboxId),
       )
-      .where(activeForContacts(workspaceId, contactIds))
+      .where(activeForContacts(workspaceId, contactIds, createdBefore))
       .limit(1)
     return rows.length > 0
   }

@@ -71,6 +71,18 @@ export async function handleCompanyStopOnReply(
           },
           "company-stop: inbound reply stopped the company",
         )
+      } else if (result.status === "partial") {
+        // Stamped, but a phase failed (e.g. a wait row stayed locked past the
+        // retry budget). The next trigger re-runs the smart-delay phase.
+        logger.warn(
+          {
+            workspaceId: payload.workspaceId,
+            contactId: contact.id,
+            companyId: result.companyId,
+            failedPhases: result.failedPhases,
+          },
+          "company-stop: inbound reply stopped the company only partially",
+        )
       }
     } catch (err) {
       logger.warn(
