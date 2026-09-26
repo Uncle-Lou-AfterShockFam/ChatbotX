@@ -27,6 +27,7 @@ import {
 } from "react"
 import { Controller, useWatch } from "react-hook-form"
 import { toast } from "sonner"
+import { ScrollFadeStrip } from "@/components/scroll-fade-strip"
 import { disableBotAction } from "@/features/conversations/actions/disable-bot.action"
 import {
   BOT_DISABLE_DURATION_MS,
@@ -497,7 +498,10 @@ export const MessageInput = () => {
               )}
             </div>
           )}
-          <div className="scrollbar-hide flex w-full items-center gap-2 overflow-x-auto ps-2.5">
+          <ScrollFadeStrip
+            className="flex w-full items-center gap-2 ps-2.5"
+            watch={`${hasFiles}:${isInstagramPostComment}`}
+          >
             <div className="min-w-0 flex-1">
               <InboxIcon
                 channel={
@@ -567,7 +571,7 @@ export const MessageInput = () => {
                 />
               </Button>
             </div>
-          </div>
+          </ScrollFadeStrip>
         </form>
       </Form>
     </div>
