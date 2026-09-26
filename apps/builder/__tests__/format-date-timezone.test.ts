@@ -795,6 +795,9 @@ function scanClockFormatters(path: string, source: string): Scan {
         CLOCK_FORMATTERS.has((node.propertyName ?? node.name).text)) ||
       (ts.isPropertyAccessExpression(node) &&
         CLOCK_FORMATTERS.has(node.name.text)) ||
+      (ts.isElementAccessExpression(node) &&
+        ts.isStringLiteralLike(node.argumentExpression) &&
+        CLOCK_FORMATTERS.has(node.argumentExpression.text)) ||
       (ts.isBindingElement(node) &&
         ts.isIdentifier(node.propertyName ?? node.name) &&
         CLOCK_FORMATTERS.has(
@@ -829,6 +832,7 @@ describe("the clock-formatter scanner itself (s205c)", () => {
       'import { formatDistanceToNow } from "date-fns"',
       'import { formatDistanceToNowStrict as rel } from "date-fns"',
       'import * as dfns from "date-fns"\ndfns.formatDistanceToNow(d)',
+      'import * as dfns from "date-fns"\ndfns["formatDistanceToNowStrict"](d)',
       'import rel from "date-fns/formatDistanceToNow"',
       'const { formatDistanceToNowStrict } = await import("date-fns")',
       'const { formatDistanceToNow: rel } = require("date-fns")',

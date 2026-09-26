@@ -1,5 +1,5 @@
 import { act } from "react"
-import { hydrateRoot, type Root } from "react-dom/client"
+import { createRoot, hydrateRoot, type Root } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, describe, expect, test, vi } from "vitest"
 
@@ -9,6 +9,7 @@ const REQUEST_NOW = new Date("2026-09-26T12:00:00Z")
 vi.mock("next-intl", () => ({ useNow: () => REQUEST_NOW }))
 
 const { RelativeTime } = await import("@/components/relative-time")
+const { useRenderNow } = await import("@/hooks/use-render-now")
 
 // 90 s before the request: "2 minutes ago" at request time, and the label
 // changes by the time the client hydrates 60 s later.
@@ -62,5 +63,33 @@ describe("RelativeTime (s205c, React #418 on /contacts)", () => {
     expect(renderToString(<RelativeTime date={LAST_READ} strict />)).toBe(
       "2 minutes",
     )
+  })
+
+  test("a label first mounted long after page load never paints the page-load now, not even once", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] })
+    // Five hours after the request: a client navigation in a long-lived tab.
+    const later = new Date(REQUEST_NOW.getTime() + 5 * 3_600_000)
+    vi.setSystemTime(later)
+    const painted: string[] = []
+    function Probe() {
+      const now = useRenderNow()
+      painted.push(now.toISOString())
+      return null
+    }
+    container = document.createElement("div")
+    document.body.append(container)
+    await act(() => {
+      root = createRoot(container as HTMLElement)
+      root.render(
+        <>
+          <Probe />
+          <RelativeTime addSuffix date={new Date(later.getTime() - 120_000)} />
+        </>,
+      )
+    })
+
+    expect(painted.length).toBeGreaterThan(0)
+    expect(painted.every((iso) => iso === later.toISOString())).toBe(true)
+    expect(container.textContent).toBe("2 minutes ago")
   })
 })
