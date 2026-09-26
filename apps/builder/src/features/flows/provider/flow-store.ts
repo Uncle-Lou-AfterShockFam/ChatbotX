@@ -77,14 +77,25 @@ export const createFlowStore = (props: Partial<FlowState>) =>
       try {
         set({ loading: true, error: null })
 
-        const data = await fetchAllListPages((page) =>
-          client.flowsAPI.privateListFlowsAPI({
-            workspaceId,
-            active: true,
-            ...filter,
-            ...page,
-          }),
-        )
+        // A startType filter reads version graphs, so the server filters the
+        // whole workspace list anyway: ask once, unpaged, instead of making
+        // it rescan per page (s205 review). Otherwise page past the cap.
+        const data = filter.startType
+          ? (
+              await client.flowsAPI.privateListFlowsAPI({
+                workspaceId,
+                active: true,
+                ...filter,
+              })
+            ).data
+          : await fetchAllListPages((page) =>
+              client.flowsAPI.privateListFlowsAPI({
+                workspaceId,
+                active: true,
+                ...filter,
+                ...page,
+              }),
+            )
 
         set({ flows: data })
       } catch (error: unknown) {

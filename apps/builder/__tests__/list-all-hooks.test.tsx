@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
-import { listRows, pagedServer } from "@/lib/query/__tests__/paged-server"
+import { listRows, pagedServer } from "@/lib/query/testing/paged-server"
 
 // s205: every "load all" hook used one `perPage: maxPerPage` call that the
 // server caps at 50 rows. Each hook must page to the end, and the invalidate

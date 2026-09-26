@@ -4,7 +4,7 @@ import {
   LIST_MAX_PAGES,
   ListPageShapeError,
 } from "../fetch-all-list-pages"
-import { listRows, pagedServer } from "./paged-server"
+import { listRows, pagedServer } from "../testing/paged-server"
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -74,7 +74,7 @@ describe("fetchAllListPages (s205: the server caps a page at 50)", () => {
     expect(endless).toHaveBeenCalledTimes(LIST_MAX_PAGES)
     expect(rows).toHaveLength(LIST_MAX_PAGES * 50)
     expect(warn).toHaveBeenCalledTimes(1)
-    expect(String(warn.mock.calls[0][0])).toContain("truncated")
+    expect(String(warn.mock.calls[0][0])).toContain("may be truncated")
   })
 
   test("no warning when the last page ends the list", async () => {

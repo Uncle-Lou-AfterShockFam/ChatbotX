@@ -2,7 +2,7 @@ import { fetchAllPages } from "./fetch-all-pages"
 
 /**
  * The list endpoints cap a page at 50 (`maxLimit` in
- * `@chatbotx.io/database/utils`), so a single `perPage: maxPerPage` call
+ * `@chatbotx.io/database/utils`), so a single call asking for more (the removed `maxPerPage`)
  * silently returned the first 50 rows only: a workspace with more never saw
  * the rest in any picker (s201 fields, s205 every other store). Page through
  * all of them, ordered by id so offset pages are stable.
@@ -55,7 +55,7 @@ export const fetchAllListPages = async <T extends { id: unknown }>(
   })
   if (lastFull) {
     console.warn(
-      `fetchAllListPages: stopped at ${LIST_MAX_PAGES} pages (${LIST_MAX_PAGES * LIST_PAGE_SIZE} rows); the list is truncated`,
+      `fetchAllListPages: stopped at ${LIST_MAX_PAGES} pages (${LIST_MAX_PAGES * LIST_PAGE_SIZE} rows); the list may be truncated`,
     )
   }
   return [...new Map(rows.map((row) => [row.id, row])).values()]

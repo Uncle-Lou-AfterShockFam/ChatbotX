@@ -1,6 +1,6 @@
 import { ORPCError } from "@orpc/client"
 import { beforeEach, describe, expect, test, vi } from "vitest"
-import { listRows, pagedServer } from "@/lib/query/__tests__/paged-server"
+import { listRows, pagedServer } from "@/lib/query/testing/paged-server"
 
 const mocks = vi.hoisted(() => ({
   listInboxesAuthenticatedAPI: vi.fn(),

@@ -734,3 +734,28 @@ describe("flowService.list: startType filters BEFORE paging (s205)", () => {
     expect(result).toMatchObject({ data: [], pageCount: 0 })
   })
 })
+
+test("flowService.list: startType with no page/perPage returns the whole filtered list (s205)", async () => {
+  const nodes = [
+    {
+      data: {
+        isStartNode: true,
+        details: { steps: [{ stepType: "sendText" }] },
+      },
+    },
+  ]
+  mockListWithVersions.mockResolvedValueOnce(
+    Array.from({ length: 75 }, (_, i) => ({
+      id: String(i + 1),
+      flowVersions: [{ nodes }],
+    })),
+  )
+
+  const result = await flowService.list({
+    workspaceId: "ws-1",
+    startType: "sendText",
+  })
+
+  expect(result.data).toHaveLength(75)
+  expect(result.pageCount).toBe(1)
+})

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest"
-import { listRows, pagedServer } from "@/lib/query/__tests__/paged-server"
+import { listRows, pagedServer } from "@/lib/query/testing/paged-server"
 
 const mocks = vi.hoisted(() => ({
   privateListFlowsAPI: vi.fn(),
@@ -28,17 +28,33 @@ describe("getAllActiveFlows", () => {
     expect(mocks.privateListFlowsAPI).toHaveBeenCalledTimes(3)
   })
 
-  test("the filter rides every page and cannot override paging", async () => {
-    mocks.privateListFlowsAPI.mockImplementation(pagedServer(listRows(1, 61)))
+  test("a startType filter is ONE unpaged call: the server filters the whole list", async () => {
+    mocks.privateListFlowsAPI.mockResolvedValue({ data: listRows(1, 76) })
     const store = createFlowStore({ workspaceId: "workspace-1" })
     store.getState().appendFilter({ startType: "sendText" })
+
+    await store.getState().getAllActiveFlows()
+
+    expect(store.getState().flows).toHaveLength(75)
+    expect(mocks.privateListFlowsAPI).toHaveBeenCalledTimes(1)
+    expect(mocks.privateListFlowsAPI).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      active: true,
+      startType: "sendText",
+    })
+  })
+
+  test("a non-startType filter rides every page", async () => {
+    mocks.privateListFlowsAPI.mockImplementation(pagedServer(listRows(1, 61)))
+    const store = createFlowStore({ workspaceId: "workspace-1" })
+    store.getState().appendFilter({ integrationWhatsappId: "9" })
 
     await store.getState().getAllActiveFlows()
 
     expect(mocks.privateListFlowsAPI).toHaveBeenNthCalledWith(2, {
       workspaceId: "workspace-1",
       active: true,
-      startType: "sendText",
+      integrationWhatsappId: "9",
       page: 2,
       perPage: 50,
       sort: [{ id: "id", desc: false }],
