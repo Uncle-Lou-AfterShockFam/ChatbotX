@@ -142,7 +142,7 @@ async function ensureCustomer(
  * email is read from the Stripe customer, not the contact: a cached customer
  * created before the contact gained an email still has none.
  */
-export async function chooseCollection(
+async function chooseCollection(
   stripe: Stripe,
   customerId: string,
   invoice: InvoiceModel,
@@ -188,6 +188,54 @@ export async function chooseCollection(
     },
     idempotencyKey: `hub-inv-${invoice.id}-create`,
   }
+}
+
+/**
+ * A Stripe invoice created for this hub invoice whose id never reached the
+ * row (a crash between the create and the persist). The create key depends
+ * on the customer's email, so a retry after the email appeared or vanished
+ * would otherwise mint a twin. `list` (read-your-writes, unlike `search`)
+ * over the customer's newest 100; a voided one is not resumed.
+ */
+async function findUnrecordedInvoice(
+  stripe: Stripe,
+  customerId: string,
+  invoice: InvoiceModel,
+): Promise<string | null> {
+  let page: Stripe.ApiList<Stripe.Invoice>
+  try {
+    page = await stripe.invoices.list({ customer: customerId, limit: 100 })
+  } catch (error) {
+    throw wrap(error, "list invoices")
+  }
+  const match = page.data.find(
+    (candidate) =>
+      candidate.metadata?.hub_invoice_id === invoice.id &&
+      candidate.status !== "void",
+  )
+  return match?.id ?? null
+}
+
+async function recordStripeIds(
+  credentials: StripeCredentials,
+  invoice: InvoiceModel,
+  stripeInvoiceId: string,
+  customerId: string,
+): Promise<void> {
+  await db
+    .update(invoiceModel)
+    .set({
+      providerInvoiceId: stripeInvoiceId,
+      providerAccountId: credentials.accountId,
+      providerCustomerId: customerId,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(invoiceModel.id, invoice.id),
+        isNull(invoiceModel.providerInvoiceId),
+      ),
+    )
 }
 
 /**
@@ -267,7 +315,12 @@ export async function finalizeWithStripe(props: {
   const stripe = createStripeClient(credentials.auth.secretKey)
   const customerId = await ensureCustomer(stripe, credentials, invoice)
 
-  let stripeInvoiceId = invoice.providerInvoiceId
+  let stripeInvoiceId =
+    invoice.providerInvoiceId ??
+    (await findUnrecordedInvoice(stripe, customerId, invoice))
+  if (stripeInvoiceId && !invoice.providerInvoiceId) {
+    await recordStripeIds(credentials, invoice, stripeInvoiceId, customerId)
+  }
   if (!stripeInvoiceId) {
     const collection = await chooseCollection(stripe, customerId, invoice)
     let created: Stripe.Invoice
@@ -296,20 +349,7 @@ export async function finalizeWithStripe(props: {
     }
     stripeInvoiceId = created.id
     // Persist the id NOW so a crash below resumes this invoice, never a twin.
-    await db
-      .update(invoiceModel)
-      .set({
-        providerInvoiceId: stripeInvoiceId,
-        providerAccountId: credentials.accountId,
-        providerCustomerId: customerId,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(invoiceModel.id, invoice.id),
-          isNull(invoiceModel.providerInvoiceId),
-        ),
-      )
+    await recordStripeIds(credentials, invoice, stripeInvoiceId, customerId)
   }
 
   let current: Stripe.Invoice
