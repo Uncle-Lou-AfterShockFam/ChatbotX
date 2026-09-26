@@ -113,6 +113,7 @@ async function runSendSequenceFlow(
       contactId: data.contactId,
       metadata: data.metadata,
       flowExecutionKey: job.id,
+      startedAt: new Date(job.timestamp),
     })
 
     sentAt = new Date()

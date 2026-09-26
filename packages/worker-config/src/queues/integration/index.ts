@@ -236,6 +236,13 @@ export type IntegrationJobRunFlowNode = {
     origin?: "channel"
     /** See {@link CommentAnchor}. */
     commentAnchor?: CommentAnchor
+    /**
+     * ISO start of the run this job continues. Every flow-internal re-dispatch
+     * copies it, so a continuation enqueued after a company stop by a run that
+     * began before it is still refused (apps/worker company-stop-guard.ts).
+     * Unset = this job opens a run; its own enqueue time is the start.
+     */
+    runStartedAt?: string
   }
 }
 

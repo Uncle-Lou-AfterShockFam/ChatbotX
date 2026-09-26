@@ -24,6 +24,7 @@ export async function handleCondition(
     trackingContext,
     commentAnchor,
     appointmentId,
+    runStartedAt,
   } = props
 
   const resolveMatchedHandleId = async (): Promise<string> => {
@@ -88,6 +89,7 @@ export async function handleCondition(
       sendFrom,
       nodeVisits,
       commentAnchor,
+      runStartedAt: runStartedAt?.toISOString(),
       origin: webhookChannelOrigin(),
     },
   })

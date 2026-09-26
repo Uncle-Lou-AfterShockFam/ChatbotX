@@ -2,13 +2,17 @@ import { emit } from "@chatbotx.io/event-bus"
 import type { FlowNode } from "@chatbotx.io/flow-config"
 import { initVariables, SdkException } from "@chatbotx.io/sdk"
 import type { IntegrationJobRunChallenge } from "@chatbotx.io/worker-config"
+import type { Job } from "bullmq"
 import {
   detectConversationAndContactInbox,
   detectFlowVersion,
 } from "../../lib/db"
 import { runStepsAndQuickReplies } from "./flow"
 
-export async function runChallenge(data: IntegrationJobRunChallenge["data"]) {
+export async function runChallenge(
+  data: IntegrationJobRunChallenge["data"],
+  job: Pick<Job, "timestamp">,
+) {
   const {
     conversationId,
     contactInboxId,
@@ -79,6 +83,7 @@ export async function runChallenge(data: IntegrationJobRunChallenge["data"]) {
       triggerMessageId: messageId,
       triggerMessageCreatedAt: messageCreatedAt,
       appointmentId: challenge.data.appointmentId,
+      runStartedAt: new Date(job.timestamp),
     })
 
     if (messageId) {

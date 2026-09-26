@@ -254,6 +254,7 @@ describe("heavy worker", () => {
       flowId: "flow-1",
       flowVersionId: "flow-version-1",
       nodeId: "node-1",
+      runStartedAt: "2026-09-26T03:00:00.000Z",
     }
 
     await mocks.processJob?.(job)
@@ -281,6 +282,7 @@ describe("heavy worker", () => {
           flowVersionId: "flow-version-1",
           nodeId: "node-1",
           outcomeKey: "heavy-step-outcome-1",
+          runStartedAt: "2026-09-26T03:00:00.000Z",
           startFromStepId: "1",
         }),
       },

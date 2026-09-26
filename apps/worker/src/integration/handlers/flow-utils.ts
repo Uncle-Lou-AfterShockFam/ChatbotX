@@ -145,6 +145,7 @@ export async function sendFlow(
         sendFrom: props.sendFrom,
         nodeVisits: props.nodeVisits,
         commentAnchor: props.commentAnchor,
+        runStartedAt: props.runStartedAt?.toISOString(),
         origin: webhookChannelOrigin(),
       },
     })

@@ -69,8 +69,21 @@ vi.mock("@chatbotx.io/database/schema", async (importOriginal) => {
   return { ...actual }
 })
 vi.mock("../src/lib/logger", () => ({
-  logger: { debug: vi.fn(), error: vi.fn(), warn: vi.fn() },
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }))
+// The stopped-company lookup; everything else in smart-delay stays real.
+const wasCompanyStoppedSince = vi.fn(async () => false)
+vi.mock("../src/integration/handlers/smart-delay", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("../src/integration/handlers/smart-delay")
+    >()
+  return {
+    ...actual,
+    wasCompanyStoppedSince: (...args: unknown[]) =>
+      wasCompanyStoppedSince(...(args as [])),
+  }
+})
 vi.mock("../src/lib/db", () => ({
   detectConversationAndContactInbox,
   detectFlowVersion,
@@ -445,6 +458,30 @@ describe("flow action target resolution", () => {
     } as never)
 
     expectAdvancedToNextNode()
+  })
+
+  test("runFlowPostback threads the job's start to the node it advances to", async () => {
+    mockFlowWithReply({
+      steps: [],
+      quickReplies: [makeQuickReply(REPLY_ID, "Yes")],
+    })
+    const startedAt = new Date("2026-09-26T03:00:00.000Z")
+
+    await runFlowPostback(
+      {
+        conversationId: "conv-1",
+        contactInboxId: "ci-1",
+        action: replyAction(),
+        ref: null,
+      } as never,
+      { flowExecutionKey: "job-1", startedAt },
+    )
+
+    const [, job] = integrationQueueAdd.mock.calls[0] as unknown as [
+      string,
+      { data: { runStartedAt?: string } },
+    ]
+    expect(job.data.runStartedAt).toBe(startedAt.toISOString())
   })
 
   test("runFlowPostback still advances the flow for a step button", async () => {
@@ -2494,5 +2531,209 @@ describe("runFlowNode — a lost claim is not a failed broadcast delivery", () =
       ),
     ).rejects.toBe(lost)
     expect(dbUpdate).not.toHaveBeenCalled()
+  })
+})
+
+describe("stopped company — a run ends before its next step", () => {
+  const RUN_START = new Date("2026-09-26T03:00:00.000Z")
+
+  beforeEach(() => {
+    chatQueueAdd.mockClear()
+    integrationQueueAdd.mockClear()
+    wasCompanyStoppedSince.mockReset().mockResolvedValue(false)
+    vi.mocked(logger.info).mockClear()
+    vi.mocked(logger.warn).mockClear()
+  })
+
+  function twoStepProps(runStartedAt: Date | undefined) {
+    return {
+      ...makeBaseProps(),
+      details: {
+        steps: [
+          { ...makeStep("autoAssignConversation"), id: "step-1" },
+          { ...makeStep("autoAssignConversation"), id: "step-2" },
+        ],
+      },
+      triggerNextNode: false,
+      runStartedAt,
+    }
+  }
+
+  async function spyHandler() {
+    const { flowStepHandlers } = await import(
+      "../src/integration/handlers/step"
+    )
+    return mockSpy(
+      flowStepHandlers,
+      "autoAssignConversation",
+    ).mockResolvedValue({ status: "success", result: null })
+  }
+
+  test("a run started before the stop runs no step, queues nothing and does not throw", async () => {
+    const handler = await spyHandler()
+    wasCompanyStoppedSince.mockResolvedValue(true)
+
+    await expect(
+      runStepsAndQuickReplies(twoStepProps(RUN_START)),
+    ).resolves.toBeUndefined()
+
+    expect(handler).not.toHaveBeenCalled()
+    expect(integrationQueueAdd).not.toHaveBeenCalled()
+    expect(wasCompanyStoppedSince).toHaveBeenCalledWith(
+      { workspaceId: "ws-1", contactInboxId: "ci-1" },
+      RUN_START,
+    )
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ contactInboxId: "ci-1" }),
+      expect.stringContaining("company was stopped"),
+    )
+  })
+
+  test("a live company runs the step and its continuation carries the run start", async () => {
+    const handler = await spyHandler()
+
+    await runStepsAndQuickReplies(twoStepProps(RUN_START))
+
+    expect(handler).toHaveBeenCalledOnce()
+    const [, job] = integrationQueueAdd.mock.calls[0] as unknown as [
+      string,
+      { data: { startFromStepId: string; runStartedAt?: string } },
+    ]
+    expect(job.data.startFromStepId).toBe("step-2")
+    // The D2 residual: the continuation is judged by the run's start, not
+    // by its own later enqueue time.
+    expect(job.data.runStartedAt).toBe(RUN_START.toISOString())
+  })
+
+  test("a stop landing between two steps ends the run at the next check", async () => {
+    const handler = await spyHandler()
+    wasCompanyStoppedSince
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true)
+    const steps = [
+      { ...makeStep("autoAssignConversation"), id: "step-a" },
+      { ...makeStep("autoAssignConversation"), id: "step-b" },
+    ]
+
+    await expect(
+      executeMultipleSteps({
+        ...makeBaseProps(),
+        steps,
+        runStartedAt: RUN_START,
+      }),
+    ).rejects.toMatchObject({ name: "CompanyStoppedError" })
+
+    expect(handler).toHaveBeenCalledOnce()
+  })
+
+  test("no run start = no lookup (a job queued before the field existed)", async () => {
+    const handler = await spyHandler()
+
+    await runStepsAndQuickReplies(twoStepProps(undefined))
+
+    expect(wasCompanyStoppedSince).not.toHaveBeenCalled()
+    expect(handler).toHaveBeenCalledOnce()
+    const [, job] = integrationQueueAdd.mock.calls[0] as unknown as [
+      string,
+      { data: { runStartedAt?: string } },
+    ]
+    expect(job.data.runStartedAt).toBeUndefined()
+  })
+
+  test("a failed lookup is logged and the step runs", async () => {
+    const handler = await spyHandler()
+    wasCompanyStoppedSince.mockRejectedValue(new Error("pg down"))
+
+    await runStepsAndQuickReplies(twoStepProps(RUN_START))
+
+    expect(handler).toHaveBeenCalledOnce()
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ contactInboxId: "ci-1" }),
+      expect.stringContaining("Stopped-company step check failed"),
+    )
+  })
+
+  test("a stopped run is not a failed broadcast delivery", async () => {
+    const { db } = await import("@chatbotx.io/database/client")
+    const dbUpdate = vi.mocked(db.update)
+    dbUpdate.mockClear()
+    await spyHandler()
+    wasCompanyStoppedSince.mockResolvedValue(true)
+    findSendableBroadcast.mockReset().mockResolvedValue({ id: "broadcast-1" })
+    detectConversationAndContactInbox.mockReset().mockResolvedValue({
+      conversation: makeConversation(),
+      contactInbox: makeContactInbox(),
+    })
+    const node: FlowNode = {
+      id: "node-1",
+      position: { x: 0, y: 0 },
+      measured: { width: 100, height: 100 },
+      data: {
+        name: "Broadcast",
+        isStartNode: false,
+        details: { steps: [makeStep("autoAssignConversation")] },
+      },
+    }
+    detectFlowVersion.mockReset().mockResolvedValue({
+      flowVersion: makeFlowVersion([node]),
+      useLatestFlowVersion: false,
+    })
+
+    await expect(
+      runFlowNode(
+        {
+          flowId: "flow-1",
+          conversationId: "conv-1",
+          contactInboxId: "ci-1",
+          nodeId: "node-1",
+          metadata: {
+            type: "broadcast",
+            broadcastId: "broadcast-1",
+            contactInboxId: "ci-1",
+          },
+        },
+        { flowExecutionKey: "job-1", startedAt: RUN_START },
+      ),
+    ).resolves.toBeUndefined()
+    expect(dbUpdate).not.toHaveBeenCalled()
+  })
+
+  test("every flow-internal re-dispatch copies the run start", async () => {
+    const { flowStepHandlers } = await import(
+      "../src/integration/handlers/step"
+    )
+    const edges: EdgeSchema[] = [
+      {
+        id: "e1",
+        source: "node-1",
+        sourceHandle: "node-1",
+        target: "node-2",
+        targetHandle: "input",
+      },
+    ]
+    const flowVersion = makeFlowVersion([], edges)
+    const base = { ...makeBaseProps(flowVersion), runStartedAt: RUN_START }
+    const jumps = [
+      { stepType: "startAnotherNode", nodeId: "node-9" },
+      { stepType: "startExternalFlow", flowId: "flow-2" },
+      { stepType: "startExternalNode", flowId: "flow-2", nodeId: "node-3" },
+    ]
+    for (const extra of jumps) {
+      integrationQueueAdd.mockClear()
+      const step = { ...makeStep(extra.stepType), ...extra }
+      await (
+        flowStepHandlers as unknown as Record<
+          string,
+          (p: unknown) => Promise<unknown>
+        >
+      )[extra.stepType]({ ...base, step })
+      const [, job] = integrationQueueAdd.mock.calls[0] as unknown as [
+        string,
+        { data: { runStartedAt?: string } },
+      ]
+      expect(job.data.runStartedAt, extra.stepType).toBe(
+        RUN_START.toISOString(),
+      )
+    }
   })
 })

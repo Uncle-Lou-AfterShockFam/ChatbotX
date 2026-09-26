@@ -93,6 +93,8 @@ function makeData(
   } as unknown as Parameters<typeof handleSendSequenceFlow>[0]
 }
 
+const JOB_TIMESTAMP = 1_790_000_000_000
+
 function makeJob(
   overrides: Partial<{
     attemptsMade: number
@@ -105,6 +107,7 @@ function makeJob(
     id,
     attemptsMade,
     opts: { attempts },
+    timestamp: JOB_TIMESTAMP,
   } as unknown as Job
 }
 
@@ -162,6 +165,8 @@ describe("handleSendSequenceFlow", () => {
           flowId: "flow-1",
           workspaceId: "ws-1",
           contactId: "contact-1",
+          // The sequence job opens the run: the stop guard's start.
+          startedAt: new Date(JOB_TIMESTAMP),
         }),
       )
       expect(markCompletedSpy).toHaveBeenCalledWith(

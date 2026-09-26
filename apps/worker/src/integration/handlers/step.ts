@@ -158,6 +158,7 @@ async function splitTraffic({
   nodeVisits,
   commentAnchor,
   appointmentId,
+  runStartedAt,
 }: ExecuteStepProps<SplitTrafficStepSchema>) {
   if (!(targetId && step.cases.length)) {
     return
@@ -197,6 +198,7 @@ async function splitTraffic({
         nodeVisits,
         commentAnchor,
         appointmentId,
+        runStartedAt: runStartedAt?.toISOString(),
         origin: webhookChannelOrigin(),
       },
     })
@@ -358,6 +360,7 @@ async function startAnotherNode(
       sendFrom: props.sendFrom,
       nodeVisits: props.nodeVisits,
       commentAnchor: props.commentAnchor,
+      runStartedAt: props.runStartedAt?.toISOString(),
       origin: webhookChannelOrigin(),
     },
   })
@@ -372,6 +375,7 @@ async function startExternalFlow({
   nodeVisits,
   commentAnchor,
   appointmentId,
+  runStartedAt,
 }: ExecuteStepProps<StartExternalFlowStepSchema>) {
   await integrationQueue.add(IntegrationJobAction.sendFlow, {
     type: IntegrationJobAction.sendFlow,
@@ -384,6 +388,7 @@ async function startExternalFlow({
       sendFrom,
       nodeVisits,
       commentAnchor,
+      runStartedAt: runStartedAt?.toISOString(),
       origin: webhookChannelOrigin(),
     },
   })
@@ -398,6 +403,7 @@ async function startExternalNode({
   nodeVisits,
   commentAnchor,
   appointmentId,
+  runStartedAt,
 }: ExecuteStepProps<StartExternalNodeStepSchema>) {
   await integrationQueue.add(IntegrationJobAction.sendFlow, {
     type: IntegrationJobAction.sendFlow,
@@ -411,6 +417,7 @@ async function startExternalNode({
       sendFrom,
       nodeVisits,
       commentAnchor,
+      runStartedAt: runStartedAt?.toISOString(),
       origin: webhookChannelOrigin(),
     },
   })

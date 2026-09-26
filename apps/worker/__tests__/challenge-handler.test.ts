@@ -103,11 +103,15 @@ describe("runChallenge", () => {
   })
 
   test("resumes challenge from the stored step", async () => {
-    await expect(runChallenge(makeChallenge())).resolves.toBeUndefined()
+    await expect(
+      runChallenge(makeChallenge(), { timestamp: 1_790_000_000_000 }),
+    ).resolves.toBeUndefined()
 
     expect(mocks.runStepsAndQuickReplies).toHaveBeenCalledWith(
       expect.objectContaining({
         startFromStepId: "step-1",
+        // The contact's reply job opens this pass: the stop guard's start.
+        runStartedAt: new Date(1_790_000_000_000),
       }),
     )
   })

@@ -7,13 +7,22 @@ export interface SendFlowDirectParams {
   flowExecutionKey?: string
   flowId: string
   metadata?: MetadataPayload
+  /** Enqueue time of the job running this dispatch (the run start). */
+  startedAt?: Date
   workspaceId: string
 }
 
 export async function sendFlowDirect(
   params: SendFlowDirectParams,
 ): Promise<Date> {
-  const { flowExecutionKey, flowId, workspaceId, contactId, metadata } = params
+  const {
+    flowExecutionKey,
+    flowId,
+    workspaceId,
+    contactId,
+    metadata,
+    startedAt,
+  } = params
 
   const conversation = await conversationService.findBy({
     where: { contactId, workspaceId },
@@ -37,7 +46,7 @@ export async function sendFlowDirect(
           conversationId: conversation,
           contactInboxId: contactInbox,
         },
-        { flowExecutionKey },
+        { flowExecutionKey, startedAt },
       )
     }),
   )

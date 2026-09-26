@@ -219,7 +219,7 @@ export async function processLeadgen(
           contactInboxId: contactInbox,
           origin: "channel",
         },
-        { flowExecutionKey: job.id },
+        { flowExecutionKey: job.id, startedAt: new Date(job.timestamp) },
       )
     }
 

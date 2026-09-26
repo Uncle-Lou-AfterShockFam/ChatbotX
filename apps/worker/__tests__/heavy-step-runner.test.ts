@@ -43,6 +43,7 @@ function makeProps(): HeavyStepProps<
     flowExecutionKey: "flow-execution-1",
     flowVersion: { flowId: "flow-1", id: "flow-version-1" },
     nodeVisits: { "node-1": 1 },
+    runStartedAt: new Date("2026-09-26T03:00:00.000Z"),
     step: aiGenerateImageDefaultFn({
       id: "1",
       outputFieldId: "field-1",
@@ -82,6 +83,7 @@ describe("runViaHeavyWorker", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           flowExecutionKey: "flow-execution-1",
+          runStartedAt: "2026-09-26T03:00:00.000Z",
           startFromStepId: "1",
         }),
         type: "resumeHeavyStep",
@@ -93,6 +95,8 @@ describe("runViaHeavyWorker", () => {
     )
     const [, data, options] = mocks.heavyQueueAdd.mock.calls[0] ?? []
     expect(data.data.continuation.flowExecutionKey).toBe("flow-execution-1")
+    // The resume re-enters under the run that queued the step.
+    expect(data.data.continuation.runStartedAt).toBe("2026-09-26T03:00:00.000Z")
     expect(data.data.outcomeKey).toContain("heavy-step-outcome")
     expect(options.jobId).not.toContain(":")
   })

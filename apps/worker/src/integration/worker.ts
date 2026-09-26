@@ -44,6 +44,7 @@ import { coexistMessengerSync } from "./handlers/coexist/messenger-sync"
 import { coexistWhatsappBuffer } from "./handlers/coexist/whatsapp-buffer"
 import { coexistWhatsappFlush } from "./handlers/coexist/whatsapp-flush"
 import { processCommentAutomation } from "./handlers/comment-automation"
+import { resolveRunStartedAt } from "./handlers/company-stop-guard"
 import { runCompanyStopOnTag } from "./handlers/company-stop-on-tag"
 import { updateContactAvatar } from "./handlers/contact/update-avatar"
 import { runContactScan } from "./handlers/contact-scan/engine"
@@ -315,12 +316,15 @@ async function startIntegrationWorker() {
                 await runFlowNode(job.data.data, {
                   flowExecutionKey:
                     job.data.data.flowExecutionKey ?? getFlowExecutionKey(job),
-                  startedAt: new Date(job.timestamp),
+                  startedAt: resolveRunStartedAt(
+                    job.data.data.runStartedAt,
+                    job.timestamp,
+                  ),
                 })
                 return
               }
               case IntegrationJobAction.resumeHeavyStep: {
-                await resumeHeavyStep(job.data.data)
+                await resumeHeavyStep(job.data.data, job)
                 return
               }
               case IntegrationJobAction.sendSequenceFlow: {
@@ -375,7 +379,7 @@ async function startIntegrationWorker() {
                 return
               }
               case IntegrationJobAction.runChallenge: {
-                await runChallenge(job.data.data)
+                await runChallenge(job.data.data, job)
                 return
               }
               case IntegrationJobAction.resumeWait: {
