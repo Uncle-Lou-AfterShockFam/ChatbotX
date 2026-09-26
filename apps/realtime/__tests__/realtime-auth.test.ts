@@ -1,9 +1,10 @@
 import {
+  LEGACY_PURPOSE_WINDOW_CUTOFF,
   REALTIME_TOKEN_PURPOSE,
   signRealtimeToken,
 } from "@chatbotx.io/partysocket-config/auth"
 import type * as Party from "partykit/server"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, onTestFinished, vi } from "vitest"
 import { verifyBroadcastRequest } from "../src/lib/realtime-auth"
 
 const SECRET = "s".repeat(32)
@@ -42,6 +43,13 @@ describe("verifyBroadcastRequest", () => {
   })
 
   it("accepts a purpose-less legacy token — rolling-deploy compat window (BLOCKER-a)", async () => {
+    // Inside the window: on real time this expired with the window itself
+    // (LEGACY_PURPOSE_WINDOW_CUTOFF, 2026-09-25).
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date(LEGACY_PURPOSE_WINDOW_CUTOFF.getTime() - 60_000))
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
     const token = await signLegacyTokenWithNoPurposeClaim("workspace:ws_1")
     const req = asRequest(
       new Request("https://realtime.example.com/parties/workspaces/ws_1", {
