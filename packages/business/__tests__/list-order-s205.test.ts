@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   inboxFindMany: vi.fn(),
   memberFindMany: vi.fn(),
   count: vi.fn(),
+  relationsCount: vi.fn(),
 }))
 
 vi.mock("@chatbotx.io/database/client", () => ({
@@ -17,6 +18,7 @@ vi.mock("@chatbotx.io/database/client", () => ({
     },
     $count: mocks.count,
   },
+  countWithRelationsFilter: mocks.relationsCount,
   relationsFilterToSQL: vi.fn(),
 }))
 
@@ -30,6 +32,7 @@ beforeEach(() => {
   mocks.inboxFindMany.mockResolvedValue([])
   mocks.memberFindMany.mockResolvedValue([])
   mocks.count.mockResolvedValue(120)
+  mocks.relationsCount.mockResolvedValue(120)
 })
 
 describe("inboxService.list", () => {
@@ -75,6 +78,37 @@ describe("workspaceMemberService.listPaginated", () => {
         limit: 50,
         offset: 100,
       }),
+    )
+  })
+
+  test("a keyword matches the name only, and the count uses the same filter", async () => {
+    await workspaceMemberService.listPaginated({
+      workspaceId: "1",
+      keyword: "  a_b ",
+    })
+
+    const where = {
+      workspaceId: "1",
+      user: {
+        name: { ilike: "%a\\_b%" },
+      },
+    }
+    expect(mocks.memberFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where }),
+    )
+    expect(mocks.relationsCount).toHaveBeenCalledWith(
+      expect.objectContaining({ tsName: "workspaceMemberModel", where }),
+    )
+  })
+
+  test("a blank keyword filters nothing", async () => {
+    await workspaceMemberService.listPaginated({
+      workspaceId: "1",
+      keyword: "   ",
+    })
+
+    expect(mocks.relationsCount).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { workspaceId: "1", user: undefined } }),
     )
   })
 })
