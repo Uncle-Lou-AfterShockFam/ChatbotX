@@ -131,3 +131,59 @@ jobs:
       # contend with builder's own workers on a 4-vCPU runner.
       - name: Test
         run: pnpm turbo run test --concurrency=2
+
+  # The `__tests__/integration` suites need a real, migrated Postgres: in the
+  # plain `test` job above they skip themselves (setup-env's port-1 sentinel).
+  # They are the only gate on the smart-delay claim / cancel races (fork #47,
+  # #53, #57) — a revert of #57's SKIP LOCKED + re-check passes every mocked
+  # test. `test:db` sets REQUIRE_REAL_DB=1, so a missing database fails loudly
+  # instead of skipping to a silent green. No Turbo cache step: test:db runs
+  # vitest directly through pnpm --filter, not through turbo.
+  test-db:
+    name: Tests (real Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        # Same major + extensions as production (TimescaleDB hypertables).
+        image: timescale/timescaledb-ha:pg18-all
+        env:
+          POSTGRES_USER: chatbotx
+          POSTGRES_PASSWORD: pw
+          POSTGRES_DB: chatbotx
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chatbotx -d chatbotx"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      DATABASE_URL: postgres://chatbotx:pw@127.0.0.1:5432/chatbotx
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The script directly, not `pnpm db:migrate`: that wraps it in
+      # `dotenv -e ../../.env`, and CI has no .env (DATABASE_URL is job env).
+      - name: Apply migrations
+        working-directory: packages/database
+        run: node ./scripts/run-migrations.mjs
+
+      - name: Database integration tests
+        run: pnpm --filter @chatbotx.io/database test:db
+
+      - name: Business integration tests
+        run: pnpm --filter @chatbotx.io/business test:db
