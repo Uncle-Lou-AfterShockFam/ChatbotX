@@ -315,6 +315,7 @@ async function startIntegrationWorker() {
                 await runFlowNode(job.data.data, {
                   flowExecutionKey:
                     job.data.data.flowExecutionKey ?? getFlowExecutionKey(job),
+                  startedAt: new Date(job.timestamp),
                 })
                 return
               }

@@ -119,26 +119,43 @@ const smartDelayPersistenceHandlers: Record<
 }
 
 /**
- * A wait written for a contact whose company is stopped is canceled at once.
- * The step that wrote it may have started before the stop (and passed its
- * claimCheck) while the stop's cancel pass had already run; checking after the
- * write closes that window (see `isContactInboxStopped`). A failed check is
- * logged and the row kept: every resume re-checks before it runs.
+ * Was the contact's company stopped AFTER `since`? A stop is permanent and
+ * must end the waits that existed or were being written when it ran, but a
+ * flow started after it (the `company-stopped` tag trigger) keeps its waits.
  */
-async function isStoppedCompanyRow(row: SmartDelayRow): Promise<boolean> {
+export async function wasCompanyStoppedSince(
+  row: Pick<SmartDelayRow, "workspaceId" | "contactInboxId">,
+  since: Date,
+): Promise<boolean> {
+  const stoppedAt = await smartDelayService.companyStoppedAt({
+    workspaceId: row.workspaceId,
+    contactInboxId: row.contactInboxId,
+  })
+  return stoppedAt !== null && stoppedAt.getTime() > since.getTime()
+}
+
+/**
+ * A wait written by a run that started before its contact's company was
+ * stopped is canceled at once: the step may have passed its claimCheck before
+ * the stop and written the row after the stop's cancel pass. Checking after
+ * the write closes that window (see `companyStoppedAt`). A failed check is
+ * logged and the row kept: every resume re-checks against its createdAt.
+ */
+async function cancelIfStoppedSinceRun(
+  row: SmartDelayRow,
+  runStartedAt: Date | undefined,
+): Promise<boolean> {
+  if (!runStartedAt) {
+    return false
+  }
   try {
-    if (
-      !(await smartDelayService.isContactInboxStopped({
-        workspaceId: row.workspaceId,
-        contactInboxId: row.contactInboxId,
-      }))
-    ) {
+    if (!(await wasCompanyStoppedSince(row, runStartedAt))) {
       return false
     }
     await smartDelayService.cancelIfNotStarted({ id: row.id })
     logger.info(
       { rowId: row.id, contactInboxId: row.contactInboxId },
-      "Smart delay canceled at creation: the contact's company is stopped",
+      "Smart delay canceled at creation: the contact's company was stopped during this run",
     )
     return true
   } catch (err) {
@@ -167,6 +184,8 @@ export async function scheduleSmartDelayResume(props: {
   /** waitForEvent only. */
   eventNodeId?: string | null
   eventSpec?: WaitForEventSpec | null
+  /** ExecuteStepProps.runStartedAt of the step writing this wait. */
+  runStartedAt?: Date
 }): Promise<void> {
   const rowId = createId()
   const row: SmartDelayRow = {
@@ -193,7 +212,7 @@ export async function scheduleSmartDelayResume(props: {
   // Insert tracking record first so a crash during enqueue still has a recovery path via scanner.
   const persistedRow = await smartDelayPersistenceHandlers[props.type](row)
 
-  if (await isStoppedCompanyRow(persistedRow)) {
+  if (await cancelIfStoppedSinceRun(persistedRow, props.runStartedAt)) {
     return
   }
 

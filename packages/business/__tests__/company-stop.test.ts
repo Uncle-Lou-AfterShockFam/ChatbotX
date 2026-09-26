@@ -10,6 +10,7 @@ const {
   mockRemoveSequences,
   mockCancelActiveForContacts,
   mockHasActiveForContacts,
+  mockHasActiveForCompany,
   mockQueueRemove,
   mockMarkBroadcastFailed,
   mockEnsureTag,
@@ -50,6 +51,7 @@ const {
     mockRemoveSequences: vi.fn(),
     mockCancelActiveForContacts: vi.fn(),
     mockHasActiveForContacts: vi.fn(async () => false),
+    mockHasActiveForCompany: vi.fn(async () => false),
     mockQueueRemove: vi.fn(),
     mockMarkBroadcastFailed: vi.fn(),
     mockEnsureTag: vi.fn(),
@@ -102,6 +104,7 @@ vi.mock("../src/smart-delay/service", () => ({
   smartDelayService: {
     cancelActiveForContacts: mockCancelActiveForContacts,
     hasActiveForContacts: mockHasActiveForContacts,
+    hasActiveForCompany: mockHasActiveForCompany,
   },
 }))
 vi.mock("../src/broadcast/service", () => ({
@@ -140,6 +143,7 @@ describe("stopCompany", () => {
     mockRemoveSequences.mockResolvedValue([{ id: "d1" }, { id: "d2" }])
     mockCancelActiveForContacts.mockResolvedValue([])
     mockHasActiveForContacts.mockResolvedValue(false)
+    mockHasActiveForCompany.mockResolvedValue(false)
     mockQueueRemove.mockResolvedValue(undefined)
     mockMarkBroadcastFailed.mockResolvedValue(1)
     mockEnsureTag.mockResolvedValue("tag-stopped")
@@ -203,7 +207,7 @@ describe("stopCompany", () => {
     expect(mockAudit).toHaveBeenCalledTimes(1)
   })
 
-  test("already stopped, no firable wait left: only the cheap re-check runs", async () => {
+  test("already stopped, no firable wait left: one join check, no contact list", async () => {
     mockTxSelectFor.mockResolvedValue([companyRow({ stoppedAt: new Date() })])
     const result = await stopCompany({
       workspaceId: WS,
@@ -212,10 +216,11 @@ describe("stopCompany", () => {
     })
     expect(result).toEqual({ status: "already_stopped", companyId: COMPANY })
     expect(mockTxUpdateWhere).not.toHaveBeenCalled()
-    expect(mockHasActiveForContacts).toHaveBeenCalledWith({
+    expect(mockHasActiveForCompany).toHaveBeenCalledWith({
       workspaceId: WS,
-      contactIds: ["c-1", "c-2"],
+      companyId: COMPANY,
     })
+    expect(mockListContactIds).not.toHaveBeenCalled()
     expect(mockCancelActiveForContacts).not.toHaveBeenCalled()
     expect(mockRemoveSequences).not.toHaveBeenCalled()
     expect(mockBulkAttach).not.toHaveBeenCalled()
@@ -223,9 +228,7 @@ describe("stopCompany", () => {
 
   test("already stopped with a wait a partial stop left behind: the smart-delay phase re-runs", async () => {
     mockTxSelectFor.mockResolvedValue([companyRow({ stoppedAt: new Date() })])
-    mockHasActiveForContacts
-      .mockResolvedValueOnce(true) // the re-sweep's own re-check
-      .mockResolvedValue(false) // the cancel loop's drained check
+    mockHasActiveForCompany.mockResolvedValueOnce(true)
     mockCancelActiveForContacts
       .mockResolvedValueOnce([{ id: "sd-left", triggerAt: new Date(0) }])
       .mockResolvedValue([])
@@ -244,7 +247,7 @@ describe("stopCompany", () => {
 
   test("a failing re-sweep is logged and still answers already_stopped", async () => {
     mockTxSelectFor.mockResolvedValue([companyRow({ stoppedAt: new Date() })])
-    mockHasActiveForContacts.mockRejectedValueOnce(new Error("db down"))
+    mockHasActiveForCompany.mockRejectedValueOnce(new Error("db down"))
     const result = await stopCompany({
       workspaceId: WS,
       companyId: COMPANY,
@@ -252,9 +255,10 @@ describe("stopCompany", () => {
     })
     expect(result).toEqual({ status: "already_stopped", companyId: COMPANY })
     expect(mockLoggerWarn).toHaveBeenCalledWith(
-      expect.objectContaining({ companyId: COMPANY, canceled: 0 }),
-      "company-stop: re-sweep of an already-stopped company failed",
+      expect.objectContaining({ phase: "smart-delays", companyId: COMPANY }),
+      "company-stop: cascade phase failed",
     )
+    expect(mockCancelActiveForContacts).not.toHaveBeenCalled()
   })
 
   test("already stopped + force: re-runs the cascade", async () => {

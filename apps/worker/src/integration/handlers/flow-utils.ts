@@ -51,6 +51,8 @@ export type ExecuteMultipleStepsProps = {
   flowExecutionKey?: string
   /** Set by a claimed smart-delay resume; runs before every step and dispatch. */
   claimCheck?: ClaimCheck
+  /** When the job running this pass was enqueued (FlowExecutionOptions.startedAt). */
+  runStartedAt?: Date
 }
 
 // claimCheck stays with the runner: handlers never receive it.

@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 const { integrationQueueAdd, smartDelayService } = vi.hoisted(() => ({
   integrationQueueAdd: vi.fn(),
   smartDelayService: {
-    isContactInboxStopped: vi.fn(async () => false),
+    companyStoppedAt: vi.fn(async (): Promise<Date | null> => null),
     cancelIfNotStarted: vi.fn(async () => true),
     create: vi.fn(),
     markScheduled: vi.fn(),
@@ -77,13 +77,20 @@ describe("scheduleSmartDelayResume: immediate enqueue", () => {
     expect(smartDelayService.resetToPending).not.toHaveBeenCalled()
   })
 
+  const RUN_STARTED = new Date(NOW.getTime() - 5000)
+
   test.each([
     "waitForEvent",
     "waitNode",
-  ] as const)("%s: a stopped company's contact -> the written row is canceled, never marked or enqueued", async (type) => {
-    smartDelayService.isContactInboxStopped.mockResolvedValueOnce(true)
-    await scheduleSmartDelayResume(props(type))
-    expect(smartDelayService.isContactInboxStopped).toHaveBeenCalledWith({
+  ] as const)("%s: company stopped during this run -> the written row is canceled, never marked or enqueued", async (type) => {
+    smartDelayService.companyStoppedAt.mockResolvedValueOnce(
+      new Date(NOW.getTime() - 1000),
+    )
+    await scheduleSmartDelayResume({
+      ...props(type),
+      runStartedAt: RUN_STARTED,
+    })
+    expect(smartDelayService.companyStoppedAt).toHaveBeenCalledWith({
       workspaceId: "ws-1",
       contactInboxId: "ci-1",
     })
@@ -94,12 +101,35 @@ describe("scheduleSmartDelayResume: immediate enqueue", () => {
     expect(integrationQueueAdd).not.toHaveBeenCalled()
   })
 
+  test("company stopped before this run started (a flow reacting to the stop): the wait is kept", async () => {
+    smartDelayService.companyStoppedAt.mockResolvedValueOnce(
+      new Date(RUN_STARTED.getTime() - 1000),
+    )
+    smartDelayService.markScheduled.mockResolvedValueOnce(true)
+    await scheduleSmartDelayResume({
+      ...props("waitNode"),
+      runStartedAt: RUN_STARTED,
+    })
+    expect(smartDelayService.cancelIfNotStarted).not.toHaveBeenCalled()
+    expect(integrationQueueAdd).toHaveBeenCalledTimes(1)
+  })
+
+  test("no run start (a button tap, an inline run): no stop lookup at all", async () => {
+    smartDelayService.markScheduled.mockResolvedValueOnce(true)
+    await scheduleSmartDelayResume(props("waitNode"))
+    expect(smartDelayService.companyStoppedAt).not.toHaveBeenCalled()
+    expect(integrationQueueAdd).toHaveBeenCalledTimes(1)
+  })
+
   test("a failing stopped-company check keeps the row (every resume re-checks)", async () => {
-    smartDelayService.isContactInboxStopped.mockRejectedValueOnce(
+    smartDelayService.companyStoppedAt.mockRejectedValueOnce(
       new Error("db down"),
     )
     smartDelayService.markScheduled.mockResolvedValueOnce(true)
-    await scheduleSmartDelayResume(props("waitNode"))
+    await scheduleSmartDelayResume({
+      ...props("waitNode"),
+      runStartedAt: RUN_STARTED,
+    })
     expect(smartDelayService.cancelIfNotStarted).not.toHaveBeenCalled()
     expect(integrationQueueAdd).toHaveBeenCalledTimes(1)
   })

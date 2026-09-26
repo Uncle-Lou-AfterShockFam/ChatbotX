@@ -6,8 +6,9 @@
  * A company stop is permanent: it commits `Company.stoppedAt`, then cancels
  * every active wait of the company's contacts. A wait written after that
  * cancel pass (a step that started before the stop), or one the pass skipped
- * on a held lock (a `partial` stop), is caught by `isContactInboxStopped`
- * (checked after the write and at every resume). The re-sweep an
+ * on a held lock (a `partial` stop), is caught by `companyStoppedAt`
+ * (compared with the run start after the write, and with the row's createdAt
+ * at every resume). The re-sweep an
  * `already_stopped` trigger runs is covered in `company-stop.test.ts`.
  *
  * Seeds run under `SET LOCAL session_replication_role = replica` (no
@@ -137,8 +138,8 @@ afterAll(async () => {
   await db.$client.end()
 })
 
-describe.skipIf(!databaseUrl)("isContactInboxStopped", () => {
-  test("true only for a contact of a stopped company in the same workspace", async () => {
+describe.skipIf(!databaseUrl)("companyStoppedAt", () => {
+  test("the stamp only for a contact of a stopped company in the same workspace", async () => {
     const workspaceId = mintId()
     const stopped = await seedContact({ workspaceId, stopped: true })
     const live = await seedContact({ workspaceId, stopped: false })
@@ -149,15 +150,53 @@ describe.skipIf(!databaseUrl)("isContactInboxStopped", () => {
     })
 
     const check = (contactInboxId: string, ws = workspaceId) =>
-      smartDelayService.isContactInboxStopped({
+      smartDelayService.companyStoppedAt({
         workspaceId: ws,
         contactInboxId,
       })
-    expect(await check(stopped.contactInboxId)).toBe(true)
-    expect(await check(live.contactInboxId)).toBe(false)
-    expect(await check(loose.contactInboxId)).toBe(false)
-    expect(await check(stopped.contactInboxId, mintId())).toBe(false)
-    expect(await check(mintId())).toBe(false)
+    expect(await check(stopped.contactInboxId)).toBeInstanceOf(Date)
+    expect(await check(live.contactInboxId)).toBeNull()
+    expect(await check(loose.contactInboxId)).toBeNull()
+    expect(await check(stopped.contactInboxId, mintId())).toBeNull()
+    expect(await check(mintId())).toBeNull()
+  })
+})
+
+describe.skipIf(!databaseUrl)("hasActiveForCompany", () => {
+  test("sees a firable row of a CURRENT contact only, in one join", async () => {
+    const workspaceId = mintId()
+    const a = await seedContact({ workspaceId, stopped: true })
+    const other = await seedContact({ workspaceId, stopped: true })
+    const check = () =>
+      smartDelayService.hasActiveForCompany({
+        workspaceId,
+        companyId: a.companyId,
+      })
+
+    await seedWait({
+      workspaceId,
+      contactInboxId: a.contactInboxId,
+      status: "completed",
+    })
+    await seedWait({
+      workspaceId,
+      contactInboxId: other.contactInboxId,
+      status: "scheduled",
+    })
+    expect(await check()).toBe(false)
+
+    await seedWait({
+      workspaceId,
+      contactInboxId: a.contactInboxId,
+      status: "running",
+      claimGeneration: 1,
+    })
+    expect(await check()).toBe(true)
+
+    // The contact leaves the company: its waits are no longer the company's.
+    await asReplica(sql`
+      UPDATE "Contact" SET "companyId" = NULL WHERE id = ${a.contactId}`)
+    expect(await check()).toBe(false)
   })
 })
 
@@ -187,11 +226,11 @@ describe.skipIf(!databaseUrl)(
       })
 
       expect(
-        await smartDelayService.isContactInboxStopped({
+        await smartDelayService.companyStoppedAt({
           workspaceId,
           contactInboxId,
         }),
-      ).toBe(true)
+      ).toBeInstanceOf(Date)
       expect(await smartDelayService.cancelIfNotStarted({ id: row })).toBe(true)
       expect(await statusOf(row)).toBe("canceled")
     })

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 const { runFlowNode, smartDelayService } = vi.hoisted(() => ({
   runFlowNode: vi.fn(),
   smartDelayService: {
-    isContactInboxStopped: vi.fn(async () => false),
+    companyStoppedAt: vi.fn(async (): Promise<Date | null> => null),
     cancelIfNotStarted: vi.fn(async () => true),
     claimRunning: vi.fn(),
     findById: vi.fn(),
@@ -71,12 +71,14 @@ describe("runWaitResume", () => {
     smartDelayService.requeueClaimedRun.mockResolvedValue("scheduled")
   })
 
-  test("a stopped company's contact: the claimed row is canceled with ITS generation, the flow never runs", async () => {
-    smartDelayService.isContactInboxStopped.mockResolvedValueOnce(true)
+  test("company stopped after the wait was written: the claimed row is canceled with ITS generation, the flow never runs", async () => {
+    smartDelayService.companyStoppedAt.mockResolvedValueOnce(
+      new Date("2026-07-16T00:00:30.000Z"),
+    )
 
     await runWaitResume({ smartDelayId: "smart-delay-1" })
 
-    expect(smartDelayService.isContactInboxStopped).toHaveBeenCalledWith({
+    expect(smartDelayService.companyStoppedAt).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       contactInboxId: "contact-inbox-1",
     })
@@ -90,8 +92,22 @@ describe("runWaitResume", () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  test("company stopped BEFORE the wait was written (a flow reacting to the stop): the flow runs", async () => {
+    smartDelayService.companyStoppedAt.mockResolvedValueOnce(
+      new Date("2026-07-15T23:59:00.000Z"),
+    )
+
+    await runWaitResume({ smartDelayId: "smart-delay-1" })
+
+    expect(runFlowNode).toHaveBeenCalledTimes(1)
+    expect(smartDelayService.finishClaimedRun).toHaveBeenCalledWith({
+      id: "smart-delay-1",
+      generation: 7,
+    })
+  })
+
   test("a failing stopped-company check is a flow failure: requeue + rethrow", async () => {
-    smartDelayService.isContactInboxStopped.mockRejectedValueOnce(
+    smartDelayService.companyStoppedAt.mockRejectedValueOnce(
       new Error("db down"),
     )
 

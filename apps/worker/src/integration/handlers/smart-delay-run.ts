@@ -8,7 +8,10 @@ import { normalizeError } from "universal-error-normalizer"
 import { logger } from "../../lib/logger"
 import { type ClaimCheck, ClaimLostError } from "./claim-lost"
 import { runFlowNode } from "./flow"
-import type { buildSendFlowResumeJob } from "./smart-delay"
+import {
+  type buildSendFlowResumeJob,
+  wasCompanyStoppedSince,
+} from "./smart-delay"
 
 /**
  * How often an in-flight run renews its claim. The scanner sweeps `running`
@@ -66,7 +69,7 @@ async function withClaimWriteRetry<T>(write: () => Promise<T>): Promise<T> {
 export async function runClaimedSmartDelay(
   claimed: Pick<
     SmartDelayRow,
-    "id" | "claimGeneration" | "workspaceId" | "contactInboxId"
+    "id" | "claimGeneration" | "workspaceId" | "contactInboxId" | "createdAt"
   >,
   resumeJob: ReturnType<typeof buildSendFlowResumeJob>,
   parentJob?: Job,
@@ -102,15 +105,10 @@ export async function runClaimedSmartDelay(
     }
   }
   try {
-    // A stopped company's contact: the stop canceled every active row, but a
-    // row it skipped (partial stop) or one written after its cancel pass can
-    // still be claimed here. Cancel it instead of running the flow.
-    if (
-      await smartDelayService.isContactInboxStopped({
-        workspaceId: claimed.workspaceId,
-        contactInboxId: claimed.contactInboxId,
-      })
-    ) {
+    // The contact's company was stopped after this wait was written: the stop
+    // canceled every active row, but one it skipped (a partial stop) or one
+    // written around its cancel pass can still be claimed here.
+    if (await wasCompanyStoppedSince(claimed, claimed.createdAt)) {
       await withClaimWriteRetry(() =>
         smartDelayService.finishClaimedRun({
           id: smartDelayId,
@@ -120,13 +118,14 @@ export async function runClaimedSmartDelay(
       )
       logger.info(
         { smartDelayId, generation },
-        "Smart delay run canceled: the contact's company is stopped",
+        "Smart delay run canceled: the contact's company was stopped",
       )
       return
     }
     await runFlowNode(resumeJob.data.data, {
       flowExecutionKey: parentJob?.id,
       claimCheck,
+      startedAt: parentJob ? new Date(parentJob.timestamp) : undefined,
     })
   } catch (error) {
     if (error instanceof ClaimLostError) {

@@ -235,45 +235,45 @@ async function phase<T>(
 
 /**
  * An already-stopped company can still hold firable waits: a `partial` stop
- * whose smart-delay phase gave up on a locked row, or a row a check-then-write
- * path wrote around the stop. Every later non-force trigger re-runs just that
- * phase when the cheap re-check finds one; the result stays `already_stopped`.
+ * whose smart-delay phase gave up on a locked row. Every later non-force
+ * trigger re-runs just that phase when a one-join check finds such a row; the
+ * answer stays `already_stopped` and a failure is only logged (the next
+ * trigger tries again).
  */
 async function resweepSmartDelays(props: {
   workspaceId: string
   companyId: string
 }): Promise<void> {
   const { workspaceId, companyId } = props
-  try {
-    const contactIds = await companyService.listContactIds({
-      workspaceId,
-      companyId,
-    })
-    if (
-      !(await smartDelayService.hasActiveForContacts({
-        workspaceId,
-        contactIds,
-      }))
-    ) {
-      return
-    }
-    const canceled = await cancelSmartDelays({ workspaceId, contactIds })
-    logger.info(
-      { workspaceId, companyId, smartDelaysCanceled: canceled },
-      "company-stop: re-swept waits of an already-stopped company",
-    )
-  } catch (error) {
-    logger.warn(
-      {
-        error,
-        workspaceId,
-        companyId,
-        canceled:
-          error instanceof SmartDelayCancelIncompleteError ? error.canceled : 0,
-      },
-      "company-stop: re-sweep of an already-stopped company failed",
-    )
+  const failed: CompanyStopPhase[] = []
+  const hasLeft = await phase(
+    "smart-delays",
+    { workspaceId, companyId, failed },
+    () => smartDelayService.hasActiveForCompany({ workspaceId, companyId }),
+    false,
+  )
+  if (!hasLeft) {
+    return
   }
+  const smartDelaysCanceled = await phase(
+    "smart-delays",
+    { workspaceId, companyId, failed },
+    async () =>
+      cancelSmartDelays({
+        workspaceId,
+        contactIds: await companyService.listContactIds({
+          workspaceId,
+          companyId,
+        }),
+      }),
+    0,
+    (error) =>
+      error instanceof SmartDelayCancelIncompleteError ? error.canceled : 0,
+  )
+  logger.info(
+    { workspaceId, companyId, smartDelaysCanceled, failedPhases: failed },
+    "company-stop: re-swept waits of an already-stopped company",
+  )
 }
 
 export async function stopCompany(props: {

@@ -125,6 +125,7 @@ type ExecuteStepsAndQuickRepliesProps = {
   appointmentId?: string
   flowExecutionKey?: string
   claimCheck?: ClaimCheck
+  runStartedAt?: Date
 }
 
 /** A job carries either an entity ID or the already-loaded entity. */
@@ -143,6 +144,12 @@ type FlowExecutionOptions = {
    * the stuck-running sweep has handed the row to another resume.
    */
   claimCheck?: ClaimCheck
+  /**
+   * When the job running this pass was enqueued. A wait the pass writes for a
+   * contact whose company was stopped after it is canceled (see
+   * scheduleSmartDelayResume); unset = never canceled on that ground.
+   */
+  startedAt?: Date
 }
 
 // A tapped button / quick reply never runs under a smart-delay claim, and
@@ -314,6 +321,7 @@ export const runFlowNode = async (
       appointmentId: props.appointmentId,
       flowExecutionKey,
       claimCheck: options?.claimCheck,
+      runStartedAt: options?.startedAt,
     })
   } catch (error) {
     // A lost claim is not a failed delivery: the edge's new owner (or a

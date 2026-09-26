@@ -148,20 +148,22 @@ class SmartDelayService extends BaseService {
   }
 
   /**
-   * Is the contact behind this ContactInbox in a STOPPED company? A company
-   * stop is permanent, so a wait written or resumed for such a contact is
-   * canceled instead of run. Read AFTER the row is written: stopCompany
-   * commits `stoppedAt` before its cancel pass, so either this read sees the
-   * stamp or the row was committed before it and the cancel pass sees the row.
+   * When the company of the contact behind this ContactInbox was stopped, or
+   * null (no company, a live one, another workspace). A stop is permanent and
+   * cancels the waits that existed or were being written when it ran; a flow
+   * that starts AFTER it (the `company-stopped` tag trigger) keeps its waits,
+   * so callers compare this instant with the row's createdAt / the run's
+   * start. Read it AFTER the row write: stopCompany commits `stoppedAt` before
+   * its cancel pass, so either this read sees the stamp or the pass sees the row.
    */
-  async isContactInboxStopped(props: {
+  async companyStoppedAt(props: {
     tx?: DatabaseClient
     workspaceId: string
     contactInboxId: string
-  }): Promise<boolean> {
+  }): Promise<Date | null> {
     const { tx = db, workspaceId, contactInboxId } = props
-    const rows = await tx
-      .select({ id: companyModel.id })
+    const [row] = await tx
+      .select({ stoppedAt: companyModel.stoppedAt })
       .from(contactInboxModel)
       .innerJoin(contactModel, eq(contactModel.id, contactInboxModel.contactId))
       .innerJoin(companyModel, eq(companyModel.id, contactModel.companyId))
@@ -173,7 +175,7 @@ class SmartDelayService extends BaseService {
         ),
       )
       .limit(1)
-    return rows.length > 0
+    return row?.stoppedAt ?? null
   }
 
   /**
@@ -738,6 +740,35 @@ class SmartDelayService extends BaseService {
         id: contactOnSmartDelayModel.id,
         triggerAt: contactOnSmartDelayModel.triggerAt,
       })
+  }
+
+  /**
+   * Non-locking: does any CURRENT contact of the company still have a firable
+   * row? One join (no contact-id list), for the per-reply re-sweep check.
+   */
+  async hasActiveForCompany(props: {
+    tx?: DatabaseClient
+    workspaceId: string
+    companyId: string
+  }): Promise<boolean> {
+    const { tx = db, workspaceId, companyId } = props
+    const rows = await tx
+      .select({ id: contactOnSmartDelayModel.id })
+      .from(contactOnSmartDelayModel)
+      .innerJoin(
+        contactInboxModel,
+        eq(contactInboxModel.id, contactOnSmartDelayModel.contactInboxId),
+      )
+      .innerJoin(contactModel, eq(contactModel.id, contactInboxModel.contactId))
+      .where(
+        and(
+          activeInWorkspace(workspaceId),
+          eq(contactModel.workspaceId, workspaceId),
+          eq(contactModel.companyId, companyId),
+        ),
+      )
+      .limit(1)
+    return rows.length > 0
   }
 
   /** Non-locking twin of `cancelActiveForContacts`' filter. */
