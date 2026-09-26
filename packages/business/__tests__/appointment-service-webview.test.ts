@@ -1,6 +1,8 @@
 import { formatInTimeZone } from "date-fns-tz"
 import { beforeEach, describe, expect, test, vi } from "vitest"
 
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
+
 const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   findBy: vi.fn(),
@@ -415,7 +417,7 @@ describe("appointmentService.cancelAppointment", () => {
         metadata: undefined,
         appointmentId: "appointment-1",
         // A calendar flow opens a bot run: a later company stop ends it (s204).
-        runStartedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.+Z$/),
+        runStartedAt: expect.stringMatching(ISO_INSTANT),
         origin: "channel",
       },
     })
