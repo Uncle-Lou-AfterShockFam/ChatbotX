@@ -596,10 +596,10 @@ function scanDateFns(path: string, source: string): Scan {
     sf.getLineAndCharacterOfPosition(node.getStart()).line
   const report = (node: ts.Node, problem: string) =>
     findings.push({ path, line: lineOf(node) + 1, problem })
-  const { names, namespaces } = dateFnsBindings(sf, report)
-  if (names.size === 0 && namespaces.size === 0) {
+  if (!source.includes("date-fns")) {
     return { calls, findings }
   }
+  const { names, namespaces } = dateFnsBindings(sf, report)
 
   /** One reference to a formatter: a direct call under a reasoned comment. */
   const check = (callee: ts.Expression) => {
@@ -621,7 +621,18 @@ function scanDateFns(path: string, source: string): Scan {
   }
   const visit = (node: ts.Node) => {
     const parent = node.parent
+    const [first] = ts.isCallExpression(node) ? node.arguments : []
     if (
+      ts.isCallExpression(node) &&
+      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+        (ts.isIdentifier(node.expression) &&
+          node.expression.text === "require")) &&
+      first &&
+      ts.isStringLiteralLike(first) &&
+      DATE_FNS_MODULE.test(first.text)
+    ) {
+      report(node, "loads date-fns dynamically; the gate only follows imports")
+    } else if (
       ts.isExportSpecifier(node) &&
       names.has((node.propertyName ?? node.name).text)
     ) {
@@ -709,6 +720,15 @@ describe("the date-fns scanner itself (s203c)", () => {
       `${named}// zone: wall-clock (day key)\nconst fn = format`,
       'import * as dfns from "date-fns"\nconst { format } = dfns',
       'import * as dfns from "date-fns"\ndfns["format"](d, "y")',
+    ]) {
+      expect(scan(source).findings).toHaveLength(1)
+    }
+  })
+
+  test("a dynamic import or require of date-fns fails", () => {
+    for (const source of [
+      'const dfns = await import("date-fns")\ndfns.format(d, "y")',
+      'const { format } = require("date-fns/format")',
     ]) {
       expect(scan(source).findings).toHaveLength(1)
     }
