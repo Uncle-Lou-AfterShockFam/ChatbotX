@@ -14,16 +14,16 @@ import {
 import { Button } from "@chatbotx.io/ui/components/ui/button"
 import { Card, CardContent } from "@chatbotx.io/ui/components/ui/card"
 import { formatDate } from "@chatbotx.io/ui/lib/format"
-import { formatDistanceToNowStrict } from "date-fns"
+import { formatDistanceStrict } from "date-fns"
 import { AlertTriangleIcon, Loader2Icon, Trash2Icon } from "lucide-react"
 import { useLocale, useTimeZone, useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
-import { useEffect, useState } from "react"
+import { useRenderNow } from "@/hooks/use-render-now"
 import { safeActionErrorHandler } from "@/lib/errors/safe-action-error-handler"
 import { cancelWorkspaceDeletionAction } from "../actions/cancel-workspace-deletion-action"
 import { scheduleWorkspaceDeletionAction } from "../actions/schedule-workspace-deletion-action"
 
-function formatCountdown(target: string | Date | null) {
+function formatCountdown(target: string | Date | null, now: Date) {
   if (!target) {
     return null
   }
@@ -36,29 +36,14 @@ function formatCountdown(target: string | Date | null) {
   // `round`, not `ceil`: scheduledDeletionAt is rounded up to the purge cron
   // boundary, so the real distance is 24h + up to 30m (~1.01 days). `ceil` would
   // inflate that to "2 days"; `round` keeps it at the intended "1 day".
-  return formatDistanceToNowStrict(targetDate, {
+  return formatDistanceStrict(targetDate, now, {
     addSuffix: true,
     roundingMethod: "round",
   })
 }
 
 function useCountdown(target: string | Date | null) {
-  const [countdown, setCountdown] = useState(() => formatCountdown(target))
-
-  useEffect(() => {
-    setCountdown(formatCountdown(target))
-
-    if (!target) {
-      return
-    }
-
-    const timer = window.setInterval(() => {
-      setCountdown(formatCountdown(target))
-    }, 60_000)
-    return () => window.clearInterval(timer)
-  }, [target])
-
-  return countdown
+  return formatCountdown(target, useRenderNow())
 }
 
 export function WorkspaceDeletionCard({

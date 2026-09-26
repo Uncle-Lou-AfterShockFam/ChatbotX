@@ -752,3 +752,101 @@ describe("the date-fns scanner itself (s203c)", () => {
     }
   })
 })
+
+/**
+ * s205c: `formatDistanceToNow*` reads the clock DURING render, so the server
+ * render and the hydrating client can print different words ("1 minute ago"
+ * vs "2 minutes ago") and React throws #418 (`/contacts`, 1 load in 2). Render
+ * `<RelativeTime>` or read `useRenderNow()`, whose first value is the
+ * request's `now` on both sides. No comment escape: there is no zone reason
+ * that makes a render-time clock read hydration-safe.
+ */
+const CLOCK_FORMATTER_MODULE = /^date-fns\/formatDistanceToNow(Strict)?$/
+const CLOCK_FORMATTERS = new Set([
+  "formatDistanceToNow",
+  "formatDistanceToNowStrict",
+])
+
+function scanClockFormatters(path: string, source: string): Scan {
+  const findings: Finding[] = []
+  if (!source.includes("date-fns")) {
+    return { calls: 0, findings }
+  }
+  const sf = ts.createSourceFile(
+    path,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  )
+  let calls = 0
+  const report = (node: ts.Node) => {
+    calls++
+    findings.push({
+      path,
+      line: sf.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+      problem:
+        "formatDistanceToNow* reads the clock at render: use <RelativeTime> or useRenderNow()",
+    })
+  }
+  const visit = (node: ts.Node) => {
+    if (
+      (ts.isImportSpecifier(node) &&
+        CLOCK_FORMATTERS.has((node.propertyName ?? node.name).text)) ||
+      (ts.isPropertyAccessExpression(node) &&
+        CLOCK_FORMATTERS.has(node.name.text)) ||
+      (ts.isElementAccessExpression(node) &&
+        ts.isStringLiteralLike(node.argumentExpression) &&
+        CLOCK_FORMATTERS.has(node.argumentExpression.text)) ||
+      (ts.isBindingElement(node) &&
+        ts.isIdentifier(node.propertyName ?? node.name) &&
+        CLOCK_FORMATTERS.has(
+          ((node.propertyName ?? node.name) as ts.Identifier).text,
+        )) ||
+      (ts.isStringLiteralLike(node) && CLOCK_FORMATTER_MODULE.test(node.text))
+    ) {
+      report(node)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sf)
+  return { calls, findings }
+}
+
+describe("no render-time clock reads through date-fns (s205c)", () => {
+  test("no formatDistanceToNow* in src", () => {
+    expect(
+      files(ROOT).flatMap(
+        (path) =>
+          scanClockFormatters(path, readFileSync(path, "utf8")).findings,
+      ),
+    ).toEqual([])
+  })
+})
+
+describe("the clock-formatter scanner itself (s205c)", () => {
+  const scan = (source: string) => scanClockFormatters("x.tsx", source)
+
+  test("named, aliased, namespace and subpath uses fail", () => {
+    for (const source of [
+      'import { formatDistanceToNow } from "date-fns"',
+      'import { formatDistanceToNowStrict as rel } from "date-fns"',
+      'import * as dfns from "date-fns"\ndfns.formatDistanceToNow(d)',
+      'import * as dfns from "date-fns"\ndfns["formatDistanceToNowStrict"](d)',
+      'import rel from "date-fns/formatDistanceToNow"',
+      'const { formatDistanceToNowStrict } = await import("date-fns")',
+      'const { formatDistanceToNow: rel } = require("date-fns")',
+    ]) {
+      expect(scan(source).findings.length).toBeGreaterThan(0)
+    }
+  })
+
+  test("clock-free formatters and files without date-fns pass", () => {
+    for (const source of [
+      'import { formatDistance, formatDistanceStrict } from "date-fns"',
+      "const formatDistanceToNow = 1",
+    ]) {
+      expect(scan(source).findings).toEqual([])
+    }
+  })
+})

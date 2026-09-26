@@ -43,10 +43,11 @@ import {
 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
-import { useTimeZone, useTranslations } from "next-intl"
+import { useTranslations } from "next-intl"
 import { useState } from "react"
 import type { AttachmentResource } from "@/features/attachments/schema/resource"
 import { useAttachmentUrl } from "@/features/attachments/utils"
+import { useViewerTimeZone } from "@/hooks/use-viewer-time-zone"
 import type { MessageResourceWithRelations } from "../schema/resource"
 import { MessageActions, MessageActionsEditor } from "./message-actions"
 import { MessageBubble } from "./message-bubble"
@@ -95,7 +96,7 @@ export const MessageItem = (props: MessageItemProps) => {
     onEdit,
   } = props
   const t = useTranslations("messages")
-  const timeZone = useTimeZone()
+  const timeZone = useViewerTimeZone()
   const [isEditing, setIsEditing] = useState(false)
 
   const variants: Record<"left" | "right" | "full", string> = {

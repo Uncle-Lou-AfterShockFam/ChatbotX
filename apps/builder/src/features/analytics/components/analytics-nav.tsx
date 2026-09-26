@@ -1,10 +1,12 @@
 "use client"
 
+import { useHorizontalOverflow } from "@chatbotx.io/ui/hooks/use-horizontal-overflow"
 import { cn } from "@chatbotx.io/ui/lib/utils"
 import type { AdsEligibleChannelType } from "@chatbotx.io/utils/channel"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useTranslations } from "next-intl"
+import { useRef } from "react"
 import { useWorkspaceId } from "@/hooks/routing"
 
 type AnalyticsNavLink = {
@@ -41,15 +43,21 @@ export function AnalyticsNav({
       segment: `ads/${channel}`,
     })),
   ]
+  const stripRef = useRef<HTMLUListElement>(null)
+  useHorizontalOverflow(stripRef, links.map((link) => link.segment).join("|"))
 
   return (
     // Below `md` the dashboard stacks, so the rail becomes a scrollable strip
-    // above the charts instead of eating 224px of a phone's width.
+    // above the charts instead of eating 224px of a phone's width, fading
+    // whichever edge hides links; the md+ rail never scrolls, so no mask.
     <nav
       aria-label={t("fields.analytics.label")}
       className="w-full md:w-56 md:shrink-0"
     >
-      <ul className="scrollbar-hide flex flex-row gap-1 overflow-x-auto md:flex-col md:overflow-visible">
+      <ul
+        className="scrollbar-hide scroll-fade-x flex flex-row gap-1 overflow-x-auto md:flex-col md:overflow-visible md:[mask-image:none]"
+        ref={stripRef}
+      >
         {links.map((link) => {
           const href = `${base}/${link.segment}`
           const isActive = pathname.startsWith(href)

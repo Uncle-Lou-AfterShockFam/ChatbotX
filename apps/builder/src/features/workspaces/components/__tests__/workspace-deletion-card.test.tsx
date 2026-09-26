@@ -19,6 +19,7 @@ vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => translations[key] ?? key,
   useLocale: () => "en",
   useTimeZone: () => "UTC",
+  useNow: () => new Date(),
 }))
 
 const capturedOptions: Record<string, { onSuccess?: () => void }> = {}

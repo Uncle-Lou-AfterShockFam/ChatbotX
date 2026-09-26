@@ -133,4 +133,30 @@ describe("AnalyticsNav", () => {
     expect(messengerLink?.className).toContain("font-medium")
     expect(whatsappLink?.className).not.toContain("font-medium")
   })
+
+  test("the phone strip fades its hidden edge; the md+ rail drops the mask (s205c)", async () => {
+    const scrollWidth = vi
+      .spyOn(HTMLElement.prototype, "scrollWidth", "get")
+      .mockReturnValue(500)
+    const clientWidth = vi
+      .spyOn(HTMLElement.prototype, "clientWidth", "get")
+      .mockReturnValue(390)
+    try {
+      await act(async () => {
+        root.render(
+          <AnalyticsNav adsChannels={["whatsapp", "messenger", "instagram"]} />,
+        )
+        await Promise.resolve()
+      })
+    } finally {
+      scrollWidth.mockRestore()
+      clientWidth.mockRestore()
+    }
+
+    const list = container.querySelector("ul")
+    expect(list?.classList).toContain("scroll-fade-x")
+    expect(list?.classList).toContain("md:[mask-image:none]")
+    expect(list?.hasAttribute("data-overflow-end")).toBe(true)
+    expect(list?.hasAttribute("data-overflow-start")).toBe(false)
+  })
 })

@@ -14,10 +14,10 @@ import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
 import { formatWithFallback } from "@chatbotx.io/utils/datetime"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import type { Column, ColumnDef, Row } from "@tanstack/react-table"
-import { formatDistanceToNow } from "date-fns"
 import { useSearchParams } from "next/navigation"
 import { useFormatter, useTimeZone, useTranslations } from "next-intl"
 import { use, useCallback, useEffect, useMemo, useState } from "react"
+import { RelativeTime } from "@/components/relative-time"
 import {
   type ContactFilterCriteria,
   ContactListFilterButton,
@@ -364,9 +364,7 @@ export function ContactsTable({
 
           return (
             <div>
-              {lastReadAt
-                ? formatDistanceToNow(lastReadAt, { addSuffix: true })
-                : null}
+              {lastReadAt ? <RelativeTime addSuffix date={lastReadAt} /> : null}
             </div>
           )
         },

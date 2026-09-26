@@ -14,7 +14,7 @@ import {
   TooltipTrigger,
 } from "@chatbotx.io/ui/components/ui/tooltip"
 import { cn } from "@chatbotx.io/ui/lib/utils"
-import { formatDistanceToNowStrict, isAfter } from "date-fns"
+import { isAfter } from "date-fns"
 import {
   MailIcon,
   MessageCircleMoreIcon,
@@ -30,6 +30,7 @@ import { useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { useEffect, useMemo } from "react"
 import { toast } from "sonner"
+import { RelativeTime } from "@/components/relative-time"
 import { useUserAvatarUrl } from "@/lib/auth/avatar"
 import { useChatStore } from "../chat/store/chat-store-provider"
 import { useAvatarUrl } from "../contacts/utils"
@@ -331,9 +332,11 @@ export default function ConversationItem({
               <span />
             )}
             <span className="text-neutral-400">
-              {conversation.lastActivityAt
-                ? formatDistanceToNowStrict(conversation.lastActivityAt)
-                : " "}
+              {conversation.lastActivityAt ? (
+                <RelativeTime date={conversation.lastActivityAt} strict />
+              ) : (
+                " "
+              )}
             </span>
           </div>
         </div>
