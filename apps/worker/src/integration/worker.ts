@@ -44,6 +44,7 @@ import { coexistMessengerSync } from "./handlers/coexist/messenger-sync"
 import { coexistWhatsappBuffer } from "./handlers/coexist/whatsapp-buffer"
 import { coexistWhatsappFlush } from "./handlers/coexist/whatsapp-flush"
 import { processCommentAutomation } from "./handlers/comment-automation"
+import { resolveRunStartedAt } from "./handlers/company-stop-guard"
 import { runCompanyStopOnTag } from "./handlers/company-stop-on-tag"
 import { updateContactAvatar } from "./handlers/contact/update-avatar"
 import { runContactScan } from "./handlers/contact-scan/engine"
@@ -315,12 +316,18 @@ async function startIntegrationWorker() {
                 await runFlowNode(job.data.data, {
                   flowExecutionKey:
                     job.data.data.flowExecutionKey ?? getFlowExecutionKey(job),
-                  startedAt: new Date(job.timestamp),
+                  // Only a bot-opened run carries a start (see runStartedAt).
+                  startedAt: job.data.data.runStartedAt
+                    ? resolveRunStartedAt(
+                        job.data.data.runStartedAt,
+                        job.timestamp,
+                      )
+                    : undefined,
                 })
                 return
               }
               case IntegrationJobAction.resumeHeavyStep: {
-                await resumeHeavyStep(job.data.data)
+                await resumeHeavyStep(job.data.data, job)
                 return
               }
               case IntegrationJobAction.sendSequenceFlow: {
@@ -329,15 +336,15 @@ async function startIntegrationWorker() {
               }
               case IntegrationJobAction.runFlowPostback: {
                 await runFlowPostback(job.data.data, {
+                  // A tap is the contact's own run: never cut off by a stop.
                   flowExecutionKey: getFlowExecutionKey(job),
-                  startedAt: new Date(job.timestamp),
                 })
                 return
               }
               case IntegrationJobAction.runFlowQuickReply: {
                 await runFlowQuickReply(job.data.data, {
+                  // A tap is the contact's own run: never cut off by a stop.
                   flowExecutionKey: getFlowExecutionKey(job),
-                  startedAt: new Date(job.timestamp),
                 })
                 return
               }
@@ -375,7 +382,7 @@ async function startIntegrationWorker() {
                 return
               }
               case IntegrationJobAction.runChallenge: {
-                await runChallenge(job.data.data)
+                await runChallenge(job.data.data, job)
                 return
               }
               case IntegrationJobAction.resumeWait: {

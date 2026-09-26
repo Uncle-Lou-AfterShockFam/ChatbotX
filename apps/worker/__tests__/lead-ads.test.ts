@@ -306,6 +306,7 @@ describe("processLeadgen", () => {
     )
     expect(mockRunFlowNode).toHaveBeenCalledWith(
       expect.objectContaining({ flowId: "flow-9" }),
+      // A lead is the contact's own run: never cut off by a company stop.
       { flowExecutionKey: undefined },
     )
     expect(mockSetContactId).toHaveBeenCalledWith({

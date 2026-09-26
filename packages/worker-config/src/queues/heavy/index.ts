@@ -28,6 +28,8 @@ export type HeavyFlowContinuation = {
   metadata?: z.infer<typeof metadataSchema>
   nodeId?: string
   nodeVisits?: Record<string, number>
+  /** ISO start of the run that queued this step (IntegrationJobRunFlowNode). */
+  runStartedAt?: string
   sendFrom?: "inbox"
   targetId?: string
   targetType?: FlowActionTargetType
@@ -158,6 +160,7 @@ const heavyFlowContinuationSchema = z
     appointmentId: z.string().min(1).optional(),
     sendFrom: z.literal("inbox").optional(),
     nodeVisits: z.record(z.string(), z.number().int().nonnegative()).optional(),
+    runStartedAt: z.iso.datetime().optional(),
     commentAnchor: z
       .object({
         commentId: z.string().min(1),

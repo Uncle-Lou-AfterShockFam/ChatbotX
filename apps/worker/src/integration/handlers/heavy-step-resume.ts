@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto"
 import type { IntegrationJobResumeHeavyStep } from "@chatbotx.io/worker-config"
+import type { Job } from "bullmq"
+import { resolveRunStartedAt } from "./company-stop-guard"
 import { runFlowNode } from "./flow"
 import {
   claimHeavyStepResume,
@@ -13,6 +15,7 @@ import {
  */
 export async function resumeHeavyStep(
   data: IntegrationJobResumeHeavyStep["data"],
+  job: Pick<Job, "timestamp">,
 ): Promise<void> {
   const resumeLeaseToken = randomUUID()
   const claim = await claimHeavyStepResume({
@@ -24,7 +27,14 @@ export async function resumeHeavyStep(
   }
 
   try {
-    await runFlowNode(data, { flowExecutionKey: data.flowExecutionKey })
+    await runFlowNode(data, {
+      flowExecutionKey: data.flowExecutionKey,
+      // The bot-opened run that queued the heavy step, not this resume job;
+      // a contact-opened run carries none and stays unguarded.
+      startedAt: data.runStartedAt
+        ? resolveRunStartedAt(data.runStartedAt, job.timestamp)
+        : undefined,
+    })
     await finishHeavyStepResume({
       outcomeKey: data.outcomeKey,
       resumeLeaseToken,

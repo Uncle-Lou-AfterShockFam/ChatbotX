@@ -107,13 +107,21 @@ async function runSendSequenceFlow(
   if (completedAt) {
     sentAt = completedAt
   } else {
-    await sendFlowDirect({
+    const { companyStopped } = await sendFlowDirect({
       flowId: validStep.flow.id,
       workspaceId,
       contactId: data.contactId,
       metadata: data.metadata,
       flowExecutionKey: job.id,
+      startedAt: new Date(job.timestamp),
     })
+    if (companyStopped) {
+      // Nothing was sent: never record a send or advance the enrollment (the
+      // stop's sequence phase ends it; a partial stop must not queue a step).
+      await markDispatchCanceled(dispatchId, workspaceId, "company_stopped")
+      await scheduler.removeFromSchedule(bucket, dispatchId)
+      return
+    }
 
     sentAt = new Date()
     await markDispatchCompleted(dispatchId, workspaceId, sentAt)

@@ -28,6 +28,8 @@ const data = {
   startFromStepId: "step-1",
 }
 
+const RESUME_JOB_AT = Date.parse("2026-09-26T03:00:00.000Z")
+
 describe("resumeHeavyStep", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -38,10 +40,12 @@ describe("resumeHeavyStep", () => {
     mocks.claimHeavyStepResume.mockResolvedValue("claimed")
     mocks.runFlowNode.mockResolvedValue(undefined)
 
-    await resumeHeavyStep(data)
+    await resumeHeavyStep(data, { timestamp: RESUME_JOB_AT })
 
+    // No run start carried: a contact-opened run, never cut off.
     expect(mocks.runFlowNode).toHaveBeenCalledWith(data, {
       flowExecutionKey: "flow-execution-1",
+      startedAt: undefined,
     })
     expect(mocks.finishHeavyStepResume).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -54,9 +58,28 @@ describe("resumeHeavyStep", () => {
   test("leaves a duplicate or premature continuation as a no-op", async () => {
     mocks.claimHeavyStepResume.mockResolvedValue("pending")
 
-    await resumeHeavyStep(data)
+    await resumeHeavyStep(data, { timestamp: RESUME_JOB_AT })
 
     expect(mocks.runFlowNode).not.toHaveBeenCalled()
     expect(mocks.finishHeavyStepResume).not.toHaveBeenCalled()
+  })
+
+  test("re-enters under the start of the run that queued the heavy step", async () => {
+    mocks.claimHeavyStepResume.mockResolvedValue("claimed")
+    mocks.runFlowNode.mockResolvedValue(undefined)
+    const runStartedAt = "2026-09-26T02:59:00.000Z"
+
+    await resumeHeavyStep(
+      { ...data, runStartedAt },
+      { timestamp: RESUME_JOB_AT },
+    )
+
+    expect(mocks.runFlowNode).toHaveBeenCalledWith(
+      expect.objectContaining({ runStartedAt }),
+      {
+        flowExecutionKey: "flow-execution-1",
+        startedAt: new Date(runStartedAt),
+      },
+    )
   })
 })

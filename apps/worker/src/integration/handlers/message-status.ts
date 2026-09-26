@@ -257,7 +257,8 @@ export const handleMessageStatus = async (
         contactInboxId: contactInbox.id,
         webhookType: IntegrationJobAction.messageStatus,
       },
-      { flowExecutionKey: parentJob?.id },
+      // The template's own send anchors its Delivered/Failed branch.
+      { flowExecutionKey: parentJob?.id, startedAt: message.createdAt },
     )
   } catch (error) {
     logger.error(

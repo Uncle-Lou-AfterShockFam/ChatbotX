@@ -285,6 +285,7 @@ function buildContinuation<T>(props: HeavyStepProps<T>) {
     metadata: props.metadata,
     nodeId: props.targetNodeId,
     nodeVisits: props.nodeVisits,
+    runStartedAt: props.runStartedAt?.toISOString(),
     sendFrom: props.sendFrom,
     targetId: props.targetId,
     // Only button and quick-reply targets are queue-level variants. Node and

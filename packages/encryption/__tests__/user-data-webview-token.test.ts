@@ -57,6 +57,42 @@ describe("user data webview token", () => {
     })
   })
 
+  test("carries the minting run's start for the company-stop guard", async () => {
+    const runStartedAt = "2026-09-26T03:00:00.000Z"
+    const token = await signUserDataWebviewToken({
+      ...BASE_PAYLOAD,
+      runStartedAt,
+    })
+    await expect(verifyUserDataWebviewToken(token)).resolves.toMatchObject({
+      runStartedAt,
+    })
+
+    const appointment = await signAppointmentWebviewToken({
+      mode: "book",
+      workspaceId: "workspace-1",
+      calendarId: "calendar-1",
+      contactId: "contact-1",
+      conversationId: "conversation-1",
+      contactInboxId: "contact-inbox-1",
+      channel: "messenger",
+      flowId: "flow-1",
+      flowVersionId: "flow-version-1",
+      stepId: "step-1",
+      runStartedAt,
+    })
+    await expect(
+      verifyAppointmentWebviewToken(appointment),
+    ).resolves.toMatchObject({ runStartedAt })
+  })
+
+  test("refuses a run start that is not an ISO datetime", async () => {
+    const token = await signUserDataWebviewToken({
+      ...BASE_PAYLOAD,
+      runStartedAt: "yesterday",
+    })
+    await expect(verifyUserDataWebviewToken(token)).rejects.toThrow()
+  })
+
   test("rejects expired tokens", async () => {
     const token = await signUserDataWebviewToken(BASE_PAYLOAD, -1)
 

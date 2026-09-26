@@ -87,6 +87,26 @@ describe("submitDateTimeAction", () => {
     expect(result).toEqual({ completed: true })
   })
 
+  test("resumes under the start of the run that minted the link", async () => {
+    const runStartedAt = "2026-09-26T03:00:00.000Z"
+    mocks.verifyUserDataWebviewToken.mockResolvedValue({
+      ...VALID_PAYLOAD,
+      runStartedAt,
+    })
+
+    await submitDateTime({
+      token: "token-1",
+      selectedValue: "2026-08-21T00:00:00.000Z",
+    })
+
+    expect(mocks.integrationQueueAdd).toHaveBeenCalledWith(
+      "sendFlow",
+      expect.objectContaining({
+        data: expect.objectContaining({ runStartedAt }),
+      }),
+    )
+  })
+
   test("rejects a non-ISO-datetime selectedValue", () => {
     expect(
       submitDateTimeRequestSchema.safeParse({

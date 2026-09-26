@@ -385,6 +385,7 @@ export async function appointmentScheduling(
           flowVersionId: flowVersion.id,
           stepId: step.id,
           nodeId: props.targetNodeId,
+          runStartedAt: props.runStartedAt?.toISOString(),
         })
         const pickerUrl = new URL("/booking/picker", appUrl)
         pickerUrl.searchParams.set("token", token)
@@ -478,6 +479,7 @@ export async function appointmentScheduling(
             nodeId: props.targetNodeId,
             resultCustomFieldId: step.outputCustomFieldId,
             resultUsedByAI: step.resultUsedByAI,
+            runStartedAt: props.runStartedAt?.toISOString(),
           })
           const pickerUrl = new URL("/booking/range-picker", appUrl)
           pickerUrl.searchParams.set("token", token)

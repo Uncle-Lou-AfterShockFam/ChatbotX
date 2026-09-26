@@ -142,6 +142,7 @@ async function startTriggerFlow(
       metadata: props.metadata,
       trackingContext: props.trackingContext,
       sendFrom: props.sendFrom,
+      runStartedAt: props.runStartedAt?.toISOString(),
       origin: webhookChannelOrigin(),
     },
   })
@@ -222,6 +223,7 @@ async function sendQuestion(
         stepId: props.step.id,
         attempts: data.attempts,
         lastAttemptAt: sentAt,
+        runStartedAt: props.runStartedAt?.toISOString() ?? null,
       },
     },
   })

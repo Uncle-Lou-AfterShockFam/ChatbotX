@@ -1,14 +1,20 @@
+import { conversationService } from "@chatbotx.io/business"
 import { emit } from "@chatbotx.io/event-bus"
 import type { FlowNode } from "@chatbotx.io/flow-config"
 import { initVariables, SdkException } from "@chatbotx.io/sdk"
 import type { IntegrationJobRunChallenge } from "@chatbotx.io/worker-config"
+import type { Job } from "bullmq"
 import {
   detectConversationAndContactInbox,
   detectFlowVersion,
 } from "../../lib/db"
+import { COMPANY_STOPPED, resolveRunStartedAt } from "./company-stop-guard"
 import { runStepsAndQuickReplies } from "./flow"
 
-export async function runChallenge(data: IntegrationJobRunChallenge["data"]) {
+export async function runChallenge(
+  data: IntegrationJobRunChallenge["data"],
+  job: Pick<Job, "timestamp">,
+) {
   const {
     conversationId,
     contactInboxId,
@@ -64,7 +70,7 @@ export async function runChallenge(data: IntegrationJobRunChallenge["data"]) {
       value: challenge.data.lastAttemptAt,
     }
 
-    await runStepsAndQuickReplies({
+    const outcome = await runStepsAndQuickReplies({
       conversation,
       contactInbox,
       flowVersion,
@@ -79,7 +85,28 @@ export async function runChallenge(data: IntegrationJobRunChallenge["data"]) {
       triggerMessageId: messageId,
       triggerMessageCreatedAt: messageCreatedAt,
       appointmentId: challenge.data.appointmentId,
+      // The run that asked, not this reply: a pre-stop question stays stopped.
+      // null = the contact opened the run that asked: never cut off. Absent =
+      // a challenge written before s204: judged by when it was asked.
+      runStartedAt:
+        challenge.data.runStartedAt === null
+          ? undefined
+          : resolveRunStartedAt(
+              challenge.data.runStartedAt ?? challenge.data.lastAttemptAt,
+              job.timestamp,
+            ),
     })
+
+    if (outcome === COMPANY_STOPPED) {
+      // The run that asked is over: a pending challenge would route every
+      // later inbound message here (and block automated replies) for good.
+      await conversationService.updateChallenge({
+        workspaceId: conversation.workspaceId,
+        conversationId: conversation.id,
+        challenge: undefined,
+      })
+      return
+    }
 
     if (messageId) {
       emit("analytics:dashboard", {

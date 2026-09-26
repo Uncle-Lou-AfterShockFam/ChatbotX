@@ -145,6 +145,8 @@ describe("runFollowUpResume", () => {
         flowId: "flow-1",
         flowVersionId: "flow-version-1",
         nodeId: "next-node",
+        // The run that wrote the follow-up, not this resume job.
+        runStartedAt: "2026-07-16T00:00:00.000Z",
       },
     })
     expect(smartDelayService.claimForRun).toHaveBeenCalledWith({

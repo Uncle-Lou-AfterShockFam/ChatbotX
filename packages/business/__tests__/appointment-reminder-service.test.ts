@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest"
 
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
+
 const mocks = vi.hoisted(() => ({
   defaultQueueAdd: vi.fn(),
   defaultQueueRemove: vi.fn(),
@@ -358,6 +360,8 @@ describe("appointmentReminderService", () => {
           flowId: "flow-1",
           origin: "channel",
           appointmentId: "appointment-1",
+          // A reminder opens a bot run: a later company stop ends it (s204).
+          runStartedAt: expect.stringMatching(ISO_INSTANT),
         },
       },
       { jobId: "appt-reminder-flow-dispatch-1" },

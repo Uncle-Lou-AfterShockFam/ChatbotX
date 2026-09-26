@@ -50,6 +50,11 @@ import {
 import { logger } from "../../lib/logger"
 import { type ClaimCheck, ClaimLostError } from "./claim-lost"
 import {
+  assertCompanyNotStoppedSince,
+  COMPANY_STOPPED,
+  CompanyStoppedError,
+} from "./company-stop-guard"
+import {
   type ExecuteMultipleStepsProps,
   MESSAGE_PRODUCING_STEP_TYPES,
   seekConnectedNode,
@@ -300,7 +305,7 @@ export const runFlowNode = async (
   }
 
   try {
-    await runStepsAndQuickReplies({
+    const outcome = await runStepsAndQuickReplies({
       conversation,
       contactInbox,
       flowVersion,
@@ -323,6 +328,7 @@ export const runFlowNode = async (
       claimCheck: options?.claimCheck,
       runStartedAt: options?.startedAt,
     })
+    return outcome === COMPANY_STOPPED ? COMPANY_STOPPED : undefined
   } catch (error) {
     // A lost claim is not a failed delivery: the edge's new owner (or a
     // cancel) decides the outcome, so the broadcast row is left alone.
@@ -354,7 +360,34 @@ export const runFlowNode = async (
   }
 }
 
+/**
+ * Runs a node's steps. A run whose contact's company was stopped after it
+ * began ends before its next step (CompanyStoppedError, thrown by the step
+ * loop) and reports nothing: it is not a failed delivery, so no retry, no
+ * broadcast failure and no fallback analytics.
+ */
 export async function runStepsAndQuickReplies(
+  props: ExecuteStepsAndQuickRepliesProps,
+) {
+  try {
+    return await runStepsAndQuickRepliesUnguarded(props)
+  } catch (error) {
+    if (!(error instanceof CompanyStoppedError)) {
+      throw error
+    }
+    logger.info(
+      {
+        contactInboxId: error.contactInboxId,
+        runStartedAt: error.runStartedAt,
+        flowId: props.flowVersion.flowId,
+      },
+      "Flow run ended: the contact's company was stopped after it started",
+    )
+    return COMPANY_STOPPED
+  }
+}
+
+async function runStepsAndQuickRepliesUnguarded(
   props: ExecuteStepsAndQuickRepliesProps,
 ) {
   const {
@@ -507,6 +540,7 @@ export async function runStepsAndQuickReplies(
           sendFrom: props.sendFrom,
           nodeVisits,
           commentAnchor: remainingAnchor,
+          runStartedAt: props.runStartedAt?.toISOString(),
           origin: webhookChannelOrigin(),
         },
       })
@@ -570,6 +604,7 @@ export async function runStepsAndQuickReplies(
         sendFrom: props.sendFrom,
         nodeVisits,
         commentAnchor: remainingAnchor,
+        runStartedAt: props.runStartedAt?.toISOString(),
         origin: webhookChannelOrigin(),
       },
     })
@@ -607,6 +642,11 @@ async function* executeMultipleStepsGenerator(
 
   for (const step of steps) {
     await claimCheck?.()
+    await assertCompanyNotStoppedSince({
+      workspaceId: props.conversation.workspaceId,
+      contactInboxId: props.contactInbox.id,
+      runStartedAt: props.runStartedAt,
+    })
     // `nodeId` is overloaded: startAnotherNode/startExternalNode store their own jump
     // target in it, while every other step uses it only to tag the message with the node
     // that produced it (flow analytics). Keep the step's own target when present; otherwise
@@ -685,6 +725,7 @@ async function* executeMultipleStepsGenerator(
               sendFrom: props.sendFrom,
               nodeVisits: props.nodeVisits,
               commentAnchor: anchorAvailable,
+              runStartedAt: props.runStartedAt?.toISOString(),
               origin: webhookChannelOrigin(),
             },
           })
@@ -899,7 +940,7 @@ async function runFlowAction(
         flowId: parsedAction.flowId,
         flowVersionId: parsedAction.flowVersionId,
       },
-      { flowExecutionKey },
+      { flowExecutionKey, startedAt: options?.startedAt },
     )
     return
   }
@@ -1012,7 +1053,7 @@ async function runFlowAction(
 
   const startTime = Date.now()
   try {
-    await runStepsAndQuickReplies({
+    const outcome = await runStepsAndQuickReplies({
       conversation,
       contactInbox,
       flowVersion,
@@ -1025,8 +1066,10 @@ async function runFlowAction(
         variables: initVariables(),
       },
       flowExecutionKey,
+      runStartedAt: options?.startedAt,
     })
-    if (data.messageId) {
+    // A run ended by a company stop sent nothing: no bot response to count.
+    if (data.messageId && outcome !== COMPANY_STOPPED) {
       emit("analytics:dashboard", {
         eventType: "message:bot_received",
         workspaceId: conversation.workspaceId,

@@ -38,6 +38,8 @@ export async function submitDateTime(parsedInput: SubmitDateTimeInput) {
         contactInboxId: payload.contactInboxId,
         selectedValue: parsedInput.selectedValue,
       },
+      // The flow run that minted the link (company-stop guard).
+      runStartedAt: payload.runStartedAt,
       origin: "channel",
     },
   })

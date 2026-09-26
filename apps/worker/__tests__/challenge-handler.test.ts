@@ -8,6 +8,11 @@ const mocks = vi.hoisted(() => ({
   emit: vi.fn(),
   initVariables: vi.fn(() => ({ conversation: {} })),
   SdkException: class SdkException extends Error {},
+  updateChallenge: vi.fn(async () => undefined),
+}))
+
+vi.mock("@chatbotx.io/business", () => ({
+  conversationService: { updateChallenge: mocks.updateChallenge },
 }))
 
 vi.mock("@chatbotx.io/event-bus", () => ({
@@ -103,12 +108,67 @@ describe("runChallenge", () => {
   })
 
   test("resumes challenge from the stored step", async () => {
-    await expect(runChallenge(makeChallenge())).resolves.toBeUndefined()
+    await expect(
+      runChallenge(makeChallenge(), { timestamp: 1_790_000_000_000 }),
+    ).resolves.toBeUndefined()
 
     expect(mocks.runStepsAndQuickReplies).toHaveBeenCalledWith(
       expect.objectContaining({
         startFromStepId: "step-1",
       }),
+    )
+  })
+
+  test("a challenge from before runStartedAt existed is judged by when it was asked", async () => {
+    await runChallenge(makeChallenge(), { timestamp: 1_790_000_000_000 })
+
+    expect(mocks.runStepsAndQuickReplies).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runStartedAt: new Date("2026-01-01T00:00:00Z"),
+      }),
+    )
+  })
+
+  test("the carried run start wins over the reply's own time", async () => {
+    const runStartedAt = "2026-06-01T00:00:00.000Z"
+    await runChallenge(
+      makeChallenge({
+        challenge: { type: "step", data: { runStartedAt } } as never,
+      }),
+      { timestamp: 1_790_000_000_000 },
+    )
+
+    expect(mocks.runStepsAndQuickReplies).toHaveBeenCalledWith(
+      expect.objectContaining({ runStartedAt: new Date(runStartedAt) }),
+    )
+  })
+
+  test("a run ended by a company stop clears the challenge and reports no bot response", async () => {
+    mocks.runStepsAndQuickReplies.mockResolvedValueOnce(
+      "companyStopped" as never,
+    )
+    mocks.emit.mockClear()
+
+    await runChallenge(makeChallenge({ messageId: "m-1" }), {
+      timestamp: 1_790_000_000_000,
+    })
+
+    expect(mocks.updateChallenge).toHaveBeenCalledWith(
+      expect.objectContaining({ challenge: undefined }),
+    )
+    expect(mocks.emit).not.toHaveBeenCalled()
+  })
+
+  test("a question from a contact-opened run (runStartedAt null) is never cut off", async () => {
+    await runChallenge(
+      makeChallenge({
+        challenge: { type: "step", data: { runStartedAt: null } } as never,
+      }),
+      { timestamp: 1_790_000_000_000 },
+    )
+
+    expect(mocks.runStepsAndQuickReplies).toHaveBeenCalledWith(
+      expect.objectContaining({ runStartedAt: undefined }),
     )
   })
 })

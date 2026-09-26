@@ -93,6 +93,8 @@ function makeData(
   } as unknown as Parameters<typeof handleSendSequenceFlow>[0]
 }
 
+const JOB_TIMESTAMP = 1_790_000_000_000
+
 function makeJob(
   overrides: Partial<{
     attemptsMade: number
@@ -105,6 +107,7 @@ function makeJob(
     id,
     attemptsMade,
     opts: { attempts },
+    timestamp: JOB_TIMESTAMP,
   } as unknown as Job
 }
 
@@ -145,12 +148,30 @@ beforeEach(() => {
   validateStepSpy.mockReturnValue({ valid: true, step })
 
   // send-flow-direct default
-  sendFlowDirectSpy.mockResolvedValue(new Date())
+  sendFlowDirectSpy.mockResolvedValue({ companyStopped: false })
 })
 
 // ---------- tests ----------
 
 describe("handleSendSequenceFlow", () => {
+  describe("company stopped — the run sent nothing", () => {
+    test("cancels the dispatch, unschedules it and never advances the enrollment", async () => {
+      sendFlowDirectSpy.mockResolvedValueOnce({ companyStopped: true })
+
+      await handleSendSequenceFlow(makeData(), makeJob())
+
+      expect(markCanceledSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dispatchId: "dispatch-1",
+          reason: "company_stopped",
+        }),
+      )
+      expect(markCompletedSpy).not.toHaveBeenCalled()
+      expect(advanceEnrollmentSpy).not.toHaveBeenCalled()
+      expect(removeFromScheduleSpy).toHaveBeenCalledOnce()
+    })
+  })
+
   describe("happy path — fresh dispatch (no completedAt)", () => {
     test("calls sendFlowDirect then marks dispatch completed", async () => {
       // Act
@@ -162,6 +183,8 @@ describe("handleSendSequenceFlow", () => {
           flowId: "flow-1",
           workspaceId: "ws-1",
           contactId: "contact-1",
+          // The sequence job opens the run: the stop guard's start.
+          startedAt: new Date(JOB_TIMESTAMP),
         }),
       )
       expect(markCompletedSpy).toHaveBeenCalledWith(

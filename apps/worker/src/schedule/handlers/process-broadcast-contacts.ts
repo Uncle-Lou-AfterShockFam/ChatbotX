@@ -163,6 +163,8 @@ const enqueueBroadcastContact = async (
           // worker-config). Every re-dispatch downstream of this one must
           // leave it unset.
           initialBroadcastDispatch: true,
+          // A bot-opened run: a company stop after this ends it (s204).
+          runStartedAt: new Date().toISOString(),
           metadata: {
             type: BROADCAST_PAYLOAD_TYPE,
             broadcastId: broadcast.id,

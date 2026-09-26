@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest"
 
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
+
 // ── service spies (replace direct db.* calls in the handler) ─────────────────
 const listSendableById = vi.fn()
 const listPendingRecipients = vi.fn()
@@ -239,6 +241,8 @@ describe("processBroadcastContacts", () => {
             // The flow stop/resume guard's ONE authoritative marker (fix
             // round 1) — only this, the producer's first dispatch, may set it.
             initialBroadcastDispatch: true,
+            // A broadcast opens a bot run: a later company stop ends it (s204).
+            runStartedAt: expect.stringMatching(ISO_INSTANT),
             metadata: expect.objectContaining({
               type: "broadcast",
               broadcastId: BROADCAST_ID,

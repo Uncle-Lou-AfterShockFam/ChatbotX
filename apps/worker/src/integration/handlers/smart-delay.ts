@@ -61,6 +61,9 @@ export const buildSendFlowResumeJob = (
         flowId: row.flowId,
         flowVersionId: row.flowVersionId ?? undefined,
         nodeId: row.nodeId ?? undefined,
+        // The wait was written by a run no later than this; a resume queued
+        // after a stop is judged by it, not by its own enqueue time.
+        runStartedAt: row.createdAt.toISOString(),
         ...(metadata ? { metadata } : {}),
         ...(extras?.sendFrom ? { sendFrom: extras.sendFrom } : {}),
         ...(appointmentId ? { appointmentId } : {}),

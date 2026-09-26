@@ -20,6 +20,8 @@ export const userDataWebviewPayloadSchema = z.object({
   challengeId: z.string().min(1),
   outputFieldId: z.string().min(1),
   replyFormat: z.enum(["date", "datetime"]),
+  /** Start of the flow run that minted the link; the resume keeps it. */
+  runStartedAt: z.iso.datetime().optional(),
   expiresAt: z.number(),
 })
 
