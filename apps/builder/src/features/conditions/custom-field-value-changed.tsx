@@ -11,12 +11,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@chatbotx.io/ui/components/ui/select"
+import { MultiSelect } from "@chatbotx.io/ui/components/ui/sersavan/multi-select"
 import { Textarea } from "@chatbotx.io/ui/components/ui/textarea"
-import { customFieldTypes } from "@chatbotx.io/utils/custom-field"
+import {
+  customFieldTypes,
+  isOptionFieldType,
+  optionOperatorTakesList,
+} from "@chatbotx.io/utils/custom-field"
 import { useTranslations } from "next-intl"
 import { useMemo } from "react"
 import { Controller, useFormContext } from "react-hook-form"
 import { getConditionOptions } from "@/features/contact-filter/components/contact-filter-config"
+import { relabelOptionOperators } from "@/features/contact-filter/components/custom-field-filter-config"
 import { getBrowserTimezone } from "@/features/contact-filter/lib/timezone"
 import {
   convertCustomFieldTypeToConditionType,
@@ -24,12 +30,6 @@ import {
 } from "@/features/contact-filter/schema"
 import { CustomFieldSelect } from "@/features/custom-fields/custom-field-select"
 import { useCustomFieldStore } from "@/features/custom-fields/provider/custom-field-store-context"
-
-// s201: a multiSelect stores JSON-array text, which the value-changed
-// operators cannot compare yet (typed operators land in part 2).
-const TRIGGER_FIELD_TYPES = customFieldTypes.options.filter(
-  (type) => type !== "multiSelect",
-)
 
 export const CustomFieldValueChanged = ({
   parentName,
@@ -43,11 +43,21 @@ export const CustomFieldValueChanged = ({
 
   const customFieldId = form.watch(`${parentName}.sourceId`)
 
-  const customFieldType = useMemo(
-    () =>
-      customFields.find((field) => field.id === customFieldId)
-        ?.type as CustomFieldType,
+  const customField = useMemo(
+    () => customFields.find((field) => field.id === customFieldId),
     [customFieldId, customFields],
+  )
+  const customFieldType = customField?.type as CustomFieldType
+  const optionType =
+    customFieldType && isOptionFieldType(customFieldType)
+      ? customFieldType
+      : undefined
+  // s203: a select / multiSelect picks from its options, stored as
+  // `{ options: [...] }` for a list operator and `{ text }` for a select
+  // `eq` / `ne` (see `matchesOptionCondition`).
+  const optionItems = useMemo(
+    () => (customField?.options ?? []).map((o) => ({ label: o, value: o })),
+    [customField],
   )
 
   const conditionType = useMemo(
@@ -61,22 +71,52 @@ export const CustomFieldValueChanged = ({
     }
 
     const enableOperators = mappingConditions[conditionType]
+    if (optionType) {
+      // An option field offers exactly its own operators, in its own words.
+      const byValue = new Map(conditionOptions.map((o) => [o.value, o]))
+      return relabelOptionOperators(
+        enableOperators.map((operator) => ({
+          value: operator,
+          label: byValue.get(operator)?.label ?? operator,
+        })),
+        optionType,
+        t,
+      )
+    }
     return conditionOptions.map((option) => ({
       ...option,
       disabled: !enableOperators.includes(option.value),
     }))
-  }, [conditionOptions, customFieldId, conditionType])
+  }, [conditionOptions, customFieldId, conditionType, optionType, t])
 
   const currentOperator = form.watch(`${parentName}.operator`)
+  const optionValueMode = (() => {
+    if (
+      !optionType ||
+      currentOperator === operatorTypes.enum.isEmpty ||
+      currentOperator === operatorTypes.enum.isNotEmpty
+    ) {
+      return
+    }
+    return optionOperatorTakesList(optionType, currentOperator) ? "list" : "one"
+  })()
 
   return (
     <div className="flex flex-col gap-4">
       <CustomFieldSelect
-        customFieldTypes={TRIGGER_FIELD_TYPES}
         label=""
         name={`${parentName}.sourceId`}
-        onValueChange={() => {
+        onValueChange={(nextFieldId) => {
           form.resetField(`${parentName}.value`)
+          // s203: an operator carried over from another field type (e.g. a
+          // text `notContains` onto a select) would match every change: start
+          // the new field on its own first operator.
+          const nextType = customFields.find(
+            (field) => field.id === nextFieldId,
+          )?.type
+          const [firstOperator] =
+            mappingConditions[convertCustomFieldTypeToConditionType(nextType)]
+          form.setValue(`${parentName}.operator`, firstOperator ?? "")
         }}
       />
       {customFieldId && (
@@ -84,6 +124,15 @@ export const CustomFieldValueChanged = ({
           <Select
             items={operatorOptions}
             onValueChange={(value) => {
+              // An option field's value shape follows the operator (one
+              // option or a list): switching shape clears the value.
+              if (
+                optionType &&
+                optionOperatorTakesList(optionType, String(value ?? "")) !==
+                  optionOperatorTakesList(optionType, currentOperator)
+              ) {
+                form.setValue(`${parentName}.value`, "")
+              }
               form.setValue(`${parentName}.operator`, value, {
                 shouldValidate: true,
               })
@@ -105,6 +154,54 @@ export const CustomFieldValueChanged = ({
               ))}
             </SelectContent>
           </Select>
+
+          {optionValueMode === "one" && (
+            <Controller
+              control={form.control}
+              name={`${parentName}.value`}
+              render={({ field }) => (
+                <Select
+                  items={optionItems}
+                  onValueChange={(value) => field.onChange({ text: value })}
+                  value={field.value?.text || ""}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("actions.pleaseSelect")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {optionItems.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          )}
+
+          {optionValueMode === "list" && (
+            <Controller
+              control={form.control}
+              name={`${parentName}.value`}
+              render={({ field }) => (
+                <MultiSelect
+                  defaultValue={
+                    Array.isArray(field.value?.options)
+                      ? field.value.options
+                      : []
+                  }
+                  key={`${customFieldId}:${currentOperator}`}
+                  modalPopover={true}
+                  onValueChange={(options) =>
+                    field.onChange(options.length > 0 ? { options } : "")
+                  }
+                  options={optionItems}
+                  placeholder={t("actions.pleaseSelect")}
+                />
+              )}
+            />
+          )}
 
           {customFieldType === customFieldTypes.enum.longText && (
             <Controller

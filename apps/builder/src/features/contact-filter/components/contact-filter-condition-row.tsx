@@ -9,6 +9,7 @@ import {
   formatConditionValueDisplay,
   formatCtwaRetargetChipLabel,
 } from "./contact-filter-config"
+import { resolveOperatorLabel } from "./custom-field-filter-config"
 
 type ContactFilterConditionRowProps = {
   row: ContactFilterCondition
@@ -88,7 +89,12 @@ export const ContactFilterConditionRow = ({
     "value" in row ? row.value : undefined,
     fieldConfig?.options,
   )
-  const operatorLabel = operatorLabelByValue.get(row.operator) ?? row.operator
+  const operatorLabel = resolveOperatorLabel(
+    "customFieldType" in row ? row.customFieldType : undefined,
+    row.operator,
+    operatorLabelByValue,
+    t,
+  )
   const editLabel = [fieldLabel, operatorLabel, valueDisplay]
     .filter(Boolean)
     .join(" ")

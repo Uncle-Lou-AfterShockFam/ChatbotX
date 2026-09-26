@@ -632,7 +632,14 @@
       "endsWith": "Eindigt op",
       "isBetween": "Interval",
       "notBetween": "Geen interval",
-      "used": "Gebruikt"
+      "used": "Gebruikt",
+      "isAnyOf": "Is een van",
+      "isNoneOf": "Is geen van",
+      "hasAnyOf": "Heeft een van",
+      "hasAllOf": "Heeft alle",
+      "hasNoneOf": "Heeft geen van",
+      "isExactly": "Is precies",
+      "isNotExactly": "Is niet precies"
     },
     "contactFilter": {
       "allConditions": "Alle onderstaande voorwaarden",

@@ -961,7 +961,14 @@
       "endsWith": "Ends with",
       "isBetween": "Interval",
       "notBetween": "Not interval",
-      "used": "Used"
+      "used": "Used",
+      "isAnyOf": "Is any of",
+      "isNoneOf": "Is none of",
+      "hasAnyOf": "Has any of",
+      "hasAllOf": "Has all of",
+      "hasNoneOf": "Has none of",
+      "isExactly": "Is exactly",
+      "isNotExactly": "Is not exactly"
     },
     "contactFilter": {
       "allConditions": "All of the following conditions",

@@ -819,7 +819,14 @@
       "endsWith": "Päättyy",
       "isBetween": "Aikaväli",
       "notBetween": "Ei aikavälillä",
-      "used": "Käytetty"
+      "used": "Käytetty",
+      "isAnyOf": "On jokin näistä",
+      "isNoneOf": "Ei ole mikään näistä",
+      "hasAnyOf": "Sisältää jonkin",
+      "hasAllOf": "Sisältää kaikki",
+      "hasNoneOf": "Ei sisällä mitään",
+      "isExactly": "On täsmälleen",
+      "isNotExactly": "Ei ole täsmälleen"
     },
     "contactFilter": {
       "allConditions": "Kaikki seuraavat ehdot",

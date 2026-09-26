@@ -7,7 +7,15 @@ import {
   triggerEventTypes,
 } from "@chatbotx.io/database/partials"
 import type { WorkspaceModel } from "@chatbotx.io/database/types"
+import {
+  isOptionFieldType,
+  isOptionOperator,
+  matchesOptionCondition,
+  type OptionFieldType,
+  optionConditionIssue,
+} from "@chatbotx.io/utils/custom-field"
 import { toZonedWallClock } from "@chatbotx.io/utils/datetime"
+import { logger } from "../../lib/logger"
 import type { ConditionEvaluationContext } from "../types"
 import { parseDateTimeValue } from "../utils/datetime-calculator"
 
@@ -185,6 +193,18 @@ export class ConditionEvaluator {
     customFieldType?: string,
     timezone?: string,
   ): boolean {
+    if (customFieldType && isOptionFieldType(customFieldType)) {
+      const optionMatch = this.evaluateOptionOperator(
+        customFieldType,
+        operator,
+        actualValue,
+        expectedValue,
+      )
+      if (optionMatch !== undefined) {
+        return optionMatch
+      }
+    }
+
     const normalizedOperator = this.normalizeOperator(operator)
 
     if (normalizedOperator === "hasAnyValue") {
@@ -226,6 +246,51 @@ export class ConditionEvaluator {
     return this.evaluateStandardOperator(
       normalizedOperator,
       actualValue,
+      expected,
+    )
+  }
+
+  /**
+   * s203: a select / multiSelect condition, answered exactly as the contact
+   * filter SQL answers it (`matchesOptionCondition`). The editor stores
+   * `{ options: [...] }` for a list operator and `{ text }` for one option.
+   * An operator of the option table with the wrong value shape FAILS CLOSED
+   * (false + a warning); an operator outside the table returns undefined so a
+   * condition saved before s203 (e.g. a select `contains`) keeps its text
+   * meaning, like the SQL builder's fallback.
+   */
+  private evaluateOptionOperator(
+    type: OptionFieldType,
+    operator: string,
+    actualValue: unknown,
+    expectedValue: unknown,
+  ): boolean | undefined {
+    const listValue =
+      typeof expectedValue === "object" &&
+      expectedValue !== null &&
+      "options" in expectedValue
+    if (!isOptionOperator(type, operator)) {
+      // A pre-s203 text operator keeps its text meaning, but never over an
+      // option list (text-comparing "[object Object]" would match anything).
+      return listValue ? false : undefined
+    }
+    let expected: unknown = expectedValue
+    if (typeof expectedValue === "object" && expectedValue !== null) {
+      const obj = expectedValue as Record<string, unknown>
+      expected = "options" in obj ? obj.options : obj.text
+    }
+    const issue = optionConditionIssue(type, operator, expected)
+    if (issue) {
+      logger.warn(
+        { type, operator, issue },
+        "trigger option-field condition refused; no match",
+      )
+      return false
+    }
+    return matchesOptionCondition(
+      type,
+      operator,
+      typeof actualValue === "string" ? actualValue : null,
       expected,
     )
   }

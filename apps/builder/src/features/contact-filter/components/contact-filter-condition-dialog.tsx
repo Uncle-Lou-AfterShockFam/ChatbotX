@@ -52,6 +52,7 @@ import {
   getCustomFieldConditionOptions,
   getCustomFieldValueInputConfig,
   getDefaultCustomFieldValue,
+  relabelOptionOperators,
 } from "./custom-field-filter-config"
 import {
   getDefaultStaticFieldValue,
@@ -515,8 +516,13 @@ export const ContactFilterConditionDialog = ({
   const fieldOptions = useMemo(() => getFieldOptions(configs, t), [configs, t])
 
   const activeOperationsList = useMemo(
-    () => getConditionOptionsForConfig(activeConfig, conditionOptions),
-    [activeConfig, conditionOptions],
+    () =>
+      relabelOptionOperators(
+        getConditionOptionsForConfig(activeConfig, conditionOptions),
+        activeConfig?.customFieldType,
+        t,
+      ),
+    [activeConfig, conditionOptions, t],
   )
 
   const { valueType, valueOptions } = useMemo<{
@@ -598,7 +604,7 @@ export const ContactFilterConditionDialog = ({
         activeConfig?.customFieldId || activeConfig?.botFieldId
       if (
         isCustomOrBotFieldConfig &&
-        customFieldOperatorRequiresArrayValue(nextOperator)
+        customFieldOperatorRequiresArrayValue(nextOperator, activeConfig)
       ) {
         if (Array.isArray(currentValue)) {
           return

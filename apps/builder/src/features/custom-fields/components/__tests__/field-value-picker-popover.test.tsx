@@ -27,6 +27,23 @@ vi.mock("@chatbotx.io/ui/components/ui/button", () => ({
   ),
 }))
 
+vi.mock("@chatbotx.io/ui/components/ui/checkbox", () => ({
+  Checkbox: ({
+    checked,
+    onCheckedChange,
+  }: {
+    checked: boolean
+    onCheckedChange: (checked: boolean) => void
+  }) => (
+    <button
+      data-checked={String(checked)}
+      data-testid="option-checkbox"
+      onClick={() => onCheckedChange(!checked)}
+      type="button"
+    />
+  ),
+}))
+
 vi.mock("@chatbotx.io/ui/components/ui/calendar", () => ({
   Calendar: ({ onSelect }: { onSelect: (day: Date) => void }) => (
     <button
@@ -344,5 +361,62 @@ describe("FieldValuePickerPopover", () => {
     expect(
       container.querySelector('[data-testid="popover-content"]'),
     ).not.toBeNull()
+  })
+
+  test("s203: select picker writes the picked option", () => {
+    let latestValue: string | undefined
+    act(() => {
+      root.render(
+        <FormHarness onValuesChange={(value) => (latestValue = value)}>
+          <FieldValuePickerPopover
+            kind="select"
+            name="value"
+            options={["Gold", "Silver"]}
+          >
+            {(inputKey) => <TrackedInput inputKey={inputKey} key={inputKey} />}
+          </FieldValuePickerPopover>
+        </FormHarness>,
+      )
+    })
+    click(container.querySelector('[data-testid="wrapped-input"]'))
+    click(
+      Array.from(container.querySelectorAll("button")).find(
+        (button) => button.textContent === "Silver",
+      ),
+    )
+    expect(latestValue).toBe("Silver")
+  })
+
+  test("s203: multiSelect picker writes canonical JSON in option order", () => {
+    let latestValue: string | undefined
+    act(() => {
+      root.render(
+        <FormHarness
+          defaultValue='["Red, White"]'
+          onValuesChange={(value) => (latestValue = value)}
+        >
+          <FieldValuePickerPopover
+            kind="multiSelect"
+            name="value"
+            options={["Golf", "Hiking", "Red, White"]}
+          >
+            {(inputKey) => <TrackedInput inputKey={inputKey} key={inputKey} />}
+          </FieldValuePickerPopover>
+        </FormHarness>,
+      )
+    })
+    click(container.querySelector('[data-testid="wrapped-input"]'))
+    const boxes = () =>
+      Array.from(container.querySelectorAll('[data-testid="option-checkbox"]'))
+    expect(boxes().map((b) => b.getAttribute("data-checked"))).toEqual([
+      "false",
+      "false",
+      "true",
+    ])
+    click(boxes()[0]) // Golf: stays open, joins in option order
+    expect(latestValue).toBe('["Golf","Red, White"]')
+    click(boxes()[2])
+    click(boxes()[0])
+    expect(latestValue).toBe("")
   })
 })

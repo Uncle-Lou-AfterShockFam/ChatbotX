@@ -819,7 +819,14 @@
       "endsWith": "次で終わる",
       "isBetween": "範囲内",
       "notBetween": "範囲外",
-      "used": "使用済み"
+      "used": "使用済み",
+      "isAnyOf": "いずれかである",
+      "isNoneOf": "いずれでもない",
+      "hasAnyOf": "いずれかを含む",
+      "hasAllOf": "すべてを含む",
+      "hasNoneOf": "いずれも含まない",
+      "isExactly": "完全一致",
+      "isNotExactly": "完全一致しない"
     },
     "contactFilter": {
       "allConditions": "以下のすべての条件",

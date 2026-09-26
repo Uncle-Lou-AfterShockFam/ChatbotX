@@ -819,7 +819,14 @@
       "endsWith": "Se termine par",
       "isBetween": "Intervalle",
       "notBetween": "Hors intervalle",
-      "used": "Utilisé"
+      "used": "Utilisé",
+      "isAnyOf": "Est l'un de",
+      "isNoneOf": "N'est aucun de",
+      "hasAnyOf": "A l'un de",
+      "hasAllOf": "A tous",
+      "hasNoneOf": "N'a aucun de",
+      "isExactly": "Est exactement",
+      "isNotExactly": "N'est pas exactement"
     },
     "contactFilter": {
       "allConditions": "Toutes les conditions suivantes",

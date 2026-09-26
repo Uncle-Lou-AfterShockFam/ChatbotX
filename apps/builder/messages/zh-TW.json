@@ -120,7 +120,14 @@
       "endsWith": "結尾為",
       "isBetween": "間隔",
       "notBetween": "非區間",
-      "used": "已使用"
+      "used": "已使用",
+      "isAnyOf": "是其中之一",
+      "isNoneOf": "不是其中任何一個",
+      "hasAnyOf": "包含任一",
+      "hasAllOf": "包含全部",
+      "hasNoneOf": "不包含任何",
+      "isExactly": "完全等於",
+      "isNotExactly": "不完全等於"
     },
     "contactFilter": {
       "allConditions": "滿足以下所有條件",

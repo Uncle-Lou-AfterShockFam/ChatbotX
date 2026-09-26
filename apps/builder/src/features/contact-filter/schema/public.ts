@@ -25,6 +25,16 @@ const contactFilterCustomFieldPublicResource = z.object({
   valueType: formFieldTypes.describe(
     "Value type to put in a `contactFilter` condition's `valueType` for this field.",
   ),
+  options: z
+    .array(z.string())
+    .optional()
+    .describe(
+      "select / multiSelect only: the allowed values. `in` / `notIn` / `contains` / a multiSelect `eq` take an array of them; a select `eq` / `ne` takes one.",
+    ),
+  operators: z
+    .array(z.string())
+    .optional()
+    .describe("select / multiSelect only: the operators the field accepts."),
 })
 
 const contactFilterTagPublicResource = z.object({

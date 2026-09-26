@@ -1668,7 +1668,14 @@
       "endsWith": "Se termină cu",
       "isBetween": "Interval",
       "notBetween": "Nu este în interval",
-      "used": "Utilizat"
+      "used": "Utilizat",
+      "isAnyOf": "Este unul dintre",
+      "isNoneOf": "Nu este niciunul dintre",
+      "hasAnyOf": "Are unul dintre",
+      "hasAllOf": "Le are pe toate",
+      "hasNoneOf": "Nu are niciunul dintre",
+      "isExactly": "Este exact",
+      "isNotExactly": "Nu este exact"
     },
     "contactFilter": {
       "allConditions": "Toate condițiile următoare",

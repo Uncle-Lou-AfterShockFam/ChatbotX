@@ -2,18 +2,25 @@
 
 import { Button } from "@chatbotx.io/ui/components/ui/button"
 import { Calendar } from "@chatbotx.io/ui/components/ui/calendar"
+import { Checkbox } from "@chatbotx.io/ui/components/ui/checkbox"
 import { TimePicker } from "@chatbotx.io/ui/components/ui/date-picker"
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@chatbotx.io/ui/components/ui/popover"
+import { multiSelectItems } from "@chatbotx.io/utils/custom-field"
 import { format, parse } from "date-fns"
 import { useTranslations } from "next-intl"
 import { type ReactNode, useMemo, useRef, useState } from "react"
 import { useFormContext } from "react-hook-form"
 
-export type FieldValuePickerKind = "date" | "datetime" | "boolean"
+export type FieldValuePickerKind =
+  | "date"
+  | "datetime"
+  | "boolean"
+  | "select"
+  | "multiSelect"
 
 type FieldValuePickerPopoverProps = {
   kind: FieldValuePickerKind
@@ -24,6 +31,8 @@ type FieldValuePickerPopoverProps = {
    * to true; the contact-filter condition value uses minutes only.
    */
   withSeconds?: boolean
+  /** s203: the option list of a select / multiSelect field. */
+  options?: readonly string[]
   /**
    * Renders the wrapped free-text input. The `inputKey` MUST be passed as the
    * input's `key`: the tiptap editor only reads the form value on mount, so a
@@ -44,6 +53,7 @@ export function FieldValuePickerPopover({
   kind,
   name,
   withSeconds = true,
+  options = [],
   children,
 }: FieldValuePickerPopoverProps) {
   const t = useTranslations()
@@ -60,7 +70,10 @@ export function FieldValuePickerPopover({
       : `yyyy-MM-dd HH:mm${withSeconds ? ":ss" : ""}`
   const watchedValue = form.watch(name)
   const pickedDate = useMemo(() => {
-    if (kind === "boolean" || typeof watchedValue !== "string") {
+    if (
+      !(kind === "date" || kind === "datetime") ||
+      typeof watchedValue !== "string"
+    ) {
       return
     }
     const trimmed = watchedValue.trim()
@@ -84,6 +97,25 @@ export function FieldValuePickerPopover({
     if (!options?.keepOpen) {
       setIsPickerOpen(false)
     }
+  }
+
+  // s203: a multiSelect writes the canonical stored text (JSON array in
+  // option order, "" for none) so the server normalizer sees no rewrite.
+  const pickedOptions = new Set(
+    kind === "multiSelect" && typeof watchedValue === "string"
+      ? multiSelectItems(watchedValue)
+      : [],
+  )
+  const toggleOption = (option: string, checked: boolean) => {
+    if (checked) {
+      pickedOptions.add(option)
+    } else {
+      pickedOptions.delete(option)
+    }
+    const ordered = options.filter((o) => pickedOptions.has(o))
+    applyPickedValue(ordered.length === 0 ? "" : JSON.stringify(ordered), {
+      keepOpen: true,
+    })
   }
 
   const applyPickedDate = (picked: Date | undefined) => {
@@ -126,7 +158,46 @@ export function FieldValuePickerPopover({
           </div>
         }
       />
-      <PopoverContent align="start" className="w-auto p-0">
+      <PopoverContent align="start" className="w-auto max-w-80 p-0">
+        {kind === "select" ? (
+          <div className="flex max-h-72 flex-col overflow-y-auto p-1">
+            {options.map((option) => (
+              <Button
+                className="min-w-0 justify-start"
+                key={option}
+                onClick={() => applyPickedValue(option)}
+                type="button"
+                variant="ghost"
+              >
+                <span className="truncate">{option}</span>
+              </Button>
+            ))}
+          </div>
+        ) : null}
+        {kind === "multiSelect" ? (
+          <div
+            className="flex max-h-72 flex-col gap-2 overflow-y-auto p-3"
+            data-testid="multi-select-picker"
+          >
+            {options.map((option) => (
+              // biome-ignore lint/a11y/noLabelWithoutControl: the Checkbox inside is the control
+              <label
+                className="flex min-w-0 cursor-pointer items-center gap-2 text-sm"
+                key={option}
+              >
+                <Checkbox
+                  checked={pickedOptions.has(option)}
+                  onCheckedChange={(checked) =>
+                    toggleOption(option, checked === true)
+                  }
+                />
+                <span className="truncate" title={option}>
+                  {option}
+                </span>
+              </label>
+            ))}
+          </div>
+        ) : null}
         {kind === "boolean" ? (
           <div className="flex flex-col p-1">
             <Button
@@ -146,7 +217,8 @@ export function FieldValuePickerPopover({
               {t("fields.boolean.false")}
             </Button>
           </div>
-        ) : (
+        ) : null}
+        {kind === "date" || kind === "datetime" ? (
           <>
             <Calendar
               defaultMonth={pickedDate}
@@ -175,7 +247,7 @@ export function FieldValuePickerPopover({
               </div>
             ) : null}
           </>
-        )}
+        ) : null}
       </PopoverContent>
     </Popover>
   )

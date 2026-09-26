@@ -819,7 +819,14 @@
       "endsWith": "Diakhiri dengan",
       "isBetween": "Interval",
       "notBetween": "Bukan interval",
-      "used": "Digunakan"
+      "used": "Digunakan",
+      "isAnyOf": "Salah satu dari",
+      "isNoneOf": "Bukan salah satu dari",
+      "hasAnyOf": "Memiliki salah satu",
+      "hasAllOf": "Memiliki semua",
+      "hasNoneOf": "Tidak memiliki satu pun",
+      "isExactly": "Tepat",
+      "isNotExactly": "Tidak tepat"
     },
     "contactFilter": {
       "allConditions": "Semua dari following conditions",

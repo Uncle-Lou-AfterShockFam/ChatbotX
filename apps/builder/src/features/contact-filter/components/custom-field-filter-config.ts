@@ -2,6 +2,13 @@ import {
   type OperatorType,
   operatorTypes,
 } from "@chatbotx.io/database/partials"
+import {
+  isOptionFieldType,
+  isOptionOperator,
+  OPTION_FIELD_OPERATORS,
+  type OptionFieldType,
+  optionOperatorTakesList,
+} from "@chatbotx.io/utils/custom-field"
 import type { ConditionOption, FieldConfig } from "./contact-filter-config"
 
 export type CustomFieldValueInputKind =
@@ -13,6 +20,8 @@ export type CustomFieldValueInputKind =
   | "boolean"
   | "numberInterval"
   | "datetimeInterval"
+  | "select"
+  | "multiSelect"
 
 export type CustomFieldValueInputConfig = {
   kind: CustomFieldValueInputKind
@@ -149,6 +158,8 @@ const getDefaultValueForInputKind = (
   kind: CustomFieldValueInputKind,
 ): string | string[] => {
   switch (kind) {
+    case "multiSelect":
+      return []
     case "numberInterval":
       return ["0", "0"]
     case "date":
@@ -160,15 +171,73 @@ const getDefaultValueForInputKind = (
   }
 }
 
+/**
+ * s203: an option field reads its list operators in its own words ("has any
+ * of" for a multiSelect `in`); the i18n key, or undefined for the shared label.
+ */
+const OPTION_OPERATOR_LABEL_KEYS: Record<
+  OptionFieldType,
+  Partial<Record<string, string>>
+> = {
+  select: {
+    in: "fields.operator.isAnyOf",
+    notIn: "fields.operator.isNoneOf",
+  },
+  multiSelect: {
+    in: "fields.operator.hasAnyOf",
+    contains: "fields.operator.hasAllOf",
+    notIn: "fields.operator.hasNoneOf",
+    eq: "fields.operator.isExactly",
+    ne: "fields.operator.isNotExactly",
+  },
+}
+
+export const optionOperatorLabelKey = (
+  customFieldType: string | undefined,
+  operator: string,
+): string | undefined =>
+  customFieldType && isOptionFieldType(customFieldType)
+    ? OPTION_OPERATOR_LABEL_KEYS[customFieldType][operator]
+    : undefined
+
+/** A condition chip's operator label: the option-field wording, else the shared one. */
+export const resolveOperatorLabel = (
+  customFieldType: string | undefined,
+  operator: string,
+  operatorLabelByValue: Map<string, string>,
+  t: (key: string) => string,
+): string => {
+  const key = optionOperatorLabelKey(customFieldType, operator)
+  return key ? t(key) : (operatorLabelByValue.get(operator) ?? operator)
+}
+
+/** Relabels option-field operators (see {@link optionOperatorLabelKey}). */
+export const relabelOptionOperators = (
+  options: ConditionOption[],
+  customFieldType: string | undefined,
+  t: (key: string) => string,
+): ConditionOption[] =>
+  options.map((option) => {
+    const key = optionOperatorLabelKey(customFieldType, option.value)
+    return key ? { ...option, label: t(key) } : option
+  })
+
 export const getCustomFieldConditionOptions = (
   config: FieldConfig,
   conditionOptions: ConditionOption[],
 ): ConditionOption[] => {
-  const rule = getCustomFieldTypeRule(config.customFieldType)
-  const enabledOperators = new Set(rule.enabledOperators)
   const optionByOperator = new Map(
     conditionOptions.map((option) => [option.value, option]),
   )
+  // s203: an option field offers exactly its own operator table, in order.
+  if (config.customFieldType && isOptionFieldType(config.customFieldType)) {
+    return OPTION_FIELD_OPERATORS[config.customFieldType].map((operator) => ({
+      value: operator,
+      label: optionByOperator.get(operator)?.label ?? operator,
+    }))
+  }
+  const rule = getCustomFieldTypeRule(config.customFieldType)
+  const enabledOperators = new Set(rule.enabledOperators)
 
   return CUSTOM_FIELD_OPERATOR_ORDER.map((operator) => {
     const option = optionByOperator.get(operator)
@@ -193,6 +262,19 @@ export const getCustomFieldValueInputConfig = (
   if (isValuelessOperator(operator)) {
     return { kind: "none", defaultValue: "" }
   }
+  // s203: an option field picks from its options; an operator outside its
+  // table (a condition saved before s203, e.g. a select `contains`) keeps the
+  // text input it was saved with.
+  if (
+    config.customFieldType &&
+    isOptionFieldType(config.customFieldType) &&
+    isOptionOperator(config.customFieldType, operator ?? "")
+  ) {
+    const kind = optionOperatorTakesList(config.customFieldType, operator ?? "")
+      ? "multiSelect"
+      : "select"
+    return { kind, defaultValue: getDefaultValueForInputKind(kind) }
+  }
 
   const rule = getCustomFieldTypeRule(config.customFieldType)
   const kind = resolveInputKind(rule, operator)
@@ -211,4 +293,8 @@ export const getDefaultCustomFieldValue = (
 
 export const customFieldOperatorRequiresArrayValue = (
   operator: string | undefined,
-): boolean => isIntervalOperator(operator)
+  config?: FieldConfig,
+): boolean =>
+  config?.customFieldType && isOptionFieldType(config.customFieldType)
+    ? optionOperatorTakesList(config.customFieldType, operator ?? "")
+    : isIntervalOperator(operator)

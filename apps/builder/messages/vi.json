@@ -952,7 +952,14 @@
       "endsWith": "Kết thúc bằng",
       "isBetween": "Khoảng",
       "notBetween": "Không phải khoảng",
-      "used": "Đã sử dụng"
+      "used": "Đã sử dụng",
+      "isAnyOf": "Là một trong",
+      "isNoneOf": "Không là cái nào trong",
+      "hasAnyOf": "Có một trong",
+      "hasAllOf": "Có tất cả",
+      "hasNoneOf": "Không có cái nào trong",
+      "isExactly": "Chính xác là",
+      "isNotExactly": "Không chính xác là"
     },
     "contactFilter": {
       "allConditions": "Tất cả các điều kiện bên dưới",

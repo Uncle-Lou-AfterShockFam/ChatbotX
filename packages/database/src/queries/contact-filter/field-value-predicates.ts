@@ -21,6 +21,7 @@ import {
   operatorTypes,
 } from "../../partials"
 import { escapeLikePattern, likeContains } from "../../utils"
+import { buildOptionFieldPredicate } from "./option-field-predicates"
 import {
   isValidDateTimeFilterValue,
   NUMERIC_VALUE_PATTERN,
@@ -43,6 +44,8 @@ const NEGATION_TO_POSITIVE: Partial<Record<OperatorType, OperatorType>> = {
   [operatorTypes.enum.notContains]: operatorTypes.enum.contains,
   [operatorTypes.enum.notBetween]: operatorTypes.enum.isBetween,
   [operatorTypes.enum.isEmpty]: operatorTypes.enum.isNotEmpty,
+  // s203: option fields (select / multiSelect); `in` is built only there.
+  [operatorTypes.enum.notIn]: operatorTypes.enum.in,
 }
 
 /** Resolves a (possibly negative) operator to its positive form + a negate flag. */
@@ -91,6 +94,11 @@ export function buildFieldValuePositivePredicate(input: {
 }): SQL | undefined {
   const { column, operator, value, customFieldType, valueType, timezone } =
     input
+
+  const optionPredicate = buildOptionFieldPredicate(input)
+  if (optionPredicate) {
+    return optionPredicate
+  }
 
   if (operator === operatorTypes.enum.isNotEmpty) {
     return sql`(${column} IS NOT NULL AND ${column} <> '')`

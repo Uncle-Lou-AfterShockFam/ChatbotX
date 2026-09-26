@@ -2514,7 +2514,14 @@
       "notContains": "Innehåller inte",
       "notIn": "Inte i",
       "startsWith": "Börjar med",
-      "used": "Använd"
+      "used": "Använd",
+      "isAnyOf": "Är något av",
+      "isNoneOf": "Är inget av",
+      "hasAnyOf": "Har något av",
+      "hasAllOf": "Har alla",
+      "hasNoneOf": "Har inget av",
+      "isExactly": "Är exakt",
+      "isNotExactly": "Är inte exakt"
     },
     "outputCustomField": {
       "label": "Anpassat utdatafält",

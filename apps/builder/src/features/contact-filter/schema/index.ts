@@ -3,6 +3,7 @@ import {
   formFieldTypes,
   type OperatorType,
 } from "@chatbotx.io/database/partials"
+import { OPTION_FIELD_OPERATORS } from "@chatbotx.io/utils/custom-field"
 import { z } from "zod"
 import { booleanOperators } from "./boolean-filter"
 import {
@@ -23,9 +24,7 @@ import {
 } from "./custom-field-filter"
 import { datetimeOperators } from "./datetime-filter"
 import { contactFilterConditionSchemas } from "./definitions"
-import { multiSelectOperators } from "./multi-select-filter"
 import { numberOperators } from "./number"
-import { selectOperators } from "./select-filter"
 import { textOperators } from "./text-filter"
 
 export {
@@ -58,8 +57,8 @@ export {
 } from "./definitions"
 
 export const mappingConditions: Record<FormFieldType, OperatorType[]> = {
-  [formFieldTypes.enum.multiSelect]: multiSelectOperators,
-  [formFieldTypes.enum.select]: selectOperators,
+  [formFieldTypes.enum.multiSelect]: [...OPTION_FIELD_OPERATORS.multiSelect],
+  [formFieldTypes.enum.select]: [...OPTION_FIELD_OPERATORS.select],
   [formFieldTypes.enum.text]: textOperators,
   [formFieldTypes.enum.boolean]: booleanOperators,
   [formFieldTypes.enum.datetime]: datetimeOperators,
