@@ -122,10 +122,11 @@ export function InvoiceList({
             <TableRow>
               <TableHead>{t("invoices.fields.number")}</TableHead>
               <TableHead>{t("invoices.fields.status")}</TableHead>
-              <TableHead className="text-right">
+              {/* Below sm the total folds under the status and the dates under the
+                  number, so every action stays on screen at 375 px (s210b). */}
+              <TableHead className="hidden text-right sm:table-cell">
                 {t("invoices.fields.total")}
               </TableHead>
-              {/* Below sm the dates fold under the number so Actions stay on screen. */}
               <TableHead className="hidden sm:table-cell">
                 {t("invoices.fields.created")}
               </TableHead>
@@ -152,17 +153,20 @@ export function InvoiceList({
                   <Badge variant={STATUS_VARIANT[row.status]}>
                     {t(`invoices.status.${row.status}`)}
                   </Badge>
+                  <p className="mt-1 whitespace-nowrap text-xs tabular-nums sm:hidden">
+                    {money(row)}
+                  </p>
                   {/* A draft's failed send, or (s207b) a payment that needs a human. */}
                   {row.lastError ? (
                     <p
-                      className="mt-1 max-w-64 truncate text-destructive text-xs"
+                      className="mt-1 max-w-32 truncate text-destructive text-xs sm:max-w-64"
                       title={row.lastError}
                     >
                       {row.lastError}
                     </p>
                   ) : null}
                 </TableCell>
-                <TableCell className="text-right tabular-nums">
+                <TableCell className="hidden text-right tabular-nums sm:table-cell">
                   {money(row)}
                 </TableCell>
                 <TableCell className="hidden whitespace-nowrap sm:table-cell">
