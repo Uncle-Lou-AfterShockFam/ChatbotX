@@ -166,7 +166,8 @@ export function BroadcastsCalendar({
   )
   // "Today" is the user's day, keyed like `groupByDay`, from the request's
   // `now` while hydrating (s209: `isToday` read the browser's zone and clock).
-  const todayKey = currentTemporalLiteral("date", timeZone, useRenderNow())
+  const renderNow = useRenderNow()
+  const todayKey = currentTemporalLiteral("date", timeZone, renderNow)
   const isToday = (day: Date) => dayKey(day) === todayKey
   const [selected, setSelected] = useState<BroadcastCalendarRow | null>(null)
   const [jumpOpen, setJumpOpen] = useState(false)
@@ -178,12 +179,11 @@ export function BroadcastsCalendar({
   // see the shared onSelect handler below).
   const [pendingRange, setPendingRange] = useState<DateRange | undefined>()
 
-  // Computed once per render from `new Date()` (not `anchor`, which can
-  // itself already be years away) so the jump picker's dropdown/navigation
-  // bounds always reach a consistent window around *today*.
-  const today = new Date()
-  const jumpPickerStartMonth = subYears(today, JUMP_PICKER_PAST_YEARS)
-  const jumpPickerEndMonth = addYears(today, JUMP_PICKER_FUTURE_YEARS)
+  // From the render's `now` (not `anchor`, which can itself already be years
+  // away) so the jump picker's dropdown/navigation bounds always reach a
+  // consistent window around *today*, the same on the server and on hydrate.
+  const jumpPickerStartMonth = subYears(renderNow, JUMP_PICKER_PAST_YEARS)
+  const jumpPickerEndMonth = addYears(renderNow, JUMP_PICKER_FUTURE_YEARS)
 
   // Day clicks only ever update the local pending selection — no URL write,
   // no close. Committing is an explicit user action (the Apply button
