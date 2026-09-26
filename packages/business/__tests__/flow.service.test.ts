@@ -5,6 +5,7 @@ import { afterEach, describe, expect, test, vi } from "vitest"
 const {
   mockListWithVersions,
   mockCountFlows,
+  mockListTemplateIds,
   mockAudit,
   mockCreateId,
   mockDbTransaction,
@@ -36,6 +37,7 @@ const {
   return {
     mockListWithVersions: vi.fn(),
     mockCountFlows: vi.fn(),
+    mockListTemplateIds: vi.fn(),
     mockAudit: vi.fn(),
     mockCreateId: vi.fn(),
     mockDbTransaction: vi.fn(),
@@ -88,7 +90,9 @@ vi.mock("@chatbotx.io/database/repositories", () => ({
     listWithVersions: mockListWithVersions,
     count: mockCountFlows,
   },
-  whatsappMessageTemplateRepository: { listIdsByIntegration: vi.fn() },
+  whatsappMessageTemplateRepository: {
+    listIdsByIntegrations: mockListTemplateIds,
+  },
 }))
 
 vi.mock("@chatbotx.io/database/partials", () => ({
@@ -118,8 +122,8 @@ vi.mock("@chatbotx.io/flow-config", () => ({
     decrease: "O05",
   },
   // flowService.list's startType filtering imports stepTypes for the
-  // sendWaTemplateMessage branch — this suite never exercises `list`, so a
-  // minimal stub (rather than the real enum) keeps the mock self-contained.
+  // sendWaTemplateMessage branch; a minimal stub (rather than the real enum)
+  // keeps the mock self-contained.
   stepTypes: { enum: { sendWaTemplateMessage: "sendWaTemplateMessage" } },
 }))
 
@@ -131,6 +135,7 @@ vi.mock("../src/base.service", () => ({
 
 vi.mock("../src/errors", () => ({
   notFoundException: (message: string) => new Error(message),
+  validationException: (_field: string, message: string) => new Error(message),
 }))
 
 vi.mock("../src/flow-version", () => ({
@@ -732,6 +737,96 @@ describe("flowService.list: startType filters BEFORE paging (s205)", () => {
     })
 
     expect(result).toMatchObject({ data: [], pageCount: 0 })
+  })
+})
+
+describe("flowService.list: WhatsApp template flows by integration (s207)", () => {
+  // Flow i starts with a WhatsApp template step using template "t<i>".
+  const waFlow = (i: number) => ({
+    id: String(i),
+    flowVersions: [
+      {
+        nodes: [
+          {
+            data: {
+              isStartNode: true,
+              details: {
+                steps: [
+                  {
+                    stepType: "sendWaTemplateMessage",
+                    template: { id: `t${i}` },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    ],
+  })
+  const flows = [1, 2, 3].map(waFlow)
+  const list = (input: {
+    integrationWhatsappId?: string | null
+    integrationWhatsappIds?: string[] | null
+  }) =>
+    flowService.list({
+      workspaceId: "ws-1",
+      startType: "sendWaTemplateMessage",
+      ...input,
+    })
+
+  afterEach(() => {
+    mockListWithVersions.mockReset()
+    mockListTemplateIds.mockReset()
+  })
+
+  test("the plural the broadcast form sends selects the bound flows", async () => {
+    mockListWithVersions.mockResolvedValue(flows)
+    mockListTemplateIds.mockResolvedValue(["t1", "t3"])
+
+    const result = await list({ integrationWhatsappIds: ["10", "11"] })
+
+    expect(result.data.map((flow) => flow.id)).toEqual(["1", "3"])
+    expect(mockListTemplateIds).toHaveBeenCalledWith({
+      integrationWhatsappIds: ["10", "11"],
+    })
+  })
+
+  test("singular and plural are merged and de-duplicated", async () => {
+    mockListWithVersions.mockResolvedValue(flows)
+    mockListTemplateIds.mockResolvedValue(["t2"])
+
+    const result = await list({
+      integrationWhatsappId: "10",
+      integrationWhatsappIds: ["10", "12"],
+    })
+
+    expect(result.data.map((flow) => flow.id)).toEqual(["2"])
+    expect(mockListTemplateIds).toHaveBeenCalledWith({
+      integrationWhatsappIds: ["10", "12"],
+    })
+  })
+
+  test("an empty plural still selects nothing", async () => {
+    mockListWithVersions.mockResolvedValue(flows)
+    mockListTemplateIds.mockResolvedValue([])
+
+    const result = await list({ integrationWhatsappIds: [] })
+
+    expect(result.data).toEqual([])
+  })
+
+  test("more integrations than the cap is refused", async () => {
+    mockListWithVersions.mockResolvedValue(flows)
+
+    await expect(
+      list({
+        integrationWhatsappIds: Array.from({ length: 101 }, (_, i) =>
+          String(i + 1),
+        ),
+      }),
+    ).rejects.toThrow("At most 100")
+    expect(mockListTemplateIds).not.toHaveBeenCalled()
   })
 })
 

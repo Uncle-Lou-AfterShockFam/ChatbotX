@@ -34,7 +34,7 @@ import { customFieldResolutionKey } from "@chatbotx.io/utils/custom-field"
 import { BaseService } from "../base.service"
 import { botFieldService } from "../bot-field/service"
 import { customFieldService } from "../custom-field/service"
-import { notFoundException } from "../errors"
+import { notFoundException, validationException } from "../errors"
 import { flowVersionService } from "../flow-version"
 import { folderService } from "../folder/service"
 import { assertDeletable } from "../template/installed-resource.service"
@@ -56,6 +56,9 @@ type ResolveFieldsByNameAndType = (props: {
  * `importFlowExport`'s customField and botField branches, which are
  * otherwise identical apart from which service resolves the manifest.
  */
+/** A workspace has a handful of WhatsApp lines; far more is a caller bug. */
+const MAX_WHATSAPP_INTEGRATION_FILTER = 100
+
 const resolveManifestIdMap = async (
   manifest: Record<string, FieldManifestEntry>,
   resolve: ResolveFieldsByNameAndType,
@@ -113,8 +116,9 @@ class FlowService extends BaseService {
   /**
    * Paginated flow list with draft/latest versions attached. When
    * `startType` is given, the whole workspace list is filtered in memory by the
-   * first start node's step type (and, for WhatsApp template steps, by
-   * `integrationWhatsappId`'s bound template ids) and then paged, so
+   * first start node's step type (and, for WhatsApp template steps, by the
+   * templates bound to `integrationWhatsappId` / `integrationWhatsappIds`)
+   * and then paged, so
    * `pageCount` and every page are exact.
    */
   async list(
@@ -123,6 +127,8 @@ class FlowService extends BaseService {
       perPage?: number | null
       startType?: string | null
       integrationWhatsappId?: string | null
+      /** Any of these integrations (a multi-inbox broadcast sends plural). */
+      integrationWhatsappIds?: string[] | null
     },
   ): Promise<{
     data: Awaited<ReturnType<typeof flowRepository.listWithVersions>>
@@ -156,15 +162,31 @@ class FlowService extends BaseService {
       input.startType,
     )
     if (input.startType === stepTypes.enum.sendWaTemplateMessage) {
-      if (input.integrationWhatsappId) {
-        const templateIds =
-          await whatsappMessageTemplateRepository.listIdsByIntegration({
-            integrationWhatsappId: input.integrationWhatsappId,
-          })
-        data = filterFlowsByTemplateIds(data, templateIds)
-      } else {
-        data = []
+      // The broadcast form sends the plural; reading only the singular left
+      // its WhatsApp-template flow picker always empty (s207).
+      const integrationWhatsappIds = [
+        ...new Set(
+          [
+            input.integrationWhatsappId,
+            ...(input.integrationWhatsappIds ?? []),
+          ].filter((id): id is string => Boolean(id)),
+        ),
+      ]
+      if (integrationWhatsappIds.length > MAX_WHATSAPP_INTEGRATION_FILTER) {
+        throw validationException(
+          "integrationWhatsappIds",
+          `At most ${MAX_WHATSAPP_INTEGRATION_FILTER} WhatsApp integrations per flow filter`,
+        )
       }
+      data =
+        integrationWhatsappIds.length === 0
+          ? []
+          : filterFlowsByTemplateIds(
+              data,
+              await whatsappMessageTemplateRepository.listIdsByIntegrations({
+                integrationWhatsappIds,
+              }),
+            )
     }
 
     if (!pagination) {
