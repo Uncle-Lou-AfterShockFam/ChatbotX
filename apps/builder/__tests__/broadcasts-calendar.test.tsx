@@ -20,6 +20,8 @@ vi.mock("next-intl", () => ({
   // The process zone, so the instant-keyed `groupByDay` agrees with the
   // local-time fixtures and the local-time `useFormatter` mock above.
   // A test can set `userZone.current` to a zone other than the process zone.
+  // The request's `now` (`useRenderNow` reads it while hydrating).
+  useNow: () => new Date(),
   useTimeZone: () =>
     userZone.current ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
   useFormatter: () => ({
@@ -1168,5 +1170,28 @@ describe("BroadcastsCalendar in a user zone other than the process zone (s205c)"
     expect(findCurrentMonthDayCell(el, processDay).textContent).not.toContain(
       "Zone check",
     )
+  })
+
+  test("today is highlighted on the user's day, not the browser's", () => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(INSTANT)
+    userZone.current = userZoneName
+    try {
+      const el = renderCalendar(
+        <BroadcastsCalendar
+          broadcasts={[]}
+          date="2026-08-01"
+          endDate="2026-08-01"
+          range="month"
+        />,
+      )
+      const highlighted = Array.from(
+        el.querySelectorAll<HTMLElement>("span.self-end.bg-primary"),
+      ).map((span) => span.textContent)
+
+      expect(highlighted).toEqual([dayIn(userZoneName)])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

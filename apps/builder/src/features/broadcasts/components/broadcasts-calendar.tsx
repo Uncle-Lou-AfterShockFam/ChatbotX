@@ -13,19 +13,14 @@ import {
   ToggleGroupItem,
 } from "@chatbotx.io/ui/components/ui/toggle-group"
 import { cn } from "@chatbotx.io/ui/lib/utils"
-import {
-  addYears,
-  format,
-  isSameMonth,
-  isToday,
-  startOfDay,
-  subYears,
-} from "date-fns"
+import { currentTemporalLiteral } from "@chatbotx.io/utils/datetime"
+import { addYears, format, isSameMonth, startOfDay, subYears } from "date-fns"
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
 import { useFormatter, useTimeZone, useTranslations } from "next-intl"
 import { useQueryStates } from "nuqs"
 import { type ReactNode, useMemo, useRef, useState } from "react"
 import type { DateRange } from "react-day-picker"
+import { useRenderNow } from "@/hooks/use-render-now"
 import { BroadcastDetailDialog } from "../broadcast-detail-dialog"
 import {
   broadcastStatusConfig,
@@ -169,6 +164,11 @@ export function BroadcastsCalendar({
     () => groupByDay(broadcasts, timeZone),
     [broadcasts, timeZone],
   )
+  // "Today" is the user's day, keyed like `groupByDay`, from the request's
+  // `now` while hydrating (s209: `isToday` read the browser's zone and clock).
+  const renderNow = useRenderNow()
+  const todayKey = currentTemporalLiteral("date", timeZone, renderNow)
+  const isToday = (day: Date) => dayKey(day) === todayKey
   const [selected, setSelected] = useState<BroadcastCalendarRow | null>(null)
   const [jumpOpen, setJumpOpen] = useState(false)
   const [customPopoverOpen, setCustomPopoverOpen] = useState(false)
@@ -179,12 +179,11 @@ export function BroadcastsCalendar({
   // see the shared onSelect handler below).
   const [pendingRange, setPendingRange] = useState<DateRange | undefined>()
 
-  // Computed once per render from `new Date()` (not `anchor`, which can
-  // itself already be years away) so the jump picker's dropdown/navigation
-  // bounds always reach a consistent window around *today*.
-  const today = new Date()
-  const jumpPickerStartMonth = subYears(today, JUMP_PICKER_PAST_YEARS)
-  const jumpPickerEndMonth = addYears(today, JUMP_PICKER_FUTURE_YEARS)
+  // From the render's `now` (not `anchor`, which can itself already be years
+  // away) so the jump picker's dropdown/navigation bounds always reach a
+  // consistent window around *today*, the same on the server and on hydrate.
+  const jumpPickerStartMonth = subYears(renderNow, JUMP_PICKER_PAST_YEARS)
+  const jumpPickerEndMonth = addYears(renderNow, JUMP_PICKER_FUTURE_YEARS)
 
   // Day clicks only ever update the local pending selection — no URL write,
   // no close. Committing is an explicit user action (the Apply button
