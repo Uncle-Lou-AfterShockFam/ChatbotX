@@ -236,10 +236,11 @@ async function findUnrecordedInvoice(
 }
 
 /**
- * Store the Stripe ids on the row unless another finalize got there first,
- * and return the Stripe invoice the ROW names. A racer that lost with an
- * invoice it just created (the two racers chose different create keys)
- * deletes that draft: it has no lines yet and was never finalized.
+ * Store the Stripe ids on the row while it is still a draft with none, and
+ * return the Stripe invoice the ROW names. Losing to another finalize (the
+ * two chose different create keys) or to a void deletes the draft this call
+ * created: it has no lines yet and was never finalized. A row voided
+ * meanwhile is never finalized in Stripe (blind probe, s206b).
  */
 async function recordStripeIds(props: {
   stripe: Stripe
@@ -261,6 +262,7 @@ async function recordStripeIds(props: {
     .where(
       and(
         eq(invoiceModel.id, invoice.id),
+        eq(invoiceModel.status, "draft"),
         isNull(invoiceModel.providerInvoiceId),
       ),
     )
@@ -272,22 +274,23 @@ async function recordStripeIds(props: {
     where: { id: invoice.id },
     columns: { providerInvoiceId: true },
   })
-  const recorded = row?.providerInvoiceId
-  if (!recorded) {
-    throw new InvoiceProviderError(
-      "The invoice changed while it was being finalized",
-      true,
-    )
-  }
+  const recorded = row?.providerInvoiceId ?? null
   if (recorded !== stripeInvoiceId && props.createdHere) {
     try {
       await stripe.invoices.del(stripeInvoiceId)
     } catch (error) {
       logger.error(
         { err: error, invoiceId: invoice.id, stripeInvoiceId, recorded },
-        "invoice: a concurrent finalize won and our twin Stripe draft could not be deleted",
+        "invoice: the finalize lost its persist and our Stripe draft could not be deleted",
       )
     }
+  }
+  if (!recorded) {
+    // Voided (or deleted) while we were creating: never finalize it.
+    throw new InvoiceProviderError(
+      "The invoice was voided while it was being finalized",
+      false,
+    )
   }
   return recorded
 }

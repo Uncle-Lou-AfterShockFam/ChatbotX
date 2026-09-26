@@ -30,6 +30,8 @@ const m = vi.hoisted(() => {
   }
   /** Every `.set(...)` payload written to the invoice row. */
   const written: Record<string, unknown>[] = []
+  /** Every `.where(...)` predicate of those UPDATEs. */
+  const predicates: unknown[] = []
   /** Rows the persist UPDATE returns: [] = another finalize won. */
   const updateRows = { value: [{ id: "901" }] as unknown[] }
   const db = {
@@ -42,11 +44,16 @@ const m = vi.hoisted(() => {
     update: vi.fn(() => ({
       set: (values: Record<string, unknown>) => {
         written.push(values)
-        return { where: () => ({ returning: async () => updateRows.value }) }
+        return {
+          where: (predicate: unknown) => {
+            predicates.push(predicate)
+            return { returning: async () => updateRows.value }
+          },
+        }
       },
     })),
   }
-  return { stripe, db, written, updateRows }
+  return { stripe, db, written, predicates, updateRows }
 })
 
 vi.mock("@chatbotx.io/database/client", () => ({
@@ -118,6 +125,7 @@ const ours = { hub_invoice_id: INVOICE_ID, hub_workspace_id: "11" }
 beforeEach(() => {
   vi.clearAllMocks()
   m.written.length = 0
+  m.predicates.length = 0
   m.updateRows.value = [{ id: INVOICE_ID }]
   m.stripe.invoices.create.mockResolvedValue({ id: "in_1" })
   listed([])
@@ -250,6 +258,10 @@ describe("finalizeWithStripe collection choice", () => {
         providerAccountId: "acct_test",
         providerCustomerId: CUSTOMER,
       }),
+    ])
+    // Only a still-DRAFT row without a Stripe id takes it (a void wins).
+    expect(m.predicates).toEqual([
+      { and: [{ eq: INVOICE_ID }, { eq: "draft" }, { isNull: true }] },
     ])
   })
 
@@ -393,7 +405,7 @@ describe("finalizeWithStripe collection choice", () => {
     expect(result.providerInvoiceId).toBe("in_winner")
   })
 
-  test("a lost persist with no recorded id is a retryable error", async () => {
+  test("a row VOIDED during the finalize: our new draft is deleted and nothing is finalized", async () => {
     m.stripe.customers.retrieve.mockResolvedValue({ id: CUSTOMER, email: null })
     m.updateRows.value = []
     m.db.query.invoiceModel.findFirst.mockResolvedValue({
@@ -405,7 +417,10 @@ describe("finalizeWithStripe collection choice", () => {
       lines: LINES,
     }).catch((e: unknown) => e)
     expect((error as InstanceType<typeof InvoiceProviderError>).retryable).toBe(
-      true,
+      false,
     )
+    expect(m.stripe.invoices.del).toHaveBeenCalledWith("in_1")
+    expect(m.stripe.invoiceItems.create).not.toHaveBeenCalled()
+    expect(m.stripe.invoices.finalizeInvoice).not.toHaveBeenCalled()
   })
 })
