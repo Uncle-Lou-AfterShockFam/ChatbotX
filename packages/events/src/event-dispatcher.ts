@@ -15,6 +15,7 @@ import type {
   DealValueChangedMetadata,
   FormSubmittedMetadata,
   IncomingCallMetadata,
+  InvoiceEventMetadata,
 } from "./base-emitter"
 import { CompanyStopEventEmitter } from "./company-stop/emitter"
 import { logger } from "./logger"
@@ -426,3 +427,28 @@ export const emitFormSubmitted = async (
   contactId: string,
   metadata: FormSubmittedMetadata,
 ) => await emitToAllEmitters("formSubmitted", workspaceId, contactId, metadata)
+
+// Hub invoicing (s205b)
+export const emitInvoiceCreated = async (
+  workspaceId: string,
+  contactId: string,
+  metadata: InvoiceEventMetadata,
+) => await emitToAllEmitters("invoiceCreated", workspaceId, contactId, metadata)
+
+export const emitInvoicePaid = async (
+  workspaceId: string,
+  contactId: string,
+  metadata: InvoiceEventMetadata,
+) => await emitToAllEmitters("invoicePaid", workspaceId, contactId, metadata)
+
+export const emitInvoicePaymentFailed = async (
+  workspaceId: string,
+  contactId: string,
+  metadata: InvoiceEventMetadata,
+) =>
+  await emitToAllEmitters(
+    "invoicePaymentFailed",
+    workspaceId,
+    contactId,
+    metadata,
+  )

@@ -90,6 +90,21 @@ export type FormSubmittedMetadata = {
 }
 
 /**
+ * A hub invoice (s205b). `total` is the numeric(14,2) string, `currency` ISO
+ * upper-case; `hostedUrl` is the provider pay page (null while draft).
+ */
+export type InvoiceEventMetadata = {
+  invoiceId: string
+  number: number
+  status: string
+  method: string
+  total: string
+  currency: string
+  hostedUrl: string | null
+  dealId: string | null
+}
+
+/**
  * Base event emitter class with common functionality
  */
 export abstract class BaseEventEmitter {
@@ -603,6 +618,42 @@ export abstract class BaseEventEmitter {
       workspaceId,
       contactId,
       metadata: { ...metadata, sourceId: metadata.formId },
+    })
+  }
+
+  async invoiceCreated(
+    workspaceId: string,
+    contactId: string,
+    metadata: InvoiceEventMetadata,
+  ): Promise<void> {
+    await this.emit(triggerEventTypes.enum.invoiceCreated, {
+      workspaceId,
+      contactId,
+      metadata,
+    })
+  }
+
+  async invoicePaid(
+    workspaceId: string,
+    contactId: string,
+    metadata: InvoiceEventMetadata,
+  ): Promise<void> {
+    await this.emit(triggerEventTypes.enum.invoicePaid, {
+      workspaceId,
+      contactId,
+      metadata,
+    })
+  }
+
+  async invoicePaymentFailed(
+    workspaceId: string,
+    contactId: string,
+    metadata: InvoiceEventMetadata,
+  ): Promise<void> {
+    await this.emit(triggerEventTypes.enum.invoicePaymentFailed, {
+      workspaceId,
+      contactId,
+      metadata,
     })
   }
 }

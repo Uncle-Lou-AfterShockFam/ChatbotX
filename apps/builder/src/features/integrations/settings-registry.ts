@@ -1,5 +1,11 @@
 import { SiFacebook, SiMake } from "@icons-pack/react-simple-icons"
-import { BotIcon, CodeIcon, MailIcon, TableIcon } from "lucide-react"
+import {
+  BotIcon,
+  CodeIcon,
+  CreditCardIcon,
+  MailIcon,
+  TableIcon,
+} from "lucide-react"
 import type { ComponentType } from "react"
 
 /**
@@ -56,4 +62,5 @@ export const INTEGRATION_SETTINGS_REGISTRY: readonly IntegrationSettingsEntry[] 
     { slug: "drip", titleKey: "drip.title", icon: MailIcon },
     { slug: "sendgrid", titleKey: "sendGrid.title", icon: MailIcon },
     { slug: "klaviyo", titleKey: "klaviyo.title", icon: MailIcon },
+    { slug: "stripe", titleKey: "stripe.title", icon: CreditCardIcon },
   ]

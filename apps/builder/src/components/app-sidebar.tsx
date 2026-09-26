@@ -22,6 +22,7 @@ import {
   MessageCircleMoreIcon,
   PhoneCallIcon,
   RadioIcon,
+  ReceiptTextIcon,
   SlidersHorizontalIcon,
   UsersIcon,
   WebhookIcon,
@@ -130,6 +131,12 @@ export function AppSidebar({
         url: `/space/${workspaceId}/deals`,
         icon: HandshakeIcon,
         permission: PERMISSION_NAV.deals,
+      },
+      {
+        title: t("invoices.title"),
+        url: `/space/${workspaceId}/invoices`,
+        icon: ReceiptTextIcon,
+        permission: PERMISSION_NAV.contacts,
       },
       {
         title: t("tasks.calendar.title"),

@@ -51,6 +51,10 @@ export const triggerEventTypes = z.enum([
   // deal comment @mention (s193 part 3b); sourceId = pipelineId, contact = the deal's
   "dealMentioned",
   "formSubmitted",
+  // hub invoicing (s205b); no sourceId, metadata carries the invoice
+  "invoiceCreated",
+  "invoicePaid",
+  "invoicePaymentFailed",
   "subscribedToSequence",
   "unsubscribedFromSequence",
   "WhatsappShoppingCartSent",

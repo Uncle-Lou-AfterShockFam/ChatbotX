@@ -50,6 +50,7 @@ import {
 } from "@/features/integration-whatsapp/message-templates/api/public"
 import { zaloChannelsPublicRouter } from "@/features/integration-zalo/api/public"
 import { integrationsPublicRouter } from "@/features/integrations/api/public"
+import { invoicesPublicRouter } from "@/features/invoices/api/public"
 import { mediaLibraryPublicRouter } from "@/features/media-library/api/public"
 import { messagesPublicRouter } from "@/features/messages/api/public"
 import { minigamesPublicRouter } from "@/features/minigames/api/public"
@@ -110,6 +111,7 @@ export const publicRouter = {
   inboxTeams: inboxTeamsPublicRouter,
   inboxes: inboxesPublicRouter,
   integrations: integrationsPublicRouter,
+  invoices: invoicesPublicRouter,
   keywords: keywordsPublicRouter,
   mediaLibrary: mediaLibraryPublicRouter,
   messages: messagesPublicRouter,

@@ -71,6 +71,17 @@ const DEAL_TASK_EVENT_DATA = {
   templateId: null,
 }
 
+const INVOICE_EVENT_DATA = {
+  invoiceId: "inv-1",
+  number: 7,
+  status: "open",
+  method: "stripeInvoice",
+  total: "25.00",
+  currency: "USD",
+  hostedUrl: "https://invoice.stripe.com/i/test",
+  dealId: null,
+}
+
 const EVENT_DATA_BY_TYPE: Record<string, Record<string, unknown>> = {
   [triggerEventTypes.enum.tagApplied]: { tagId: "tag-1" },
   [triggerEventTypes.enum.tagRemoved]: { tagId: "tag-1" },
@@ -173,6 +184,12 @@ const EVENT_DATA_BY_TYPE: Record<string, Record<string, unknown>> = {
     sourceId: "form-1",
     values: { first_name: "Ada" },
   },
+  [triggerEventTypes.enum.invoiceCreated]: INVOICE_EVENT_DATA,
+  [triggerEventTypes.enum.invoicePaid]: {
+    ...INVOICE_EVENT_DATA,
+    status: "paid",
+  },
+  [triggerEventTypes.enum.invoicePaymentFailed]: INVOICE_EVENT_DATA,
 }
 
 // Every MatchableEventType EXCEPT dateTimeBasedTrigger (documented exception

@@ -35,8 +35,10 @@
     "./inbox/connect-outcome": "./src/inbox/connect-outcome.ts",
     "./inbox/connect-outcome-types": "./src/inbox/connect-outcome-types.ts",
     "./inbox/schema": "./src/inbox/schema.ts",
+    "./integration-stripe": "./src/integration-stripe/index.ts",
     "./integration-whatsapp/auth-schema": "./src/integration-whatsapp/auth-schema.ts",
     "./license-startup": "./src/enterprise/license/startup.ts",
+    "./invoice": "./src/invoice/index.ts",
     "./javascript-execution": "./src/javascript-execution/index.ts",
     "./minigame": "./src/minigame/index.ts",
     "./notification": "./src/notification/index.ts",
@@ -84,6 +86,7 @@
     "libphonenumber-js": "^1.12.42",
     "qrcode": "^1.5.4",
     "remeda": "^2.37.0",
+    "stripe": "^22.1.0",
     "universal-error-normalizer": "^1.0.0",
     "zod": "^4.3.6"
   },

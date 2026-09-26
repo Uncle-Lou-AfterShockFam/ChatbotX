@@ -38,6 +38,7 @@ import {
   MessagesSquareIcon,
   OctagonXIcon,
   PackageOpenIcon,
+  ReceiptTextIcon,
   SaveIcon,
   SaveOffIcon,
   SheetIcon,
@@ -481,6 +482,11 @@ export const performActionMenus = (t: TranslationFn): MenuItem[] => [
     label: t("flows.actions.sendDocumentForSignature"),
     icon: FileSignatureIcon,
     stepType: stepTypes.enum.sendDocumentForSignature,
+  },
+  {
+    label: t("flows.actions.createInvoice"),
+    icon: ReceiptTextIcon,
+    stepType: stepTypes.enum.createInvoice,
   },
   {
     label: t("flows.actions.emailActions"),

@@ -27,6 +27,7 @@ export const integrationTypes = z.enum([
   "outlookCalendar",
   "sendGrid",
   "smtp",
+  "stripe",
   "telegram",
   "tiktok",
   "webchat",

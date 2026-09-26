@@ -26,6 +26,7 @@ import { conditionStep } from "./condition"
 import { countCharactersStep } from "./count-characters"
 import { markCouponUsedStep, setUpCouponStep } from "./coupon"
 import { createDealStep } from "./create-deal"
+import { createInvoiceStep } from "./create-invoice"
 import { createTaskStep } from "./create-task"
 import type { StepDefinition } from "./definition"
 import { deleteContactStep } from "./delete-contact"
@@ -170,6 +171,7 @@ export const allSteps: Record<StepType, StepDefinition<any> | undefined> = {
   [stepTypes.enum.subscribeSequence]: subscribeSequenceStep,
   [stepTypes.enum.unsubscribeSequence]: unsubscribeSequenceStep,
   [stepTypes.enum.createDeal]: createDealStep,
+  [stepTypes.enum.createInvoice]: createInvoiceStep,
   [stepTypes.enum.moveDealStage]: moveDealStageStep,
   [stepTypes.enum.setDealStatus]: setDealStatusStep,
   [stepTypes.enum.createTask]: createTaskStep,

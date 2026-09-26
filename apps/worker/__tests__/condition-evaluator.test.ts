@@ -388,6 +388,19 @@ describe("ConditionEvaluator formSubmitted (s200)", () => {
   })
 })
 
+describe("ConditionEvaluator invoice events (s205b)", () => {
+  const evaluator = new ConditionEvaluator()
+  test.each([
+    triggerEventTypes.enum.invoiceCreated,
+    triggerEventTypes.enum.invoicePaid,
+    triggerEventTypes.enum.invoicePaymentFailed,
+  ])("%s matches every invoice of the workspace (no sourceId)", async (type) => {
+    await expect(
+      evaluator.evaluate(buildContext({ type }, { invoiceId: "inv-1" })),
+    ).resolves.toBe(true)
+  })
+})
+
 describe("ConditionEvaluator customFieldValueChanged on option fields (s203)", () => {
   const evaluator = new ConditionEvaluator()
 

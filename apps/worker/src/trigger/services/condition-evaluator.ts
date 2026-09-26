@@ -60,6 +60,10 @@ export class ConditionEvaluator {
       case triggerEventTypes.enum.unsubscribedFromSequence:
       case triggerEventTypes.enum.contactReferredANewContact:
       case triggerEventTypes.enum.contactReferredExistingContact:
+      // Hub invoicing (s205b): every invoice of the workspace, no sourceId.
+      case triggerEventTypes.enum.invoiceCreated:
+      case triggerEventTypes.enum.invoicePaid:
+      case triggerEventTypes.enum.invoicePaymentFailed:
         return true
 
       // Deal events: the condition is pinned to a pipeline (created / value /

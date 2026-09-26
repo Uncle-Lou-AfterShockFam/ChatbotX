@@ -120,6 +120,7 @@ export const stepTypes = z.enum([
 
   // Deal Operations
   "createDeal",
+  "createInvoice",
   "moveDealStage",
   "setDealStatus",
   "createTask",
