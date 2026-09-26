@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, test, vi } from "vitest"
 import { EXCLUDED_FIELD_CONDITION } from "@chatbotx.io/database/queries/contact-filter/excluded-field"
+import { beforeEach, describe, expect, test, vi } from "vitest"
 
 const findManyBroadcast = vi.fn()
 const findFirstBroadcast = vi.fn()
