@@ -190,39 +190,67 @@ async function chooseCollection(
   }
 }
 
+/** Upper bound on the invoices scanned for an unrecorded one (10 pages). */
+const UNRECORDED_SCAN_LIMIT = 1000
+
 /**
  * A Stripe invoice created for this hub invoice whose id never reached the
  * row (a crash between the create and the persist). The create key depends
  * on the customer's email, so a retry after the email appeared or vanished
- * would otherwise mint a twin. `list` (read-your-writes, unlike `search`)
- * over the customer's newest 100; a voided one is not resumed.
+ * would otherwise mint a twin. `list` is read-your-writes (unlike `search`)
+ * and only invoices created since the hub row can match (60 s of clock
+ * skew allowed); a voided one is not resumed. Past the scan cap this fails
+ * rather than guess.
  */
 async function findUnrecordedInvoice(
   stripe: Stripe,
   customerId: string,
   invoice: InvoiceModel,
 ): Promise<string | null> {
-  let page: Stripe.ApiList<Stripe.Invoice>
+  let scanned = 0
   try {
-    page = await stripe.invoices.list({ customer: customerId, limit: 100 })
+    for await (const candidate of stripe.invoices.list({
+      customer: customerId,
+      created: { gte: Math.floor(invoice.createdAt.getTime() / 1000) - 60 },
+      limit: 100,
+    })) {
+      if (
+        candidate.metadata?.hub_invoice_id === invoice.id &&
+        candidate.metadata?.hub_workspace_id === invoice.workspaceId &&
+        candidate.status !== "void"
+      ) {
+        return candidate.id ?? null
+      }
+      scanned += 1
+      if (scanned >= UNRECORDED_SCAN_LIMIT) {
+        throw new InvoiceProviderError(
+          `More than ${UNRECORDED_SCAN_LIMIT} Stripe invoices for this customer since the hub invoice was created; check Stripe for one carrying hub_invoice_id ${invoice.id}`,
+          false,
+        )
+      }
+    }
   } catch (error) {
     throw wrap(error, "list invoices")
   }
-  const match = page.data.find(
-    (candidate) =>
-      candidate.metadata?.hub_invoice_id === invoice.id &&
-      candidate.status !== "void",
-  )
-  return match?.id ?? null
+  return null
 }
 
-async function recordStripeIds(
-  credentials: StripeCredentials,
-  invoice: InvoiceModel,
-  stripeInvoiceId: string,
-  customerId: string,
-): Promise<void> {
-  await db
+/**
+ * Store the Stripe ids on the row unless another finalize got there first,
+ * and return the Stripe invoice the ROW names. A racer that lost with an
+ * invoice it just created (the two racers chose different create keys)
+ * deletes that draft: it has no lines yet and was never finalized.
+ */
+async function recordStripeIds(props: {
+  stripe: Stripe
+  credentials: StripeCredentials
+  invoice: InvoiceModel
+  stripeInvoiceId: string
+  customerId: string
+  createdHere: boolean
+}): Promise<string> {
+  const { stripe, credentials, invoice, stripeInvoiceId, customerId } = props
+  const won = await db
     .update(invoiceModel)
     .set({
       providerInvoiceId: stripeInvoiceId,
@@ -236,6 +264,32 @@ async function recordStripeIds(
         isNull(invoiceModel.providerInvoiceId),
       ),
     )
+    .returning({ id: invoiceModel.id })
+  if (won.length > 0) {
+    return stripeInvoiceId
+  }
+  const row = await db.query.invoiceModel.findFirst({
+    where: { id: invoice.id },
+    columns: { providerInvoiceId: true },
+  })
+  const recorded = row?.providerInvoiceId
+  if (!recorded) {
+    throw new InvoiceProviderError(
+      "The invoice changed while it was being finalized",
+      true,
+    )
+  }
+  if (recorded !== stripeInvoiceId && props.createdHere) {
+    try {
+      await stripe.invoices.del(stripeInvoiceId)
+    } catch (error) {
+      logger.error(
+        { err: error, invoiceId: invoice.id, stripeInvoiceId, recorded },
+        "invoice: a concurrent finalize won and our twin Stripe draft could not be deleted",
+      )
+    }
+  }
+  return recorded
 }
 
 /**
@@ -319,7 +373,14 @@ export async function finalizeWithStripe(props: {
     invoice.providerInvoiceId ??
     (await findUnrecordedInvoice(stripe, customerId, invoice))
   if (stripeInvoiceId && !invoice.providerInvoiceId) {
-    await recordStripeIds(credentials, invoice, stripeInvoiceId, customerId)
+    stripeInvoiceId = await recordStripeIds({
+      stripe,
+      credentials,
+      invoice,
+      stripeInvoiceId,
+      customerId,
+      createdHere: false,
+    })
   }
   if (!stripeInvoiceId) {
     const collection = await chooseCollection(stripe, customerId, invoice)
@@ -347,9 +408,15 @@ export async function finalizeWithStripe(props: {
     if (!created.id) {
       throw new InvoiceProviderError("Stripe returned no invoice id", true)
     }
-    stripeInvoiceId = created.id
     // Persist the id NOW so a crash below resumes this invoice, never a twin.
-    await recordStripeIds(credentials, invoice, stripeInvoiceId, customerId)
+    stripeInvoiceId = await recordStripeIds({
+      stripe,
+      credentials,
+      invoice,
+      stripeInvoiceId: created.id,
+      customerId,
+      createdHere: true,
+    })
   }
 
   let current: Stripe.Invoice

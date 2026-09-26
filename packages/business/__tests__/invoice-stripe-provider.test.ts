@@ -24,19 +24,29 @@ const m = vi.hoisted(() => {
       listLineItems: vi.fn(),
       list: vi.fn(),
       voidInvoice: vi.fn(),
+      del: vi.fn(),
     },
     invoiceItems: { create: vi.fn() },
   }
-  const updateWhere = vi.fn()
+  /** Every `.set(...)` payload written to the invoice row. */
+  const written: Record<string, unknown>[] = []
+  /** Rows the persist UPDATE returns: [] = another finalize won. */
+  const updateRows = { value: [{ id: "901" }] as unknown[] }
   const db = {
     query: {
       stripeCustomerModel: {
         findFirst: vi.fn(async () => ({ customerId: "cus_test_1" })),
       },
+      invoiceModel: { findFirst: vi.fn() },
     },
-    update: vi.fn(() => ({ set: () => ({ where: updateWhere }) })),
+    update: vi.fn(() => ({
+      set: (values: Record<string, unknown>) => {
+        written.push(values)
+        return { where: () => ({ returning: async () => updateRows.value }) }
+      },
+    })),
   }
-  return { stripe, db, updateWhere }
+  return { stripe, db, written, updateRows }
 })
 
 vi.mock("@chatbotx.io/database/client", () => ({
@@ -98,13 +108,19 @@ const openInvoice = {
 
 const RETRIEVE_CUSTOMER_ERROR = /^Stripe retrieve customer:/
 
-// A Stripe draft with no line items yet: an empty auto-pager.
-const noLines = () => [][Symbol.iterator]()
+// An auto-pager over these items (Stripe list results are async-iterable).
+const pager = (items: unknown[]) => items[Symbol.iterator]()
+const noLines = () => pager([])
+const listed = (items: Record<string, unknown>[]) =>
+  m.stripe.invoices.list.mockImplementation(() => pager(items))
+const ours = { hub_invoice_id: INVOICE_ID, hub_workspace_id: "11" }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  m.written.length = 0
+  m.updateRows.value = [{ id: INVOICE_ID }]
   m.stripe.invoices.create.mockResolvedValue({ id: "in_1" })
-  m.stripe.invoices.list.mockResolvedValue({ data: [] })
+  listed([])
   m.stripe.invoices.retrieve.mockResolvedValue({
     ...openInvoice,
     status: "draft",
@@ -221,21 +237,35 @@ describe("finalizeWithStripe collection choice", () => {
     expect(m.stripe.invoices.create).not.toHaveBeenCalled()
   })
 
+  test("a new Stripe invoice's ids are persisted on the row", async () => {
+    m.stripe.customers.retrieve.mockResolvedValue({ id: CUSTOMER, email: null })
+    await finalizeWithStripe({
+      credentials: CREDENTIALS,
+      invoice: invoice(),
+      lines: LINES,
+    })
+    expect(m.written).toEqual([
+      expect.objectContaining({
+        providerInvoiceId: "in_1",
+        providerAccountId: "acct_test",
+        providerCustomerId: CUSTOMER,
+      }),
+    ])
+  })
+
   test("a Stripe invoice created before a crash is ADOPTED by metadata: no second create, even after the email changed", async () => {
     m.stripe.customers.retrieve.mockResolvedValue({
       id: CUSTOMER,
       email: "new@b.test",
     })
-    m.stripe.invoices.list.mockResolvedValue({
-      data: [
-        { id: "in_other", status: "open", metadata: { hub_invoice_id: "902" } },
-        {
-          id: "in_orphan",
-          status: "draft",
-          metadata: { hub_invoice_id: INVOICE_ID },
-        },
-      ],
-    })
+    listed([
+      {
+        id: "in_other",
+        status: "open",
+        metadata: { ...ours, hub_invoice_id: "902" },
+      },
+      { id: "in_orphan", status: "draft", metadata: ours },
+    ])
     const result = await finalizeWithStripe({
       credentials: CREDENTIALS,
       invoice: invoice(),
@@ -243,40 +273,83 @@ describe("finalizeWithStripe collection choice", () => {
     })
     expect(m.stripe.invoices.list).toHaveBeenCalledWith({
       customer: CUSTOMER,
+      created: { gte: Math.floor(createdAt.getTime() / 1000) - 60 },
       limit: 100,
     })
     expect(m.stripe.invoices.create).not.toHaveBeenCalled()
     expect(m.stripe.customers.retrieve).not.toHaveBeenCalled()
-    expect(m.stripe.invoices.retrieve).toHaveBeenCalledWith("in_orphan")
-    expect(m.db.update).toHaveBeenCalledTimes(1)
+    expect(m.written).toEqual([
+      expect.objectContaining({
+        providerInvoiceId: "in_orphan",
+        providerAccountId: "acct_test",
+        providerCustomerId: CUSTOMER,
+      }),
+    ])
     expect(result.providerInvoiceId).toBe("in_orphan")
   })
 
-  test("a VOIDED Stripe invoice for this hub invoice is never adopted: a new one is created", async () => {
+  test("a candidate of ANOTHER workspace, or a VOIDED one, is never adopted: a new invoice is created", async () => {
     m.stripe.customers.retrieve.mockResolvedValue({ id: CUSTOMER, email: null })
-    m.stripe.invoices.list.mockResolvedValue({
-      data: [
-        {
-          id: "in_void",
-          status: "void",
-          metadata: { hub_invoice_id: INVOICE_ID },
-        },
-      ],
-    })
-    await finalizeWithStripe({
+    listed([
+      {
+        id: "in_foreign",
+        status: "open",
+        metadata: { ...ours, hub_workspace_id: "99" },
+      },
+      { id: "in_void", status: "void", metadata: ours },
+    ])
+    const result = await finalizeWithStripe({
       credentials: CREDENTIALS,
       invoice: invoice(),
       lines: LINES,
     })
     expect(m.stripe.invoices.create).toHaveBeenCalledTimes(1)
+    expect(result.providerInvoiceId).toBe("in_1")
+  })
+
+  test("an adopted PAID invoice whose total disagrees is never voided: the finalize fails loud", async () => {
+    listed([{ id: "in_paid", status: "paid", metadata: ours }])
+    m.stripe.invoices.retrieve.mockResolvedValue({
+      ...openInvoice,
+      id: "in_paid",
+      status: "paid",
+      total: 999,
+    })
+    const error = await finalizeWithStripe({
+      credentials: CREDENTIALS,
+      invoice: invoice(),
+      lines: LINES,
+    }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(InvoiceProviderError)
+    expect(m.stripe.invoices.voidInvoice).not.toHaveBeenCalled()
+    expect(m.stripe.invoices.finalizeInvoice).not.toHaveBeenCalled()
+  })
+
+  test("past the scan cap the lookup fails non-retryable instead of creating", async () => {
+    listed(
+      Array.from({ length: 1000 }, (_, i) => ({
+        id: `in_${i}`,
+        status: "open",
+        metadata: {},
+      })),
+    )
+    const error = await finalizeWithStripe({
+      credentials: CREDENTIALS,
+      invoice: invoice(),
+      lines: LINES,
+    }).catch((e: unknown) => e)
+    expect((error as InstanceType<typeof InvoiceProviderError>).retryable).toBe(
+      false,
+    )
+    expect(m.stripe.invoices.create).not.toHaveBeenCalled()
   })
 
   test("a failure listing the customer's invoices is retryable and creates nothing", async () => {
-    m.stripe.invoices.list.mockRejectedValue(
-      new Stripe.errors.StripeConnectionError({
+    m.stripe.invoices.list.mockImplementation(() => {
+      throw new Stripe.errors.StripeConnectionError({
         message: "socket hang up",
-      } as never),
-    )
+      } as never)
+    })
     const error = await finalizeWithStripe({
       credentials: CREDENTIALS,
       invoice: invoice(),
@@ -286,5 +359,53 @@ describe("finalizeWithStripe collection choice", () => {
       true,
     )
     expect(m.stripe.invoices.create).not.toHaveBeenCalled()
+  })
+
+  test("a concurrent finalize that won: the loser deletes ITS new draft and continues on the recorded invoice", async () => {
+    m.stripe.customers.retrieve.mockResolvedValue({ id: CUSTOMER, email: null })
+    m.stripe.invoices.create.mockResolvedValue({ id: "in_twin" })
+    m.updateRows.value = []
+    m.db.query.invoiceModel.findFirst.mockResolvedValue({
+      providerInvoiceId: "in_winner",
+    })
+    const result = await finalizeWithStripe({
+      credentials: CREDENTIALS,
+      invoice: invoice(),
+      lines: LINES,
+    })
+    expect(m.stripe.invoices.del).toHaveBeenCalledWith("in_twin")
+    expect(m.stripe.invoices.retrieve).toHaveBeenCalledWith("in_winner")
+    expect(result.providerInvoiceId).toBe("in_winner")
+  })
+
+  test("losing the race with an ADOPTED invoice never deletes it (it may be the other racer's)", async () => {
+    listed([{ id: "in_orphan", status: "draft", metadata: ours }])
+    m.updateRows.value = []
+    m.db.query.invoiceModel.findFirst.mockResolvedValue({
+      providerInvoiceId: "in_winner",
+    })
+    const result = await finalizeWithStripe({
+      credentials: CREDENTIALS,
+      invoice: invoice(),
+      lines: LINES,
+    })
+    expect(m.stripe.invoices.del).not.toHaveBeenCalled()
+    expect(result.providerInvoiceId).toBe("in_winner")
+  })
+
+  test("a lost persist with no recorded id is a retryable error", async () => {
+    m.stripe.customers.retrieve.mockResolvedValue({ id: CUSTOMER, email: null })
+    m.updateRows.value = []
+    m.db.query.invoiceModel.findFirst.mockResolvedValue({
+      providerInvoiceId: null,
+    })
+    const error = await finalizeWithStripe({
+      credentials: CREDENTIALS,
+      invoice: invoice(),
+      lines: LINES,
+    }).catch((e: unknown) => e)
+    expect((error as InstanceType<typeof InvoiceProviderError>).retryable).toBe(
+      true,
+    )
   })
 })
