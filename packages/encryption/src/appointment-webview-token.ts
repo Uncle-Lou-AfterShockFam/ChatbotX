@@ -28,6 +28,8 @@ export const appointmentWebviewPayloadSchema = z.object({
   resultUsedByAI: z.boolean().optional(),
   availabilityStartAt: z.iso.datetime().optional(),
   availabilityEndAt: z.iso.datetime().optional(),
+  /** Start of the flow run that minted the link; the resume keeps it. */
+  runStartedAt: z.iso.datetime().optional(),
   expiresAt: z.number(),
 })
 

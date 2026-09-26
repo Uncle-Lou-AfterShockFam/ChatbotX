@@ -1,5 +1,6 @@
 import { contactInboxService, conversationService } from "@chatbotx.io/business"
 import type { MetadataPayload } from "@chatbotx.io/flow-config"
+import { COMPANY_STOPPED } from "./company-stop-guard"
 import { runFlowNode } from "./flow"
 
 export interface SendFlowDirectParams {
@@ -12,9 +13,10 @@ export interface SendFlowDirectParams {
   workspaceId: string
 }
 
+/** `companyStopped`: every run ended on a company stop before sending anything. */
 export async function sendFlowDirect(
   params: SendFlowDirectParams,
-): Promise<Date> {
+): Promise<{ companyStopped: boolean }> {
   const {
     flowExecutionKey,
     flowId,
@@ -37,19 +39,23 @@ export async function sendFlowDirect(
     contactId,
   })
 
-  await Promise.all(
-    allContactInboxes.map(async (contactInbox) => {
-      await runFlowNode(
-        {
-          flowId,
-          metadata,
-          conversationId: conversation,
-          contactInboxId: contactInbox,
-        },
-        { flowExecutionKey, startedAt },
-      )
-    }),
+  const outcomes = await Promise.all(
+    allContactInboxes.map(
+      async (contactInbox) =>
+        await runFlowNode(
+          {
+            flowId,
+            metadata,
+            conversationId: conversation,
+            contactInboxId: contactInbox,
+          },
+          { flowExecutionKey, startedAt },
+        ),
+    ),
   )
 
-  return new Date()
+  return {
+    companyStopped:
+      outcomes.length > 0 && outcomes.every((o) => o === COMPANY_STOPPED),
+  }
 }

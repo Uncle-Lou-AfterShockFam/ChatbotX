@@ -100,6 +100,8 @@ export async function submitBooking(parsedInput: SubmitBookingInput) {
               selectedStartAt: parsedInput.selectedStartAt,
               appointmentId: result.appointment?.id,
             },
+            // The flow run that minted the link (company-stop guard).
+            runStartedAt: tokenPayload.runStartedAt,
             origin: "channel",
           },
         })

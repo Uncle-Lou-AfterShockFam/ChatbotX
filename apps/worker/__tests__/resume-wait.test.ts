@@ -134,6 +134,7 @@ describe("runWaitResume", () => {
         flowId: "flow-1",
         flowVersionId: "flow-version-1",
         nodeId: "next-node",
+        runStartedAt: "2026-07-16T00:00:00.000Z",
       },
       { flowExecutionKey: undefined, claimCheck: expect.any(Function) },
     )

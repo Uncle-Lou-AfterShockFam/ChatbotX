@@ -47,6 +47,8 @@ export async function submitAvailabilityRange(
               stepId: tokenPayload.stepId,
               contactInboxId: tokenPayload.contactInboxId,
             },
+            // The flow run that minted the link (company-stop guard).
+            runStartedAt: tokenPayload.runStartedAt,
             origin: "channel",
           },
         },
@@ -76,6 +78,8 @@ export async function submitAvailabilityRange(
             startDate: parsedInput.startDate,
             endDate: parsedInput.endDate,
           },
+          // The flow run that minted the link (company-stop guard).
+          runStartedAt: tokenPayload.runStartedAt,
           origin: "channel",
         },
       },

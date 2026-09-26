@@ -51,6 +51,7 @@ import { logger } from "../../lib/logger"
 import { type ClaimCheck, ClaimLostError } from "./claim-lost"
 import {
   assertCompanyNotStoppedSince,
+  COMPANY_STOPPED,
   CompanyStoppedError,
 } from "./company-stop-guard"
 import {
@@ -304,7 +305,7 @@ export const runFlowNode = async (
   }
 
   try {
-    await runStepsAndQuickReplies({
+    const outcome = await runStepsAndQuickReplies({
       conversation,
       contactInbox,
       flowVersion,
@@ -327,6 +328,7 @@ export const runFlowNode = async (
       claimCheck: options?.claimCheck,
       runStartedAt: options?.startedAt,
     })
+    return outcome === COMPANY_STOPPED ? COMPANY_STOPPED : undefined
   } catch (error) {
     // A lost claim is not a failed delivery: the edge's new owner (or a
     // cancel) decides the outcome, so the broadcast row is left alone.
@@ -381,6 +383,7 @@ export async function runStepsAndQuickReplies(
       },
       "Flow run ended: the contact's company was stopped after it started",
     )
+    return COMPANY_STOPPED
   }
 }
 
@@ -937,7 +940,7 @@ async function runFlowAction(
         flowId: parsedAction.flowId,
         flowVersionId: parsedAction.flowVersionId,
       },
-      { flowExecutionKey },
+      { flowExecutionKey, startedAt: options?.startedAt },
     )
     return
   }
@@ -1050,7 +1053,7 @@ async function runFlowAction(
 
   const startTime = Date.now()
   try {
-    await runStepsAndQuickReplies({
+    const outcome = await runStepsAndQuickReplies({
       conversation,
       contactInbox,
       flowVersion,
@@ -1065,7 +1068,8 @@ async function runFlowAction(
       flowExecutionKey,
       runStartedAt: options?.startedAt,
     })
-    if (data.messageId) {
+    // A run ended by a company stop sent nothing: no bot response to count.
+    if (data.messageId && outcome !== COMPANY_STOPPED) {
       emit("analytics:dashboard", {
         eventType: "message:bot_received",
         workspaceId: conversation.workspaceId,

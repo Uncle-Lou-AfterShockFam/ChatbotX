@@ -340,6 +340,8 @@ export type IntegrationJobRunChallenge = {
         attempts: number
         lastAttemptAt: Date
         appointmentId?: string
+        /** ISO start of the flow run that asked (company-stop guard baseline). */
+        runStartedAt?: string
       }
     }
   }

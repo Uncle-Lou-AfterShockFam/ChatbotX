@@ -2,6 +2,13 @@ import { logger } from "../../lib/logger"
 import { wasCompanyStoppedSince } from "./smart-delay"
 
 /**
+ * What runStepsAndQuickReplies / runFlowNode / sendFlowDirect return when the
+ * run ended on a company stop, so a caller that keeps bookkeeping (a sequence
+ * dispatch, a pending challenge) can close it instead of recording a send.
+ */
+export const COMPANY_STOPPED = "companyStopped" as const
+
+/**
  * The contact's company was stopped after the run began: the run ends before
  * its next step. Caught by runStepsAndQuickReplies, so it never reaches a job
  * (no retry, no broadcast failure, no error log).
@@ -60,7 +67,7 @@ export async function assertCompanyNotStoppedSince(props: {
  * future carried value never makes a run look younger than its job.
  */
 export function resolveRunStartedAt(
-  carried: string | undefined,
+  carried: string | Date | undefined,
   jobTimestamp: number,
 ): Date {
   const parsed = carried ? new Date(carried).getTime() : Number.NaN

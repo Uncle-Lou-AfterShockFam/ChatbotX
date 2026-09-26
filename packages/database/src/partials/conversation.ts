@@ -50,6 +50,8 @@ export type ConversationAttributes = {
       lastAttemptAt: Date
       appointmentId?: string
       challengeId?: string
+      /** ISO start of the flow run that asked (company-stop guard baseline). */
+      runStartedAt?: string
     }
   }
 }

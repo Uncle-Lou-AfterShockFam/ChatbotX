@@ -2575,7 +2575,7 @@ describe("stopped company — a run ends before its next step", () => {
 
     await expect(
       runStepsAndQuickReplies(twoStepProps(RUN_START)),
-    ).resolves.toBeUndefined()
+    ).resolves.toBe("companyStopped")
 
     expect(handler).not.toHaveBeenCalled()
     expect(integrationQueueAdd).not.toHaveBeenCalled()
@@ -2694,7 +2694,7 @@ describe("stopped company — a run ends before its next step", () => {
         },
         { flowExecutionKey: "job-1", startedAt: RUN_START },
       ),
-    ).resolves.toBeUndefined()
+    ).resolves.toBe("companyStopped")
     expect(dbUpdate).not.toHaveBeenCalled()
   })
 

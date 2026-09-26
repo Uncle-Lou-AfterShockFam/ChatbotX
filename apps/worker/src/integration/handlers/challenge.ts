@@ -1,3 +1,4 @@
+import { conversationService } from "@chatbotx.io/business"
 import { emit } from "@chatbotx.io/event-bus"
 import type { FlowNode } from "@chatbotx.io/flow-config"
 import { initVariables, SdkException } from "@chatbotx.io/sdk"
@@ -7,6 +8,7 @@ import {
   detectConversationAndContactInbox,
   detectFlowVersion,
 } from "../../lib/db"
+import { COMPANY_STOPPED, resolveRunStartedAt } from "./company-stop-guard"
 import { runStepsAndQuickReplies } from "./flow"
 
 export async function runChallenge(
@@ -68,7 +70,7 @@ export async function runChallenge(
       value: challenge.data.lastAttemptAt,
     }
 
-    await runStepsAndQuickReplies({
+    const outcome = await runStepsAndQuickReplies({
       conversation,
       contactInbox,
       flowVersion,
@@ -83,8 +85,24 @@ export async function runChallenge(
       triggerMessageId: messageId,
       triggerMessageCreatedAt: messageCreatedAt,
       appointmentId: challenge.data.appointmentId,
-      runStartedAt: new Date(job.timestamp),
+      // The run that asked, not this reply: a pre-stop question stays stopped.
+      // A challenge written before runStartedAt existed: when it was asked.
+      runStartedAt: resolveRunStartedAt(
+        challenge.data.runStartedAt ?? challenge.data.lastAttemptAt,
+        job.timestamp,
+      ),
     })
+
+    if (outcome === COMPANY_STOPPED) {
+      // The run that asked is over: a pending challenge would route every
+      // later inbound message here (and block automated replies) for good.
+      await conversationService.updateChallenge({
+        workspaceId: conversation.workspaceId,
+        conversationId: conversation.id,
+        challenge: undefined,
+      })
+      return
+    }
 
     if (messageId) {
       emit("analytics:dashboard", {

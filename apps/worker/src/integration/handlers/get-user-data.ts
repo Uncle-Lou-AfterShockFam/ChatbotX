@@ -480,6 +480,7 @@ async function sendMessage(
         lastAttemptAt: new Date(),
         appointmentId: props.appointmentId,
         challengeId,
+        runStartedAt: props.runStartedAt?.toISOString(),
       },
     },
   })
@@ -571,6 +572,7 @@ async function sendDateTimePrompt(
     challengeId: context.challengeId,
     outputFieldId: step.outputFieldId,
     replyFormat: context.mode,
+    runStartedAt: props.runStartedAt?.toISOString(),
   })
 
   const pickerUrl = new URL("/extensions/datetime-picker", appUrl)
