@@ -6,6 +6,10 @@ import { hydrateRoot, type Root } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, describe, expect, test, vi } from "vitest"
 
+const SOURCE_FILE = /\.tsx?$/
+const UTF16_SLICE_TWO = /\.slice\(0,\s*2\)/
+const NAME_LIKE = /name|initial/i
+
 let root: Root | undefined
 let container: HTMLElement | undefined
 
@@ -54,14 +58,11 @@ describe("avatar initials (s209, React #418 on /contacts)", () => {
         const path = join(dir, entry)
         if (statSync(path).isDirectory()) {
           walk(path)
-        } else if (/\.tsx?$/.test(entry)) {
+        } else if (SOURCE_FILE.test(entry)) {
           readFileSync(path, "utf8")
             .split("\n")
             .forEach((line, i) => {
-              if (
-                /\.slice\(0,\s*2\)/.test(line) &&
-                /name|initial/i.test(line)
-              ) {
+              if (UTF16_SLICE_TWO.test(line) && NAME_LIKE.test(line)) {
                 offenders.push(`${path}:${i + 1}`)
               }
             })
