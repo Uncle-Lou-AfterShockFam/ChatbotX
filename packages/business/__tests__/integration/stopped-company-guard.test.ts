@@ -305,3 +305,70 @@ describe.skipIf(!databaseUrl)(
     })
   },
 )
+
+describe.skipIf(!databaseUrl)(
+  "a re-sweep spares waits created after the stop",
+  () => {
+    test("createdBefore: a pre-stop row is canceled, a reaction flow's row is left running", async () => {
+      const workspaceId = mintId()
+      const { companyId, contactId, contactInboxId } = await seedContact({
+        workspaceId,
+        stopped: false,
+      })
+      const before = await seedWait({
+        workspaceId,
+        contactInboxId,
+        status: "scheduled",
+      })
+      // Distinct instants: the stop lands strictly between the two rows.
+      await asReplica(sql`
+      UPDATE "ContactOnSmartDelay" SET "createdAt" = now() - interval '2 minutes'
+       WHERE id = ${before}`)
+      await asReplica(sql`
+      UPDATE "Company" SET "stoppedAt" = now() - interval '1 minute'
+       WHERE id = ${companyId}`)
+      const stopped = await smartDelayService.companyStoppedAt({
+        workspaceId,
+        contactInboxId,
+      })
+      if (!stopped) {
+        throw new Error("seed: company not stopped")
+      }
+      const after = await seedWait({
+        workspaceId,
+        contactInboxId,
+        status: "pending",
+      })
+
+      expect(
+        await smartDelayService.hasActiveForCompany({
+          workspaceId,
+          companyId,
+          createdBefore: stopped,
+        }),
+      ).toBe(true)
+      const canceled = await smartDelayService.cancelActiveForContacts({
+        workspaceId,
+        contactIds: [contactId],
+        limit: 50,
+        createdBefore: stopped,
+      })
+      expect(canceled.map((row) => row.id)).toEqual([before])
+      expect(await statusOf(after)).toBe("pending")
+      expect(
+        await smartDelayService.hasActiveForContacts({
+          workspaceId,
+          contactIds: [contactId],
+          createdBefore: stopped,
+        }),
+      ).toBe(false)
+      expect(
+        await smartDelayService.hasActiveForCompany({
+          workspaceId,
+          companyId,
+          createdBefore: stopped,
+        }),
+      ).toBe(false)
+    })
+  },
+)

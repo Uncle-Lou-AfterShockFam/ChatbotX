@@ -59,11 +59,22 @@ const activeInWorkspace = (workspaceId: string) =>
     ]),
   )
 
-/** Needs the `ContactInbox` join on `contactInboxId`. */
-const activeForContacts = (workspaceId: string, contactIds: string[]) =>
+/**
+ * Needs the `ContactInbox` join on `contactInboxId`. `createdBefore` keeps a
+ * re-sweep of an already-stopped company off the waits of flows that started
+ * after the stop (they are allowed to run).
+ */
+const activeForContacts = (
+  workspaceId: string,
+  contactIds: string[],
+  createdBefore?: Date,
+) =>
   and(
     activeInWorkspace(workspaceId),
     inArray(contactInboxModel.contactId, contactIds),
+    createdBefore
+      ? lte(contactOnSmartDelayModel.createdAt, createdBefore)
+      : undefined,
   )
 
 /** Claims a resume may take (initial + retries + recoveries) before the row is `failed`. */
@@ -715,8 +726,9 @@ class SmartDelayService extends BaseService {
     workspaceId: string
     contactIds: string[]
     limit: number
+    createdBefore?: Date
   }): Promise<Pick<SmartDelayRow, "id" | "triggerAt">[]> {
-    const { tx = db, workspaceId, contactIds, limit } = props
+    const { tx = db, workspaceId, contactIds, limit, createdBefore } = props
     if (contactIds.length === 0) {
       return []
     }
@@ -727,7 +739,7 @@ class SmartDelayService extends BaseService {
         contactInboxModel,
         eq(contactInboxModel.id, contactOnSmartDelayModel.contactInboxId),
       )
-      .where(activeForContacts(workspaceId, contactIds))
+      .where(activeForContacts(workspaceId, contactIds, createdBefore))
       .orderBy(contactOnSmartDelayModel.triggerAt)
       .limit(limit)
       .for("update", { skipLocked: true, of: contactOnSmartDelayModel })
@@ -750,8 +762,9 @@ class SmartDelayService extends BaseService {
     tx?: DatabaseClient
     workspaceId: string
     companyId: string
+    createdBefore?: Date
   }): Promise<boolean> {
-    const { tx = db, workspaceId, companyId } = props
+    const { tx = db, workspaceId, companyId, createdBefore } = props
     const rows = await tx
       .select({ id: contactOnSmartDelayModel.id })
       .from(contactOnSmartDelayModel)
@@ -765,6 +778,9 @@ class SmartDelayService extends BaseService {
           activeInWorkspace(workspaceId),
           eq(contactModel.workspaceId, workspaceId),
           eq(contactModel.companyId, companyId),
+          createdBefore
+            ? lte(contactOnSmartDelayModel.createdAt, createdBefore)
+            : undefined,
         ),
       )
       .limit(1)
@@ -776,8 +792,9 @@ class SmartDelayService extends BaseService {
     tx?: DatabaseClient
     workspaceId: string
     contactIds: string[]
+    createdBefore?: Date
   }): Promise<boolean> {
-    const { tx = db, workspaceId, contactIds } = props
+    const { tx = db, workspaceId, contactIds, createdBefore } = props
     if (contactIds.length === 0) {
       return false
     }
@@ -788,7 +805,7 @@ class SmartDelayService extends BaseService {
         contactInboxModel,
         eq(contactInboxModel.id, contactOnSmartDelayModel.contactInboxId),
       )
-      .where(activeForContacts(workspaceId, contactIds))
+      .where(activeForContacts(workspaceId, contactIds, createdBefore))
       .limit(1)
     return rows.length > 0
   }
