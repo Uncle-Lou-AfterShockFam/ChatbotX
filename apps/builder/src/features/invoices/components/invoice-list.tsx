@@ -147,7 +147,11 @@ export function InvoiceList({
                 </TableCell>
                 <TableCell className="whitespace-nowrap">
                   {row.dueAt
-                    ? format.dateTime(row.dueAt, { dateStyle: "medium" })
+                    ? format.dateTime(row.dueAt, {
+                        dateStyle: "medium",
+                        // A due DATE, the hub convention since s192: its UTC day.
+                        timeZone: "UTC",
+                      })
                     : "-"}
                 </TableCell>
                 <TableCell>
