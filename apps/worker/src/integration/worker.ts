@@ -316,10 +316,13 @@ async function startIntegrationWorker() {
                 await runFlowNode(job.data.data, {
                   flowExecutionKey:
                     job.data.data.flowExecutionKey ?? getFlowExecutionKey(job),
-                  startedAt: resolveRunStartedAt(
-                    job.data.data.runStartedAt,
-                    job.timestamp,
-                  ),
+                  // Only a bot-opened run carries a start (see runStartedAt).
+                  startedAt: job.data.data.runStartedAt
+                    ? resolveRunStartedAt(
+                        job.data.data.runStartedAt,
+                        job.timestamp,
+                      )
+                    : undefined,
                 })
                 return
               }
@@ -333,15 +336,15 @@ async function startIntegrationWorker() {
               }
               case IntegrationJobAction.runFlowPostback: {
                 await runFlowPostback(job.data.data, {
+                  // A tap is the contact's own run: never cut off by a stop.
                   flowExecutionKey: getFlowExecutionKey(job),
-                  startedAt: new Date(job.timestamp),
                 })
                 return
               }
               case IntegrationJobAction.runFlowQuickReply: {
                 await runFlowQuickReply(job.data.data, {
+                  // A tap is the contact's own run: never cut off by a stop.
                   flowExecutionKey: getFlowExecutionKey(job),
-                  startedAt: new Date(job.timestamp),
                 })
                 return
               }

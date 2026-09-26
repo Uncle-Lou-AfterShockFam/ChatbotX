@@ -932,6 +932,8 @@ class AppointmentService extends BaseService {
           flowId: input.flowId,
           metadata: input.metadata,
           appointmentId: input.appointmentId,
+          // A bot-opened run: a company stop after this ends it (s204).
+          runStartedAt: new Date().toISOString(),
           origin: "channel",
         },
       })

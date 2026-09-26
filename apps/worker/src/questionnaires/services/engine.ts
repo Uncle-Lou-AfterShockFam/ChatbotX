@@ -223,7 +223,7 @@ async function sendQuestion(
         stepId: props.step.id,
         attempts: data.attempts,
         lastAttemptAt: sentAt,
-        runStartedAt: props.runStartedAt?.toISOString(),
+        runStartedAt: props.runStartedAt?.toISOString() ?? null,
       },
     },
   })

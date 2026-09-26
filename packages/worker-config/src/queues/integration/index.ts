@@ -237,10 +237,13 @@ export type IntegrationJobRunFlowNode = {
     /** See {@link CommentAnchor}. */
     commentAnchor?: CommentAnchor
     /**
-     * ISO start of the run this job continues. Every flow-internal re-dispatch
-     * copies it, so a continuation enqueued after a company stop by a run that
-     * began before it is still refused (apps/worker company-stop-guard.ts).
-     * Unset = this job opens a run; its own enqueue time is the start.
+     * ISO start of a BOT-opened run (owner, s204): set by the producer that
+     * opens one (broadcast, trigger startAnotherFlow, appointment reminder or
+     * calendar flow) and copied by every flow-internal re-dispatch, so the
+     * run and its continuations end at the next step once the contact's
+     * company is stopped after that start (apps/worker company-stop-guard.ts).
+     * Unset = a run the contact opened (reply, keyword, tap, comment, link,
+     * lead) or an operator send: it is never cut off mid-way.
      */
     runStartedAt?: string
   }
@@ -340,8 +343,11 @@ export type IntegrationJobRunChallenge = {
         attempts: number
         lastAttemptAt: Date
         appointmentId?: string
-        /** ISO start of the flow run that asked (company-stop guard baseline). */
-        runStartedAt?: string
+        /**
+         * ISO start of the bot-opened run that asked; null = a contact-opened
+         * run (never cut off); absent = written before s204 (lastAttemptAt).
+         */
+        runStartedAt?: string | null
       }
     }
   }

@@ -29,8 +29,11 @@ export async function resumeHeavyStep(
   try {
     await runFlowNode(data, {
       flowExecutionKey: data.flowExecutionKey,
-      // The run that queued the heavy step, not this resume job.
-      startedAt: resolveRunStartedAt(data.runStartedAt, job.timestamp),
+      // The bot-opened run that queued the heavy step, not this resume job;
+      // a contact-opened run carries none and stays unguarded.
+      startedAt: data.runStartedAt
+        ? resolveRunStartedAt(data.runStartedAt, job.timestamp)
+        : undefined,
     })
     await finishHeavyStepResume({
       outcomeKey: data.outcomeKey,

@@ -103,9 +103,8 @@ const JOB = {
  * `defaultJobOptions.attempts` is 2. The handler only writes an `ErrorLog` row
  * once the retries are spent, so the default fixture is the final attempt.
  */
-const JOB_TIMESTAMP = 1_790_000_000_000
 const bullJob = (attemptsMade = 1) =>
-  ({ attemptsMade, opts: { attempts: 2 }, timestamp: JOB_TIMESTAMP }) as never
+  ({ attemptsMade, opts: { attempts: 2 } }) as never
 
 const INBOX = { id: "inbox-1", workspaceId: "ws-1", channel: "messenger" }
 const INTEGRATION_ROW = {
@@ -307,7 +306,8 @@ describe("processLeadgen", () => {
     )
     expect(mockRunFlowNode).toHaveBeenCalledWith(
       expect.objectContaining({ flowId: "flow-9" }),
-      { flowExecutionKey: undefined, startedAt: new Date(JOB_TIMESTAMP) },
+      // A lead is the contact's own run: never cut off by a company stop.
+      { flowExecutionKey: undefined },
     )
     expect(mockSetContactId).toHaveBeenCalledWith({
       id: "claim-1",

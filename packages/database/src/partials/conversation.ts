@@ -50,8 +50,11 @@ export type ConversationAttributes = {
       lastAttemptAt: Date
       appointmentId?: string
       challengeId?: string
-      /** ISO start of the flow run that asked (company-stop guard baseline). */
-      runStartedAt?: string
+      /**
+       * ISO start of the bot-opened run that asked; null = a contact-opened
+       * run (never cut off); absent = written before s204 (lastAttemptAt).
+       */
+      runStartedAt?: string | null
     }
   }
 }

@@ -358,6 +358,8 @@ describe("appointmentReminderService", () => {
           flowId: "flow-1",
           origin: "channel",
           appointmentId: "appointment-1",
+          // A reminder opens a bot run: a later company stop ends it (s204).
+          runStartedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.+Z$/),
         },
       },
       { jobId: "appt-reminder-flow-dispatch-1" },

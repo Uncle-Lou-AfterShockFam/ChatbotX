@@ -480,7 +480,7 @@ async function sendMessage(
         lastAttemptAt: new Date(),
         appointmentId: props.appointmentId,
         challengeId,
-        runStartedAt: props.runStartedAt?.toISOString(),
+        runStartedAt: props.runStartedAt?.toISOString() ?? null,
       },
     },
   })

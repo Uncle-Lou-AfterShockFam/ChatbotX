@@ -240,6 +240,8 @@ export class ActionExecutor {
             conversationId: conversation,
             contactInboxId: contactInbox.id,
             flowId,
+            // A bot-opened run: a company stop after this ends it (s204).
+            runStartedAt: new Date().toISOString(),
             origin: webhookChannelOrigin(),
           },
         })

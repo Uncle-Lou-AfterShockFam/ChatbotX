@@ -778,6 +778,8 @@ describe("getUserData — first send (no challenge state)", () => {
           attempts: 1,
           lastAttemptAt: expect.any(Date),
           challengeId: "test-id",
+          // No bot-opened run start: a contact-opened run, never cut off.
+          runStartedAt: null,
         },
       },
     })

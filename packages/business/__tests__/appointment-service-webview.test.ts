@@ -414,6 +414,8 @@ describe("appointmentService.cancelAppointment", () => {
         flowId: "flow-1",
         metadata: undefined,
         appointmentId: "appointment-1",
+        // A calendar flow opens a bot run: a later company stop ends it (s204).
+        runStartedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.+Z$/),
         origin: "channel",
       },
     })

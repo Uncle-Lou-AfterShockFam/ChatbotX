@@ -239,6 +239,10 @@ describe("processBroadcastContacts", () => {
             // The flow stop/resume guard's ONE authoritative marker (fix
             // round 1) — only this, the producer's first dispatch, may set it.
             initialBroadcastDispatch: true,
+            // A broadcast opens a bot run: a later company stop ends it (s204).
+            runStartedAt: expect.stringMatching(
+              /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
+            ),
             metadata: expect.objectContaining({
               type: "broadcast",
               broadcastId: BROADCAST_ID,

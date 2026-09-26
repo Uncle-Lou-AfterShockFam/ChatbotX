@@ -42,11 +42,10 @@ describe("resumeHeavyStep", () => {
 
     await resumeHeavyStep(data, { timestamp: RESUME_JOB_AT })
 
-    // No run start carried (a job queued before the field existed): the
-    // resume job's own enqueue time stands in.
+    // No run start carried: a contact-opened run, never cut off.
     expect(mocks.runFlowNode).toHaveBeenCalledWith(data, {
       flowExecutionKey: "flow-execution-1",
-      startedAt: new Date(RESUME_JOB_AT),
+      startedAt: undefined,
     })
     expect(mocks.finishHeavyStepResume).toHaveBeenCalledWith(
       expect.objectContaining({

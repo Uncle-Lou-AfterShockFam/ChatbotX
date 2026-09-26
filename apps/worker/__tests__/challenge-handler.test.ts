@@ -158,4 +158,17 @@ describe("runChallenge", () => {
     )
     expect(mocks.emit).not.toHaveBeenCalled()
   })
+
+  test("a question from a contact-opened run (runStartedAt null) is never cut off", async () => {
+    await runChallenge(
+      makeChallenge({
+        challenge: { type: "step", data: { runStartedAt: null } } as never,
+      }),
+      { timestamp: 1_790_000_000_000 },
+    )
+
+    expect(mocks.runStepsAndQuickReplies).toHaveBeenCalledWith(
+      expect.objectContaining({ runStartedAt: undefined }),
+    )
+  })
 })

@@ -328,6 +328,8 @@ class AppointmentReminderService extends BaseService {
                 flowId: dispatch.reminderConfig.flowId,
                 origin: "channel",
                 appointmentId: input.appointmentId,
+                // A bot-opened run: a company stop after this ends it (s204).
+                runStartedAt: new Date().toISOString(),
               },
             },
             {

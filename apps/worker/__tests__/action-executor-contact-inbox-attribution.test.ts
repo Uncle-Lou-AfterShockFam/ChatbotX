@@ -157,6 +157,8 @@ const MESSENGER_INBOX = {
   channel: "messenger",
 }
 
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
+
 describe("ActionExecutor — per-integration contact inbox attribution", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -213,7 +215,11 @@ describe("ActionExecutor — per-integration contact inbox attribution", () => {
       expect(mocks.integrationQueueAdd).toHaveBeenCalledWith(
         "sendFlow",
         expect.objectContaining({
-          data: expect.objectContaining({ contactInboxId: "ci-whatsapp" }),
+          data: expect.objectContaining({
+            contactInboxId: "ci-whatsapp",
+            // A trigger opens a bot run: a later company stop ends it (s204).
+            runStartedAt: expect.stringMatching(ISO_INSTANT),
+          }),
         }),
       )
     })

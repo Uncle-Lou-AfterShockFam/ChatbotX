@@ -86,11 +86,15 @@ export async function runChallenge(
       triggerMessageCreatedAt: messageCreatedAt,
       appointmentId: challenge.data.appointmentId,
       // The run that asked, not this reply: a pre-stop question stays stopped.
-      // A challenge written before runStartedAt existed: when it was asked.
-      runStartedAt: resolveRunStartedAt(
-        challenge.data.runStartedAt ?? challenge.data.lastAttemptAt,
-        job.timestamp,
-      ),
+      // null = the contact opened the run that asked: never cut off. Absent =
+      // a challenge written before s204: judged by when it was asked.
+      runStartedAt:
+        challenge.data.runStartedAt === null
+          ? undefined
+          : resolveRunStartedAt(
+              challenge.data.runStartedAt ?? challenge.data.lastAttemptAt,
+              job.timestamp,
+            ),
     })
 
     if (outcome === COMPANY_STOPPED) {
