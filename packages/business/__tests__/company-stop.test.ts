@@ -203,7 +203,7 @@ describe("stopCompany", () => {
     expect(mockAudit).toHaveBeenCalledTimes(1)
   })
 
-  test("already stopped: no-op, nothing else touched", async () => {
+  test("already stopped, no firable wait left: only the cheap re-check runs", async () => {
     mockTxSelectFor.mockResolvedValue([companyRow({ stoppedAt: new Date() })])
     const result = await stopCompany({
       workspaceId: WS,
@@ -212,8 +212,49 @@ describe("stopCompany", () => {
     })
     expect(result).toEqual({ status: "already_stopped", companyId: COMPANY })
     expect(mockTxUpdateWhere).not.toHaveBeenCalled()
-    expect(mockListContactIds).not.toHaveBeenCalled()
+    expect(mockHasActiveForContacts).toHaveBeenCalledWith({
+      workspaceId: WS,
+      contactIds: ["c-1", "c-2"],
+    })
+    expect(mockCancelActiveForContacts).not.toHaveBeenCalled()
+    expect(mockRemoveSequences).not.toHaveBeenCalled()
     expect(mockBulkAttach).not.toHaveBeenCalled()
+  })
+
+  test("already stopped with a wait a partial stop left behind: the smart-delay phase re-runs", async () => {
+    mockTxSelectFor.mockResolvedValue([companyRow({ stoppedAt: new Date() })])
+    mockHasActiveForContacts
+      .mockResolvedValueOnce(true) // the re-sweep's own re-check
+      .mockResolvedValue(false) // the cancel loop's drained check
+    mockCancelActiveForContacts
+      .mockResolvedValueOnce([{ id: "sd-left", triggerAt: new Date(0) }])
+      .mockResolvedValue([])
+    const result = await stopCompany({
+      workspaceId: WS,
+      companyId: COMPANY,
+      reason: "contact_replied",
+    })
+    expect(result).toEqual({ status: "already_stopped", companyId: COMPANY })
+    expect(mockCancelActiveForContacts).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: WS, contactIds: ["c-1", "c-2"] }),
+    )
+    expect(mockRemoveSequences).not.toHaveBeenCalled()
+    expect(mockBulkAttach).not.toHaveBeenCalled()
+  })
+
+  test("a failing re-sweep is logged and still answers already_stopped", async () => {
+    mockTxSelectFor.mockResolvedValue([companyRow({ stoppedAt: new Date() })])
+    mockHasActiveForContacts.mockRejectedValueOnce(new Error("db down"))
+    const result = await stopCompany({
+      workspaceId: WS,
+      companyId: COMPANY,
+      reason: "api",
+    })
+    expect(result).toEqual({ status: "already_stopped", companyId: COMPANY })
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.objectContaining({ companyId: COMPANY, canceled: 0 }),
+      "company-stop: re-sweep of an already-stopped company failed",
+    )
   })
 
   test("already stopped + force: re-runs the cascade", async () => {

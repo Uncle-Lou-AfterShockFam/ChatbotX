@@ -7,6 +7,8 @@ const { contactInboxService, integrationQueueAdd, smartDelayService } =
     },
     integrationQueueAdd: vi.fn(),
     smartDelayService: {
+      isContactInboxStopped: vi.fn(async () => false),
+      cancelIfNotStarted: vi.fn(async () => true),
       claimForRun: vi.fn(),
       findById: vi.fn(),
     },
@@ -80,6 +82,20 @@ describe("runFollowUpResume", () => {
       triggerAt: new Date("2026-07-16T00:01:00.000Z"),
       to: "canceled",
     })
+    expect(integrationQueueAdd).not.toHaveBeenCalled()
+  })
+
+  test("a stopped company's contact: the follow-up is canceled, the flow never continues", async () => {
+    smartDelayService.isContactInboxStopped.mockResolvedValueOnce(true)
+
+    await runFollowUpResume({ smartDelayId: "smart-delay-1" })
+
+    expect(smartDelayService.claimForRun).toHaveBeenCalledWith({
+      id: "smart-delay-1",
+      triggerAt: new Date("2026-07-16T00:01:00.000Z"),
+      to: "canceled",
+    })
+    expect(smartDelayService.claimForRun).toHaveBeenCalledTimes(1)
     expect(integrationQueueAdd).not.toHaveBeenCalled()
   })
 

@@ -17,7 +17,9 @@ import {
   smartDelayTypes,
 } from "@chatbotx.io/database/partials"
 import {
+  companyModel,
   contactInboxModel,
+  contactModel,
   contactOnSmartDelayModel,
 } from "@chatbotx.io/database/schema"
 import { BaseService } from "../base.service"
@@ -139,6 +141,61 @@ class SmartDelayService extends BaseService {
           eq(contactOnSmartDelayModel.id, id),
           eq(contactOnSmartDelayModel.status, smartDelayStatuses.enum.pending),
           eq(contactOnSmartDelayModel.triggerAt, triggerAt),
+        ),
+      )
+      .returning({ id: contactOnSmartDelayModel.id })
+    return rows.length > 0
+  }
+
+  /**
+   * Is the contact behind this ContactInbox in a STOPPED company? A company
+   * stop is permanent, so a wait written or resumed for such a contact is
+   * canceled instead of run. Read AFTER the row is written: stopCompany
+   * commits `stoppedAt` before its cancel pass, so either this read sees the
+   * stamp or the row was committed before it and the cancel pass sees the row.
+   */
+  async isContactInboxStopped(props: {
+    tx?: DatabaseClient
+    workspaceId: string
+    contactInboxId: string
+  }): Promise<boolean> {
+    const { tx = db, workspaceId, contactInboxId } = props
+    const rows = await tx
+      .select({ id: companyModel.id })
+      .from(contactInboxModel)
+      .innerJoin(contactModel, eq(contactModel.id, contactInboxModel.contactId))
+      .innerJoin(companyModel, eq(companyModel.id, contactModel.companyId))
+      .where(
+        and(
+          eq(contactInboxModel.id, contactInboxId),
+          eq(companyModel.workspaceId, workspaceId),
+          isNotNull(companyModel.stoppedAt),
+        ),
+      )
+      .limit(1)
+    return rows.length > 0
+  }
+
+  /**
+   * Cancel a row nothing has started yet (pending / scheduled); a running row
+   * belongs to its claim and a terminal one is left alone. Returns whether it
+   * canceled.
+   */
+  async cancelIfNotStarted(props: {
+    tx?: DatabaseClient
+    id: string
+  }): Promise<boolean> {
+    const { tx = db, id } = props
+    const rows = await tx
+      .update(contactOnSmartDelayModel)
+      .set({ status: smartDelayStatuses.enum.canceled })
+      .where(
+        and(
+          eq(contactOnSmartDelayModel.id, id),
+          inArray(contactOnSmartDelayModel.status, [
+            smartDelayStatuses.enum.pending,
+            smartDelayStatuses.enum.scheduled,
+          ]),
         ),
       )
       .returning({ id: contactOnSmartDelayModel.id })
@@ -393,7 +450,8 @@ class SmartDelayService extends BaseService {
   }
 
   /**
-   * The flow of a claimed (running) row finished: running -> completed, but
+   * The flow of a claimed (running) row finished: running -> completed (or
+   * canceled: its contact's company was stopped before the flow ran), but
    * only for the generation that ran. A stale retry whose row was re-claimed
    * (and re-run) by another path cannot complete that newer run.
    */
@@ -401,11 +459,12 @@ class SmartDelayService extends BaseService {
     tx?: DatabaseClient
     id: string
     generation: number
+    to?: "completed" | "canceled"
   }): Promise<boolean> {
-    const { tx = db, id, generation } = props
+    const { tx = db, id, generation, to = "completed" } = props
     const rows = await tx
       .update(contactOnSmartDelayModel)
-      .set({ status: smartDelayStatuses.enum.completed })
+      .set({ status: smartDelayStatuses.enum[to] })
       .where(
         and(
           eq(contactOnSmartDelayModel.id, id),

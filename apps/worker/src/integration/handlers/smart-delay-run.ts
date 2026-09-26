@@ -64,7 +64,10 @@ async function withClaimWriteRetry<T>(write: () => Promise<T>): Promise<T> {
  * lands: that step, and whatever it dispatches, can run twice.
  */
 export async function runClaimedSmartDelay(
-  claimed: Pick<SmartDelayRow, "id" | "claimGeneration">,
+  claimed: Pick<
+    SmartDelayRow,
+    "id" | "claimGeneration" | "workspaceId" | "contactInboxId"
+  >,
   resumeJob: ReturnType<typeof buildSendFlowResumeJob>,
   parentJob?: Job,
 ): Promise<void> {
@@ -99,6 +102,28 @@ export async function runClaimedSmartDelay(
     }
   }
   try {
+    // A stopped company's contact: the stop canceled every active row, but a
+    // row it skipped (partial stop) or one written after its cancel pass can
+    // still be claimed here. Cancel it instead of running the flow.
+    if (
+      await smartDelayService.isContactInboxStopped({
+        workspaceId: claimed.workspaceId,
+        contactInboxId: claimed.contactInboxId,
+      })
+    ) {
+      await withClaimWriteRetry(() =>
+        smartDelayService.finishClaimedRun({
+          id: smartDelayId,
+          generation,
+          to: "canceled",
+        }),
+      )
+      logger.info(
+        { smartDelayId, generation },
+        "Smart delay run canceled: the contact's company is stopped",
+      )
+      return
+    }
     await runFlowNode(resumeJob.data.data, {
       flowExecutionKey: parentJob?.id,
       claimCheck,

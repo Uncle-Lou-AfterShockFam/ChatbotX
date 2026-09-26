@@ -233,6 +233,49 @@ async function phase<T>(
   }
 }
 
+/**
+ * An already-stopped company can still hold firable waits: a `partial` stop
+ * whose smart-delay phase gave up on a locked row, or a row a check-then-write
+ * path wrote around the stop. Every later non-force trigger re-runs just that
+ * phase when the cheap re-check finds one; the result stays `already_stopped`.
+ */
+async function resweepSmartDelays(props: {
+  workspaceId: string
+  companyId: string
+}): Promise<void> {
+  const { workspaceId, companyId } = props
+  try {
+    const contactIds = await companyService.listContactIds({
+      workspaceId,
+      companyId,
+    })
+    if (
+      !(await smartDelayService.hasActiveForContacts({
+        workspaceId,
+        contactIds,
+      }))
+    ) {
+      return
+    }
+    const canceled = await cancelSmartDelays({ workspaceId, contactIds })
+    logger.info(
+      { workspaceId, companyId, smartDelaysCanceled: canceled },
+      "company-stop: re-swept waits of an already-stopped company",
+    )
+  } catch (error) {
+    logger.warn(
+      {
+        error,
+        workspaceId,
+        companyId,
+        canceled:
+          error instanceof SmartDelayCancelIncompleteError ? error.canceled : 0,
+      },
+      "company-stop: re-sweep of an already-stopped company failed",
+    )
+  }
+}
+
 export async function stopCompany(props: {
   workspaceId: string
   companyId: string
@@ -252,6 +295,7 @@ export async function stopCompany(props: {
     force,
   })
   if (claim.kind === "already_stopped" && !force) {
+    await resweepSmartDelays({ workspaceId, companyId })
     return { status: "already_stopped", companyId }
   }
   if (claim.kind === "skipped") {

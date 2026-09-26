@@ -105,6 +105,24 @@ export async function runFollowUpResume(
     return
   }
 
+  if (
+    await smartDelayService.isContactInboxStopped({
+      workspaceId: row.workspaceId,
+      contactInboxId: row.contactInboxId,
+    })
+  ) {
+    await smartDelayService.claimForRun({
+      id: row.id,
+      triggerAt: row.triggerAt,
+      to: smartDelayStatuses.enum.canceled,
+    })
+    logger.info(
+      { smartDelayId: row.id, conversationId: row.conversationId },
+      "Follow-up canceled: the contact's company is stopped",
+    )
+    return
+  }
+
   const completed = await smartDelayService.claimForRun({
     id: row.id,
     triggerAt: row.triggerAt,

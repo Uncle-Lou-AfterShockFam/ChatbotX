@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 const { runFlowNode, smartDelayService } = vi.hoisted(() => ({
   runFlowNode: vi.fn(),
   smartDelayService: {
+    isContactInboxStopped: vi.fn(async () => false),
+    cancelIfNotStarted: vi.fn(async () => true),
     claimRunning: vi.fn(),
     findById: vi.fn(),
     finishClaimedRun: vi.fn(),
@@ -67,6 +69,40 @@ describe("runWaitResume", () => {
     smartDelayService.finishClaimedRun.mockResolvedValue(true)
     smartDelayService.heartbeatClaim.mockResolvedValue(true)
     smartDelayService.requeueClaimedRun.mockResolvedValue("scheduled")
+  })
+
+  test("a stopped company's contact: the claimed row is canceled with ITS generation, the flow never runs", async () => {
+    smartDelayService.isContactInboxStopped.mockResolvedValueOnce(true)
+
+    await runWaitResume({ smartDelayId: "smart-delay-1" })
+
+    expect(smartDelayService.isContactInboxStopped).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      contactInboxId: "contact-inbox-1",
+    })
+    expect(runFlowNode).not.toHaveBeenCalled()
+    expect(smartDelayService.finishClaimedRun).toHaveBeenCalledWith({
+      id: "smart-delay-1",
+      generation: 7,
+      to: "canceled",
+    })
+    expect(smartDelayService.requeueClaimedRun).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  test("a failing stopped-company check is a flow failure: requeue + rethrow", async () => {
+    smartDelayService.isContactInboxStopped.mockRejectedValueOnce(
+      new Error("db down"),
+    )
+
+    await expect(
+      runWaitResume({ smartDelayId: "smart-delay-1" }),
+    ).rejects.toThrow("db down")
+    expect(runFlowNode).not.toHaveBeenCalled()
+    expect(smartDelayService.requeueClaimedRun).toHaveBeenCalledWith({
+      id: "smart-delay-1",
+      generation: 7,
+    })
   })
 
   test("runs the connected node after claiming the scheduled row", async () => {

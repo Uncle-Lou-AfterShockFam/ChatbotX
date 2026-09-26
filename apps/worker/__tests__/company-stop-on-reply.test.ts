@@ -82,6 +82,24 @@ describe("handleCompanyStopOnReply", () => {
     expect(mockAutoLink).not.toHaveBeenCalled()
   })
 
+  test("a partial stop is logged as a warning with its failed phases", async () => {
+    mockStopForContact.mockResolvedValue({
+      status: "partial",
+      companyId: "co-1",
+      failedPhases: ["smart-delays"],
+    })
+    await handleCompanyStopOnReply([
+      { ...base, contactId: "c-1", origin: "inbound" },
+    ])
+    expect(mockWarn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: "co-1",
+        failedPhases: ["smart-delays"],
+      }),
+      "company-stop: inbound reply stopped the company only partially",
+    )
+  })
+
   test("a contact without a company is auto-linked first, then stopped when linked", async () => {
     mockFindById.mockResolvedValue({
       id: "c-1",

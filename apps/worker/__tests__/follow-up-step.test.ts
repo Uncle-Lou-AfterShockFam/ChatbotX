@@ -12,6 +12,8 @@ const {
   integrationQueueAdd: vi.fn(),
   loggerWarn: vi.fn(),
   smartDelayService: {
+    isContactInboxStopped: vi.fn(async () => false),
+    cancelIfNotStarted: vi.fn(async () => true),
     create: vi.fn(),
     findById: vi.fn(),
     markScheduled: vi.fn(),

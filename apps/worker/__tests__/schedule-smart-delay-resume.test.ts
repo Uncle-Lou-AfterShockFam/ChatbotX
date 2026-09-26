@@ -9,6 +9,8 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 const { integrationQueueAdd, smartDelayService } = vi.hoisted(() => ({
   integrationQueueAdd: vi.fn(),
   smartDelayService: {
+    isContactInboxStopped: vi.fn(async () => false),
+    cancelIfNotStarted: vi.fn(async () => true),
     create: vi.fn(),
     markScheduled: vi.fn(),
     resetToPending: vi.fn(),
@@ -73,6 +75,33 @@ describe("scheduleSmartDelayResume: immediate enqueue", () => {
     })
     expect(integrationQueueAdd).not.toHaveBeenCalled()
     expect(smartDelayService.resetToPending).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    "waitForEvent",
+    "waitNode",
+  ] as const)("%s: a stopped company's contact -> the written row is canceled, never marked or enqueued", async (type) => {
+    smartDelayService.isContactInboxStopped.mockResolvedValueOnce(true)
+    await scheduleSmartDelayResume(props(type))
+    expect(smartDelayService.isContactInboxStopped).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      contactInboxId: "ci-1",
+    })
+    expect(smartDelayService.cancelIfNotStarted).toHaveBeenCalledWith({
+      id: smartDelayService.create.mock.calls[0]?.[0].data.id,
+    })
+    expect(smartDelayService.markScheduled).not.toHaveBeenCalled()
+    expect(integrationQueueAdd).not.toHaveBeenCalled()
+  })
+
+  test("a failing stopped-company check keeps the row (every resume re-checks)", async () => {
+    smartDelayService.isContactInboxStopped.mockRejectedValueOnce(
+      new Error("db down"),
+    )
+    smartDelayService.markScheduled.mockResolvedValueOnce(true)
+    await scheduleSmartDelayResume(props("waitNode"))
+    expect(smartDelayService.cancelIfNotStarted).not.toHaveBeenCalled()
+    expect(integrationQueueAdd).toHaveBeenCalledTimes(1)
   })
 
   test.each([

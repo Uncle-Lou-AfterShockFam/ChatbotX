@@ -118,6 +118,38 @@ const smartDelayPersistenceHandlers: Record<
   },
 }
 
+/**
+ * A wait written for a contact whose company is stopped is canceled at once.
+ * The step that wrote it may have started before the stop (and passed its
+ * claimCheck) while the stop's cancel pass had already run; checking after the
+ * write closes that window (see `isContactInboxStopped`). A failed check is
+ * logged and the row kept: every resume re-checks before it runs.
+ */
+async function isStoppedCompanyRow(row: SmartDelayRow): Promise<boolean> {
+  try {
+    if (
+      !(await smartDelayService.isContactInboxStopped({
+        workspaceId: row.workspaceId,
+        contactInboxId: row.contactInboxId,
+      }))
+    ) {
+      return false
+    }
+    await smartDelayService.cancelIfNotStarted({ id: row.id })
+    logger.info(
+      { rowId: row.id, contactInboxId: row.contactInboxId },
+      "Smart delay canceled at creation: the contact's company is stopped",
+    )
+    return true
+  } catch (err) {
+    logger.warn(
+      { err, rowId: row.id },
+      "Stopped-company check failed at creation; the resume re-checks",
+    )
+    return false
+  }
+}
+
 export async function scheduleSmartDelayResume(props: {
   type: SmartDelayType
   triggerAt: Date
@@ -160,6 +192,10 @@ export async function scheduleSmartDelayResume(props: {
 
   // Insert tracking record first so a crash during enqueue still has a recovery path via scanner.
   const persistedRow = await smartDelayPersistenceHandlers[props.type](row)
+
+  if (await isStoppedCompanyRow(persistedRow)) {
+    return
+  }
 
   const diffMs = persistedRow.triggerAt.getTime() - Date.now()
   if (diffMs > ENQUEUE_DELAY_MS) {

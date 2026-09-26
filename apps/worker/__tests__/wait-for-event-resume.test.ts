@@ -4,6 +4,8 @@ const { runFlowNode, smartDelayService, queueRemove } = vi.hoisted(() => ({
   runFlowNode: vi.fn(),
   queueRemove: vi.fn(),
   smartDelayService: {
+    isContactInboxStopped: vi.fn(async () => false),
+    cancelIfNotStarted: vi.fn(async () => true),
     claimForEvent: vi.fn(),
     claimRunning: vi.fn(),
     findActiveWaitForEvent: vi.fn(),
