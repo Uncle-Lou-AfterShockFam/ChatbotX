@@ -26,7 +26,7 @@ export const basePaginationRequest = z.object({
         return parsedArray.data
       }
 
-      const value = JSON.parse(decodeURIComponent(`${val}`))
+      const value = JSON.parse(`${val}`)
       const { success, data } = sortSchema.safeParse(value)
       if (!success) {
         return
@@ -64,7 +64,7 @@ export const cursorPaginationRequest = z.object({
         return parsedArray.data
       }
 
-      const value = JSON.parse(decodeURIComponent(`${val}`))
+      const value = JSON.parse(`${val}`)
       const { success, data } = sortSchema.safeParse(value)
       if (!success) {
         return
