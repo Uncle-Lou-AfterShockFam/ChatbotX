@@ -132,22 +132,29 @@ describe.skipIf(!databaseUrl)(
       })
     })
 
-    test("an email keyword matches, including a member with no name", async () => {
-      const { workspaceId, unnamed } = await seedWorkspace()
+    test("an email is never matched, so it cannot be spelled out", async () => {
+      const { workspaceId } = await seedWorkspace()
 
-      expect(await search(workspaceId, "NAMELESS-")).toEqual({
-        ids: [unnamed],
-        pageCount: 1,
-      })
+      for (const keyword of [
+        "nameless-",
+        `ada-${workspaceId}`,
+        "example.test",
+      ]) {
+        expect(await search(workspaceId, keyword)).toEqual({
+          ids: [],
+          pageCount: 0,
+        })
+      }
     })
 
     test("the count spans pages and stays inside the workspace", async () => {
       const { workspaceId, ada, grace, percent, unnamed } =
         await seedWorkspace()
 
-      // Every seeded email in this workspace carries its id; the lookalike in
-      // the other workspace carries it too and must not be counted.
-      const all = await search(workspaceId, `-${workspaceId}@`)
+      // "a" is in Ada, Grace and "100% Agent" (3 rows = 2 pages of 2); the
+      // nameless member never matches, and "Ada Elsewhere" in the other
+      // workspace must not be counted.
+      const all = await search(workspaceId, "A")
       expect(all.pageCount).toBe(2)
       expect(all.ids).toEqual([ada, grace])
 
@@ -159,14 +166,10 @@ describe.skipIf(!databaseUrl)(
     })
 
     test("% and _ are literal, not wildcards", async () => {
-      const { workspaceId, grace, percent } = await seedWorkspace()
+      const { workspaceId, percent } = await seedWorkspace()
 
       expect(await search(workspaceId, "0%")).toEqual({
         ids: [percent],
-        pageCount: 1,
-      })
-      expect(await search(workspaceId, "l_f")).toEqual({
-        ids: [grace],
         pageCount: 1,
       })
       // As wildcards these would match "Ada Lovelace".
