@@ -23,6 +23,32 @@ const { AppTab } = await import("@/components/app-tab")
 
 type Tab = ComponentProps<typeof AppTab>["tabs"][number]
 
+type Boxes = {
+  clientWidth: number
+  scrollWidth: number
+  offsetLeft: number
+  offsetWidth: number
+}
+
+/**
+ * jsdom lays nothing out. Every element reports the given box, which is
+ * enough to place one active tab relative to the strip that holds it.
+ */
+function stubBoxes(boxes: Boxes) {
+  const keys = Object.keys(boxes) as (keyof Boxes)[]
+  for (const key of keys) {
+    Object.defineProperty(HTMLElement.prototype, key, {
+      configurable: true,
+      get: () => boxes[key],
+    })
+  }
+  return () => {
+    for (const key of keys) {
+      delete (HTMLElement.prototype as unknown as Record<string, unknown>)[key]
+    }
+  }
+}
+
 const TABS: Tab[] = [
   { label: "General", href: "/settings/general", isActive: true },
   { label: "Channels", href: "/settings/channels", isActive: false },
@@ -100,6 +126,54 @@ describe("AppTab", () => {
     expect(className).toContain("md:px-8")
     expect(className).toContain("gap-4")
     expect(className).toContain("md:gap-8")
+  })
+
+  test("fades the strip's edges only where tabs are off-screen", () => {
+    render(TABS)
+
+    const element = strip()
+    expect(element?.className).toContain("scroll-fade-x")
+    // jsdom lays nothing out, so the strip fits: no edge is marked.
+    expect(element?.hasAttribute("data-overflow-start")).toBe(false)
+    expect(element?.hasAttribute("data-overflow-end")).toBe(false)
+  })
+
+  test("brings an active tab that starts off-screen into view", () => {
+    const geometry = {
+      clientWidth: 300,
+      scrollWidth: 800,
+      // The last tab: its left edge sits past the visible width.
+      offsetLeft: 650,
+      offsetWidth: 100,
+    }
+    const restore = stubBoxes(geometry)
+    try {
+      render([
+        ...TABS.map((tab) => ({ ...tab, isActive: false })),
+        { label: "Error Logs", href: "/error-logs", isActive: true },
+      ])
+
+      // Scrolled just far enough to show the tab's right edge.
+      expect(strip()?.scrollLeft).toBe(450)
+    } finally {
+      restore()
+    }
+  })
+
+  test("leaves the strip at the start when the active tab is visible", () => {
+    const restore = stubBoxes({
+      clientWidth: 300,
+      scrollWidth: 800,
+      offsetLeft: 16,
+      offsetWidth: 80,
+    })
+    try {
+      render(TABS)
+
+      expect(strip()?.scrollLeft).toBe(0)
+    } finally {
+      restore()
+    }
   })
 
   test("marks the active tab", () => {

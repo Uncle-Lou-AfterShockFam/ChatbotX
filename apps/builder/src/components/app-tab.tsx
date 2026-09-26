@@ -6,7 +6,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@chatbotx.io/ui/components/ui/tooltip"
+import { useHorizontalOverflow } from "@chatbotx.io/ui/hooks/use-horizontal-overflow"
 import Link from "next/link"
+import { useEffect, useRef } from "react"
 
 type AppTabProps = {
   tabs: {
@@ -36,7 +38,38 @@ function getTabClassName(tab: AppTabProps["tabs"][number]) {
   return `${base} border-transparent font-medium text-gray-800 dark:text-gray-400`
 }
 
+/**
+ * Scrolls the strip just far enough to show the active tab whole, and never
+ * back towards the start: a deep link to the last tab ("Error Logs") otherwise
+ * lands with its label cut at a phone's edge. `scrollLeft` is set directly
+ * rather than via `scrollIntoView`, which would also scroll the page. The
+ * strip is `relative`, so `offsetLeft` is measured from its own edge.
+ */
+function revealActiveTab(strip: HTMLElement) {
+  const active = strip.querySelector<HTMLElement>('[aria-current="page"]')
+  if (!active) {
+    return
+  }
+  const overshoot = active.offsetLeft + active.offsetWidth - strip.clientWidth
+  if (overshoot > strip.scrollLeft) {
+    strip.scrollLeft = overshoot
+  }
+}
+
 export function AppTab({ tabs }: AppTabProps) {
+  const stripRef = useRef<HTMLDivElement>(null)
+  const layoutKey = tabs
+    .map((tab) => `${tab.href}:${tab.label}:${tab.isActive}`)
+    .join("|")
+  useHorizontalOverflow(stripRef, layoutKey)
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run when the tabs or the active one change.
+  useEffect(() => {
+    if (stripRef.current) {
+      revealActiveTab(stripRef.current)
+    }
+  }, [layoutKey])
+
   return (
     <Card className="py-0">
       {/*
@@ -44,9 +77,13 @@ export function AppTab({ tabs }: AppTabProps) {
         the strip keeps every tab reachable without pushing the page itself
         into horizontal overflow. The scrollbar is hidden because the strip
         sits directly under a card edge, where a persistent bar reads as a
-        rendering artefact; touch scrolling needs no visible track.
+        rendering artefact; touch scrolling needs no visible track, and
+        `scroll-fade-x` fades whichever edge hides tabs instead.
       */}
-      <CardContent className="scrollbar-hide flex flex-nowrap items-center gap-4 overflow-x-auto px-4 md:gap-8 md:px-8">
+      <CardContent
+        className="scrollbar-hide scroll-fade-x relative flex flex-nowrap items-center gap-4 overflow-x-auto px-4 md:gap-8 md:px-8"
+        ref={stripRef}
+      >
         {tabs.map((tab) =>
           tab.disabled ? (
             <Tooltip key={tab.href}>
@@ -67,6 +104,7 @@ export function AppTab({ tabs }: AppTabProps) {
             </Tooltip>
           ) : (
             <Link
+              aria-current={tab.isActive ? "page" : undefined}
               className={getTabClassName(tab)}
               href={tab.href}
               key={tab.href}
