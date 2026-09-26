@@ -17,6 +17,37 @@
   }
 }
 
+/**
+ * Fades the edges of a horizontal scroller that hide content, so a
+ * `scrollbar-hide` strip still shows it scrolls. Only edges marked by
+ * `useHorizontalOverflow` (`data-overflow-start` / `-end`) fade: a strip that
+ * fits, or one scrolled flush to an end, keeps that edge crisp. The gradient
+ * runs along the reading direction, so "start" is the right edge in RTL.
+ */
+@utility scroll-fade-x {
+  --scroll-fade-size: 1.5rem;
+  --scroll-fade-start: 0px;
+  --scroll-fade-end: 0px;
+  --scroll-fade-direction: to right;
+  mask-image: linear-gradient(
+    var(--scroll-fade-direction),
+    transparent 0,
+    #000 var(--scroll-fade-start),
+    #000 calc(100% - var(--scroll-fade-end)),
+    transparent 100%
+  );
+
+  &:where([dir="rtl"], [dir="rtl"] *) {
+    --scroll-fade-direction: to left;
+  }
+  &[data-overflow-start] {
+    --scroll-fade-start: var(--scroll-fade-size);
+  }
+  &[data-overflow-end] {
+    --scroll-fade-end: var(--scroll-fade-size);
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

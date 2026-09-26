@@ -23,6 +23,27 @@ const { AppTab } = await import("@/components/app-tab")
 
 type Tab = ComponentProps<typeof AppTab>["tabs"][number]
 
+type Span = { left: number; right: number }
+
+/**
+ * jsdom lays nothing out. The strip and its active tab report the given
+ * on-screen spans; a spy, not a prototype write, so `mockRestore` puts
+ * jsdom's own getter back.
+ */
+function stubRects(strip: Span, active: Span) {
+  return vi
+    .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+    .mockImplementation(function (this: HTMLElement) {
+      const span = this.getAttribute("aria-current") === "page" ? active : strip
+      return DOMRect.fromRect({
+        x: span.left,
+        y: 0,
+        width: span.right - span.left,
+        height: 40,
+      })
+    })
+}
+
 const TABS: Tab[] = [
   { label: "General", href: "/settings/general", isActive: true },
   { label: "Channels", href: "/settings/channels", isActive: false },
@@ -48,6 +69,8 @@ describe("AppTab", () => {
 
   beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+    // jsdom computes no default font size; browsers report the root's in px.
+    document.documentElement.style.fontSize = "16px"
     container = document.createElement("div")
     document.body.append(container)
     root = createRoot(container)
@@ -58,6 +81,7 @@ describe("AppTab", () => {
       root.unmount()
     })
     container.remove()
+    document.documentElement.style.fontSize = ""
   })
 
   test("renders every tab", () => {
@@ -100,6 +124,69 @@ describe("AppTab", () => {
     expect(className).toContain("md:px-8")
     expect(className).toContain("gap-4")
     expect(className).toContain("md:gap-8")
+  })
+
+  test("fades the strip's edges only where tabs are off-screen", () => {
+    render(TABS)
+
+    const element = strip()
+    expect(element?.className).toContain("scroll-fade-x")
+    // jsdom lays nothing out, so the strip fits: no edge is marked.
+    expect(element?.hasAttribute("data-overflow-start")).toBe(false)
+    expect(element?.hasAttribute("data-overflow-end")).toBe(false)
+  })
+
+  const withLastTabActive = [
+    ...TABS.map((tab) => ({ ...tab, isActive: false })),
+    { label: "Error Logs", href: "/error-logs", isActive: true },
+  ]
+
+  test("brings an active tab past the end edge into view, clear of the fade", () => {
+    const rects = stubRects({ left: 16, right: 372 }, { left: 331, right: 396 })
+    try {
+      render(withLastTabActive)
+
+      // 396 - 372 to show the tab, plus 24 px so the end fade misses it.
+      expect(strip()?.scrollLeft).toBe(48)
+    } finally {
+      rects.mockRestore()
+    }
+  })
+
+  test("the clearance tracks the fade's rem width at a larger root font", () => {
+    document.documentElement.style.fontSize = "20px"
+    const rects = stubRects({ left: 16, right: 372 }, { left: 331, right: 396 })
+    try {
+      render(withLastTabActive)
+
+      // 1.5rem at 20 px is 30 px.
+      expect(strip()?.scrollLeft).toBe(54)
+    } finally {
+      rects.mockRestore()
+    }
+  })
+
+  test("brings an active tab past the start edge into view (right-to-left)", () => {
+    const rects = stubRects({ left: 16, right: 372 }, { left: -40, right: 30 })
+    try {
+      render(withLastTabActive)
+
+      // Scrolling towards the physical left is negative in an RTL strip.
+      expect(strip()?.scrollLeft).toBe(-80)
+    } finally {
+      rects.mockRestore()
+    }
+  })
+
+  test("leaves the strip alone when the active tab is visible", () => {
+    const rects = stubRects({ left: 16, right: 372 }, { left: 33, right: 83 })
+    try {
+      render(TABS)
+
+      expect(strip()?.scrollLeft).toBe(0)
+    } finally {
+      rects.mockRestore()
+    }
   })
 
   test("marks the active tab", () => {
