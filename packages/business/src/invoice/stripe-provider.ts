@@ -135,6 +135,167 @@ async function ensureCustomer(
 }
 
 /**
+ * Stripe refuses `send_invoice` for a customer without an email ("Missing
+ * email", s206b live proof), and most SMS-only contacts have none. Those get
+ * `charge_automatically` instead: with `auto_advance: false` Stripe never
+ * attempts a charge on its own, and the hosted page still takes a card. The
+ * email is read from the Stripe customer, not the contact: a cached customer
+ * created before the contact gained an email still has none.
+ */
+async function chooseCollection(
+  stripe: Stripe,
+  customerId: string,
+  invoice: InvoiceModel,
+): Promise<{
+  params: Pick<
+    Stripe.InvoiceCreateParams,
+    "collection_method" | "days_until_due"
+  >
+  idempotencyKey: string
+}> {
+  let customer: Stripe.Customer | Stripe.DeletedCustomer
+  try {
+    customer = await stripe.customers.retrieve(customerId)
+  } catch (error) {
+    throw wrap(error, "retrieve customer")
+  }
+  if (customer.deleted) {
+    throw new InvoiceProviderError(
+      "The Stripe customer for this contact was deleted in Stripe",
+      false,
+    )
+  }
+  if (!customer.email) {
+    // A key of its own: a send_invoice create Stripe refused for this invoice
+    // must never answer the retry.
+    return {
+      params: { collection_method: "charge_automatically" },
+      idempotencyKey: `hub-inv-${invoice.id}-create-charge`,
+    }
+  }
+  return {
+    params: {
+      collection_method: "send_invoice",
+      days_until_due: Math.max(
+        1,
+        invoice.dueAt
+          ? Math.ceil(
+              (invoice.dueAt.getTime() - invoice.createdAt.getTime()) /
+                86_400_000,
+            )
+          : 1,
+      ),
+    },
+    idempotencyKey: `hub-inv-${invoice.id}-create`,
+  }
+}
+
+/** Upper bound on the invoices scanned for an unrecorded one (10 pages). */
+const UNRECORDED_SCAN_LIMIT = 1000
+
+/**
+ * A Stripe invoice created for this hub invoice whose id never reached the
+ * row (a crash between the create and the persist). The create key depends
+ * on the customer's email, so a retry after the email appeared or vanished
+ * would otherwise mint a twin. `list` is read-your-writes (unlike `search`)
+ * and only invoices created since the hub row can match (60 s of clock
+ * skew allowed); a voided one is not resumed. Past the scan cap this fails
+ * rather than guess.
+ */
+async function findUnrecordedInvoice(
+  stripe: Stripe,
+  customerId: string,
+  invoice: InvoiceModel,
+): Promise<string | null> {
+  let scanned = 0
+  try {
+    for await (const candidate of stripe.invoices.list({
+      customer: customerId,
+      created: { gte: Math.floor(invoice.createdAt.getTime() / 1000) - 60 },
+      limit: 100,
+    })) {
+      if (
+        candidate.metadata?.hub_invoice_id === invoice.id &&
+        candidate.metadata?.hub_workspace_id === invoice.workspaceId &&
+        candidate.status !== "void"
+      ) {
+        return candidate.id ?? null
+      }
+      scanned += 1
+      if (scanned >= UNRECORDED_SCAN_LIMIT) {
+        throw new InvoiceProviderError(
+          `More than ${UNRECORDED_SCAN_LIMIT} Stripe invoices for this customer since the hub invoice was created; check Stripe for one carrying hub_invoice_id ${invoice.id}`,
+          false,
+        )
+      }
+    }
+  } catch (error) {
+    throw wrap(error, "list invoices")
+  }
+  return null
+}
+
+/**
+ * Store the Stripe ids on the row while it is still a draft with none, and
+ * return the Stripe invoice the ROW names. Losing to another finalize (the
+ * two chose different create keys) or to a void deletes the draft this call
+ * created: it has no lines yet and was never finalized. A row voided
+ * meanwhile is never finalized in Stripe (blind probe, s206b).
+ */
+async function recordStripeIds(props: {
+  stripe: Stripe
+  credentials: StripeCredentials
+  invoice: InvoiceModel
+  stripeInvoiceId: string
+  customerId: string
+  createdHere: boolean
+}): Promise<string> {
+  const { stripe, credentials, invoice, stripeInvoiceId, customerId } = props
+  const won = await db
+    .update(invoiceModel)
+    .set({
+      providerInvoiceId: stripeInvoiceId,
+      providerAccountId: credentials.accountId,
+      providerCustomerId: customerId,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(invoiceModel.id, invoice.id),
+        eq(invoiceModel.status, "draft"),
+        isNull(invoiceModel.providerInvoiceId),
+      ),
+    )
+    .returning({ id: invoiceModel.id })
+  if (won.length > 0) {
+    return stripeInvoiceId
+  }
+  const row = await db.query.invoiceModel.findFirst({
+    where: { id: invoice.id },
+    columns: { providerInvoiceId: true },
+  })
+  const recorded = row?.providerInvoiceId ?? null
+  if (recorded !== stripeInvoiceId && props.createdHere) {
+    try {
+      await stripe.invoices.del(stripeInvoiceId)
+    } catch (error) {
+      logger.error(
+        { err: error, invoiceId: invoice.id, stripeInvoiceId, recorded },
+        "invoice: the finalize lost its persist and our Stripe draft could not be deleted",
+      )
+    }
+  }
+  if (!recorded) {
+    // Voided (or deleted) while we were creating: never finalize it.
+    throw new InvoiceProviderError(
+      "The invoice was voided while it was being finalized",
+      false,
+    )
+  }
+  return recorded
+}
+
+/**
  * Add the hub lines the Stripe draft does not carry yet. Re-entrant: a line
  * already on the invoice (metadata `hub_line_position`) is skipped, and each
  * create has its own Idempotency-Key.
@@ -211,24 +372,28 @@ export async function finalizeWithStripe(props: {
   const stripe = createStripeClient(credentials.auth.secretKey)
   const customerId = await ensureCustomer(stripe, credentials, invoice)
 
-  let stripeInvoiceId = invoice.providerInvoiceId
+  let stripeInvoiceId =
+    invoice.providerInvoiceId ??
+    (await findUnrecordedInvoice(stripe, customerId, invoice))
+  if (stripeInvoiceId && !invoice.providerInvoiceId) {
+    stripeInvoiceId = await recordStripeIds({
+      stripe,
+      credentials,
+      invoice,
+      stripeInvoiceId,
+      customerId,
+      createdHere: false,
+    })
+  }
   if (!stripeInvoiceId) {
+    const collection = await chooseCollection(stripe, customerId, invoice)
     let created: Stripe.Invoice
     try {
       created = await stripe.invoices.create(
         {
           customer: customerId,
           currency,
-          collection_method: "send_invoice",
-          days_until_due: Math.max(
-            1,
-            invoice.dueAt
-              ? Math.ceil(
-                  (invoice.dueAt.getTime() - invoice.createdAt.getTime()) /
-                    86_400_000,
-                )
-              : 1,
-          ),
+          ...collection.params,
           auto_advance: false,
           pending_invoice_items_behavior: "exclude",
           ...(invoice.memo ? { description: invoice.memo } : {}),
@@ -238,7 +403,7 @@ export async function finalizeWithStripe(props: {
             hub_invoice_number: String(invoice.number),
           },
         },
-        { idempotencyKey: `hub-inv-${invoice.id}-create` },
+        { idempotencyKey: collection.idempotencyKey },
       )
     } catch (error) {
       throw wrap(error, "create invoice")
@@ -246,22 +411,15 @@ export async function finalizeWithStripe(props: {
     if (!created.id) {
       throw new InvoiceProviderError("Stripe returned no invoice id", true)
     }
-    stripeInvoiceId = created.id
     // Persist the id NOW so a crash below resumes this invoice, never a twin.
-    await db
-      .update(invoiceModel)
-      .set({
-        providerInvoiceId: stripeInvoiceId,
-        providerAccountId: credentials.accountId,
-        providerCustomerId: customerId,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(invoiceModel.id, invoice.id),
-          isNull(invoiceModel.providerInvoiceId),
-        ),
-      )
+    stripeInvoiceId = await recordStripeIds({
+      stripe,
+      credentials,
+      invoice,
+      stripeInvoiceId: created.id,
+      customerId,
+      createdHere: true,
+    })
   }
 
   let current: Stripe.Invoice
