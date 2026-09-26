@@ -322,6 +322,22 @@ const pruneAudienceFilter = (
   return pruned
 }
 
+/**
+ * `pruneAudienceFilter` for a filter read back from the untyped jsonb column:
+ * a stored value that is not a filter shape rejects with `invalidMessage`
+ * (the worker would refuse it). Null is "everyone", chosen by the operator.
+ */
+const pruneStoredAudienceFilter = (
+  persisted: unknown,
+  canViewEmailAndPhone: boolean,
+  invalidMessage: string,
+): ContactFilterCriteriaInput | undefined => {
+  if (persisted != null && !isContactFilterShape(persisted)) {
+    throw validationException("contactFilter", invalidMessage)
+  }
+  return pruneAudienceFilter(persisted ?? undefined, canViewEmailAndPhone)
+}
+
 export class BroadcastValidationException extends ChatbotXException {
   readonly field: BroadcastValidationField
 
@@ -782,14 +798,11 @@ class BroadcastService extends BaseService {
       // operator. Refuse here instead; the throw rolls the UPDATE back, so
       // the row stays an editable draft (s208). Checked on the RETURNING row,
       // under the UPDATE's row lock, so a concurrent edit cannot slip past.
-      const persisted = row.contactFilter as unknown
-      if (persisted != null && !isContactFilterShape(persisted)) {
-        throw validationException(
-          "contactFilter",
-          "The broadcast's audience filter is invalid; edit the draft and fix or clear the filter before scheduling.",
-        )
-      }
-      pruneAudienceFilter(persisted ?? undefined, input.canViewEmailAndPhone)
+      pruneStoredAudienceFilter(
+        row.contactFilter,
+        input.canViewEmailAndPhone,
+        "The broadcast's audience filter is invalid; edit the draft and fix or clear the filter before scheduling.",
+      )
 
       // A draft keeps every picked page, empty ones included, so it can be
       // reopened. Scheduling is the point of no return: a page left without a
@@ -2183,16 +2196,10 @@ class BroadcastService extends BaseService {
     // filter that no longer parses, or one whose every condition is pruned
     // away for this caller, rejects: either would silently resend to
     // everyone (s206).
-    const persisted = broadcast.contactFilter as unknown
-    if (persisted != null && !isContactFilterShape(persisted)) {
-      throw validationException(
-        "contactFilter",
-        "The broadcast's stored audience filter is invalid; create a new broadcast instead of resending.",
-      )
-    }
-    const contactFilter = pruneAudienceFilter(
-      persisted ?? undefined,
+    const contactFilter = pruneStoredAudienceFilter(
+      broadcast.contactFilter,
       input.canViewEmailAndPhone,
+      "The broadcast's stored audience filter is invalid; create a new broadcast instead of resending.",
     )
 
     const newBroadcast = await db.transaction(async (tx) => {
