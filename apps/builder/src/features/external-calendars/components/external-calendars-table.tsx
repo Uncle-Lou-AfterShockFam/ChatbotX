@@ -11,7 +11,7 @@ import {
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
 import type { DataTableRowAction } from "@chatbotx.io/ui/types/data-table"
 import { useSearchParams } from "next/navigation"
-import { useTranslations } from "next-intl"
+import { useTimeZone, useTranslations } from "next-intl"
 import { use, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import type { listExternalCalendars } from "../queries"
@@ -28,14 +28,15 @@ type Props = {
 
 export function ExternalCalendarsTable({ workspaceId, promises }: Props) {
   const t = useTranslations()
+  const timeZone = useTimeZone()
   const searchParams = useSearchParams()
   const callbackStatus = searchParams.get("externalCalendarConnect")
   const [{ data, pageCount }] = use(promises)
   const [rowAction, setRowAction] =
     useState<DataTableRowAction<ExternalCalendarResource> | null>(null)
   const columns = useMemo(
-    () => getExternalCalendarColumns({ t, setRowAction }),
-    [t],
+    () => getExternalCalendarColumns({ t, setRowAction, timeZone }),
+    [t, timeZone],
   )
   const { table } = useDataTable({
     data,

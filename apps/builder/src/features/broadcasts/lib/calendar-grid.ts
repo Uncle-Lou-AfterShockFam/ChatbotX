@@ -60,6 +60,7 @@ export function resolveDateParam(
   if (value) {
     const parsed = parse(value, DATE_PARAM_FORMAT, now)
     if (isValid(parsed)) {
+      // zone: wall-clock (URL date param parsed locally, re-serialised from the same local fields)
       return format(parsed, DATE_PARAM_FORMAT)
     }
   }
@@ -103,6 +104,7 @@ export function resolveEndDateParam(
   value: string | null,
   anchorValue: string,
 ): string {
+  // zone: wall-clock (URL endDate param parsed locally, re-serialised from the same local fields)
   return format(
     parseEndDateParam(value, parseDateParam(anchorValue)),
     DATE_PARAM_FORMAT,
@@ -194,6 +196,7 @@ export const calendarRangeConfig: Record<
  * zone never leaks into the result.
  */
 function wallClockToInstant(wallClock: Date, timezone: string): Date {
+  // zone: wall-clock (grid day boundary read by local getters, then placed in timezone by fromZonedTime)
   return fromZonedTime(format(wallClock, WALL_CLOCK_FORMAT), timezone)
 }
 
@@ -242,15 +245,20 @@ export function buildRangeDays(anchor: Date, endAnchor: Date): Date[] {
 }
 
 export function dayKey(date: Date): string {
+  // zone: wall-clock (calendar grid day built from local fields, never an instant)
   return format(date, DAY_KEY_FORMAT)
 }
 
 export function groupByDay<T extends { schedulesAt: Date }>(
   rows: T[],
+  timezone: string | undefined,
 ): Map<string, T[]> {
+  const zone = resolveFilterTimezone(timezone)
   const grouped = new Map<string, T[]>()
   for (const row of rows) {
-    const key = dayKey(row.schedulesAt)
+    // `schedulesAt` is an instant: key it by its day in the user's zone, the
+    // same zone getCalendarQueryRange fetched with, so it matches `dayKey(day)`.
+    const key = formatInTimeZone(row.schedulesAt, zone, DAY_KEY_FORMAT)
     grouped.set(key, [...(grouped.get(key) ?? []), row])
   }
   return grouped

@@ -11,8 +11,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@chatbotx.io/ui/components/ui/dialog"
-import { format } from "date-fns"
-import { useFormatter, useTranslations } from "next-intl"
+import { formatWithFallback } from "@chatbotx.io/utils/datetime"
+import { useFormatter, useTimeZone, useTranslations } from "next-intl"
 import { useMemo } from "react"
 import { ContactFilterSummary } from "@/features/contact-filter/components/contact-filter-summary"
 import { contactFilterCriteriaSchema } from "@/features/contact-filter/schema"
@@ -43,6 +43,7 @@ export function BroadcastDetailDialog({
   onOpenChange,
 }: BroadcastDetailDialogProps) {
   const t = useTranslations()
+  const timeZone = useTimeZone()
   const formatter = useFormatter()
   const workspaceId = useWorkspaceId()
 
@@ -131,8 +132,9 @@ export function BroadcastDetailDialog({
             />
             <BroadcastDetailField
               label={t("fields.scheduledAt.label")}
-              value={format(
+              value={formatWithFallback(
                 new Date(broadcast.schedulesAt),
+                timeZone,
                 "yyyy/MM/dd HH:mm",
               )}
             />

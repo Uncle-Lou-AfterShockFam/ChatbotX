@@ -8,10 +8,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@chatbotx.io/ui/components/ui/dialog"
+import { formatWithFallback } from "@chatbotx.io/utils/datetime"
 import { useQuery } from "@tanstack/react-query"
-import { format } from "date-fns"
 import { Loader2Icon, StarIcon } from "lucide-react"
-import { useTranslations } from "next-intl"
+import { useTimeZone, useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -35,6 +35,7 @@ export function FlowVersionsDialog({
   onRestoreSuccess,
 }: FlowVersionsDialogProps) {
   const t = useTranslations()
+  const timeZone = useTimeZone()
   const [restoringId, setRestoringId] = useState<string | null>(null)
 
   const {
@@ -97,7 +98,11 @@ export function FlowVersionsDialog({
                 key={version.id}
               >
                 <span className="flex items-center gap-1.5 font-medium text-sm">
-                  {format(version.createdAt, "yyyy/MM/dd HH:mm")}
+                  {formatWithFallback(
+                    version.createdAt,
+                    timeZone,
+                    "yyyy/MM/dd HH:mm",
+                  )}
                   {version.isLatest && (
                     <StarIcon className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
                   )}

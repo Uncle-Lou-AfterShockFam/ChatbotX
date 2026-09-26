@@ -12,7 +12,7 @@ import {
 } from "@chatbotx.io/ui/components/ui/card"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
 import { useRouter } from "next/navigation"
-import { useTranslations } from "next-intl"
+import { useTimeZone, useTranslations } from "next-intl"
 import { use, useMemo, useState } from "react"
 import { DeleteAIAgentsDialog } from "@/features/ai-agents/delete-ai-agent"
 import { useInvalidateAIAgents } from "@/features/ai-agents/hooks/use-ai-agents"
@@ -43,6 +43,7 @@ export function AIAgentsTable({ workspaceId, promises }: AIAgentsTableProps) {
     use(promises)
 
   const t = useTranslations()
+  const timeZone = useTimeZone()
   const router = useRouter()
   const invalidateAIAgents = useInvalidateAIAgents()
 
@@ -54,8 +55,9 @@ export function AIAgentsTable({ workspaceId, promises }: AIAgentsTableProps) {
       getAIAgentsColumns({
         setRowAction,
         t,
+        timeZone,
       }),
-    [t],
+    [t, timeZone],
   )
 
   const { table } = useDataTable({

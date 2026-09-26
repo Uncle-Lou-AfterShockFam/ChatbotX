@@ -11,11 +11,12 @@ import {
   TooltipTrigger,
 } from "@chatbotx.io/ui/components/ui/tooltip"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
+import { formatWithFallback } from "@chatbotx.io/utils/datetime"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import type { Column, ColumnDef, Row } from "@tanstack/react-table"
-import { format, formatDistanceToNow } from "date-fns"
+import { formatDistanceToNow } from "date-fns"
 import { useSearchParams } from "next/navigation"
-import { useFormatter, useTranslations } from "next-intl"
+import { useFormatter, useTimeZone, useTranslations } from "next-intl"
 import { use, useCallback, useEffect, useMemo, useState } from "react"
 import {
   type ContactFilterCriteria,
@@ -52,6 +53,7 @@ function ContactCard({
   workspaceId: string
 }) {
   const t = useTranslations()
+  const timeZone = useTimeZone()
   const contact = row.original
 
   return (
@@ -81,7 +83,7 @@ function ContactCard({
           <div className="flex items-baseline justify-between gap-3">
             <dt>{t("fields.createdAt.label")}</dt>
             <dd className="text-foreground">
-              {format(contact.createdAt, "yyyy/MM/dd")}
+              {formatWithFallback(contact.createdAt, timeZone, "yyyy/MM/dd")}
             </dd>
           </div>
         </dl>
@@ -124,6 +126,7 @@ export function ContactsTable({
   promises,
 }: ContactsTableProps) {
   const t = useTranslations()
+  const timeZone = useTimeZone()
   const formatter = useFormatter()
   const searchParams = useSearchParams()
   const searchParamsKey = searchParams.toString()
@@ -368,7 +371,8 @@ export function ContactsTable({
             title={t("fields.createdAt.label")}
           />
         ),
-        cell: ({ row }) => format(row.original.createdAt, "yyyy/MM/dd"),
+        cell: ({ row }) =>
+          formatWithFallback(row.original.createdAt, timeZone, "yyyy/MM/dd"),
         meta: {
           label: t("fields.createdAt.label"),
         },
@@ -376,7 +380,7 @@ export function ContactsTable({
         enableHiding: false,
       },
     ],
-    [workspaceId, t],
+    [workspaceId, t, timeZone],
   )
 
   const { table } = useDataTable({

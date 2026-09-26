@@ -91,6 +91,7 @@ export function FieldValuePickerPopover({
       return
     }
     // Datetime keeps the popover open so the time can still be adjusted.
+    // zone: wall-clock (day/time-picker date, local fields in and out)
     applyPickedValue(format(picked, valueFormat), {
       keepOpen: kind === "datetime",
     })

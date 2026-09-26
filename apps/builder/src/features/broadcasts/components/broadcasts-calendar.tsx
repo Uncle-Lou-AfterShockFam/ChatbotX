@@ -22,7 +22,7 @@ import {
   subYears,
 } from "date-fns"
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
-import { useFormatter, useTranslations } from "next-intl"
+import { useFormatter, useTimeZone, useTranslations } from "next-intl"
 import { useQueryStates } from "nuqs"
 import { type ReactNode, useMemo, useRef, useState } from "react"
 import type { DateRange } from "react-day-picker"
@@ -151,6 +151,7 @@ export function BroadcastsCalendar({
 }) {
   const t = useTranslations()
   const formatter = useFormatter()
+  const timeZone = useTimeZone()
   const [, setQuery] = useQueryStates(
     {
       range: broadcastsSearchParsers.range,
@@ -164,7 +165,10 @@ export function BroadcastsCalendar({
     () => parseEndDateParam(endDate, anchor),
     [endDate, anchor],
   )
-  const byDay = useMemo(() => groupByDay(broadcasts), [broadcasts])
+  const byDay = useMemo(
+    () => groupByDay(broadcasts, timeZone),
+    [broadcasts, timeZone],
+  )
   const [selected, setSelected] = useState<BroadcastCalendarRow | null>(null)
   const [jumpOpen, setJumpOpen] = useState(false)
   const [customPopoverOpen, setCustomPopoverOpen] = useState(false)
@@ -204,12 +208,15 @@ export function BroadcastsCalendar({
       return
     }
     const clampedTo = parseEndDateParam(
+      // zone: wall-clock (day-picker range end, local fields in and out)
       format(pendingRange.to, DATE_PARAM_FORMAT),
       startOfDay(pendingRange.from),
     )
     setQuery({
       range: "custom",
+      // zone: wall-clock (day-picker range start, local fields in and out)
       date: format(pendingRange.from, DATE_PARAM_FORMAT),
+      // zone: wall-clock (clamped day-picker range end, local fields in and out)
       endDate: format(clampedTo, DATE_PARAM_FORMAT),
     })
     setPendingRange(undefined)
@@ -252,8 +259,10 @@ export function BroadcastsCalendar({
 
   const goTo = (next: { date: Date; endDate: Date | null } | null) => {
     setQuery({
+      // zone: wall-clock (step() of the URL-param anchor day, local fields in and out)
       date: next ? format(next.date, DATE_PARAM_FORMAT) : null,
       endDate:
+        // zone: wall-clock (step() of the URL-param end day, local fields in and out)
         next?.endDate == null ? null : format(next.endDate, DATE_PARAM_FORMAT),
     })
   }
@@ -472,6 +481,7 @@ export function BroadcastsCalendar({
                     return
                   }
                   setQuery({
+                    // zone: wall-clock (day-picker date, local fields in and out)
                     date: format(day, DATE_PARAM_FORMAT),
                     endDate: null,
                   })

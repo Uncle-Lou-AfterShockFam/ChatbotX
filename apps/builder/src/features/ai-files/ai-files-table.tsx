@@ -24,8 +24,8 @@ import {
   TooltipTrigger,
 } from "@chatbotx.io/ui/components/ui/tooltip"
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
+import { formatWithFallback } from "@chatbotx.io/utils/datetime"
 import type { ColumnDef } from "@tanstack/react-table"
-import { format } from "date-fns"
 import {
   DownloadIcon,
   EyeIcon,
@@ -34,7 +34,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useTranslations } from "next-intl"
+import { useTimeZone, useTranslations } from "next-intl"
 import prettyBytes from "pretty-bytes"
 import { use, useMemo, useState } from "react"
 import { AIFileProcessingStatus } from "./ai-file-processing-status"
@@ -108,6 +108,7 @@ export default function AIFilesTable({ promises }: AIFilesTableProps) {
 
   const router = useRouter()
   const t = useTranslations()
+  const timeZone = useTimeZone()
 
   const columns = useMemo<ColumnDef<AIFileWithProcessing>[]>(
     () => [
@@ -213,7 +214,11 @@ export default function AIFilesTable({ promises }: AIFilesTableProps) {
         ),
         cell: ({ row }) => (
           <span className="text-muted-foreground">
-            {format(row.original.createdAt, "MMM dd, yyyy")}
+            {formatWithFallback(
+              row.original.createdAt,
+              timeZone,
+              "MMM dd, yyyy",
+            )}
           </span>
         ),
         enableSorting: true,
@@ -228,7 +233,7 @@ export default function AIFilesTable({ promises }: AIFilesTableProps) {
         enableHiding: false,
       },
     ],
-    [t],
+    [t, timeZone],
   )
 
   const { table } = useDataTable({

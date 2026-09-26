@@ -6,7 +6,7 @@ import { DataTableToolbar } from "@chatbotx.io/ui/components/data-table/data-tab
 import { useDataTable } from "@chatbotx.io/ui/hooks/use-data-table"
 import type { DataTableRowAction } from "@chatbotx.io/ui/types/data-table"
 import { useRouter } from "next/navigation"
-import { useTranslations } from "next-intl"
+import { useTimeZone, useTranslations } from "next-intl"
 import { use, useMemo, useState } from "react"
 import { DeleteErrorLogsDialog } from "./delete-error-logs"
 import { getColumns } from "./error-logs-table-columns"
@@ -20,13 +20,17 @@ type ErrorLogsTableProps = {
 
 export function ErrorLogsTable({ promises, workspaceId }: ErrorLogsTableProps) {
   const t = useTranslations()
+  const timeZone = useTimeZone()
   const router = useRouter()
 
   const [{ data, pageCount }] = use(promises)
   const [rowAction, setRowAction] =
     useState<DataTableRowAction<ErrorLogResource> | null>(null)
 
-  const columns = useMemo(() => getColumns({ setRowAction, t }), [t])
+  const columns = useMemo(
+    () => getColumns({ setRowAction, t, timeZone }),
+    [t, timeZone],
+  )
 
   const { table } = useDataTable({
     data,
