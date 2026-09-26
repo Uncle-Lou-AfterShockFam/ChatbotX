@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import { describe, expect, test, vi } from "vitest"
+import { pagedServer } from "@/lib/query/testing/paged-server"
 
 /**
  * s195 Contact / Company 360 routes: every route sits behind the
@@ -57,10 +58,11 @@ const proxy = (dflt: () => unknown) =>
   new Proxy({} as Record<string, ReturnType<typeof vi.fn>>, {
     get: (t, k: string) => (t[k] ??= vi.fn(async () => dflt())),
   })
-const dealService = proxy(() => ({
+const DEFAULT_DEALS = {
   data: [{ id: "d-1", status: "open", value: "10.50", currency: "USD" }],
   pageCount: 1,
-}))
+}
+const dealService = proxy(() => DEFAULT_DEALS)
 const dealTaskService = proxy(() => [])
 const companyService = proxy(() => ({ id: "co-1" }))
 companyService.countContacts.mockImplementation(async () => new Map())
@@ -124,7 +126,9 @@ describe("crm private routes (s195)", () => {
         expect.objectContaining({
           companyId: "co-1",
           viewer: VIEWER,
-          perPage: 200,
+          page: 1,
+          perPage: 50,
+          sort: [{ id: "id", desc: true }],
         }),
       )
     }
@@ -148,6 +152,31 @@ describe("crm private routes (s195)", () => {
     expect(crmTimelineService.forCompany).toHaveBeenLastCalledWith(
       expect.objectContaining({ companyId: "co-1", viewer: VIEWER, limit: 1 }),
     )
+  })
+
+  test("company deals page past the 50-row cap: all 120, newest first (s205)", async () => {
+    const all = Array.from({ length: 120 }, (_, i) => ({
+      id: String(i + 1),
+      status: "open",
+      value: "1",
+      currency: "USD",
+    }))
+    dealService.list.mockImplementation(pagedServer(all))
+    try {
+      const { data: deals } = (await find(
+        "GET",
+        "/companies/{id}/deals",
+      ).handler?.({
+        context,
+        input,
+      })) as { data: { id: string }[] }
+
+      expect(deals).toHaveLength(120)
+      expect(deals[0].id).toBe("120")
+      expect(dealService.list).toHaveBeenCalledTimes(3)
+    } finally {
+      dealService.list.mockImplementation(async () => DEFAULT_DEALS)
+    }
   })
 
   test("metrics sums numeric strings exactly PER CURRENCY and counts overdue open tasks", async () => {
