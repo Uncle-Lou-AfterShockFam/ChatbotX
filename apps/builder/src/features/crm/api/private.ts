@@ -15,6 +15,7 @@ import { dealTaskResource } from "@/features/deal-tasks/schema/resource"
 import { viewerFromContext } from "@/features/deals/lib/viewer"
 import { dealResource } from "@/features/deals/schema/resource"
 import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
+import { fetchAllListPages } from "@/lib/query/fetch-all-list-pages"
 import { contactsAccessAuthorizedMiddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
 import {
@@ -62,14 +63,17 @@ async function companyDeals(input: {
     workspaceId: input.workspaceId,
     id: input.id,
   })
-  const { data } = await dealService.list({
-    workspaceId: input.workspaceId,
-    companyId: input.id,
-    viewer: input.viewer,
-    page: 1,
-    perPage: 200,
-  })
-  return data
+  // Every deal, newest first, not one call the service caps at 50 (s205).
+  return await fetchAllListPages(
+    (page) =>
+      dealService.list({
+        workspaceId: input.workspaceId,
+        companyId: input.id,
+        viewer: input.viewer,
+        ...page,
+      }),
+    { desc: true },
+  )
 }
 
 async function conversationSummaries(input: {

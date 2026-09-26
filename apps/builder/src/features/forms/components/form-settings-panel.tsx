@@ -14,7 +14,9 @@ import { Switch } from "@chatbotx.io/ui/components/ui/switch"
 import { Textarea } from "@chatbotx.io/ui/components/ui/textarea"
 import { useQuery } from "@tanstack/react-query"
 import { useTranslations } from "next-intl"
+import { client } from "@/lib/orpc/orpc"
 import { orpc } from "@/lib/orpc/query"
+import { fetchAllListPages } from "@/lib/query/fetch-all-list-pages"
 
 const NO_INBOX = "__none__"
 
@@ -59,12 +61,21 @@ export function FormSettingsPanel(props: {
   onSettings: (settings: FormSettings) => void
 }) {
   const t = useTranslations()
-  const inboxes = useQuery(
-    orpc.inboxesAPI.listInboxesAuthenticatedAPI.queryOptions({
+  // Every inbox, not the default first page of 20 (s205).
+  const inboxes = useQuery({
+    queryKey: orpc.inboxesAPI.listInboxesAuthenticatedAPI.key({
+      type: "query",
       input: { workspaceId: props.workspaceId },
-      select: (res) => res.data.filter((inbox) => inbox.channel === "api"),
     }),
-  )
+    queryFn: () =>
+      fetchAllListPages((page) =>
+        client.inboxesAPI.listInboxesAuthenticatedAPI({
+          workspaceId: props.workspaceId,
+          ...page,
+        }),
+      ),
+    select: (rows) => rows.filter((inbox) => inbox.channel === "api"),
+  })
   const set = (patch: Partial<FormSettings>) =>
     props.onSettings({ ...props.settings, ...patch })
   const lines = (value: string) =>

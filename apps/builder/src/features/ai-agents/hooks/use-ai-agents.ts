@@ -1,16 +1,26 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useMemo } from "react"
+import { client } from "@/lib/orpc/orpc"
 import { orpc } from "@/lib/orpc/query"
-import { maxPerPage } from "@/lib/shared-request"
+import { fetchAllListPages } from "@/lib/query/fetch-all-list-pages"
 
 export const useAIAgents = (workspaceId: string | undefined) =>
-  useQuery(
-    orpc.aiAgentsAPI.listAIAgentsAPI.queryOptions({
-      input: { workspaceId: workspaceId ?? "", perPage: maxPerPage },
-      enabled: Boolean(workspaceId),
-      select: (res) => res.data,
+  useQuery({
+    // Every page, not one call the server caps at 50 rows (s205). The key
+    // stays under `orpc.aiAgentsAPI.key()` so invalidation still reaches it.
+    queryKey: orpc.aiAgentsAPI.listAIAgentsAPI.key({
+      type: "query",
+      input: { workspaceId: workspaceId ?? "" },
     }),
-  )
+    queryFn: () =>
+      fetchAllListPages((page) =>
+        client.aiAgentsAPI.listAIAgentsAPI({
+          workspaceId: workspaceId ?? "",
+          ...page,
+        }),
+      ),
+    enabled: Boolean(workspaceId),
+  })
 
 /** `{value,label}` pairs — the shape all consumers build by hand. */
 export const useAIAgentSelectOptions = (workspaceId: string | undefined) => {

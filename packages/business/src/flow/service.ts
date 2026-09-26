@@ -112,11 +112,10 @@ class FlowService extends BaseService {
 
   /**
    * Paginated flow list with draft/latest versions attached. When
-   * `startType` is given, the DB-level page is re-filtered in memory by the
+   * `startType` is given, the whole workspace list is filtered in memory by the
    * first start node's step type (and, for WhatsApp template steps, by
-   * `integrationWhatsappId`'s bound template ids) — mirrors the pre-move
-   * `listFlows` query adapter, including recomputing `total`/`pageCount`
-   * off the filtered set rather than the DB count.
+   * `integrationWhatsappId`'s bound template ids) and then paged, so
+   * `pageCount` and every page are exact.
    */
   async list(
     input: FlowListInput & {
@@ -133,34 +132,49 @@ class FlowService extends BaseService {
   }> {
     const pagination = parsePagination(input)
 
-    let [data, total] = await Promise.all([
-      flowRepository.listWithVersions(input),
-      flowRepository.count(input),
-    ])
-
-    if (input.startType) {
-      data = filterFlowsByStartStepType(data, input.startType)
-
-      if (input.startType === stepTypes.enum.sendWaTemplateMessage) {
-        if (input.integrationWhatsappId) {
-          const templateIds =
-            await whatsappMessageTemplateRepository.listIdsByIntegration({
-              integrationWhatsappId: input.integrationWhatsappId,
-            })
-          data = filterFlowsByTemplateIds(data, templateIds)
-        } else {
-          data = []
-        }
-      }
-
-      total = data.length
+    if (!input.startType) {
+      const [data, total] = await Promise.all([
+        flowRepository.listWithVersions(input),
+        flowRepository.count(input),
+      ])
+      const pageCount = pagination?.limit
+        ? Math.ceil(total / pagination.limit)
+        : 1
+      return { data, pageCount, ...pagination }
     }
 
-    const pageCount = pagination?.limit
-      ? Math.ceil(total / pagination.limit)
-      : 1
+    // The start-step filter reads each flow's version graph, so it cannot
+    // run in SQL. Filter the whole workspace list first, THEN page: filtering
+    // one DB page at a time returned short pages while matches remained, so a
+    // client paging until a short page stopped early (s205).
+    let data = filterFlowsByStartStepType(
+      await flowRepository.listWithVersions({
+        ...input,
+        page: null,
+        perPage: null,
+      }),
+      input.startType,
+    )
+    if (input.startType === stepTypes.enum.sendWaTemplateMessage) {
+      if (input.integrationWhatsappId) {
+        const templateIds =
+          await whatsappMessageTemplateRepository.listIdsByIntegration({
+            integrationWhatsappId: input.integrationWhatsappId,
+          })
+        data = filterFlowsByTemplateIds(data, templateIds)
+      } else {
+        data = []
+      }
+    }
 
-    return { data, pageCount, ...pagination }
+    if (!pagination) {
+      return { data, pageCount: 1 }
+    }
+    return {
+      data: data.slice(pagination.offset, pagination.offset + pagination.limit),
+      pageCount: Math.ceil(data.length / pagination.limit),
+      ...pagination,
+    }
   }
 
   /** Unguarded flow detail with all versions — callers enforce access. */

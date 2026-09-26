@@ -207,7 +207,7 @@ class AiAgentService extends BaseService {
           db.$count(aiAgentModel, relationsFilterToSQL(aiAgentModel, where)),
         ])
 
-        return { data, pageCount: Math.ceil(total / input.perPage) }
+        return { data, pageCount: Math.ceil(total / pagination.limit) }
       },
       {
         ttl: AI_AGENT_CACHE_TTL_SECONDS,

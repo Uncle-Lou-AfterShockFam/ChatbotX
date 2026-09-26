@@ -59,6 +59,8 @@ const {
   }
 })
 
+const mockCountAgents = vi.hoisted(() => vi.fn())
+
 vi.mock("@chatbotx.io/database/client", () => ({
   and: vi.fn((...conditions: unknown[]) => ({ conditions })),
   db: {
@@ -75,6 +77,7 @@ vi.mock("@chatbotx.io/database/client", () => ({
     },
     transaction: mockTransaction,
     update: mockUpdate,
+    $count: mockCountAgents,
   },
   eq: vi.fn((field: unknown, value: unknown) => ({ field, value })),
   inArray: vi.fn((field: unknown, values: unknown[]) => ({ field, values })),
@@ -465,5 +468,24 @@ describe("aiAgentService audit messages", () => {
     )
 
     expect(dispatchAuditRecord).not.toHaveBeenCalled()
+  })
+})
+
+describe("aiAgentService.listAIAgents pageCount (s205)", () => {
+  test("uses the clamped limit, not the requested perPage", async () => {
+    mockFindMany.mockResolvedValueOnce([])
+    mockCountAgents.mockResolvedValueOnce(120)
+
+    const result = await aiAgentService.listAIAgents({
+      workspaceId,
+      page: 1,
+      perPage: 999_999_999,
+      sort: [{ id: "id", desc: false }],
+    })
+
+    expect(result.pageCount).toBe(3)
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 50, offset: 0 }),
+    )
   })
 })

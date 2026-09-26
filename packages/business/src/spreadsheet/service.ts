@@ -113,6 +113,9 @@ class SpreadsheetService extends BaseService {
       db.query.spreadsheetModel.findMany({
         ...pagination,
         where,
+        // A stable order: the spreadsheet picker pages through every sheet
+        // (s205), and unordered offset pages can repeat or skip rows.
+        orderBy: { id: "asc" },
       }),
       pagination?.limit
         ? db.$count(

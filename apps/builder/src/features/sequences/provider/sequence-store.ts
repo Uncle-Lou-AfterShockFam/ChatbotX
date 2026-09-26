@@ -1,7 +1,7 @@
 import { createStore } from "zustand/vanilla"
 import { getClientErrorMessage } from "@/lib/orpc/client-error"
 import { client } from "@/lib/orpc/orpc"
-import { maxPerPage } from "@/lib/shared-request"
+import { fetchAllListPages } from "@/lib/query/fetch-all-list-pages"
 import type { ListSequencesResponse } from "../schema/action"
 
 export type SequenceState = {
@@ -54,11 +54,13 @@ export const createSequenceStore = (props: Partial<SequenceState> = {}) =>
     },
 
     getAllActiveSequences: async (workspaceId: string) => {
-      const { data } = await client.sequencesAPI.listSequencesWorkspaceAuthAPI({
-        workspaceId,
-        perPage: maxPerPage,
-        active: true,
-      })
+      const data = await fetchAllListPages((page) =>
+        client.sequencesAPI.listSequencesWorkspaceAuthAPI({
+          workspaceId,
+          active: true,
+          ...page,
+        }),
+      )
 
       set({ sequences: data })
     },

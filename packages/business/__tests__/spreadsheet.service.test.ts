@@ -89,3 +89,13 @@ describe("spreadsheetService.list — unlimited pagination", () => {
     expect(mocks.count).toHaveBeenCalled()
   })
 })
+
+describe("spreadsheetService.list order (s205)", () => {
+  test("orders by id so the picker's offset pages never overlap", async () => {
+    await spreadsheetService.list({ workspaceId: "ws-1", page: 2, perPage: 50 })
+
+    expect(mocks.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: { id: "asc" }, offset: 50 }),
+    )
+  })
+})

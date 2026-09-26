@@ -493,6 +493,9 @@ export class WorkspaceMemberService extends BaseService {
       db.query.workspaceMemberModel.findMany({
         ...pagination,
         where,
+        // A stable order: the member store pages through every member
+        // (s205), and unordered offset pages can repeat or skip rows.
+        orderBy: { id: "asc" },
         with: {
           user: true,
         },
