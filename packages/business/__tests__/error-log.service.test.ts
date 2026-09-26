@@ -40,7 +40,10 @@ vi.mock("@chatbotx.io/worker-config", () => ({
 // `@chatbotx.io/utils` constructs a Snowflake singleton at module scope, which
 // throws "Place ID 0 already in use" when `vi.resetModules()` re-evaluates it.
 let nextId = 0
-vi.mock("@chatbotx.io/utils", () => ({
+vi.mock("@chatbotx.io/utils", async () => ({
+  ...(await vi.importActual<typeof import("../../utils/src/timeout")>(
+    "../../utils/src/timeout",
+  )),
   createId: () => `id-${nextId++}`,
 }))
 
@@ -493,6 +496,32 @@ describe("logProviderErrors", () => {
       failedIndexes: [1],
     })
     expect(warn).toHaveBeenCalled()
+  })
+
+  it("reports an emit that never settles once the 2 s bound passes", async () => {
+    vi.useFakeTimers()
+    try {
+      const { logProviderErrors } = await loadBatch()
+      // ioredis's offline queue: the command is held and never rejects.
+      emit.mockReturnValueOnce(new Promise(() => undefined))
+
+      const pending = logProviderErrors([
+        {
+          provider: "telegram" as const,
+          workspaceId: "ws-9",
+          error: new Error("boom"),
+        },
+      ])
+      await vi.advanceTimersByTimeAsync(2000)
+
+      await expect(pending).resolves.toEqual({ failedIndexes: [0] })
+      expect(warn).toHaveBeenCalledWith(
+        { workspaceId: "ws-9" },
+        "logProviderErrors: emit timed out",
+      )
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("reports a synchronous routing failure, which emit signals with undefined", async () => {

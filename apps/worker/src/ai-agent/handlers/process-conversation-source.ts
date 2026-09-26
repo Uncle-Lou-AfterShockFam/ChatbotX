@@ -6,7 +6,7 @@ import {
   createConversationEmbeddingRepository,
   createConversationSourceRepository,
 } from "@chatbotx.io/database/repositories"
-import { createId } from "@chatbotx.io/utils"
+import { createId, withTimeout } from "@chatbotx.io/utils"
 import {
   AI_FILES_DEFAULT_CHUNK_SIZE,
   AI_FILES_DEFAULT_OVERLAP_SIZE,
@@ -20,7 +20,6 @@ import { parseHTML } from "linkedom"
 import { normalizeError } from "universal-error-normalizer"
 import { z } from "zod"
 import { logger } from "../../lib/logger"
-import { withTimeout } from "../lib/async-utils"
 import { isSupportedDocumentMimeType } from "../lib/mime-utils"
 import { extractTextFromFile } from "../lib/text-extractor"
 
@@ -31,6 +30,8 @@ const MAX_DOCUMENT_TEXT_CHARS = 200_000
 const MAX_DOCUMENT_CHUNKS = 120
 const PARSE_TIMEOUT_MS = 30_000
 const URL_FETCH_TIMEOUT_MS = 15_000
+// Stored as the source's user-visible errorMessage; kept from the old helper.
+const TIMEOUT_MESSAGE = "Operation timed out"
 const MAX_URL_RESPONSE_BYTES = 500_000
 const MAX_REDIRECTS = 3
 
@@ -162,6 +163,7 @@ async function processDocumentSource(source: SourceRecord): Promise<void> {
     const extractedText = await withTimeout(
       extractTextFromFile(attachment.originPath, attachment.mimeType),
       PARSE_TIMEOUT_MS,
+      TIMEOUT_MESSAGE,
     )
     const trimmedText = extractedText.slice(0, MAX_DOCUMENT_TEXT_CHARS).trim()
 
@@ -321,7 +323,11 @@ async function processUrlSource(source: SourceRecord): Promise<void> {
   })
 
   try {
-    const rawText = await withTimeout(fetchHtmlText(url), URL_FETCH_TIMEOUT_MS)
+    const rawText = await withTimeout(
+      fetchHtmlText(url),
+      URL_FETCH_TIMEOUT_MS,
+      TIMEOUT_MESSAGE,
+    )
     const trimmedText = rawText.slice(0, MAX_DOCUMENT_TEXT_CHARS).trim()
 
     if (!trimmedText) {
