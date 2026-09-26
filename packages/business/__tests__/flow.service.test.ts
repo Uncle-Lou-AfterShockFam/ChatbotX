@@ -788,6 +788,7 @@ describe("flowService.list: WhatsApp template flows by integration (s207)", () =
 
     expect(result.data.map((flow) => flow.id)).toEqual(["1", "3"])
     expect(mockListTemplateIds).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
       integrationWhatsappIds: ["10", "11"],
     })
   })
@@ -803,6 +804,7 @@ describe("flowService.list: WhatsApp template flows by integration (s207)", () =
 
     expect(result.data.map((flow) => flow.id)).toEqual(["2"])
     expect(mockListTemplateIds).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
       integrationWhatsappIds: ["10", "12"],
     })
   })

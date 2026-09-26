@@ -40,6 +40,9 @@ import { folderService } from "../folder/service"
 import { assertDeletable } from "../template/installed-resource.service"
 import { filterFlowsByStartStepType, filterFlowsByTemplateIds } from "./filters"
 
+/** A workspace has a handful of WhatsApp lines; far more is a caller bug. */
+const MAX_WHATSAPP_INTEGRATION_FILTER = 100
+
 type FieldManifestEntry = { name: string; type: CustomFieldType }
 
 type ResolveFieldsByNameAndType = (props: {
@@ -56,9 +59,6 @@ type ResolveFieldsByNameAndType = (props: {
  * `importFlowExport`'s customField and botField branches, which are
  * otherwise identical apart from which service resolves the manifest.
  */
-/** A workspace has a handful of WhatsApp lines; far more is a caller bug. */
-const MAX_WHATSAPP_INTEGRATION_FILTER = 100
-
 const resolveManifestIdMap = async (
   manifest: Record<string, FieldManifestEntry>,
   resolve: ResolveFieldsByNameAndType,
@@ -184,6 +184,7 @@ class FlowService extends BaseService {
           : filterFlowsByTemplateIds(
               data,
               await whatsappMessageTemplateRepository.listIdsByIntegrations({
+                workspaceId: input.workspaceId,
                 integrationWhatsappIds,
               }),
             )
