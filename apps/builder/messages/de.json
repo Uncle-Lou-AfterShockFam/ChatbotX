@@ -507,7 +507,10 @@
     "resumeDialog": {
       "title": "Resume broadcast",
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
-    }
+    },
+    "invalidFilterDescription": "Der Zielgruppenfilter konnte nicht gelesen werden, daher kann dieser Broadcast nicht gesendet werden. Setze ihn zurück und erstelle die Zielgruppe neu.",
+    "invalidStoredFilterDescription": "Der gespeicherte Zielgruppenfilter konnte nicht gelesen werden. Dieser Broadcast kann nicht erneut gesendet werden; erstelle stattdessen einen neuen.",
+    "excludedFilterDescription": "Dieser Zielgruppenfilter verwendet Felder, die für deine Rolle oder diesen Kanal nicht verfügbar sind, daher kann der Broadcast nicht gesendet werden. Setze ihn zurück und erstelle die Zielgruppe neu."
   },
   "commentAutomation": {
     "stats": {
@@ -4501,7 +4504,11 @@
     "countCapped": "{count}+ Kontakte",
     "exportAllNotice": "Alle Kontakte, die dem aktuellen Filter entsprechen, werden exportiert.",
     "exportTakingLong": "Der Export dauert länger als erwartet",
-    "exportTakingLongDescription": "Der Export wird noch verarbeitet. Sie können diesen Dialog schließen und in einigen Minuten im Exportverlauf erneut nachsehen."
+    "exportTakingLongDescription": "Der Export wird noch verarbeitet. Sie können diesen Dialog schließen und in einigen Minuten im Exportverlauf erneut nachsehen.",
+    "invalidFilterTitle": "Dieser Filter kann nicht gelesen werden",
+    "invalidFilterDescription": "Der Kontaktfilter in diesem Link konnte nicht gelesen werden, daher werden keine Kontakte angezeigt. Setze ihn zurück und erstelle den Filter neu.",
+    "clearInvalidFilter": "Filter zurücksetzen",
+    "excludedFilterDescription": "Dieser Filter verwendet E-Mail- oder Telefonfelder, die du nicht nutzen darfst, daher werden keine Kontakte angezeigt. Setze ihn zurück und erstelle den Filter neu."
   },
   "contactScan": {
     "menu": {

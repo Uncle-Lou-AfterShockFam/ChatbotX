@@ -507,7 +507,10 @@
     "resumeDialog": {
       "title": "Resume broadcast",
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
-    }
+    },
+    "invalidFilterDescription": "Le filtre d'audience n'a pas pu être lu, cette diffusion ne peut donc pas être envoyée. Effacez-le et recréez l'audience.",
+    "invalidStoredFilterDescription": "Le filtre d'audience enregistré n'a pas pu être lu. Cette diffusion ne peut pas être renvoyée ; créez-en une nouvelle.",
+    "excludedFilterDescription": "Ce filtre d'audience utilise des champs indisponibles pour votre rôle ou ce canal, cette diffusion ne peut donc pas être envoyée. Effacez-le et recréez l'audience."
   },
   "commentAutomation": {
     "stats": {
@@ -4501,7 +4504,11 @@
     "countCapped": "{count}+ contacts",
     "exportAllNotice": "Tous les contacts correspondant au filtre actuel seront exportés.",
     "exportTakingLong": "L’exportation prend plus de temps que prévu",
-    "exportTakingLongDescription": "L’exportation est toujours en cours. Vous pouvez fermer cette boîte de dialogue et consulter l’historique des exportations dans quelques minutes."
+    "exportTakingLongDescription": "L’exportation est toujours en cours. Vous pouvez fermer cette boîte de dialogue et consulter l’historique des exportations dans quelques minutes.",
+    "invalidFilterTitle": "Impossible de lire ce filtre",
+    "invalidFilterDescription": "Le filtre de contacts de ce lien n'a pas pu être lu, aucun contact n'est donc affiché. Effacez-le et recréez le filtre.",
+    "clearInvalidFilter": "Effacer le filtre",
+    "excludedFilterDescription": "Ce filtre utilise des champs e-mail ou téléphone que vous ne pouvez pas utiliser, aucun contact n'est donc affiché. Effacez-le et recréez le filtre."
   },
   "contactScan": {
     "menu": {

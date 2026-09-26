@@ -2,29 +2,17 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
-import {
-  type ContactFilterCriteria,
-  contactFilterCriteriaSchema,
-} from "../schema"
+import { type ContactFilterCriteria, parseContactFilterParam } from "../schema"
 
 export const EMPTY_CONTACT_FILTER: ContactFilterCriteria = {
   operator: "and",
   conditions: [],
 }
 
-const parseContactFilterQueryParam = (
-  value: string | null,
-): ContactFilterCriteria | null => {
-  if (!value) {
-    return null
-  }
-
-  try {
-    const parsed = contactFilterCriteriaSchema.safeParse(JSON.parse(value))
-    return parsed.success ? parsed.data : null
-  } catch {
-    return null
-  }
+/** One value, or the array a repeated `?contactFilter=` arrives as. */
+const readContactFilterParam = (params: URLSearchParams) => {
+  const values = params.getAll("contactFilter")
+  return parseContactFilterParam(values.length > 1 ? values : values[0])
 }
 
 const cleanContactFilterUrl = (
@@ -48,28 +36,46 @@ export function useContactFilterQueryState({
   const searchParamsKey = searchParams.toString()
   const [filter, setFilterState] =
     useState<ContactFilterCriteria>(initialFilter)
+  // Derived from the URL on every render (never an effect), so the first
+  // render already knows: an invalid filter must not fetch "everyone" (s206).
+  const invalid =
+    readContactFilterParam(new URLSearchParams(searchParamsKey)).status ===
+    "invalid"
 
   useEffect(() => {
     const params = new URLSearchParams(searchParamsKey)
-    const queryFilter = parseContactFilterQueryParam(
-      params.get("contactFilter"),
-    )
-    if (!queryFilter) {
+    const queryFilter = readContactFilterParam(params)
+    if (queryFilter.status !== "valid") {
       return
     }
 
-    setFilterState(queryFilter)
+    setFilterState(queryFilter.filter)
     router.replace(cleanContactFilterUrl(pathname, params), { scroll: false })
   }, [pathname, router, searchParamsKey])
 
-  const setFilter = useCallback((next: ContactFilterCriteria) => {
-    setFilterState(next)
-    return Promise.resolve()
-  }, [])
+  const clearInvalidFilter = useCallback(() => {
+    router.replace(
+      cleanContactFilterUrl(pathname, new URLSearchParams(searchParamsKey)),
+      { scroll: false },
+    )
+  }, [pathname, router, searchParamsKey])
+
+  const setFilter = useCallback(
+    (next: ContactFilterCriteria) => {
+      setFilterState(next)
+      if (invalid) {
+        clearInvalidFilter()
+      }
+      return Promise.resolve()
+    },
+    [clearInvalidFilter, invalid],
+  )
 
   return {
     filter,
     setFilter,
     isActive: filter.conditions.length > 0,
+    invalid,
+    clearInvalidFilter,
   }
 }

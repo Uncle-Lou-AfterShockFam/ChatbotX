@@ -2059,7 +2059,10 @@
     "resumeDialog": {
       "title": "Resume broadcast",
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
-    }
+    },
+    "invalidFilterDescription": "Non è stato possibile leggere il filtro del pubblico, quindi questa trasmissione non può essere inviata. Cancellalo e ricrea il pubblico.",
+    "invalidStoredFilterDescription": "Non è stato possibile leggere il filtro del pubblico salvato. Questa trasmissione non può essere reinviata; creane una nuova.",
+    "excludedFilterDescription": "Questo filtro del pubblico usa campi non disponibili per il tuo ruolo o per questo canale, quindi la trasmissione non può essere inviata. Cancellalo e ricrea il pubblico."
   },
   "commentAutomation": {
     "stats": {
@@ -4501,7 +4504,11 @@
     "countCapped": "{count}+ contatti",
     "exportAllNotice": "Verranno esportati tutti i contatti che corrispondono al filtro corrente.",
     "exportTakingLong": "L'esportazione sta richiedendo più tempo del previsto",
-    "exportTakingLongDescription": "L'esportazione è ancora in corso. Puoi chiudere questa finestra e ricontrollare tra qualche minuto nella cronologia delle esportazioni."
+    "exportTakingLongDescription": "L'esportazione è ancora in corso. Puoi chiudere questa finestra e ricontrollare tra qualche minuto nella cronologia delle esportazioni.",
+    "invalidFilterTitle": "Impossibile leggere questo filtro",
+    "invalidFilterDescription": "Non è stato possibile leggere il filtro contatti di questo link, quindi non viene mostrato alcun contatto. Cancellalo e ricrea il filtro.",
+    "clearInvalidFilter": "Cancella filtro",
+    "excludedFilterDescription": "Questo filtro usa campi email o telefono che non puoi usare, quindi non viene mostrato alcun contatto. Cancellalo e ricrea il filtro."
   },
   "contactScan": {
     "menu": {

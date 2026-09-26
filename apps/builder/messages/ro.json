@@ -1357,7 +1357,10 @@
     "resumeDialog": {
       "title": "Resume broadcast",
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
-    }
+    },
+    "invalidFilterDescription": "Filtrul de public nu a putut fi citit, așa că această difuzare nu poate fi trimisă. Șterge-l și creează din nou publicul.",
+    "invalidStoredFilterDescription": "Filtrul de public salvat nu a putut fi citit. Această difuzare nu poate fi retrimisă; creează una nouă.",
+    "excludedFilterDescription": "Acest filtru de public folosește câmpuri indisponibile pentru rolul tău sau pentru acest canal, așa că difuzarea nu poate fi trimisă. Șterge-l și creează din nou publicul."
   },
   "commentAutomation": {
     "stats": {
@@ -4501,7 +4504,11 @@
     "countCapped": "{count}+ contacte",
     "exportAllNotice": "Toate contactele care corespund filtrului curent vor fi exportate.",
     "exportTakingLong": "Exportul durează mai mult decât era de așteptat",
-    "exportTakingLongDescription": "Exportul este încă în curs de procesare. Poți închide acest dialog și poți reveni peste câteva minute din istoricul exporturilor."
+    "exportTakingLongDescription": "Exportul este încă în curs de procesare. Poți închide acest dialog și poți reveni peste câteva minute din istoricul exporturilor.",
+    "invalidFilterTitle": "Acest filtru nu poate fi citit",
+    "invalidFilterDescription": "Filtrul de contacte din acest link nu a putut fi citit, așa că nu se afișează niciun contact. Șterge-l și creează din nou filtrul.",
+    "clearInvalidFilter": "Șterge filtrul",
+    "excludedFilterDescription": "Acest filtru folosește câmpuri de e-mail sau telefon pe care nu le poți folosi, așa că nu se afișează niciun contact. Șterge-l și creează din nou filtrul."
   },
   "contactScan": {
     "menu": {

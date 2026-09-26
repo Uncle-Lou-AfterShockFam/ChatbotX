@@ -50,6 +50,12 @@ type ContactListFilterPanelProps = {
   onFilterChange: (filter: ContactFilterCriteria) => void
   excludeFields?: ContactFilterField[]
   inboxChannel?: string
+  /**
+   * When set, conditions on an excluded field are REPORTED instead of being
+   * silently deleted: deleting one would widen the filter, up to everyone
+   * (s206). The caller then fails closed (alert, nothing fetched or sent).
+   */
+  onExcludedConditions?: () => void
 }
 
 const EMPTY_EXCLUDE_FIELDS: ContactFilterField[] = []
@@ -60,6 +66,7 @@ export function ContactListFilterPanel({
   onFilterChange,
   excludeFields = EMPTY_EXCLUDE_FIELDS,
   inboxChannel,
+  onExcludedConditions,
 }: ContactListFilterPanelProps) {
   const t = useTranslations()
   const { configs, conditionOptions, operatorLabelByValue } =
@@ -76,13 +83,17 @@ export function ContactListFilterPanel({
   useEffect(() => {
     const pruned = pruneExcludedConditions(filter.conditions, excludeFields)
     if (pruned.length !== filter.conditions.length) {
+      if (onExcludedConditions) {
+        onExcludedConditions()
+        return
+      }
       onFilterChange({
         operator: pruned.length > 0 ? filter.operator : "and",
         conditions: pruned,
         timezone: filter.timezone,
       })
     }
-  }, [excludeFields, filter, onFilterChange])
+  }, [excludeFields, filter, onExcludedConditions, onFilterChange])
 
   // Stamp the browser timezone onto an active filter so the backend interprets
   // naive date/datetime values in the user's local zone. Fires at most once per

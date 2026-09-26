@@ -127,6 +127,22 @@ describe("buildEditBroadcastDefaultValues", () => {
       operator: "and",
       conditions: [],
     })
+    // A null stored filter is the operator's own "everyone" choice.
+    expect(built?.invalidContactFilter).toBe(false)
+  })
+
+  test.each([
+    ["an unknown field", { operator: "and", conditions: [{ field: "nope" }] }],
+    ["a bad operator", { operator: "xor", conditions: [] }],
+    ["a non-object", "not-a-filter"],
+  ])("flags a stored filter with %s as invalid instead of widening to everyone (s206)", (_label, contactFilter) => {
+    const built = buildEditBroadcastDefaultValues({
+      ...baseDraft,
+      flowId: "flow-9",
+      contactFilter,
+    })
+
+    expect(built?.invalidContactFilter).toBe(true)
   })
 
   test("keeps the legacy single-template fields when the draft's page is gone", () => {

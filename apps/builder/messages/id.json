@@ -507,7 +507,10 @@
     "resumeDialog": {
       "title": "Resume broadcast",
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
-    }
+    },
+    "invalidFilterDescription": "Filter audiens tidak dapat dibaca, jadi siaran ini tidak dapat dikirim. Hapus lalu buat ulang audiensnya.",
+    "invalidStoredFilterDescription": "Filter audiens yang tersimpan tidak dapat dibaca. Siaran ini tidak dapat dikirim ulang; buat siaran baru sebagai gantinya.",
+    "excludedFilterDescription": "Filter audiens ini memakai kolom yang tidak tersedia untuk peran Anda atau saluran ini, jadi siaran ini tidak dapat dikirim. Hapus lalu buat ulang audiensnya."
   },
   "commentAutomation": {
     "stats": {
@@ -4501,7 +4504,11 @@
     "countCapped": "{count}+ kontak",
     "exportAllNotice": "Semua kontak yang cocok dengan filter saat ini akan diekspor.",
     "exportTakingLong": "Ekspor memerlukan waktu lebih lama dari perkiraan",
-    "exportTakingLongDescription": "Ekspor masih diproses. Anda dapat menutup dialog ini dan memeriksanya kembali dalam beberapa menit dari riwayat ekspor."
+    "exportTakingLongDescription": "Ekspor masih diproses. Anda dapat menutup dialog ini dan memeriksanya kembali dalam beberapa menit dari riwayat ekspor.",
+    "invalidFilterTitle": "Filter ini tidak dapat dibaca",
+    "invalidFilterDescription": "Filter kontak di tautan ini tidak dapat dibaca, jadi tidak ada kontak yang ditampilkan. Hapus lalu buat ulang filternya.",
+    "clearInvalidFilter": "Hapus filter",
+    "excludedFilterDescription": "Filter ini memakai kolom email atau telepon yang tidak boleh Anda gunakan, jadi tidak ada kontak yang ditampilkan. Hapus lalu buat ulang filternya."
   },
   "contactScan": {
     "menu": {

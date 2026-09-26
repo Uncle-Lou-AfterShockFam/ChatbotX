@@ -14,6 +14,7 @@ import {
 import { formatWithFallback } from "@chatbotx.io/utils/datetime"
 import { useFormatter, useTimeZone, useTranslations } from "next-intl"
 import { useMemo } from "react"
+import { InvalidContactFilterAlert } from "@/features/contact-filter"
 import { ContactFilterSummary } from "@/features/contact-filter/components/contact-filter-summary"
 import { contactFilterCriteriaSchema } from "@/features/contact-filter/schema"
 import { InboxIcon } from "@/features/inboxes/components/inbox-icon"
@@ -54,11 +55,18 @@ export function BroadcastDetailDialog({
     enabled: open && sendsTemplate,
   })
 
+  // `invalid` = a stored filter that no longer parses; shown as such, never as
+  // the "no filter" (everyone) summary (s206).
   const contactFilter = useMemo(() => {
+    if (broadcast?.contactFilter == null) {
+      return { filter: null, invalid: false }
+    }
     const parsed = contactFilterCriteriaSchema.safeParse(
-      broadcast?.contactFilter,
+      broadcast.contactFilter,
     )
-    return parsed.success ? parsed.data : null
+    return parsed.success
+      ? { filter: parsed.data, invalid: false }
+      : { filter: null, invalid: true }
   }, [broadcast?.contactFilter])
 
   if (!broadcast) {
@@ -152,7 +160,13 @@ export function BroadcastDetailDialog({
             <h3 className="font-medium text-sm">
               {t("broadcasts.detail.audienceFilter")}
             </h3>
-            <ContactFilterSummary contactFilter={contactFilter} />
+            {contactFilter.invalid ? (
+              <InvalidContactFilterAlert
+                description={t("broadcasts.invalidStoredFilterDescription")}
+              />
+            ) : (
+              <ContactFilterSummary contactFilter={contactFilter.filter} />
+            )}
           </section>
 
           {/* A broadcast delivers either templates or flows, never both. */}

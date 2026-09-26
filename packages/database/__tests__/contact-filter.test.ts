@@ -14,6 +14,8 @@ import {
   buildContactWhere,
   buildSmartKeywordWhere,
   contactFilterHasPredicate,
+  EXCLUDED_FIELD_CONDITION,
+  hasExcludedFieldCondition,
   parseConversationAssigneeValues,
   pruneEmailPhoneFilterConditions,
 } from "../src/queries/contact-filter"
@@ -27,6 +29,16 @@ const renderContactWhere = (where: Record<string, unknown>) => {
     throw new Error("Expected contact filter to render SQL")
   }
   return new PgDialect().sqlToQuery(sqlWhere)
+}
+
+/**
+ * s206: a filter whose conditions ALL drop (unknown field, unusable operator
+ * or value) matches NO contact. It used to be `{}`, which matched everyone.
+ */
+const matchesNothing = {
+  asymmetricMatch: (where: Record<string, unknown>) =>
+    renderContactWhere(where).sql === "FALSE",
+  toString: () => "a where that renders FALSE",
 }
 
 const renderFirstRawCondition = (where: Record<string, unknown>) => {
@@ -72,7 +84,7 @@ describe("contact filter value-format helpers", () => {
 })
 
 describe("contact filter permission helpers", () => {
-  test("drops only email/phone contact-filter fields when email and phone are denied", () => {
+  test("replaces only email/phone conditions with the excluded-field stand-in when denied (s206: never deletes)", () => {
     const contactFilter = {
       operator: "and" as const,
       conditions: [
@@ -86,10 +98,49 @@ describe("contact filter permission helpers", () => {
       ],
     }
 
-    expect(pruneEmailPhoneFilterConditions(contactFilter, false)).toEqual({
+    const pruned = pruneEmailPhoneFilterConditions(contactFilter, false)
+    expect(pruned).toEqual({
       operator: "and",
-      conditions: [{ field: "fullName", operator: "contains", value: "Ada" }],
+      conditions: [
+        ...Array.from({ length: 6 }, () => EXCLUDED_FIELD_CONDITION),
+        { field: "fullName", operator: "contains", value: "Ada" },
+      ],
     })
+    expect(hasExcludedFieldCondition(pruned)).toBe(true)
+    // Under AND the stand-in fails the whole filter closed.
+    expect(pruned && applyContactFilter(pruned)).toEqual(matchesNothing)
+  })
+
+  test("an OR keeps its allowed branches; a pruned branch only narrows", () => {
+    const pruned = pruneEmailPhoneFilterConditions(
+      {
+        operator: "or",
+        conditions: [
+          { field: "email", operator: "eq", value: "a@b.co" },
+          { field: "fullName", operator: "contains", value: "Ada" },
+        ],
+      },
+      false,
+    )
+    const query = renderContactWhere(pruned ? applyContactFilter(pruned) : {})
+    expect(query.sql.toLowerCase()).toContain('"contact"."fullname" ilike')
+    expect(query.sql.toLowerCase()).not.toContain("email")
+  })
+
+  test("a JSON round-trip keeps the stand-in recognizable", () => {
+    const pruned = pruneEmailPhoneFilterConditions(
+      {
+        operator: "and",
+        conditions: [{ field: "email", operator: "eq", value: "a@b.co" }],
+      },
+      false,
+    )
+    expect(hasExcludedFieldCondition(JSON.parse(JSON.stringify(pruned)))).toBe(
+      true,
+    )
+    expect(hasExcludedFieldCondition({ operator: "and", conditions: [] })).toBe(
+      false,
+    )
   })
 
   test("keeps all contact-filter fields when email and phone are allowed", () => {
@@ -106,16 +157,19 @@ describe("contact filter permission helpers", () => {
     )
   })
 
-  test("normalizes an emptied filter back to AND", () => {
-    expect(
-      pruneEmailPhoneFilterConditions(
-        {
-          operator: "or",
-          conditions: [{ field: "email", operator: "eq", value: "a@b.co" }],
-        },
-        false,
-      ),
-    ).toEqual({ operator: "and", conditions: [] })
+  test("a filter whose every condition is excluded matches nothing, never everyone (s206)", () => {
+    const pruned = pruneEmailPhoneFilterConditions(
+      {
+        operator: "or",
+        conditions: [{ field: "email", operator: "eq", value: "a@b.co" }],
+      },
+      false,
+    )
+    expect(pruned).toEqual({
+      operator: "or",
+      conditions: [EXCLUDED_FIELD_CONDITION],
+    })
+    expect(pruned && applyContactFilter(pruned)).toEqual(matchesNothing)
   })
 
   test("preserves the filter timezone while pruning email/phone fields", () => {
@@ -139,6 +193,7 @@ describe("contact filter permission helpers", () => {
       operator: "and",
       timezone: "Asia/Ho_Chi_Minh",
       conditions: [
+        EXCLUDED_FIELD_CONDITION,
         {
           field: "customField",
           operator: "isBetween",
@@ -158,7 +213,11 @@ describe("contact filter permission helpers", () => {
         },
         false,
       ),
-    ).toEqual({ operator: "and", timezone: "America/New_York", conditions: [] })
+    ).toEqual({
+      operator: "or",
+      timezone: "America/New_York",
+      conditions: [EXCLUDED_FIELD_CONDITION],
+    })
   })
 })
 
@@ -185,7 +244,12 @@ describe("applyContactFilter", () => {
       ],
     }
 
-    expect(applyContactFilter(unknownOnlyFilter)).toEqual({})
+    // s206: conditions that all drop match NO contact; `{}` would match
+    // every contact. `contactFilterHasPredicate` still reports the drop.
+    expect(renderContactWhere(applyContactFilter(unknownOnlyFilter)).sql).toBe(
+      "FALSE",
+    )
+    expect(applyContactFilter({ operator: "and", conditions: [] })).toEqual({})
     expect(contactFilterHasPredicate(unknownOnlyFilter)).toBe(false)
     expect(contactFilterHasPredicate(validFilter)).toBe(true)
   })
@@ -209,6 +273,10 @@ describe("applyContactFilter", () => {
 
     expect(contactFilterHasPredicate(botFieldOnlyFilter)).toBe(false)
     expect(contactFilterHasPredicate(botFieldOnlyFilter, "ws-1")).toBe(true)
+    // Without the workspace the condition cannot be built: fail closed.
+    expect(renderContactWhere(applyContactFilter(botFieldOnlyFilter)).sql).toBe(
+      "FALSE",
+    )
   })
 
   test("maps inbox filters to an EXISTS ContactInbox.inboxId subquery", () => {
@@ -306,7 +374,7 @@ describe("applyContactFilter", () => {
       ],
     })
 
-    expect(where).toEqual({})
+    expect(where).toEqual(matchesNothing)
   })
 
   test("supports text-search operators for number custom fields", () => {
@@ -900,7 +968,7 @@ describe("applyContactFilter", () => {
       ],
     })
 
-    expect(where).toEqual({})
+    expect(where).toEqual(matchesNothing)
   })
 
   test("renders continent country-code expansion and unknown sentinel", () => {
@@ -1030,7 +1098,7 @@ describe("applyContactFilter", () => {
       ],
     })
 
-    expect(where).toEqual({})
+    expect(where).toEqual(matchesNothing)
   })
 
   test("renders lastSent as latest outbound contact-inbox datetime", () => {
@@ -1322,7 +1390,7 @@ describe("applyContactFilter", () => {
       ],
     })
 
-    expect(where).toEqual({})
+    expect(where).toEqual(matchesNothing)
   })
 
   test("interprets a naive date equality in the supplied timezone (UTC+7)", () => {
@@ -1629,7 +1697,7 @@ describe("applyContactFilter", () => {
       ],
     })
 
-    expect(where).toEqual({})
+    expect(where).toEqual(matchesNothing)
   })
 
   test("ignores unsupported custom-field operator/type combinations", () => {
@@ -1646,7 +1714,7 @@ describe("applyContactFilter", () => {
       ],
     })
 
-    expect(where).toEqual({})
+    expect(where).toEqual(matchesNothing)
   })
 
   test("ANDs keyword search with OR contact filter without overwriting either OR", () => {
@@ -1952,7 +2020,7 @@ describe("applyContactFilter — direct column fields", () => {
           },
         ],
       }),
-    ).toEqual({})
+    ).toEqual(matchesNothing)
   })
 })
 
@@ -2090,7 +2158,7 @@ describe("applyContactFilter — date columns", () => {
           },
         ],
       }),
-    ).toEqual({})
+    ).toEqual(matchesNothing)
   })
 })
 
@@ -2160,7 +2228,7 @@ describe("applyContactFilter — contactInbox relation fields", () => {
           },
         ],
       }),
-    ).toEqual({})
+    ).toEqual(matchesNothing)
   })
 
   test("renders interactedInLast24h true/false as EXISTS / NOT EXISTS", () => {
@@ -2299,7 +2367,7 @@ describe("applyContactFilter — contactInbox relation fields", () => {
           },
         ],
       }),
-    ).toEqual({})
+    ).toEqual(matchesNothing)
   })
 
   test("renders last user input filters against the latest inbound ContactInbox row", () => {
@@ -2623,7 +2691,7 @@ describe("applyContactFilter — ctwaRetarget", () => {
       operator: "and",
       conditions: [{ field: "ctwaRetarget", segment: "not-a-real-segment" }],
     })
-    expect(where).toEqual({})
+    expect(where).toEqual(matchesNothing)
   })
 
   // Saved-filter contract (ctwaRetargetConditionSchema): channel omitted =
@@ -2744,7 +2812,7 @@ describe("applyContactFilter — ctwaRetarget", () => {
         },
       ],
     })
-    expect(where).toEqual({})
+    expect(where).toEqual(matchesNothing)
   })
 
   test("pruneEmailPhoneFilterConditions leaves ctwaRetarget intact", () => {
@@ -2764,7 +2832,7 @@ describe("applyContactFilter — ctwaRetarget", () => {
 
     expect(pruneEmailPhoneFilterConditions(contactFilter, false)).toEqual({
       operator: "and",
-      conditions: [contactFilter.conditions[0]],
+      conditions: [contactFilter.conditions[0], EXCLUDED_FIELD_CONDITION],
     })
   })
 })
@@ -3100,17 +3168,21 @@ describe("applyContactFilter — custom fields", () => {
   })
 
   test("drops numeric custom-field conditions with non-numeric values", () => {
-    expect(customField("number", operatorTypes.enum.gt, "abc")).toEqual({})
+    expect(customField("number", operatorTypes.enum.gt, "abc")).toEqual(
+      matchesNothing,
+    )
   })
 
   test("drops numeric custom-field negation with a non-numeric value", () => {
-    expect(customField("number", operatorTypes.enum.ne, "abc")).toEqual({})
+    expect(customField("number", operatorTypes.enum.ne, "abc")).toEqual(
+      matchesNothing,
+    )
   })
 
   test("drops datetime custom-field negation with an invalid date", () => {
     expect(
       customField("datetime", operatorTypes.enum.ne, "not-a-date"),
-    ).toEqual({})
+    ).toEqual(matchesNothing)
   })
 
   test("renders date custom-field equality as a day-only comparison", () => {
@@ -3416,7 +3488,7 @@ describe("applyContactFilter — boolean custom fields", () => {
   })
 
   test("drops a boolean custom-field condition with a blank eq value", () => {
-    expect(booleanField(operatorTypes.enum.eq, "")).toEqual({})
+    expect(booleanField(operatorTypes.enum.eq, "")).toEqual(matchesNothing)
   })
 
   // The OPERAND goes through the same literal registry as stored values, so
@@ -3569,7 +3641,7 @@ describe("applyContactFilter — couponTopic (dynamic per-topic field)", () => {
           { field: "couponTopic", operator: operatorTypes.enum.isNotEmpty },
         ],
       }),
-    ).toEqual({})
+    ).toEqual(matchesNothing)
   })
 
   test("drops unsupported operators", () => {
@@ -3585,7 +3657,7 @@ describe("applyContactFilter — couponTopic (dynamic per-topic field)", () => {
           },
         ],
       }),
-    ).toEqual({})
+    ).toEqual(matchesNothing)
   })
 })
 
@@ -3726,7 +3798,7 @@ describe("applyContactFilter — bot fields (workspace-level, not per-contact)",
   test("drops a datetime condition when botFieldType is omitted (no legacy fallback for bot fields)", () => {
     expect(
       botField("datetime", operatorTypes.enum.eq, "2026-05-19T10:00:00Z"),
-    ).toEqual({})
+    ).toEqual(matchesNothing)
   })
 
   test("no-ops without botFieldId", () => {
@@ -3739,7 +3811,7 @@ describe("applyContactFilter — bot fields (workspace-level, not per-contact)",
       },
       WORKSPACE_ID,
     )
-    expect(where).toEqual({})
+    expect(where).toEqual(matchesNothing)
   })
 
   test("no-ops without a workspaceId scope, even with a valid condition", () => {
@@ -3758,7 +3830,7 @@ describe("applyContactFilter — bot fields (workspace-level, not per-contact)",
         },
       ],
     })
-    expect(where).toEqual({})
+    expect(where).toEqual(matchesNothing)
   })
 
   test("scopes strictly by workspaceId — different workspace ids render different params", () => {
@@ -3807,9 +3879,41 @@ describe("applyContactFilter — operator combining", () => {
     expect(applyContactFilter({ operator: "and", conditions: [] })).toEqual({})
   })
 
-  test("drops unknown fields and keeps only recognized conditions", () => {
+  test("an AND with one dropped condition matches nothing (s206: the rest alone would widen)", () => {
+    expect(
+      applyContactFilter({
+        operator: "and",
+        conditions: [
+          {
+            field: "notARealField",
+            operator: operatorTypes.enum.eq,
+            value: "x",
+          },
+          { field: "email", operator: operatorTypes.enum.eq, value: "a@b.co" },
+        ],
+      }),
+    ).toEqual(matchesNothing)
+    // A known field whose value no longer builds drops the same way.
+    expect(
+      applyContactFilter({
+        operator: "and",
+        conditions: [
+          {
+            field: "customField",
+            customFieldId: "cf-1",
+            valueType: "number",
+            operator: operatorTypes.enum.gt,
+            value: "abc",
+          },
+          { field: "email", operator: operatorTypes.enum.eq, value: "a@b.co" },
+        ],
+      }),
+    ).toEqual(matchesNothing)
+  })
+
+  test("an OR drops the unknown branch and keeps the recognized ones (dropping only narrows)", () => {
     const where = applyContactFilter({
-      operator: "and",
+      operator: "or",
       conditions: [
         { field: "notARealField", operator: operatorTypes.enum.eq, value: "x" },
         { field: "email", operator: operatorTypes.enum.eq, value: "a@b.co" },
@@ -3930,7 +4034,7 @@ describe("buildSmartKeywordWhere", () => {
   })
 })
 
-describe("applyContactFilter — unsupported operator fallbacks (dropped → {})", () => {
+describe("applyContactFilter — unsupported operator fallbacks (dropped → matches nothing)", () => {
   test.each([
     ["interactedInLast24h", operatorTypes.enum.contains, "x"],
     ["tags", operatorTypes.enum.contains, ["t"]],
@@ -3950,7 +4054,7 @@ describe("applyContactFilter — unsupported operator fallbacks (dropped → {})
         operator: "and",
         conditions: [{ field, operator, value }],
       }),
-    ).toEqual({})
+    ).toEqual(matchesNothing)
   })
 
   test("drops a date field with an unsupported operator on a valid value", () => {
@@ -3965,7 +4069,7 @@ describe("applyContactFilter — unsupported operator fallbacks (dropped → {})
           },
         ],
       }),
-    ).toEqual({})
+    ).toEqual(matchesNothing)
   })
 
   test("drops an unrecognized column operator", () => {
@@ -3974,7 +4078,7 @@ describe("applyContactFilter — unsupported operator fallbacks (dropped → {})
         operator: "and",
         conditions: [{ field: "fullName", operator: "weirdOp", value: "x" }],
       }),
-    ).toEqual({})
+    ).toEqual(matchesNothing)
   })
 
   test("keeps known column operators unchanged", () => {
@@ -4010,10 +4114,14 @@ describe("applyContactFilter — custom field remaining branches", () => {
 
   // ── number ──────────────────────────────────────────────────────────────────
   test("drops number isBetween when the value is not a valid interval", () => {
-    expect(cf("number", operatorTypes.enum.isBetween, "10")).toEqual({})
+    expect(cf("number", operatorTypes.enum.isBetween, "10")).toEqual(
+      matchesNothing,
+    )
   })
   test("drops number isBetween when interval bounds are non-numeric", () => {
-    expect(cf("number", operatorTypes.enum.isBetween, ["a", "b"])).toEqual({})
+    expect(cf("number", operatorTypes.enum.isBetween, ["a", "b"])).toEqual(
+      matchesNothing,
+    )
   })
   test("renders number notBetween with a negated numeric guard", () => {
     const sql = cfSql("number", operatorTypes.enum.notBetween, ["10", "20"])
@@ -4021,7 +4129,7 @@ describe("applyContactFilter — custom field remaining branches", () => {
     expect(sql.toUpperCase()).toContain("NOT")
   })
   test("drops number comparison with an empty value", () => {
-    expect(cf("number", operatorTypes.enum.eq, "")).toEqual({})
+    expect(cf("number", operatorTypes.enum.eq, "")).toEqual(matchesNothing)
   })
   test.each([
     operatorTypes.enum.notContains,
@@ -4031,7 +4139,7 @@ describe("applyContactFilter — custom field remaining branches", () => {
     expect(cfSql("number", operator, "12").toLowerCase()).toContain("ilike")
   })
   test("drops number with an unsupported operator", () => {
-    expect(cf("number", operatorTypes.enum.in, "12")).toEqual({})
+    expect(cf("number", operatorTypes.enum.in, "12")).toEqual(matchesNothing)
   })
 
   // ── datetime ────────────────────────────────────────────────────────────────
@@ -4041,7 +4149,7 @@ describe("applyContactFilter — custom field remaining branches", () => {
         "not-a-date",
         "2026-05-31T23:59:59Z",
       ]),
-    ).toEqual({})
+    ).toEqual(matchesNothing)
   })
   test("renders datetime notBetween with a guarded cast", () => {
     const sql = cfSql("datetime", operatorTypes.enum.notBetween, [
@@ -4082,15 +4190,15 @@ describe("applyContactFilter — custom field remaining branches", () => {
   test("drops datetime with an unsupported operator", () => {
     expect(
       cf("datetime", operatorTypes.enum.in, "2026-05-19T10:00:00Z"),
-    ).toEqual({})
+    ).toEqual(matchesNothing)
   })
 
   // ── text / boolean / select ───────────────────────────────────────────────
   test("drops text custom field with an empty value", () => {
-    expect(cf("text", operatorTypes.enum.eq, "")).toEqual({})
+    expect(cf("text", operatorTypes.enum.eq, "")).toEqual(matchesNothing)
   })
   test("drops text custom field with an unsupported operator", () => {
-    expect(cf("text", operatorTypes.enum.gt, "x")).toEqual({})
+    expect(cf("text", operatorTypes.enum.gt, "x")).toEqual(matchesNothing)
   })
 })
 
@@ -4156,5 +4264,51 @@ describe("applyContactFilter — W1 relation activations", () => {
     expect(query.sql).toContain(
       '"ContactOnBroadcast"."deliveredAt" IS NOT NULL',
     )
+  })
+})
+
+describe("applyContactFilter — a negation over no value never widens (s206)", () => {
+  const only = (condition: Record<string, unknown>) =>
+    applyContactFilter({ operator: "and", conditions: [condition] })
+
+  test.each([
+    [
+      "tags notIn []",
+      { field: "tags", operator: operatorTypes.enum.notIn, value: [] },
+    ],
+    [
+      "tags notIn ''",
+      { field: "tags", operator: operatorTypes.enum.notIn, value: "" },
+    ],
+    [
+      "tags ne ['']",
+      { field: "tags", operator: operatorTypes.enum.ne, value: [""] },
+    ],
+    [
+      "inbox notIn [null]",
+      { field: "inbox", operator: operatorTypes.enum.notIn, value: [null] },
+    ],
+    [
+      "country notIn []",
+      { field: "country", operator: operatorTypes.enum.notIn, value: [] },
+    ],
+    [
+      "country ne []",
+      { field: "country", operator: operatorTypes.enum.ne, value: [] },
+    ],
+  ])("%s matches nothing (NOT EXISTS over an empty set would match everyone)", (_label, condition) => {
+    expect(only(condition)).toEqual(matchesNothing)
+  })
+
+  test("a real tag negation still builds NOT EXISTS", () => {
+    const query = renderContactWhere(
+      only({
+        field: "tags",
+        operator: operatorTypes.enum.notIn,
+        value: ["t-1"],
+      }),
+    )
+    expect(query.sql).toContain("NOT EXISTS")
+    expect(query.params).toContain("t-1")
   })
 })

@@ -10,6 +10,7 @@ type RouteConfig = {
 
 type CapturedProcedure = {
   route: RouteConfig
+  input?: { safeParse: (value: unknown) => { success: boolean } }
   handler?: (...args: any[]) => any
 }
 
@@ -21,7 +22,10 @@ const { workspaceTokenAuthAPIForScope, capturedProcedures } = vi.hoisted(() => {
     capturedProcedures.push(record)
 
     const chain = {
-      input: vi.fn(() => chain),
+      input: vi.fn((schema: CapturedProcedure["input"]) => {
+        record.input = schema
+        return chain
+      }),
       output: vi.fn(() => chain),
       errors: vi.fn(() => chain),
       handler: vi.fn((fn: (...args: any[]) => any) => {
@@ -311,4 +315,41 @@ describe("POST /v1/conversations/{id}/disable-bot", () => {
     })
     expect(result).toEqual({ success: true })
   })
+})
+
+describe("GET /v1/conversations rejects an invalid contactFilter (s206: never widens)", () => {
+  const procedure = findProcedure("GET", "/v1/conversations")
+
+  test("control: no filter and a valid filter both pass", () => {
+    expect(procedure.input?.safeParse({}).success).toBe(true)
+    expect(
+      procedure.input?.safeParse({
+        contactFilter: JSON.stringify({
+          operator: "and",
+          conditions: [{ field: "fullName", operator: "isNotEmpty" }],
+        }),
+      }).success,
+    ).toBe(true)
+  })
+
+  test.each([
+    ["malformed JSON", "{bad"],
+    ["a schema-invalid filter", JSON.stringify({ operator: "xor" })],
+    [
+      "an unknown field",
+      JSON.stringify({ operator: "and", conditions: [{ field: "nope" }] }),
+    ],
+    ["JSON null", "null"],
+    ["a repeated param", ["{}", "{}"]],
+  ])("%s fails input validation (oRPC maps it to 422)", (_label, contactFilter) => {
+    expect(procedure.input?.safeParse({ contactFilter }).success).toBe(false)
+  })
+})
+
+test.each([
+  ["status", "[not json"],
+  ["tags", "{bad"],
+])("GET /v1/conversations rejects a malformed JSON %s instead of dropping it", (key, value) => {
+  const procedure = findProcedure("GET", "/v1/conversations")
+  expect(procedure.input?.safeParse({ [key]: value }).success).toBe(false)
 })

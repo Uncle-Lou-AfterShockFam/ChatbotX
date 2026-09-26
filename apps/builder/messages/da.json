@@ -507,7 +507,10 @@
     "resumeDialog": {
       "title": "Resume broadcast",
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
-    }
+    },
+    "invalidFilterDescription": "Målgruppefilteret kunne ikke læses, så denne udsendelse kan ikke sendes. Ryd det, og opret målgruppen igen.",
+    "invalidStoredFilterDescription": "Det gemte målgruppefilter kunne ikke læses. Denne udsendelse kan ikke sendes igen; opret en ny i stedet.",
+    "excludedFilterDescription": "Dette målgruppefilter bruger felter, der ikke er tilgængelige for din rolle eller denne kanal, så udsendelsen kan ikke sendes. Ryd det, og opret målgruppen igen."
   },
   "commentAutomation": {
     "stats": {
@@ -4501,7 +4504,11 @@
     "countCapped": "{count}+ kontakter",
     "exportAllNotice": "Alle kontakter matching den current filter vil være exported.",
     "exportTakingLong": "Eksportér er taking longer than expected",
-    "exportTakingLongDescription": "Den eksportér er still processing. Du kan close denne dialog og check tilbage i a few minutter fra den eksportér historik."
+    "exportTakingLongDescription": "Den eksportér er still processing. Du kan close denne dialog og check tilbage i a few minutter fra den eksportér historik.",
+    "invalidFilterTitle": "Dette filter kan ikke læses",
+    "invalidFilterDescription": "Kontaktfilteret i dette link kunne ikke læses, så ingen kontakter vises. Ryd det, og opret filteret igen.",
+    "clearInvalidFilter": "Ryd filter",
+    "excludedFilterDescription": "Dette filter bruger e-mail- eller telefonfelter, som du ikke må bruge, så ingen kontakter vises. Ryd det, og opret filteret igen."
   },
   "contactScan": {
     "menu": {

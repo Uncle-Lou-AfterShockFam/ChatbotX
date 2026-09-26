@@ -827,7 +827,10 @@
     "resumeDialog": {
       "title": "Resume broadcast",
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
-    }
+    },
+    "invalidFilterDescription": "无法读取受众筛选条件，因此无法发送此群发。请清除后重新创建受众。",
+    "invalidStoredFilterDescription": "无法读取已保存的受众筛选条件。此群发无法重新发送，请改为创建新的群发。",
+    "excludedFilterDescription": "此受众筛选条件使用了您的角色或此渠道不可用的字段，因此无法发送此群发。请清除后重新创建受众。"
   },
   "commentAutomation": {
     "stats": {
@@ -1185,7 +1188,11 @@
     "exportTakingLong": "导出花费的时间比预期长",
     "exportTakingLongDescription": "导出仍在处理中。您可以关闭此对话框，并在几分钟后返回查看导出历史记录。",
     "linkCopied": "链接已拷贝到剪贴板",
-    "title": "联系人"
+    "title": "联系人",
+    "invalidFilterTitle": "无法读取此筛选条件",
+    "invalidFilterDescription": "无法读取此链接中的联系人筛选条件，因此不显示任何联系人。请清除后重新创建筛选条件。",
+    "clearInvalidFilter": "清除筛选",
+    "excludedFilterDescription": "此筛选条件使用了您无权使用的邮箱或电话字段，因此不显示任何联系人。请清除后重新创建筛选条件。"
   },
   "contactScan": {
     "menu": {

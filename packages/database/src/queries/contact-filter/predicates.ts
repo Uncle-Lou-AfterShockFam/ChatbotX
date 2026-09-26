@@ -122,6 +122,13 @@ export function buildColumnWhere(
     return {}
   }
 
+  // An empty value list drops the condition: drizzle renders `notIn []` as
+  // TRUE, which would match every contact (s206; `applyContactFilter` then
+  // fails the filter closed).
+  if (Array.isArray(value) && value.length === 0) {
+    return {}
+  }
+
   const operatorValue = applyOperator(operator, value)
   if (operatorValue === undefined) {
     return {}

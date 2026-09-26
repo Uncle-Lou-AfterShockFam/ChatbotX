@@ -92,4 +92,38 @@ describe("RelativeTime (s205c, React #418 on /contacts)", () => {
     expect(painted.every((iso) => iso === later.toISOString())).toBe(true)
     expect(container.textContent).toBe("2 minutes ago")
   })
+
+  test("a clock that stepped BACK re-reads now instead of pinning a future one (s206)", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] })
+    // First read far in the future, then the wall clock steps back a day.
+    const future = new Date(REQUEST_NOW.getTime() + 86_400_000)
+    const probe = (label: string, painted: string[]) => {
+      function Probe() {
+        painted.push(useRenderNow().toISOString())
+        return null
+      }
+      Probe.displayName = label
+      return Probe
+    }
+    vi.setSystemTime(future)
+    const first: string[] = []
+    const First = probe("First", first)
+    container = document.createElement("div")
+    document.body.append(container)
+    await act(() => {
+      root = createRoot(container as HTMLElement)
+      root.render(<First />)
+    })
+    expect(first.at(-1)).toBe(future.toISOString())
+    await act(() => root?.unmount())
+
+    vi.setSystemTime(REQUEST_NOW)
+    const second: string[] = []
+    const Second = probe("Second", second)
+    await act(() => {
+      root = createRoot(container as HTMLElement)
+      root.render(<Second />)
+    })
+    expect(second.at(-1)).toBe(REQUEST_NOW.toISOString())
+  })
 })

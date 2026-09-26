@@ -109,3 +109,42 @@ export const contactFilterRequest = z.object({
   contactFilter: contactFilterCriteriaSchema,
 })
 export type ContactFilterRequest = z.infer<typeof contactFilterRequest>
+
+/**
+ * Result of reading a `?contactFilter=<JSON>` URL value. `invalid` is its own
+ * state so no caller can mistake a broken filter for "no filter" (which
+ * matches everyone): an invalid filter must never widen (s206).
+ */
+export type ContactFilterParam =
+  | { status: "absent" }
+  | { status: "valid"; filter: ContactFilterCriteria }
+  | { status: "invalid" }
+
+/**
+ * Parse a `contactFilter` URL value. Absent = `undefined`, `null` or a blank
+ * string. A non-string (a repeated query param arrives as an array),
+ * malformed JSON, or JSON that fails `contactFilterCriteriaSchema` is
+ * `invalid`.
+ */
+export function parseContactFilterParam(value: unknown): ContactFilterParam {
+  if (
+    value === undefined ||
+    value === null ||
+    (typeof value === "string" && value.trim() === "")
+  ) {
+    return { status: "absent" }
+  }
+  if (typeof value !== "string") {
+    return { status: "invalid" }
+  }
+  let json: unknown
+  try {
+    json = JSON.parse(value)
+  } catch {
+    return { status: "invalid" }
+  }
+  const parsed = contactFilterCriteriaSchema.safeParse(json)
+  return parsed.success
+    ? { status: "valid", filter: parsed.data }
+    : { status: "invalid" }
+}

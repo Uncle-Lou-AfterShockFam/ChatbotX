@@ -125,6 +125,12 @@ export type EditBroadcastDraft = {
   id: string
   channel: ChannelType
   defaultValues: EditBroadcastDefaultValues
+  /**
+   * The stored filter exists but no longer parses. The form then blocks Save
+   * and Confirm until the operator clears it: falling back to the empty
+   * filter would silently target everyone (s206).
+   */
+  invalidContactFilter: boolean
 }
 
 const storedJsonObject = z.record(z.string(), z.unknown())
@@ -233,9 +239,11 @@ export function buildEditBroadcastDefaultValues(
   const resolvedSchedulesType = schedulesType.success
     ? schedulesType.data
     : broadcastScheduleTypes.enum.now
-  const contactFilter = contactFilterCriteriaSchema.safeParse(
-    draft.contactFilter,
-  )
+  // A null stored filter is "no filter" (everyone), chosen by the operator.
+  const contactFilter =
+    draft.contactFilter == null
+      ? undefined
+      : contactFilterCriteriaSchema.safeParse(draft.contactFilter)
   const targets = resolveDraftTargets(draft)
   // Once the draft has a page, its template lives on that target; the legacy
   // single-template fields only survive for a draft that lost its page.
@@ -247,6 +255,7 @@ export function buildEditBroadcastDefaultValues(
   return {
     id: draft.id,
     channel: channel.data,
+    invalidContactFilter: contactFilter ? !contactFilter.success : false,
     defaultValues: {
       channel: channel.data,
       subaction: subaction.data,
@@ -269,7 +278,7 @@ export function buildEditBroadcastDefaultValues(
       targets,
       schedulesType: resolvedSchedulesType,
       schedulesAt: resolveSchedulesAt(draft, resolvedSchedulesType),
-      contactFilter: contactFilter.success
+      contactFilter: contactFilter?.success
         ? contactFilter.data
         : EMPTY_CONTACT_FILTER,
       saveAsDraft: false,

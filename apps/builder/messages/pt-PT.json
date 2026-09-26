@@ -507,7 +507,10 @@
     "resumeDialog": {
       "title": "Resume broadcast",
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
-    }
+    },
+    "invalidFilterDescription": "Não foi possível ler o filtro de público, pelo que esta difusão não pode ser enviada. Limpe-o e crie o público novamente.",
+    "invalidStoredFilterDescription": "Não foi possível ler o filtro de público guardado. Esta difusão não pode ser reenviada; crie uma nova.",
+    "excludedFilterDescription": "Este filtro de público usa campos indisponíveis para a sua função ou este canal, pelo que esta difusão não pode ser enviada. Limpe-o e crie o público novamente."
   },
   "commentAutomation": {
     "stats": {
@@ -4497,7 +4500,11 @@
     "countCapped": "Mais de {count} contactos",
     "exportAllNotice": "Todos os contactos que correspondem ao filtro atual serão exportados.",
     "exportTakingLong": "A exportação está a demorar mais do que o esperado",
-    "exportTakingLongDescription": "A exportação continua a ser processada. Pode fechar esta caixa de diálogo e voltar a consultar o histórico de exportações dentro de alguns minutos."
+    "exportTakingLongDescription": "A exportação continua a ser processada. Pode fechar esta caixa de diálogo e voltar a consultar o histórico de exportações dentro de alguns minutos.",
+    "invalidFilterTitle": "Não é possível ler este filtro",
+    "invalidFilterDescription": "Não foi possível ler o filtro de contactos desta ligação, pelo que nenhum contacto é mostrado. Limpe-o e crie o filtro novamente.",
+    "clearInvalidFilter": "Limpar filtro",
+    "excludedFilterDescription": "Este filtro usa campos de e-mail ou telefone que não pode usar, pelo que nenhum contacto é mostrado. Limpe-o e crie o filtro novamente."
   },
   "contactScan": {
     "menu": {

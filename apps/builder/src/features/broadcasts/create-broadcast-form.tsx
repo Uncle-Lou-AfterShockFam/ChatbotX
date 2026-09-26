@@ -41,7 +41,11 @@ import {
   createBroadcastRequest,
 } from "@/features/broadcasts/schema/action"
 import { useWorkspaceId } from "@/hooks/routing"
-import { ContactFilter } from "../contact-filter"
+import {
+  ContactFilter,
+  EMPTY_CONTACT_FILTER,
+  InvalidContactFilterAlert,
+} from "../contact-filter"
 import type { ContactFilterCriteria } from "../contact-filter/schema"
 import { useContactStore } from "../contacts/provider/contact-store-context"
 import { useFlowStore } from "../flows/provider/flow-store-context"
@@ -102,6 +106,8 @@ type CreateBroadcastFormProps = {
   /** Pages preselected by a deep-link (resolved server-side from the integration). */
   initialInboxIds?: string[]
   initialContactFilter?: ContactFilterCriteria
+  /** The deep-link's `contactFilter` did not parse (see the prefill). */
+  invalidContactFilter?: boolean
   /**
    * Edit mode: an existing `draft` reopened from the list. The same schema and
    * footer apply — "Save as draft" keeps it a draft, "Confirm" schedules it —
@@ -116,10 +122,27 @@ export function CreateBroadcastForm({
   initialChannel,
   initialInboxIds,
   initialContactFilter,
+  invalidContactFilter = false,
   editDraft,
 }: CreateBroadcastFormProps) {
   const t = useTranslations()
   const router = useRouter()
+  // A filter that is unreadable (deep-link or stored draft) or that uses a
+  // field this member / channel cannot use blocks every submit path until the
+  // operator clears it: it must never become "everyone" (s206).
+  const [contactFilterProblem, setContactFilterProblem] = useState<
+    "invalid" | "excluded" | null
+  >(
+    (editDraft ? editDraft.invalidContactFilter : invalidContactFilter)
+      ? "invalid"
+      : null,
+  )
+  const contactFilterInvalid = contactFilterProblem !== null
+  // Stable: `ContactFilter`'s prune effect depends on it.
+  const handleContactFilterExcluded = useCallback(
+    () => setContactFilterProblem("excluded"),
+    [],
+  )
 
   const { appendFilter, resetFilter, getAllActiveFlows } = useFlowStore(
     (state) => state,
@@ -170,6 +193,9 @@ export function CreateBroadcastForm({
   )
 
   const handleSaveAsDraft = async (): Promise<void> => {
+    if (contactFilterInvalid) {
+      return
+    }
     form.setValue("saveAsDraft", true, { shouldDirty: false })
     try {
       await handleSubmitWithAction()
@@ -231,7 +257,13 @@ export function CreateBroadcastForm({
         <form
           className="mx-auto mt-10 mb-10 w-full max-w-2xl flex-1 space-y-4"
           id="broadcast-form"
-          onSubmit={handleSubmitWithAction}
+          onSubmit={(event) => {
+            if (contactFilterInvalid) {
+              event.preventDefault()
+              return
+            }
+            return handleSubmitWithAction(event)
+          }}
         >
           {!watchedChannel && <CreateBroadcastChooseChannel />}
 
@@ -243,9 +275,17 @@ export function CreateBroadcastForm({
             <CreateBroadcastChooseFlow
               canViewEmailAndPhone={canViewEmailAndPhone}
               channel={watchedChannel}
+              contactFilterProblem={contactFilterProblem}
               hydrated={
                 editDraft && { targets: editDraft.defaultValues.targets }
               }
+              onClearInvalidContactFilter={() => {
+                form.setValue("contactFilter", EMPTY_CONTACT_FILTER, {
+                  shouldValidate: true,
+                })
+                setContactFilterProblem(null)
+              }}
+              onContactFilterExcluded={handleContactFilterExcluded}
               onSaveAsDraft={handleSaveAsDraft}
               subaction={watchedSubAction}
             />
@@ -407,12 +447,16 @@ type CreateBroadcastChooseFlowProps = {
    * creating.
    */
   hydrated?: { targets: BroadcastTargetRequest[] }
+  contactFilterProblem: "invalid" | "excluded" | null
+  onClearInvalidContactFilter: () => void
+  onContactFilterExcluded: () => void
   onSaveAsDraft: () => Promise<void>
   subaction: BroadcastSubaction
 }
 
 function CreateBroadcastChooseFlow(props: CreateBroadcastChooseFlowProps) {
   const t = useTranslations()
+  const contactFilterInvalid = props.contactFilterProblem !== null
   const router = useRouter()
   const {
     contactInboxesCount: count,
@@ -587,10 +631,20 @@ function CreateBroadcastChooseFlow(props: CreateBroadcastChooseFlowProps) {
   }, [props.channel, props.subaction, t])
 
   useEffect(() => {
+    // No count while the filter is unreadable: the form holds the empty
+    // (everyone) filter then, and that number would mislead (s206).
+    if (contactFilterInvalid) {
+      return
+    }
     latestReceiversCountQueryKeyRef.current = receiversCountQueryKey
     setCompletedReceiversCountQueryKey(null)
     fetchReceiversCount(receiversCountParams, receiversCountQueryKey)
-  }, [fetchReceiversCount, receiversCountParams, receiversCountQueryKey])
+  }, [
+    fetchReceiversCount,
+    contactFilterInvalid,
+    receiversCountParams,
+    receiversCountQueryKey,
+  ])
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
@@ -691,40 +745,60 @@ function CreateBroadcastChooseFlow(props: CreateBroadcastChooseFlowProps) {
 
       <Card>
         <CardContent className="flex flex-col gap-6">
-          <ContactFilter
-            excludeFields={excludeFields}
-            inboxChannel={props.channel}
-            parentName="contactFilter"
-          />
+          {contactFilterInvalid ? (
+            <InvalidContactFilterAlert
+              description={t(
+                props.contactFilterProblem === "excluded"
+                  ? "broadcasts.excludedFilterDescription"
+                  : "broadcasts.invalidFilterDescription",
+              )}
+              onClear={props.onClearInvalidContactFilter}
+            />
+          ) : (
+            <ContactFilter
+              excludeFields={excludeFields}
+              inboxChannel={props.channel}
+              onExcludedConditions={props.onContactFilterExcluded}
+              parentName="contactFilter"
+            />
+          )}
         </CardContent>
       </Card>
 
       <div className="flex items-center justify-between">
-        <Button
-          className="h-auto px-0 text-gray-500 text-sm"
-          disabled={isReceiversCountLoading || !count}
-          onClick={() => setAudiencePreviewOpen(true)}
-          type="button"
-          variant="link"
-        >
-          {isReceiversCountLoading ? (
-            <span className="inline-flex items-center gap-1.5">
-              <Loader2Icon className="size-3 animate-spin" />
-              {t("broadcasts.receiversLoading")}
-            </span>
-          ) : (
-            t("broadcasts.receiversCount", {
-              count: count || 0,
-            })
-          )}
-        </Button>
+        {contactFilterInvalid ? (
+          <span />
+        ) : (
+          <Button
+            className="h-auto px-0 text-gray-500 text-sm"
+            disabled={isReceiversCountLoading || !count}
+            onClick={() => setAudiencePreviewOpen(true)}
+            type="button"
+            variant="link"
+          >
+            {isReceiversCountLoading ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Loader2Icon className="size-3 animate-spin" />
+                {t("broadcasts.receiversLoading")}
+              </span>
+            ) : (
+              t("broadcasts.receiversCount", {
+                count: count || 0,
+              })
+            )}
+          </Button>
+        )}
         <div className="flex justify-end gap-2">
           <Button onClick={handleCancel} type="button" variant="outline">
             {t("actions.cancel")}
           </Button>
 
           <Button
-            disabled={!formState.isValid || formState.isSubmitting}
+            disabled={
+              contactFilterInvalid ||
+              !formState.isValid ||
+              formState.isSubmitting
+            }
             onClick={() => props.onSaveAsDraft()}
             type="button"
             variant="secondary"
@@ -733,7 +807,11 @@ function CreateBroadcastChooseFlow(props: CreateBroadcastChooseFlowProps) {
           </Button>
 
           <Button
-            disabled={!formState.isValid || formState.isSubmitting}
+            disabled={
+              contactFilterInvalid ||
+              !formState.isValid ||
+              formState.isSubmitting
+            }
             onClick={() => {
               setValue("saveAsDraft", false, { shouldDirty: false })
               setConfirmOpen(true)

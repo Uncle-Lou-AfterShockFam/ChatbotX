@@ -23,13 +23,14 @@ import {
   ContactListFilterButton,
   ContactListFilterPanel,
   EMPTY_CONTACT_FILTER,
+  InvalidContactFilterAlert,
   useContactFilterQueryState,
 } from "@/features/contact-filter"
 import { EMAIL_PHONE_RESTRICTED_FILTER_FIELDS } from "@/features/contact-filter/lib/restricted-fields"
 import { orpc } from "@/lib/orpc/query"
 import { getUserName } from "../users/schema/resource"
 import { ContactNameCell } from "./components/contact-name-cell"
-import { CONTACTS_DEFAULT_PER_PAGE } from "./constants"
+import { CONTACTS_DEFAULT_PER_PAGE, EMPTY_CONTACTS_RESPONSE } from "./constants"
 import { ContactListAction } from "./contacts-list-action"
 import { listInputKey, seedForFirstKey } from "./lib/seed-first-key"
 import type { listContacts } from "./queries/list-contacts.queries"
@@ -136,7 +137,23 @@ export function ContactsTable({
     filter: contactFilter,
     setFilter: setContactFilter,
     isActive: isContactFilterActive,
+    invalid: isContactFilterUnreadable,
+    clearInvalidFilter,
   } = useContactFilterQueryState({ initialFilter: initialContactFilter })
+  // The filter uses a field this member may not use (email / phone). The
+  // server already matches NO contact for it; the table says why (s206).
+  const [hasExcludedConditions, setHasExcludedConditions] = useState(false)
+  const isContactFilterInvalid =
+    isContactFilterUnreadable || hasExcludedConditions
+  const handleExcludedConditions = useCallback(
+    () => setHasExcludedConditions(true),
+    [],
+  )
+  const handleClearInvalidFilter = useCallback(() => {
+    setHasExcludedConditions(false)
+    setContactFilter(EMPTY_CONTACT_FILTER)
+    clearInvalidFilter()
+  }, [clearInvalidFilter, setContactFilter])
   const [optimisticContactFilter, setOptimisticContactFilter] =
     useState<ContactFilterCriteria>(contactFilter)
   const [showContactFilterPanel, setShowContactFilterPanel] = useState(
@@ -178,21 +195,31 @@ export function ContactsTable({
   // to every new key, and under the client's 30 s `staleTime` a changed
   // filter / page / sort then counts as fresh and never fetches (s203: the
   // filter panel showed its chips over the unfiltered list).
-  const [initialInputKey] = useState(() => listInputKey(listContactsInput))
+  // An invalid `?contactFilter=` lists NO contact (s206): the query stays
+  // off and the server skipped the RSC fetch, so its empty first page must
+  // not seed the unfiltered key either (Clear would then show 0 rows).
+  const [initialInputKey] = useState(() =>
+    isContactFilterInvalid ? undefined : listInputKey(listContactsInput),
+  )
   const { data: fetchedResponse } = useQuery(
     orpc.contactsAPIs.listContactsByPOSTAuthenticatedAPI.queryOptions({
       input: listContactsInput,
-      initialData: seedForFirstKey(
-        listInputKey(listContactsInput),
-        initialInputKey,
-        initialResponse,
-      ),
+      initialData: initialInputKey
+        ? seedForFirstKey(
+            listInputKey(listContactsInput),
+            initialInputKey,
+            initialResponse,
+          )
+        : undefined,
       placeholderData: keepPreviousData,
+      enabled: !isContactFilterInvalid,
     }),
   )
   // Never undefined in practice (the first key is seeded, later keys keep
   // the previous data as a placeholder); the fallback satisfies the type.
-  const contactsResponse = fetchedResponse ?? initialResponse
+  const contactsResponse = isContactFilterInvalid
+    ? EMPTY_CONTACTS_RESPONSE
+    : (fetchedResponse ?? initialResponse)
   const tableData = contactsResponse.data
   const tablePageCount = contactsResponse.pageCount
   const tableTotalCount = contactsResponse.totalCount
@@ -428,10 +455,21 @@ export function ContactsTable({
       mobileCard={(row) => <ContactCard row={row} workspaceId={workspaceId} />}
       table={table}
     >
-      {showContactFilterPanel && (
+      {isContactFilterInvalid && (
+        <InvalidContactFilterAlert
+          description={t(
+            hasExcludedConditions
+              ? "contacts.excludedFilterDescription"
+              : "contacts.invalidFilterDescription",
+          )}
+          onClear={handleClearInvalidFilter}
+        />
+      )}
+      {showContactFilterPanel && !hasExcludedConditions && (
         <ContactListFilterPanel
           excludeFields={excludedFilterFields}
           filter={optimisticContactFilter}
+          onExcludedConditions={handleExcludedConditions}
           onFilterChange={handleContactFilterChange}
         />
       )}
@@ -445,11 +483,14 @@ export function ContactsTable({
           onToggle={() => setShowContactFilterPanel((current) => !current)}
           open={showContactFilterPanel}
         />
-        <ContactListAction
-          filter={exportFilter}
-          table={table}
-          workspaceId={workspaceId}
-        />
+        {/* No export while the filter is unreadable: it would export everyone. */}
+        {!isContactFilterInvalid && (
+          <ContactListAction
+            filter={exportFilter}
+            table={table}
+            workspaceId={workspaceId}
+          />
+        )}
       </DataTableToolbar>
     </DataTable>
   )

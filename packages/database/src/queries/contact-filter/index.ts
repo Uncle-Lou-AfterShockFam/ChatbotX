@@ -65,11 +65,16 @@ export {
   ctwaRetargetSegments,
 } from "./ctwa-retarget"
 export {
+  EXCLUDED_FIELD_CONDITION,
+  hasExcludedFieldCondition,
+} from "./excluded-field"
+export {
   EMAIL_PHONE_FILTER_FIELDS,
   pruneContactFilterFields,
   pruneEmailPhoneFilterConditions,
 } from "./permission"
 export { contactInboxInteractedWithin24hSQL } from "./predicates"
+export { isContactFilterShape } from "./shape"
 export {
   DEFAULT_FILTER_TIMEZONE,
   filterValueToUtcDayEndIso,
@@ -106,6 +111,10 @@ const CTWA_RETARGET_CHANNELS: ReadonlySet<string> = new Set(
 )
 
 /**
+ * Whether ANY condition builds a predicate. It is not "the filter matches
+ * something": under AND one dropped condition makes `applyContactFilter`
+ * return FALSE (s206), so callers must still build the where from it.
+ *
  * `workspaceId` is optional for backward compat but should always be passed
  * when available — without it, a criteria whose only condition is `botField`
  * (workspace-scoped, requires `workspaceId` to build its EXISTS predicate)
@@ -115,7 +124,7 @@ const CTWA_RETARGET_CHANNELS: ReadonlySet<string> = new Set(
 export const contactFilterHasPredicate = (
   criteria: FilterCriteriaInput,
   workspaceId?: string,
-): boolean => hasWhereParts(applyContactFilter(criteria, workspaceId))
+): boolean => buildConditionWheres(criteria, workspaceId).some(hasWhereParts)
 
 type ContactFilterContext = {
   timezone: string
@@ -382,32 +391,43 @@ export const buildContactInboxContactFilterSQL = ({
   return sql`${contactIdColumn} IN (SELECT ${contactModel.id} FROM ${contactModel} WHERE ${contactWhereSQL})`
 }
 
+/**
+ * The contact where for a filter. A condition "drops" when it yields no
+ * predicate (unknown field, unusable operator or value, a workspace-scoped
+ * condition without `workspaceId`). Dropping must never widen (s206):
+ * - every condition drops -> NO contact (`{}` would match everyone);
+ * - one drops under AND -> NO contact (the rest alone match MORE contacts
+ *   than the filter describes); under OR a dropped branch only narrows.
+ * An empty conditions list still means "everyone".
+ */
 export function applyContactFilter(
   criteria: FilterCriteriaInput,
   workspaceId?: string,
 ): ContactWhere {
-  const conditions = criteria.conditions as FilterConditionInput[]
-  if (conditions.length === 0) {
+  const conditionWheres = buildConditionWheres(criteria, workspaceId)
+  if (conditionWheres.length === 0) {
     return {}
   }
+  const kept = conditionWheres.filter(hasWhereParts)
+  const dropped = kept.length < conditionWheres.length
+  if (kept.length === 0 || (dropped && criteria.operator !== "or")) {
+    return { RAW: () => sql`FALSE` }
+  }
+  return criteria.operator === "or" ? { OR: kept } : { AND: kept }
+}
 
+/** One where per condition, in order; `{}` for a condition that drops. */
+function buildConditionWheres(
+  criteria: FilterCriteriaInput,
+  workspaceId?: string,
+): ContactWhere[] {
   const context: ContactFilterContext = {
     timezone: resolveFilterTimezone(criteria.timezone),
     workspaceId,
   }
-  const conditionWheres = conditions
-    .map((condition) => buildConditionWhere(condition, context))
-    .filter((w): w is ContactWhere => Object.keys(w).length > 0)
-
-  if (conditionWheres.length === 0) {
-    return {}
-  }
-
-  if (criteria.operator === "or") {
-    return { OR: conditionWheres }
-  }
-
-  return { AND: conditionWheres }
+  return (criteria.conditions as FilterConditionInput[]).map((condition) =>
+    buildConditionWhere(condition, context),
+  )
 }
 
 function buildConditionWhere(

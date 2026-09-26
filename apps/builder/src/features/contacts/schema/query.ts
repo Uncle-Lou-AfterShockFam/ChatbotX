@@ -24,16 +24,30 @@ import { contactResource } from "./resource"
 /** Same as contact filter payload (strict discriminated `conditions`). */
 export const contactFilterSchema = contactFilterCriteriaSchema
 
-const parseContactFilterSearchParam = (value: unknown) => {
+/**
+ * A query-string `contactFilter` is JSON; decode it and let the wrapped schema
+ * validate it. A blank value is absent. Malformed JSON is an input error (422),
+ * never "no filter": dropping it would match every contact (s206).
+ */
+const decodeContactFilterSearchParam = (
+  value: unknown,
+  ctx: z.RefinementCtx,
+) => {
   if (typeof value !== "string") {
     return value
   }
+  if (value.trim() === "") {
+    return
+  }
 
   try {
-    const parsed = contactFilterCriteriaSchema.safeParse(JSON.parse(value))
-    return parsed.success ? parsed.data : undefined
+    return JSON.parse(value)
   } catch {
-    return
+    ctx.addIssue({
+      code: "custom",
+      message: "contactFilter is not valid JSON.",
+    })
+    return z.NEVER
   }
 }
 
@@ -56,7 +70,7 @@ export const listContactsRequest = basePaginationRequest.extend({
     ),
   workspaceId: zodBigintAsString(),
   contactFilter: z.preprocess(
-    parseContactFilterSearchParam,
+    decodeContactFilterSearchParam,
     contactFilterCriteriaSchema
       .optional()
       .describe(
