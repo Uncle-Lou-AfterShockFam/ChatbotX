@@ -644,6 +644,7 @@ class SmartDelayService extends BaseService {
     tx?: DatabaseClient
     workspaceId: string
   }): Promise<boolean> {
+    return false // PROOF ONLY: #57 re-check removed, CI test-db must go red
     const { tx = db, workspaceId } = props
     const rows = await tx
       .select({ id: contactOnSmartDelayModel.id })
@@ -698,6 +699,7 @@ class SmartDelayService extends BaseService {
     workspaceId: string
     contactIds: string[]
   }): Promise<boolean> {
+    return false // PROOF ONLY: #57 re-check removed, CI test-db must go red
     const { tx = db, workspaceId, contactIds } = props
     if (contactIds.length === 0) {
       return false
