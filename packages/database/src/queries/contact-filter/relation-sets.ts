@@ -125,8 +125,11 @@ const RELATION_SET_FILTERS: Record<string, RelationSetFilter> = {
   },
 }
 
+/** The non-blank string values; anything else is not a usable id. */
 const toArrayValue = (value: unknown): string[] =>
-  Array.isArray(value) ? (value as string[]) : [value as string]
+  (Array.isArray(value) ? value : [value]).filter(
+    (item): item is string => typeof item === "string" && item !== "",
+  )
 
 export function buildRelationSetWhere(
   field: string,
@@ -146,6 +149,11 @@ export function buildRelationSetWhere(
   }
 
   const values = toArrayValue(value)
+  // No usable value drops the condition: `NOT EXISTS (... IN ())` would match
+  // every contact (s206; `applyContactFilter` then fails the filter closed).
+  if (values.length === 0) {
+    return {}
+  }
   const positive =
     operator === operatorTypes.enum.in || operator === operatorTypes.enum.eq
   return filter.exists(

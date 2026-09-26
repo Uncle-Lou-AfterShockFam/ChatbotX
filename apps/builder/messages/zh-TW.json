@@ -2236,7 +2236,8 @@
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
     },
     "invalidFilterDescription": "無法讀取受眾篩選條件，因此無法傳送此廣播。請清除後重新建立受眾。",
-    "invalidStoredFilterDescription": "無法讀取已儲存的受眾篩選條件。此廣播無法重新傳送，請改為建立新的廣播。"
+    "invalidStoredFilterDescription": "無法讀取已儲存的受眾篩選條件。此廣播無法重新傳送，請改為建立新的廣播。",
+    "excludedFilterDescription": "此受眾篩選條件使用了您的角色或此管道無法使用的欄位，因此無法傳送此廣播。請清除後重新建立受眾。"
   },
   "commentAutomation": {
     "stats": {
@@ -4539,7 +4540,8 @@
     "exportTakingLongDescription": "匯出仍在處理中。您可以關閉此對話框，並在幾分鐘後返回檢視匯出歷史記錄。",
     "invalidFilterTitle": "無法讀取此篩選條件",
     "invalidFilterDescription": "無法讀取此連結中的聯絡人篩選條件，因此不顯示任何聯絡人。請清除後重新建立篩選條件。",
-    "clearInvalidFilter": "清除篩選"
+    "clearInvalidFilter": "清除篩選",
+    "excludedFilterDescription": "此篩選條件使用了您無權使用的電子郵件或電話欄位，因此不顯示任何聯絡人。請清除後重新建立篩選條件。"
   },
   "contactScan": {
     "menu": {

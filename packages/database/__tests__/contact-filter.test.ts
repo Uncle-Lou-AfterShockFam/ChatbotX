@@ -14,6 +14,8 @@ import {
   buildContactWhere,
   buildSmartKeywordWhere,
   contactFilterHasPredicate,
+  EXCLUDED_FIELD_CONDITION,
+  hasExcludedFieldCondition,
   parseConversationAssigneeValues,
   pruneEmailPhoneFilterConditions,
 } from "../src/queries/contact-filter"
@@ -82,7 +84,7 @@ describe("contact filter value-format helpers", () => {
 })
 
 describe("contact filter permission helpers", () => {
-  test("drops only email/phone contact-filter fields when email and phone are denied", () => {
+  test("replaces only email/phone conditions with the excluded-field stand-in when denied (s206: never deletes)", () => {
     const contactFilter = {
       operator: "and" as const,
       conditions: [
@@ -96,10 +98,49 @@ describe("contact filter permission helpers", () => {
       ],
     }
 
-    expect(pruneEmailPhoneFilterConditions(contactFilter, false)).toEqual({
+    const pruned = pruneEmailPhoneFilterConditions(contactFilter, false)
+    expect(pruned).toEqual({
       operator: "and",
-      conditions: [{ field: "fullName", operator: "contains", value: "Ada" }],
+      conditions: [
+        ...Array.from({ length: 6 }, () => EXCLUDED_FIELD_CONDITION),
+        { field: "fullName", operator: "contains", value: "Ada" },
+      ],
     })
+    expect(hasExcludedFieldCondition(pruned)).toBe(true)
+    // Under AND the stand-in fails the whole filter closed.
+    expect(pruned && applyContactFilter(pruned)).toEqual(matchesNothing)
+  })
+
+  test("an OR keeps its allowed branches; a pruned branch only narrows", () => {
+    const pruned = pruneEmailPhoneFilterConditions(
+      {
+        operator: "or",
+        conditions: [
+          { field: "email", operator: "eq", value: "a@b.co" },
+          { field: "fullName", operator: "contains", value: "Ada" },
+        ],
+      },
+      false,
+    )
+    const query = renderContactWhere(pruned ? applyContactFilter(pruned) : {})
+    expect(query.sql.toLowerCase()).toContain('"contact"."fullname" ilike')
+    expect(query.sql.toLowerCase()).not.toContain("email")
+  })
+
+  test("a JSON round-trip keeps the stand-in recognizable", () => {
+    const pruned = pruneEmailPhoneFilterConditions(
+      {
+        operator: "and",
+        conditions: [{ field: "email", operator: "eq", value: "a@b.co" }],
+      },
+      false,
+    )
+    expect(hasExcludedFieldCondition(JSON.parse(JSON.stringify(pruned)))).toBe(
+      true,
+    )
+    expect(hasExcludedFieldCondition({ operator: "and", conditions: [] })).toBe(
+      false,
+    )
   })
 
   test("keeps all contact-filter fields when email and phone are allowed", () => {
@@ -116,16 +157,19 @@ describe("contact filter permission helpers", () => {
     )
   })
 
-  test("normalizes an emptied filter back to AND", () => {
-    expect(
-      pruneEmailPhoneFilterConditions(
-        {
-          operator: "or",
-          conditions: [{ field: "email", operator: "eq", value: "a@b.co" }],
-        },
-        false,
-      ),
-    ).toEqual({ operator: "and", conditions: [] })
+  test("a filter whose every condition is excluded matches nothing, never everyone (s206)", () => {
+    const pruned = pruneEmailPhoneFilterConditions(
+      {
+        operator: "or",
+        conditions: [{ field: "email", operator: "eq", value: "a@b.co" }],
+      },
+      false,
+    )
+    expect(pruned).toEqual({
+      operator: "or",
+      conditions: [EXCLUDED_FIELD_CONDITION],
+    })
+    expect(pruned && applyContactFilter(pruned)).toEqual(matchesNothing)
   })
 
   test("preserves the filter timezone while pruning email/phone fields", () => {
@@ -149,6 +193,7 @@ describe("contact filter permission helpers", () => {
       operator: "and",
       timezone: "Asia/Ho_Chi_Minh",
       conditions: [
+        EXCLUDED_FIELD_CONDITION,
         {
           field: "customField",
           operator: "isBetween",
@@ -168,7 +213,11 @@ describe("contact filter permission helpers", () => {
         },
         false,
       ),
-    ).toEqual({ operator: "and", timezone: "America/New_York", conditions: [] })
+    ).toEqual({
+      operator: "or",
+      timezone: "America/New_York",
+      conditions: [EXCLUDED_FIELD_CONDITION],
+    })
   })
 })
 
@@ -2783,7 +2832,7 @@ describe("applyContactFilter — ctwaRetarget", () => {
 
     expect(pruneEmailPhoneFilterConditions(contactFilter, false)).toEqual({
       operator: "and",
-      conditions: [contactFilter.conditions[0]],
+      conditions: [contactFilter.conditions[0], EXCLUDED_FIELD_CONDITION],
     })
   })
 })
@@ -3830,9 +3879,41 @@ describe("applyContactFilter — operator combining", () => {
     expect(applyContactFilter({ operator: "and", conditions: [] })).toEqual({})
   })
 
-  test("drops unknown fields and keeps only recognized conditions", () => {
+  test("an AND with one dropped condition matches nothing (s206: the rest alone would widen)", () => {
+    expect(
+      applyContactFilter({
+        operator: "and",
+        conditions: [
+          {
+            field: "notARealField",
+            operator: operatorTypes.enum.eq,
+            value: "x",
+          },
+          { field: "email", operator: operatorTypes.enum.eq, value: "a@b.co" },
+        ],
+      }),
+    ).toEqual(matchesNothing)
+    // A known field whose value no longer builds drops the same way.
+    expect(
+      applyContactFilter({
+        operator: "and",
+        conditions: [
+          {
+            field: "customField",
+            customFieldId: "cf-1",
+            valueType: "number",
+            operator: operatorTypes.enum.gt,
+            value: "abc",
+          },
+          { field: "email", operator: operatorTypes.enum.eq, value: "a@b.co" },
+        ],
+      }),
+    ).toEqual(matchesNothing)
+  })
+
+  test("an OR drops the unknown branch and keeps the recognized ones (dropping only narrows)", () => {
     const where = applyContactFilter({
-      operator: "and",
+      operator: "or",
       conditions: [
         { field: "notARealField", operator: operatorTypes.enum.eq, value: "x" },
         { field: "email", operator: operatorTypes.enum.eq, value: "a@b.co" },
@@ -4183,5 +4264,51 @@ describe("applyContactFilter — W1 relation activations", () => {
     expect(query.sql).toContain(
       '"ContactOnBroadcast"."deliveredAt" IS NOT NULL',
     )
+  })
+})
+
+describe("applyContactFilter — a negation over no value never widens (s206)", () => {
+  const only = (condition: Record<string, unknown>) =>
+    applyContactFilter({ operator: "and", conditions: [condition] })
+
+  test.each([
+    [
+      "tags notIn []",
+      { field: "tags", operator: operatorTypes.enum.notIn, value: [] },
+    ],
+    [
+      "tags notIn ''",
+      { field: "tags", operator: operatorTypes.enum.notIn, value: "" },
+    ],
+    [
+      "tags ne ['']",
+      { field: "tags", operator: operatorTypes.enum.ne, value: [""] },
+    ],
+    [
+      "inbox notIn [null]",
+      { field: "inbox", operator: operatorTypes.enum.notIn, value: [null] },
+    ],
+    [
+      "country notIn []",
+      { field: "country", operator: operatorTypes.enum.notIn, value: [] },
+    ],
+    [
+      "country ne []",
+      { field: "country", operator: operatorTypes.enum.ne, value: [] },
+    ],
+  ])("%s matches nothing (NOT EXISTS over an empty set would match everyone)", (_label, condition) => {
+    expect(only(condition)).toEqual(matchesNothing)
+  })
+
+  test("a real tag negation still builds NOT EXISTS", () => {
+    const query = renderContactWhere(
+      only({
+        field: "tags",
+        operator: operatorTypes.enum.notIn,
+        value: ["t-1"],
+      }),
+    )
+    expect(query.sql).toContain("NOT EXISTS")
+    expect(query.params).toContain("t-1")
   })
 })

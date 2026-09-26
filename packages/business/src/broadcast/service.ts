@@ -45,6 +45,7 @@ import {
   contactInboxInteractedWithin24hSQL,
   pruneEmailPhoneFilterConditions,
 } from "@chatbotx.io/database/queries"
+import { hasExcludedFieldCondition } from "@chatbotx.io/database/queries/contact-filter/excluded-field"
 import { isContactFilterShape } from "@chatbotx.io/database/queries/contact-filter/shape"
 import {
   type BroadcastListInput,
@@ -297,6 +298,30 @@ export type BroadcastValidationField =
  * (`apps/builder/src/lib/errors/validation-exception.ts`) narrows on that
  * exact code before trusting `.field`.
  */
+
+/**
+ * Prunes the email/phone conditions a caller may not use before a filter is
+ * STORED on a broadcast. Pruning swaps each for a stand-in that matches
+ * nothing (it never widens), but a stored stand-in would only fail the send
+ * later, so it is refused here instead (s206).
+ */
+const pruneAudienceFilter = (
+  contactFilter: ContactFilterCriteriaInput | null | undefined,
+  canViewEmailAndPhone: boolean,
+): ContactFilterCriteriaInput | undefined => {
+  const pruned = pruneEmailPhoneFilterConditions(
+    contactFilter,
+    canViewEmailAndPhone,
+  )
+  if (hasExcludedFieldCondition(pruned)) {
+    throw validationException(
+      "contactFilter",
+      "The audience filter uses email or phone fields you cannot use; ask someone who can to send this broadcast.",
+    )
+  }
+  return pruned
+}
+
 export class BroadcastValidationException extends ChatbotXException {
   readonly field: BroadcastValidationField
 
@@ -1147,10 +1172,7 @@ class BroadcastService extends BaseService {
       targetMode,
       ...legacyColumns,
       contactFilter:
-        pruneEmailPhoneFilterConditions(
-          data.contactFilter,
-          canViewEmailAndPhone,
-        ) ?? null,
+        pruneAudienceFilter(data.contactFilter, canViewEmailAndPhone) ?? null,
       schedulesType: data.schedulesType,
       // Persist the minute-truncated time the schema validated against.
       schedulesAt: startOfMinute(new Date(data.schedulesAt ?? new Date())),
@@ -1234,7 +1256,7 @@ class BroadcastService extends BaseService {
       sourceName: source.name,
     })
     const contactFilter =
-      pruneEmailPhoneFilterConditions(
+      pruneAudienceFilter(
         source.contactFilter as ContactFilterCriteriaInput | null,
         input.canViewEmailAndPhone,
       ) ?? null
@@ -1725,6 +1747,7 @@ class BroadcastService extends BaseService {
     inboxIds: string[],
     input: BroadcastAudienceInput,
   ): SQL | undefined {
+    // Read-only: an excluded condition narrows or matches nothing (s206).
     const contactFilter = pruneEmailPhoneFilterConditions(
       input.contactFilter,
       input.canViewEmailAndPhone !== false,
@@ -2151,20 +2174,10 @@ class BroadcastService extends BaseService {
         "The broadcast's stored audience filter is invalid; create a new broadcast instead of resending.",
       )
     }
-    const contactFilter = pruneEmailPhoneFilterConditions(
+    const contactFilter = pruneAudienceFilter(
       persisted ?? undefined,
       input.canViewEmailAndPhone,
     )
-    if (
-      persisted != null &&
-      persisted.conditions.length > 0 &&
-      contactFilter?.conditions.length === 0
-    ) {
-      throw validationException(
-        "contactFilter",
-        "The broadcast's audience filter uses fields you cannot view; ask someone who can to resend it.",
-      )
-    }
 
     const newBroadcast = await db.transaction(async (tx) => {
       const inserted = await tx

@@ -1,4 +1,5 @@
 import { type ContactFilterField, contactFilterFields } from "../../partials"
+import { EXCLUDED_FIELD_CONDITION } from "./excluded-field"
 import type { ContactFilterCriteriaInput } from "./types"
 
 export const EMAIL_PHONE_FILTER_FIELDS = [
@@ -29,19 +30,17 @@ export function pruneContactFilterFields(
   }
 
   const excludedFieldSet = new Set<string>(excludedFields)
-  const conditions = contactFilter.conditions.filter((condition) => {
+  const conditions = contactFilter.conditions.map((condition) => {
     const field = toConditionWithField(condition)?.field
-    return typeof field !== "string" || !excludedFieldSet.has(field)
+    return typeof field === "string" && excludedFieldSet.has(field)
+      ? EXCLUDED_FIELD_CONDITION
+      : condition
   })
 
   // Spread the original so boundary-only fields (notably `timezone`, which the
   // date-range WHERE resolves against) survive pruning — listing fields by hand
   // silently drops any not enumerated here.
-  return {
-    ...contactFilter,
-    operator: conditions.length > 0 ? contactFilter.operator : "and",
-    conditions,
-  }
+  return { ...contactFilter, conditions }
 }
 
 export function pruneEmailPhoneFilterConditions(

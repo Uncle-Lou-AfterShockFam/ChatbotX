@@ -509,7 +509,8 @@
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
     },
     "invalidFilterDescription": "No se pudo leer el filtro de audiencia, así que esta difusión no se puede enviar. Bórralo y vuelve a crear la audiencia.",
-    "invalidStoredFilterDescription": "No se pudo leer el filtro de audiencia guardado. Esta difusión no se puede reenviar; crea una nueva en su lugar."
+    "invalidStoredFilterDescription": "No se pudo leer el filtro de audiencia guardado. Esta difusión no se puede reenviar; crea una nueva en su lugar.",
+    "excludedFilterDescription": "Este filtro de audiencia usa campos que no están disponibles para tu rol o este canal, así que la difusión no se puede enviar. Bórralo y vuelve a crear la audiencia."
   },
   "commentAutomation": {
     "stats": {
@@ -4506,7 +4507,8 @@
     "exportTakingLongDescription": "The export es still processing. tú puede Cerrar este dialog y check back en un few minutos desde el export history.",
     "invalidFilterTitle": "No se puede leer este filtro",
     "invalidFilterDescription": "No se pudo leer el filtro de contactos de este enlace, así que no se muestra ningún contacto. Bórralo y vuelve a crear el filtro.",
-    "clearInvalidFilter": "Borrar filtro"
+    "clearInvalidFilter": "Borrar filtro",
+    "excludedFilterDescription": "Este filtro usa campos de correo o teléfono que no puedes usar, así que no se muestra ningún contacto. Bórralo y vuelve a crear el filtro."
   },
   "contactScan": {
     "menu": {

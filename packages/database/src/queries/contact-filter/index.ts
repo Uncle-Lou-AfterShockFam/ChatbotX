@@ -65,6 +65,10 @@ export {
   ctwaRetargetSegments,
 } from "./ctwa-retarget"
 export {
+  EXCLUDED_FIELD_CONDITION,
+  hasExcludedFieldCondition,
+} from "./excluded-field"
+export {
   EMAIL_PHONE_FILTER_FIELDS,
   pruneContactFilterFields,
   pruneEmailPhoneFilterConditions,
@@ -116,7 +120,7 @@ const CTWA_RETARGET_CHANNELS: ReadonlySet<string> = new Set(
 export const contactFilterHasPredicate = (
   criteria: FilterCriteriaInput,
   workspaceId?: string,
-): boolean => hasWhereParts(buildFilterWhere(criteria, workspaceId))
+): boolean => buildConditionWheres(criteria, workspaceId).some(hasWhereParts)
 
 type ContactFilterContext = {
   timezone: string
@@ -384,50 +388,42 @@ export const buildContactInboxContactFilterSQL = ({
 }
 
 /**
- * The contact where for a filter. A filter WITH conditions that all drop
- * (unknown field, unusable operator, a workspace-scoped condition without
- * `workspaceId`) matches NO contact: returning `{}` there would match every
- * contact, and an invalid filter must never widen (s206). An empty
- * conditions list still means "everyone".
+ * The contact where for a filter. A condition "drops" when it yields no
+ * predicate (unknown field, unusable operator or value, a workspace-scoped
+ * condition without `workspaceId`). Dropping must never widen (s206):
+ * - every condition drops -> NO contact (`{}` would match everyone);
+ * - one drops under AND -> NO contact (the rest alone match MORE contacts
+ *   than the filter describes); under OR a dropped branch only narrows.
+ * An empty conditions list still means "everyone".
  */
 export function applyContactFilter(
   criteria: FilterCriteriaInput,
   workspaceId?: string,
 ): ContactWhere {
-  const where = buildFilterWhere(criteria, workspaceId)
-  if (criteria.conditions.length > 0 && !hasWhereParts(where)) {
-    return { RAW: () => sql`FALSE` }
-  }
-  return where
-}
-
-/** `{}` when no condition yields a predicate; see `applyContactFilter`. */
-function buildFilterWhere(
-  criteria: FilterCriteriaInput,
-  workspaceId?: string,
-): ContactWhere {
-  const conditions = criteria.conditions as FilterConditionInput[]
-  if (conditions.length === 0) {
+  const conditionWheres = buildConditionWheres(criteria, workspaceId)
+  if (conditionWheres.length === 0) {
     return {}
   }
+  const kept = conditionWheres.filter(hasWhereParts)
+  const dropped = kept.length < conditionWheres.length
+  if (kept.length === 0 || (dropped && criteria.operator !== "or")) {
+    return { RAW: () => sql`FALSE` }
+  }
+  return criteria.operator === "or" ? { OR: kept } : { AND: kept }
+}
 
+/** One where per condition, in order; `{}` for a condition that drops. */
+function buildConditionWheres(
+  criteria: FilterCriteriaInput,
+  workspaceId?: string,
+): ContactWhere[] {
   const context: ContactFilterContext = {
     timezone: resolveFilterTimezone(criteria.timezone),
     workspaceId,
   }
-  const conditionWheres = conditions
-    .map((condition) => buildConditionWhere(condition, context))
-    .filter((w): w is ContactWhere => Object.keys(w).length > 0)
-
-  if (conditionWheres.length === 0) {
-    return {}
-  }
-
-  if (criteria.operator === "or") {
-    return { OR: conditionWheres }
-  }
-
-  return { AND: conditionWheres }
+  return (criteria.conditions as FilterConditionInput[]).map((condition) =>
+    buildConditionWhere(condition, context),
+  )
 }
 
 function buildConditionWhere(

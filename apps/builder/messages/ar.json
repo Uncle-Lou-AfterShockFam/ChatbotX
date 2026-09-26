@@ -509,7 +509,8 @@
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
     },
     "invalidFilterDescription": "تعذّرت قراءة فلتر الجمهور، لذلك لا يمكن إرسال هذا البث. امسحه وأنشئ الجمهور من جديد.",
-    "invalidStoredFilterDescription": "تعذّرت قراءة فلتر الجمهور المحفوظ. لا يمكن إعادة إرسال هذا البث؛ أنشئ بثًا جديدًا بدلًا من ذلك."
+    "invalidStoredFilterDescription": "تعذّرت قراءة فلتر الجمهور المحفوظ. لا يمكن إعادة إرسال هذا البث؛ أنشئ بثًا جديدًا بدلًا من ذلك.",
+    "excludedFilterDescription": "يستخدم فلتر الجمهور هذا حقولًا غير متاحة لدورك أو لهذه القناة، لذلك لا يمكن إرسال هذا البث. امسحه وأنشئ الجمهور من جديد."
   },
   "commentAutomation": {
     "stats": {
@@ -4506,7 +4507,8 @@
     "exportTakingLongDescription": "لا تزال عملية التصدير جارية. يمكنك إغلاق مربع الحوار هذا والتحقق مرة أخرى بعد بضع دقائق من سجل التصدير.",
     "invalidFilterTitle": "تعذّرت قراءة هذا الفلتر",
     "invalidFilterDescription": "تعذّرت قراءة فلتر جهات الاتصال في هذا الرابط، لذلك لا تُعرض أي جهات اتصال. امسحه وأنشئ الفلتر من جديد.",
-    "clearInvalidFilter": "مسح الفلتر"
+    "clearInvalidFilter": "مسح الفلتر",
+    "excludedFilterDescription": "يستخدم هذا الفلتر حقول بريد إلكتروني أو هاتف لا يمكنك استخدامها، لذلك لا تُعرض أي جهات اتصال. امسحه وأنشئ الفلتر من جديد."
   },
   "contactScan": {
     "menu": {

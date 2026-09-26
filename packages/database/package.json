@@ -57,6 +57,7 @@
     "./partials": "./src/partials/index.ts",
     "./queries": "./src/queries/index.ts",
     "./queries/contact-filter": "./src/queries/contact-filter/index.ts",
+    "./queries/contact-filter/excluded-field": "./src/queries/contact-filter/excluded-field.ts",
     "./queries/contact-filter/permission": "./src/queries/contact-filter/permission.ts",
     "./queries/contact-filter/shape": "./src/queries/contact-filter/shape.ts",
     "./queries/contact-filter/value-format": "./src/queries/contact-filter/value-format.ts",

@@ -509,7 +509,8 @@
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
     },
     "invalidFilterDescription": "Não foi possível ler o filtro de público, então esta transmissão não pode ser enviada. Limpe-o e crie o público novamente.",
-    "invalidStoredFilterDescription": "Não foi possível ler o filtro de público salvo. Esta transmissão não pode ser reenviada; crie uma nova."
+    "invalidStoredFilterDescription": "Não foi possível ler o filtro de público salvo. Esta transmissão não pode ser reenviada; crie uma nova.",
+    "excludedFilterDescription": "Este filtro de público usa campos indisponíveis para sua função ou este canal, então esta transmissão não pode ser enviada. Limpe-o e crie o público novamente."
   },
   "commentAutomation": {
     "stats": {
@@ -4399,7 +4400,8 @@
     "exportTakingLongDescription": "A exportação ainda está sendo processada. Você pode fechar esta caixa de diálogo e verificar novamente em alguns minutos no histórico de exportações.",
     "invalidFilterTitle": "Não é possível ler este filtro",
     "invalidFilterDescription": "Não foi possível ler o filtro de contatos deste link, então nenhum contato é exibido. Limpe-o e crie o filtro novamente.",
-    "clearInvalidFilter": "Limpar filtro"
+    "clearInvalidFilter": "Limpar filtro",
+    "excludedFilterDescription": "Este filtro usa campos de e-mail ou telefone que você não pode usar, então nenhum contato é exibido. Limpe-o e crie o filtro novamente."
   },
   "contactScan": {
     "menu": {

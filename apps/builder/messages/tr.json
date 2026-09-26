@@ -509,7 +509,8 @@
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
     },
     "invalidFilterDescription": "Hedef kitle filtresi okunamadı, bu yüzden bu yayın gönderilemez. Filtreyi temizleyip hedef kitleyi yeniden oluşturun.",
-    "invalidStoredFilterDescription": "Kayıtlı hedef kitle filtresi okunamadı. Bu yayın yeniden gönderilemez; bunun yerine yeni bir yayın oluşturun."
+    "invalidStoredFilterDescription": "Kayıtlı hedef kitle filtresi okunamadı. Bu yayın yeniden gönderilemez; bunun yerine yeni bir yayın oluşturun.",
+    "excludedFilterDescription": "Bu hedef kitle filtresi rolünüz veya bu kanal için kullanılamayan alanlar içeriyor, bu yüzden yayın gönderilemez. Filtreyi temizleyip hedef kitleyi yeniden oluşturun."
   },
   "commentAutomation": {
     "stats": {
@@ -4506,7 +4507,8 @@
     "exportTakingLongDescription": "Dışa aktarma hâlâ işleniyor. Bu iletişim kutusunu kapatıp birkaç dakika sonra dışa aktarma geçmişinden tekrar kontrol edebilirsiniz.",
     "invalidFilterTitle": "Bu filtre okunamıyor",
     "invalidFilterDescription": "Bu bağlantıdaki kişi filtresi okunamadı, bu yüzden hiçbir kişi gösterilmiyor. Filtreyi temizleyip yeniden oluşturun.",
-    "clearInvalidFilter": "Filtreyi temizle"
+    "clearInvalidFilter": "Filtreyi temizle",
+    "excludedFilterDescription": "Bu filtre kullanamadığınız e-posta veya telefon alanlarını kullanıyor, bu yüzden hiçbir kişi gösterilmiyor. Filtreyi temizleyip yeniden oluşturun."
   },
   "contactScan": {
     "menu": {

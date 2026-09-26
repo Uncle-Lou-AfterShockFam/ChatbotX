@@ -125,6 +125,9 @@ vi.mock("../src/audit/dispatcher", () => ({
 const { pruneEmailPhoneFilterConditions } = await import(
   "@chatbotx.io/database/queries"
 )
+const { EXCLUDED_FIELD_CONDITION } = await import(
+  "@chatbotx.io/database/queries/contact-filter/excluded-field"
+)
 const { broadcastService } = await import("../src/broadcast/service")
 
 const WS = "ws-1"
@@ -358,11 +361,11 @@ describe("broadcastService.resendWithPruning", () => {
     )
   })
 
-  test("rejects (422) when pruning removes EVERY condition (s206: that would resend to everyone)", async () => {
+  test("rejects (422) when pruning excludes a condition (s206: a stored stand-in would only fail the send)", async () => {
     const persisted = { operator: "and", conditions: [{ field: "email" }] }
     vi.mocked(pruneEmailPhoneFilterConditions).mockReturnValueOnce({
       operator: "and",
-      conditions: [],
+      conditions: [EXCLUDED_FIELD_CONDITION],
     } as never)
     mockFindOrFail.mockResolvedValue({
       ...sourceBroadcast,

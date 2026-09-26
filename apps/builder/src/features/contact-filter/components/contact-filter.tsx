@@ -24,6 +24,12 @@ type ContactFilterProps = {
    * v1 surface only — see `useContactFilterConfigs`. Defaults to false.
    */
   includeBotFields?: boolean
+  /**
+   * When set, conditions on an excluded field are REPORTED instead of being
+   * silently deleted: deleting one would widen the filter, up to everyone
+   * (s206). The caller then fails closed (alert, nothing fetched or sent).
+   */
+  onExcludedConditions?: () => void
 }
 
 const EMPTY_EXCLUDE_FIELDS: ContactFilterField[] = []
@@ -34,6 +40,7 @@ export const ContactFilter = ({
   inboxChannel,
   enableVariables = false,
   includeBotFields = false,
+  onExcludedConditions,
 }: ContactFilterProps) => {
   const t = useTranslations()
   const { control, getValues, setValue } = useFormContext()
@@ -72,9 +79,13 @@ export const ContactFilter = ({
     const pruned = pruneExcludedConditions(conditions, excludeFields)
 
     if (pruned.length !== conditions.length) {
+      if (onExcludedConditions) {
+        onExcludedConditions()
+        return
+      }
       replace(pruned)
     }
-  }, [excludeFields, getValues, parentName, replace])
+  }, [excludeFields, getValues, onExcludedConditions, parentName, replace])
 
   const handleAdd = (data: ContactFilterCondition) => {
     append(data)

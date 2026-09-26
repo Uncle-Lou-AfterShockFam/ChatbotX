@@ -509,7 +509,8 @@
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
     },
     "invalidFilterDescription": "The audience filter could not be read, so this broadcast cannot be sent. Clear it and build the audience again.",
-    "invalidStoredFilterDescription": "The stored audience filter could not be read. This broadcast cannot be resent; create a new one instead."
+    "invalidStoredFilterDescription": "The stored audience filter could not be read. This broadcast cannot be resent; create a new one instead.",
+    "excludedFilterDescription": "This audience filter uses fields that aren't available for your role or this channel, so this broadcast cannot be sent. Clear it and build the audience again."
   },
   "commentAutomation": {
     "stats": {
@@ -4694,7 +4695,8 @@
     "exportTakingLongDescription": "The export is still processing. You can close this dialog and check back in a few minutes from the export history.",
     "invalidFilterTitle": "This filter can't be read",
     "invalidFilterDescription": "The contact filter in this link could not be read, so no contacts are shown. Clear it and build the filter again.",
-    "clearInvalidFilter": "Clear filter"
+    "clearInvalidFilter": "Clear filter",
+    "excludedFilterDescription": "This filter uses email or phone fields you can't use, so no contacts are shown. Clear it and build the filter again."
   },
   "contactScan": {
     "menu": {

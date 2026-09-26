@@ -509,7 +509,8 @@
       "description": "\"{name}\" sẽ tiếp tục gửi đến những người nhận chưa nhận được tin."
     },
     "invalidFilterDescription": "Không thể đọc bộ lọc đối tượng nên không thể gửi chiến dịch này. Hãy xóa và tạo lại đối tượng.",
-    "invalidStoredFilterDescription": "Không thể đọc bộ lọc đối tượng đã lưu. Không thể gửi lại chiến dịch này; hãy tạo chiến dịch mới."
+    "invalidStoredFilterDescription": "Không thể đọc bộ lọc đối tượng đã lưu. Không thể gửi lại chiến dịch này; hãy tạo chiến dịch mới.",
+    "excludedFilterDescription": "Bộ lọc đối tượng này dùng các trường không khả dụng với vai trò của bạn hoặc kênh này nên không thể gửi chiến dịch. Hãy xóa và tạo lại đối tượng."
   },
   "commentAutomation": {
     "stats": {
@@ -4419,7 +4420,8 @@
     "exportAllNotice": "Tất cả liên hệ khớp với bộ lọc hiện tại sẽ được xuất.",
     "invalidFilterTitle": "Không thể đọc bộ lọc này",
     "invalidFilterDescription": "Không thể đọc bộ lọc liên hệ trong liên kết này nên không có liên hệ nào được hiển thị. Hãy xóa và tạo lại bộ lọc.",
-    "clearInvalidFilter": "Xóa bộ lọc"
+    "clearInvalidFilter": "Xóa bộ lọc",
+    "excludedFilterDescription": "Bộ lọc này dùng trường email hoặc số điện thoại mà bạn không được phép dùng nên không có liên hệ nào được hiển thị. Hãy xóa và tạo lại bộ lọc."
   },
   "contactScan": {
     "menu": {

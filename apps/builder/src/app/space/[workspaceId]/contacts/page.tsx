@@ -7,27 +7,18 @@ import {
   EMPTY_CONTACT_FILTER,
   parseContactFilterParam,
 } from "@/features/contact-filter"
+import { EMPTY_CONTACTS_RESPONSE } from "@/features/contacts/constants"
 import { ContactsTable } from "@/features/contacts/contacts-table"
 import { CreateContactDialog } from "@/features/contacts/create-contact-dialog"
 import { requireContactPermissionScope } from "@/features/contacts/permissions"
 import { listContactsRSC } from "@/features/contacts/queries/list-contacts.queries"
-import {
-  type ListContactsResponse,
-  listContactsRequest,
-} from "@/features/contacts/schema/query"
+import { listContactsRequest } from "@/features/contacts/schema/query"
 import { CustomFieldStoreProvider } from "@/features/custom-fields/provider/custom-field-store-context"
 import { FlowStoreProvider } from "@/features/flows/provider/flow-store-context"
 import { InboxStoreProvider } from "@/features/inboxes/provider/inbox-store-context"
 import { SequenceStoreProvider } from "@/features/sequences/provider/sequence-store-context"
 import { UserStoreProvider } from "@/features/users/provider/user-store-context"
 import { requireContactsAccess } from "@/lib/auth/require-workspace-permission"
-
-const EMPTY_CONTACTS_RESPONSE = {
-  data: [],
-  pageCount: 0,
-  totalCount: 0,
-  totalCountCapped: false,
-} satisfies ListContactsResponse
 
 export default async function ContactsPage(props: {
   params: Promise<{ workspaceId: string }>

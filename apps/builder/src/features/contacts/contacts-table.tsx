@@ -30,7 +30,7 @@ import { EMAIL_PHONE_RESTRICTED_FILTER_FIELDS } from "@/features/contact-filter/
 import { orpc } from "@/lib/orpc/query"
 import { getUserName } from "../users/schema/resource"
 import { ContactNameCell } from "./components/contact-name-cell"
-import { CONTACTS_DEFAULT_PER_PAGE } from "./constants"
+import { CONTACTS_DEFAULT_PER_PAGE, EMPTY_CONTACTS_RESPONSE } from "./constants"
 import { ContactListAction } from "./contacts-list-action"
 import { listInputKey, seedForFirstKey } from "./lib/seed-first-key"
 import type { listContacts } from "./queries/list-contacts.queries"
@@ -114,13 +114,6 @@ const parseSortParam = (value: string | null) => {
   }
 }
 
-const EMPTY_CONTACTS_PAGE: ListContactsResponse = {
-  data: [],
-  pageCount: 0,
-  totalCount: 0,
-  totalCountCapped: false,
-}
-
 type ContactsTableProps = {
   canViewEmailAndPhone?: boolean
   initialContactFilter?: ContactFilterCriteria
@@ -144,9 +137,23 @@ export function ContactsTable({
     filter: contactFilter,
     setFilter: setContactFilter,
     isActive: isContactFilterActive,
-    invalid: isContactFilterInvalid,
+    invalid: isContactFilterUnreadable,
     clearInvalidFilter,
   } = useContactFilterQueryState({ initialFilter: initialContactFilter })
+  // The filter uses a field this member may not use (email / phone). The
+  // server already matches NO contact for it; the table says why (s206).
+  const [hasExcludedConditions, setHasExcludedConditions] = useState(false)
+  const isContactFilterInvalid =
+    isContactFilterUnreadable || hasExcludedConditions
+  const handleExcludedConditions = useCallback(
+    () => setHasExcludedConditions(true),
+    [],
+  )
+  const handleClearInvalidFilter = useCallback(() => {
+    setHasExcludedConditions(false)
+    setContactFilter(EMPTY_CONTACT_FILTER)
+    clearInvalidFilter()
+  }, [clearInvalidFilter, setContactFilter])
   const [optimisticContactFilter, setOptimisticContactFilter] =
     useState<ContactFilterCriteria>(contactFilter)
   const [showContactFilterPanel, setShowContactFilterPanel] = useState(
@@ -211,7 +218,7 @@ export function ContactsTable({
   // Never undefined in practice (the first key is seeded, later keys keep
   // the previous data as a placeholder); the fallback satisfies the type.
   const contactsResponse = isContactFilterInvalid
-    ? EMPTY_CONTACTS_PAGE
+    ? EMPTY_CONTACTS_RESPONSE
     : (fetchedResponse ?? initialResponse)
   const tableData = contactsResponse.data
   const tablePageCount = contactsResponse.pageCount
@@ -450,14 +457,19 @@ export function ContactsTable({
     >
       {isContactFilterInvalid && (
         <InvalidContactFilterAlert
-          description={t("contacts.invalidFilterDescription")}
-          onClear={clearInvalidFilter}
+          description={t(
+            hasExcludedConditions
+              ? "contacts.excludedFilterDescription"
+              : "contacts.invalidFilterDescription",
+          )}
+          onClear={handleClearInvalidFilter}
         />
       )}
-      {showContactFilterPanel && (
+      {showContactFilterPanel && !hasExcludedConditions && (
         <ContactListFilterPanel
           excludeFields={excludedFilterFields}
           filter={optimisticContactFilter}
+          onExcludedConditions={handleExcludedConditions}
           onFilterChange={handleContactFilterChange}
         />
       )}

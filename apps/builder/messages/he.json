@@ -2518,7 +2518,8 @@
     "exportTakingLongDescription": "הייצוא עדיין בעיבוד. ניתן לסגור חלון זה ולבדוק שוב בעוד מספר דקות בהיסטוריית הייצוא.",
     "invalidFilterTitle": "לא ניתן לקרוא את המסנן הזה",
     "invalidFilterDescription": "לא ניתן היה לקרוא את מסנן אנשי הקשר בקישור הזה, ולכן לא מוצגים אנשי קשר. נקו אותו ובנו את המסנן מחדש.",
-    "clearInvalidFilter": "ניקוי מסנן"
+    "clearInvalidFilter": "ניקוי מסנן",
+    "excludedFilterDescription": "המסנן הזה משתמש בשדות אימייל או טלפון שאין לכם הרשאה להשתמש בהם, ולכן לא מוצגים אנשי קשר. נקו אותו ובנו את המסנן מחדש."
   },
   "contactScan": {
     "menu": {
@@ -5868,7 +5869,8 @@
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
     },
     "invalidFilterDescription": "לא ניתן היה לקרוא את מסנן הקהל, ולכן לא ניתן לשלוח את השידור הזה. נקו אותו ובנו את הקהל מחדש.",
-    "invalidStoredFilterDescription": "לא ניתן היה לקרוא את מסנן הקהל השמור. לא ניתן לשלוח שוב את השידור הזה; צרו שידור חדש במקומו."
+    "invalidStoredFilterDescription": "לא ניתן היה לקרוא את מסנן הקהל השמור. לא ניתן לשלוח שוב את השידור הזה; צרו שידור חדש במקומו.",
+    "excludedFilterDescription": "מסנן הקהל הזה משתמש בשדות שאינם זמינים לתפקיד שלכם או לערוץ הזה, ולכן לא ניתן לשלוח את השידור. נקו אותו ובנו את הקהל מחדש."
   },
   "commentAutomation": {
     "stats": {
