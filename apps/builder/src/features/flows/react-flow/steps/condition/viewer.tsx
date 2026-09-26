@@ -6,6 +6,10 @@ import {
   type FieldConfig,
   formatConditionValueDisplay,
 } from "@/features/contact-filter/components/contact-filter-config"
+import {
+  conditionOptionType,
+  resolveOperatorLabel,
+} from "@/features/contact-filter/components/custom-field-filter-config"
 import { useContactFilterConfigs } from "@/features/contact-filter/components/use-contact-filter-configs"
 import { SequenceStoreProvider } from "@/features/sequences/provider/sequence-store-context"
 import { useWorkspaceId } from "@/hooks/routing"
@@ -53,8 +57,12 @@ const ConditionRow = ({
       }
       return t(`condition.fields.${condition.field}`)
     })()
-  const operatorLabel =
-    operatorLabelByValue.get(condition.operator) ?? condition.operator
+  const operatorLabel = resolveOperatorLabel(
+    conditionOptionType(condition),
+    condition.operator,
+    operatorLabelByValue,
+    t,
+  )
   const valueDisplay = formatConditionValueDisplay(
     condition.value,
     fieldConfig?.options,
