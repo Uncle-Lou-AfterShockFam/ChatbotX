@@ -756,6 +756,7 @@ class BroadcastService extends BaseService {
     broadcastId: string
     schedulesType: BroadcastScheduleType
     schedulesAt: Date
+    canViewEmailAndPhone: boolean
   }): Promise<{ id: string }> {
     const result = await db.transaction(async (tx) => {
       const [row] = await tx
@@ -769,11 +770,26 @@ class BroadcastService extends BaseService {
         .returning({
           id: broadcastModel.id,
           targetMode: broadcastModel.targetMode,
+          contactFilter: broadcastModel.contactFilter,
         })
 
       if (!row) {
         throw new ChatbotXException("Broadcast is not a draft")
       }
+
+      // A draft's stored filter was never checked for sending: `prepare-
+      // broadcast` would fail the broadcast later with no word to the
+      // operator. Refuse here instead; the throw rolls the UPDATE back, so
+      // the row stays an editable draft (s208). Checked on the RETURNING row,
+      // under the UPDATE's row lock, so a concurrent edit cannot slip past.
+      const persisted = row.contactFilter as unknown
+      if (persisted != null && !isContactFilterShape(persisted)) {
+        throw validationException(
+          "contactFilter",
+          "The broadcast's audience filter is invalid; edit the draft and fix or clear the filter before scheduling.",
+        )
+      }
+      pruneAudienceFilter(persisted ?? undefined, input.canViewEmailAndPhone)
 
       // A draft keeps every picked page, empty ones included, so it can be
       // reopened. Scheduling is the point of no return: a page left without a

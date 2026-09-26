@@ -39,7 +39,7 @@ const workspaceTokenAuthAPI = workspaceTokenAuthAPIForScope("broadcasts")
 //
 // This flag governs *write-side filter-condition pruning only*
 // (`pruneEmailPhoneFilterConditions`, applied in `create`/`updateDraft`/
-// `resendWithPruning`/`cloneBroadcast`). Reads are unaffected by it: `get`/
+// `resendWithPruning`/`cloneBroadcast`/`scheduleDraft`). Reads are unaffected by it: `get`/
 // `list`, and in particular `getAudience` below, already return full
 // contact PII (email, phone, gender) for any `broadcasts`-scoped token —
 // including a
@@ -291,6 +291,7 @@ export const broadcastsPublicRouter = {
         broadcastId: id,
         schedulesType: data.schedulesType,
         schedulesAt: resolveScheduleTime(data),
+        canViewEmailAndPhone: TOKEN_CALLER_CAN_VIEW_EMAIL_AND_PHONE,
       })
     }),
 

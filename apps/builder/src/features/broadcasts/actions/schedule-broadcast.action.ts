@@ -2,6 +2,8 @@
 
 import { broadcastService } from "@chatbotx.io/business"
 import { zodBigintAsString } from "@chatbotx.io/utils"
+import { canViewContactEmailAndPhone } from "@/features/contacts/permissions"
+import { getCurrentUserAndTargetWorkspace } from "@/lib/auth/utils"
 import { workspaceActionClient } from "@/lib/safe-action"
 import { resolveScheduleTime, scheduleBroadcastSchema } from "../schema/action"
 
@@ -14,13 +16,21 @@ export const scheduleBroadcastAction = workspaceActionClient
       parsedInput,
     } = props
 
-    // The service owns the draft-status guard and the audit record (only
-    // when `schedulesType === "now"`) — shared with the public API's
-    // `schedule` route.
+    const userAndWorkspace = await getCurrentUserAndTargetWorkspace(workspaceId)
+    const canViewEmailAndPhone = userAndWorkspace
+      ? canViewContactEmailAndPhone(
+          userAndWorkspace.targetWorkspaceMember.permissions,
+        )
+      : false
+
+    // The service owns the draft-status guard, the stored-filter check and
+    // the audit record (only when `schedulesType === "now"`) — shared with
+    // the public API's `schedule` route.
     return await broadcastService.scheduleDraft({
       workspaceId,
       broadcastId: id,
       schedulesType: parsedInput.schedulesType,
       schedulesAt: resolveScheduleTime(parsedInput),
+      canViewEmailAndPhone,
     })
   })
