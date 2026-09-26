@@ -8,7 +8,7 @@ import {
 } from "@chatbotx.io/database/utils"
 import type { ErrorLogRecordedPayload } from "@chatbotx.io/event-bus"
 import { emit } from "@chatbotx.io/event-bus"
-import { createId } from "@chatbotx.io/utils"
+import { createId, TimeoutError, withTimeout } from "@chatbotx.io/utils"
 import {
   type ErrorLogProvider,
   errorLogProviders,
@@ -202,26 +202,6 @@ const toEntry = (input: LogProviderErrorInput): ErrorLogRecordedPayload => ({
  */
 const EMIT_TIMEOUT_MS = 2000
 
-const TIMED_OUT = Symbol("timed-out")
-
-const withTimeout = async (
-  promise: Promise<string> | undefined,
-): Promise<string | undefined | typeof TIMED_OUT> => {
-  let timer: NodeJS.Timeout | undefined
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<typeof TIMED_OUT>((resolve) => {
-        timer = setTimeout(() => resolve(TIMED_OUT), EMIT_TIMEOUT_MS)
-      }),
-    ])
-  } finally {
-    if (timer) {
-      clearTimeout(timer)
-    }
-  }
-}
-
 /**
  * Record a batch of third-party API failures.
  *
@@ -252,27 +232,30 @@ export const logProviderErrors = async (
 
   const results = await Promise.allSettled(
     inputs.map((input) =>
-      withTimeout(emit("error-log:recorded", toEntry(input))),
+      withTimeout(
+        Promise.resolve(emit("error-log:recorded", toEntry(input))),
+        EMIT_TIMEOUT_MS,
+      ),
     ),
   )
 
   const failedIndexes: number[] = []
   results.forEach((result, index) => {
+    if (result.status === "rejected" && result.reason instanceof TimeoutError) {
+      logger.warn(
+        { workspaceId: inputs[index]?.workspaceId },
+        "logProviderErrors: emit timed out",
+      )
+      failedIndexes.push(index)
+      return
+    }
+
     if (result.status === "rejected") {
       // The stream write itself failed (Redis unreachable mid-command).
       // Transient — worth handing back to the caller's retry.
       logger.warn(
         { err: result.reason },
         "logProviderErrors: failed to emit error log",
-      )
-      failedIndexes.push(index)
-      return
-    }
-
-    if (result.value === TIMED_OUT) {
-      logger.warn(
-        { workspaceId: inputs[index]?.workspaceId },
-        "logProviderErrors: emit timed out",
       )
       failedIndexes.push(index)
       return
