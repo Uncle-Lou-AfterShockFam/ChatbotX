@@ -26,6 +26,9 @@ export default getRequestConfig(async () => {
   return {
     locale,
     timeZone,
+    // One instant for the server render and the hydrating client: relative
+    // labels ("3 minutes ago", `useRenderNow`) start from it on both sides.
+    now: new Date(),
     messages: messagesByLocale[locale],
     getMessageFallback: ({ key, namespace }) => {
       const fallback = resolveEnglishFallback(key, namespace)
