@@ -197,6 +197,36 @@ describe("scheduleBroadcastAction", () => {
       "2030-01-01T09:30:00.000Z",
     )
   })
+
+  // s208: the service refuses a stored email/phone condition the member
+  // cannot use, so the action must pass the member's real permission.
+  test.each([
+    [true, true],
+    [false, false],
+  ])("passes canViewEmailAndPhone=%s from the member's permissions", async (allowed, expected) => {
+    scheduleDraft.mockResolvedValue({ id: "b-1" })
+    canViewContactEmailAndPhone.mockReturnValue(allowed)
+
+    await scheduleHandler({
+      bindArgsParsedInputs: ["ws-1", "b-1"],
+      parsedInput: { schedulesType: "now", schedulesAt: null },
+    })
+
+    expect(getCurrentUserAndTargetWorkspace).toHaveBeenCalledWith("ws-1")
+    expect(scheduleDraft.mock.calls[0][0].canViewEmailAndPhone).toBe(expected)
+  })
+
+  test("a caller with no workspace membership schedules as a member without email/phone", async () => {
+    scheduleDraft.mockResolvedValue({ id: "b-1" })
+    getCurrentUserAndTargetWorkspace.mockResolvedValue(null)
+
+    await scheduleHandler({
+      bindArgsParsedInputs: ["ws-1", "b-1"],
+      parsedInput: { schedulesType: "now", schedulesAt: null },
+    })
+
+    expect(scheduleDraft.mock.calls[0][0].canViewEmailAndPhone).toBe(false)
+  })
 })
 
 describe("deleteBroadcastAction", () => {

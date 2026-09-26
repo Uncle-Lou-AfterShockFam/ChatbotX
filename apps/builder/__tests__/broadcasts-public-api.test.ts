@@ -191,6 +191,8 @@ describe("POST /v1/broadcasts/{id}/schedule", () => {
     expect(call.schedulesType).toBe("now")
     expect(call.schedulesAt.getSeconds()).toBe(0)
     expect(call.schedulesAt.getTime()).toBeLessThanOrEqual(Date.now())
+    // A workspace token may use email/phone conditions (same as create/resend).
+    expect(call.canViewEmailAndPhone).toBe(true)
   })
 
   test("passes a future time through unchanged (minute-truncated)", async () => {
