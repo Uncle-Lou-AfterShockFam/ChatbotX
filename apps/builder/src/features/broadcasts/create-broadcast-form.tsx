@@ -138,6 +138,11 @@ export function CreateBroadcastForm({
       : null,
   )
   const contactFilterInvalid = contactFilterProblem !== null
+  // Stable: `ContactFilter`'s prune effect depends on it.
+  const handleContactFilterExcluded = useCallback(
+    () => setContactFilterProblem("excluded"),
+    [],
+  )
 
   const { appendFilter, resetFilter, getAllActiveFlows } = useFlowStore(
     (state) => state,
@@ -280,9 +285,7 @@ export function CreateBroadcastForm({
                 })
                 setContactFilterProblem(null)
               }}
-              onContactFilterExcluded={() =>
-                setContactFilterProblem("excluded")
-              }
+              onContactFilterExcluded={handleContactFilterExcluded}
               onSaveAsDraft={handleSaveAsDraft}
               subaction={watchedSubAction}
             />

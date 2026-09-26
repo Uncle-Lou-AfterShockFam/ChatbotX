@@ -111,6 +111,10 @@ const CTWA_RETARGET_CHANNELS: ReadonlySet<string> = new Set(
 )
 
 /**
+ * Whether ANY condition builds a predicate. It is not "the filter matches
+ * something": under AND one dropped condition makes `applyContactFilter`
+ * return FALSE (s206), so callers must still build the where from it.
+ *
  * `workspaceId` is optional for backward compat but should always be passed
  * when available — without it, a criteria whose only condition is `botField`
  * (workspace-scoped, requires `workspaceId` to build its EXISTS predicate)
