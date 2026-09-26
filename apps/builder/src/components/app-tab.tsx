@@ -39,20 +39,31 @@ function getTabClassName(tab: AppTabProps["tabs"][number]) {
 }
 
 /**
- * Scrolls the strip just far enough to show the active tab whole, and never
- * back towards the start: a deep link to the last tab ("Error Logs") otherwise
- * lands with its label cut at a phone's edge. `scrollLeft` is set directly
- * rather than via `scrollIntoView`, which would also scroll the page. The
- * strip is `relative`, so `offsetLeft` is measured from its own edge.
+ * Room past the revealed tab, matching `scroll-fade-x`'s 1.5rem fade: a tab
+ * scrolled exactly flush with the edge would sit under that fade.
+ */
+const REVEAL_CLEARANCE_PX = 24
+
+/**
+ * Scrolls the strip just far enough to show the active tab whole: a deep link
+ * to the last tab ("Error Logs") otherwise lands with its label cut at a
+ * phone's edge. Box edges are compared on screen, so the maths is the same in
+ * a right-to-left strip, whose `scrollLeft` runs negative: the physical axis
+ * is shared, and the browser clamps an overshoot to the scroll range, which
+ * for the last tab means flush with the end and its fade gone. `scrollLeft` is
+ * set directly rather than via `scrollIntoView`, which would scroll the page.
  */
 function revealActiveTab(strip: HTMLElement) {
   const active = strip.querySelector<HTMLElement>('[aria-current="page"]')
   if (!active) {
     return
   }
-  const overshoot = active.offsetLeft + active.offsetWidth - strip.clientWidth
-  if (overshoot > strip.scrollLeft) {
-    strip.scrollLeft = overshoot
+  const view = strip.getBoundingClientRect()
+  const tab = active.getBoundingClientRect()
+  if (tab.right > view.right) {
+    strip.scrollLeft += tab.right - view.right + REVEAL_CLEARANCE_PX
+  } else if (tab.left < view.left) {
+    strip.scrollLeft -= view.left - tab.left + REVEAL_CLEARANCE_PX
   }
 }
 
@@ -61,14 +72,16 @@ export function AppTab({ tabs }: AppTabProps) {
   const layoutKey = tabs
     .map((tab) => `${tab.href}:${tab.label}:${tab.isActive}`)
     .join("|")
-  useHorizontalOverflow(stripRef, layoutKey)
 
+  // Declared before the overflow hook so its first read sees the revealed
+  // position, not the one the reveal is about to leave.
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-run when the tabs or the active one change.
   useEffect(() => {
     if (stripRef.current) {
       revealActiveTab(stripRef.current)
     }
   }, [layoutKey])
+  useHorizontalOverflow(stripRef, layoutKey)
 
   return (
     <Card className="py-0">
@@ -81,7 +94,7 @@ export function AppTab({ tabs }: AppTabProps) {
         `scroll-fade-x` fades whichever edge hides tabs instead.
       */}
       <CardContent
-        className="scrollbar-hide scroll-fade-x relative flex flex-nowrap items-center gap-4 overflow-x-auto px-4 md:gap-8 md:px-8"
+        className="scrollbar-hide scroll-fade-x flex flex-nowrap items-center gap-4 overflow-x-auto px-4 md:gap-8 md:px-8"
         ref={stripRef}
       >
         {tabs.map((tab) =>

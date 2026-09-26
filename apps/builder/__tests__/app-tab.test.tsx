@@ -23,30 +23,25 @@ const { AppTab } = await import("@/components/app-tab")
 
 type Tab = ComponentProps<typeof AppTab>["tabs"][number]
 
-type Boxes = {
-  clientWidth: number
-  scrollWidth: number
-  offsetLeft: number
-  offsetWidth: number
-}
+type Span = { left: number; right: number }
 
 /**
- * jsdom lays nothing out. Every element reports the given box, which is
- * enough to place one active tab relative to the strip that holds it.
+ * jsdom lays nothing out. The strip and its active tab report the given
+ * on-screen spans; a spy, not a prototype write, so `mockRestore` puts
+ * jsdom's own getter back.
  */
-function stubBoxes(boxes: Boxes) {
-  const keys = Object.keys(boxes) as (keyof Boxes)[]
-  for (const key of keys) {
-    Object.defineProperty(HTMLElement.prototype, key, {
-      configurable: true,
-      get: () => boxes[key],
+function stubRects(strip: Span, active: Span) {
+  return vi
+    .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+    .mockImplementation(function (this: HTMLElement) {
+      const span = this.getAttribute("aria-current") === "page" ? active : strip
+      return DOMRect.fromRect({
+        x: span.left,
+        y: 0,
+        width: span.right - span.left,
+        height: 40,
+      })
     })
-  }
-  return () => {
-    for (const key of keys) {
-      delete (HTMLElement.prototype as unknown as Record<string, unknown>)[key]
-    }
-  }
 }
 
 const TABS: Tab[] = [
@@ -138,41 +133,43 @@ describe("AppTab", () => {
     expect(element?.hasAttribute("data-overflow-end")).toBe(false)
   })
 
-  test("brings an active tab that starts off-screen into view", () => {
-    const geometry = {
-      clientWidth: 300,
-      scrollWidth: 800,
-      // The last tab: its left edge sits past the visible width.
-      offsetLeft: 650,
-      offsetWidth: 100,
-    }
-    const restore = stubBoxes(geometry)
-    try {
-      render([
-        ...TABS.map((tab) => ({ ...tab, isActive: false })),
-        { label: "Error Logs", href: "/error-logs", isActive: true },
-      ])
+  const withLastTabActive = [
+    ...TABS.map((tab) => ({ ...tab, isActive: false })),
+    { label: "Error Logs", href: "/error-logs", isActive: true },
+  ]
 
-      // Scrolled just far enough to show the tab's right edge.
-      expect(strip()?.scrollLeft).toBe(450)
+  test("brings an active tab past the end edge into view, clear of the fade", () => {
+    const rects = stubRects({ left: 16, right: 372 }, { left: 331, right: 396 })
+    try {
+      render(withLastTabActive)
+
+      // 396 - 372 to show the tab, plus 24 px so the end fade misses it.
+      expect(strip()?.scrollLeft).toBe(48)
     } finally {
-      restore()
+      rects.mockRestore()
     }
   })
 
-  test("leaves the strip at the start when the active tab is visible", () => {
-    const restore = stubBoxes({
-      clientWidth: 300,
-      scrollWidth: 800,
-      offsetLeft: 16,
-      offsetWidth: 80,
-    })
+  test("brings an active tab past the start edge into view (right-to-left)", () => {
+    const rects = stubRects({ left: 16, right: 372 }, { left: -40, right: 30 })
+    try {
+      render(withLastTabActive)
+
+      // Scrolling towards the physical left is negative in an RTL strip.
+      expect(strip()?.scrollLeft).toBe(-80)
+    } finally {
+      rects.mockRestore()
+    }
+  })
+
+  test("leaves the strip alone when the active tab is visible", () => {
+    const rects = stubRects({ left: 16, right: 372 }, { left: 33, right: 83 })
     try {
       render(TABS)
 
       expect(strip()?.scrollLeft).toBe(0)
     } finally {
-      restore()
+      rects.mockRestore()
     }
   })
 
