@@ -46,7 +46,7 @@ vi.mock("@chatbotx.io/database/partials", () => ({
 
 vi.mock("@chatbotx.io/database/repositories", () => ({
   flowRepository: { listIdsByIds: vi.fn() },
-  whatsappMessageTemplateRepository: { listIdsByIntegration: vi.fn() },
+  whatsappMessageTemplateRepository: { listIdsByIntegrations: vi.fn() },
 }))
 
 vi.mock("@chatbotx.io/database/schema", () => ({
