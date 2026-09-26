@@ -640,7 +640,9 @@
     "resumeDialog": {
       "title": "Resume broadcast",
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
-    }
+    },
+    "invalidFilterDescription": "Målgruppsfiltret kunde inte läsas, så det här utskicket kan inte skickas. Rensa det och skapa målgruppen igen.",
+    "invalidStoredFilterDescription": "Det sparade målgruppsfiltret kunde inte läsas. Det här utskicket kan inte skickas igen; skapa ett nytt i stället."
   },
   "commentAutomation": {
     "stats": {
@@ -998,7 +1000,10 @@
     "exportTakingLong": "Exporten tar längre tid än väntat",
     "exportTakingLongDescription": "Exporten bearbetas fortfarande. Du kan stänga den här dialogrutan och kontrollera exporthistoriken igen om några minuter.",
     "linkCopied": "Länken har kopierats till urklipp",
-    "title": "Kontakter"
+    "title": "Kontakter",
+    "invalidFilterTitle": "Det här filtret kan inte läsas",
+    "invalidFilterDescription": "Kontaktfiltret i den här länken kunde inte läsas, så inga kontakter visas. Rensa det och skapa filtret igen.",
+    "clearInvalidFilter": "Rensa filter"
   },
   "contactScan": {
     "menu": {

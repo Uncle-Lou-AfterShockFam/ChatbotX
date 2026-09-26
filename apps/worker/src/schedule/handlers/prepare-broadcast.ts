@@ -6,7 +6,7 @@ import {
   channelTypes,
   resolveBroadcastTargetInboxIds,
 } from "@chatbotx.io/database/partials"
-import type { ContactFilterCriteriaInput } from "@chatbotx.io/database/queries"
+import { isContactFilterShape } from "@chatbotx.io/database/queries/contact-filter/shape"
 import { purgeBroadcastRecipients } from "@chatbotx.io/database/repositories"
 import {
   broadcastSendJobId,
@@ -53,6 +53,26 @@ export const prepareBroadcast = async (broadcastId: string) => {
   // round-trip) from wrongly promoting the NEW schedule's row.
   const promotionEpoch = broadcast.resumeCount
 
+  // A stored filter that no longer parses must never widen to everyone
+  // (s206): the broadcast fails with no recipient instead of sending.
+  const storedContactFilter = broadcast.contactFilter as unknown
+  if (
+    storedContactFilter != null &&
+    !isContactFilterShape(storedContactFilter)
+  ) {
+    logger.error(
+      { broadcastId },
+      "prepareBroadcast: stored contactFilter is invalid, failing the broadcast without sending",
+    )
+    await broadcastService.promoteAfterPrepare({
+      broadcastId,
+      status: broadcastStatuses.enum.failed,
+      contactCount: 0,
+      promotionEpoch,
+    })
+    return
+  }
+
   const parsedChannel = channelTypes.safeParse(broadcast.channel)
   const parsedSubaction = broadcastSubactions.safeParse(broadcast.subaction)
   // The audience must stay scoped to the page the broadcast was created for;
@@ -88,8 +108,7 @@ export const prepareBroadcast = async (broadcastId: string) => {
       inboxIds: resolveBroadcastTargetInboxIds(broadcast),
       integrationWhatsappId: broadcast.integrationWhatsappId,
       integrationMessengerId,
-      contactFilter:
-        broadcast.contactFilter as ContactFilterCriteriaInput | null,
+      contactFilter: storedContactFilter ?? null,
       subaction: parsedSubaction.success ? parsedSubaction.data : undefined,
     },
     async (contactInboxes): Promise<boolean | undefined> => {

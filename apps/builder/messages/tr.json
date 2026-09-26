@@ -507,7 +507,9 @@
     "resumeDialog": {
       "title": "Resume broadcast",
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
-    }
+    },
+    "invalidFilterDescription": "Hedef kitle filtresi okunamadı, bu yüzden bu yayın gönderilemez. Filtreyi temizleyip hedef kitleyi yeniden oluşturun.",
+    "invalidStoredFilterDescription": "Kayıtlı hedef kitle filtresi okunamadı. Bu yayın yeniden gönderilemez; bunun yerine yeni bir yayın oluşturun."
   },
   "commentAutomation": {
     "stats": {
@@ -4501,7 +4503,10 @@
     "countCapped": "{count}+ kişi",
     "exportAllNotice": "Geçerli filtreyle eşleşen tüm kişiler dışa aktarılacaktır.",
     "exportTakingLong": "Dışa aktarma beklenenden uzun sürüyor",
-    "exportTakingLongDescription": "Dışa aktarma hâlâ işleniyor. Bu iletişim kutusunu kapatıp birkaç dakika sonra dışa aktarma geçmişinden tekrar kontrol edebilirsiniz."
+    "exportTakingLongDescription": "Dışa aktarma hâlâ işleniyor. Bu iletişim kutusunu kapatıp birkaç dakika sonra dışa aktarma geçmişinden tekrar kontrol edebilirsiniz.",
+    "invalidFilterTitle": "Bu filtre okunamıyor",
+    "invalidFilterDescription": "Bu bağlantıdaki kişi filtresi okunamadı, bu yüzden hiçbir kişi gösterilmiyor. Filtreyi temizleyip yeniden oluşturun.",
+    "clearInvalidFilter": "Filtreyi temizle"
   },
   "contactScan": {
     "menu": {

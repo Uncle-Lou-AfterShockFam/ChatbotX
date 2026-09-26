@@ -25,27 +25,46 @@ describe("parseCreateBroadcastPrefill", () => {
     expect(result.channel).toBe("whatsapp")
     expect(result.integrationWhatsappId).toBe("12345")
     expect(result.contactFilter).toEqual(contactFilter)
+    expect(result.invalidContactFilter).toBe(false)
   })
 
-  test("returns an empty object for absent search params", () => {
-    expect(parseCreateBroadcastPrefill({})).toEqual({})
+  test("returns no prefill for absent search params", () => {
+    expect(parseCreateBroadcastPrefill({})).toEqual({
+      contactFilter: undefined,
+      invalidContactFilter: false,
+    })
   })
 
-  test("drops an unparseable contactFilter search param instead of throwing", () => {
+  test.each([
+    ["malformed JSON", "not-json"],
+    ["a schema-invalid filter", JSON.stringify({ operator: "xor" })],
+    [
+      "an unknown field",
+      JSON.stringify({ operator: "and", conditions: [{ field: "nope" }] }),
+    ],
+    ["a repeated param", ["{}", "{}"]],
+  ])("flags %s as invalid, never an unfiltered audience (s206)", (_label, contactFilter) => {
     const result = parseCreateBroadcastPrefill({
       channel: "whatsapp",
-      contactFilter: "not-json",
+      contactFilter,
     })
 
     expect(result.channel).toBe("whatsapp")
     expect(result.contactFilter).toBeUndefined()
+    expect(result.invalidContactFilter).toBe(true)
   })
 
-  test("drops an invalid channel instead of throwing", () => {
-    const result = parseCreateBroadcastPrefill({
-      channel: "not-a-real-channel",
-    })
-
-    expect(result).toEqual({})
+  test("drops an invalid channel but keeps the filter verdict", () => {
+    expect(
+      parseCreateBroadcastPrefill({
+        channel: "not-a-real-channel",
+      }),
+    ).toEqual({ contactFilter: undefined, invalidContactFilter: false })
+    expect(
+      parseCreateBroadcastPrefill({
+        channel: "not-a-real-channel",
+        contactFilter: "{bad",
+      }).invalidContactFilter,
+    ).toBe(true)
   })
 })

@@ -4,6 +4,7 @@ export {
   ContactListFilterButton,
   ContactListFilterPanel,
 } from "./components/contact-list-filter"
+export { InvalidContactFilterAlert } from "./components/invalid-contact-filter-alert"
 export { useContactFilterConfigs } from "./components/use-contact-filter-configs"
 export {
   EMPTY_CONTACT_FILTER,

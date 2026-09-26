@@ -2515,7 +2515,10 @@
     "countCapped": "{count}+ אנשי קשר",
     "exportAllNotice": "כל אנשי הקשר שתואמים למסנן הנוכחי ייוצאו.",
     "exportTakingLong": "הייצוא נמשך זמן רב מהצפוי",
-    "exportTakingLongDescription": "הייצוא עדיין בעיבוד. ניתן לסגור חלון זה ולבדוק שוב בעוד מספר דקות בהיסטוריית הייצוא."
+    "exportTakingLongDescription": "הייצוא עדיין בעיבוד. ניתן לסגור חלון זה ולבדוק שוב בעוד מספר דקות בהיסטוריית הייצוא.",
+    "invalidFilterTitle": "לא ניתן לקרוא את המסנן הזה",
+    "invalidFilterDescription": "לא ניתן היה לקרוא את מסנן אנשי הקשר בקישור הזה, ולכן לא מוצגים אנשי קשר. נקו אותו ובנו את המסנן מחדש.",
+    "clearInvalidFilter": "ניקוי מסנן"
   },
   "contactScan": {
     "menu": {
@@ -5863,7 +5866,9 @@
     "resumeDialog": {
       "title": "Resume broadcast",
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
-    }
+    },
+    "invalidFilterDescription": "לא ניתן היה לקרוא את מסנן הקהל, ולכן לא ניתן לשלוח את השידור הזה. נקו אותו ובנו את הקהל מחדש.",
+    "invalidStoredFilterDescription": "לא ניתן היה לקרוא את מסנן הקהל השמור. לא ניתן לשלוח שוב את השידור הזה; צרו שידור חדש במקומו."
   },
   "commentAutomation": {
     "stats": {

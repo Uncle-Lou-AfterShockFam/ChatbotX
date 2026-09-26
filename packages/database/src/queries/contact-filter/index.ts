@@ -70,6 +70,7 @@ export {
   pruneEmailPhoneFilterConditions,
 } from "./permission"
 export { contactInboxInteractedWithin24hSQL } from "./predicates"
+export { isContactFilterShape } from "./shape"
 export {
   DEFAULT_FILTER_TIMEZONE,
   filterValueToUtcDayEndIso,
@@ -115,7 +116,7 @@ const CTWA_RETARGET_CHANNELS: ReadonlySet<string> = new Set(
 export const contactFilterHasPredicate = (
   criteria: FilterCriteriaInput,
   workspaceId?: string,
-): boolean => hasWhereParts(applyContactFilter(criteria, workspaceId))
+): boolean => hasWhereParts(buildFilterWhere(criteria, workspaceId))
 
 type ContactFilterContext = {
   timezone: string
@@ -382,7 +383,26 @@ export const buildContactInboxContactFilterSQL = ({
   return sql`${contactIdColumn} IN (SELECT ${contactModel.id} FROM ${contactModel} WHERE ${contactWhereSQL})`
 }
 
+/**
+ * The contact where for a filter. A filter WITH conditions that all drop
+ * (unknown field, unusable operator, a workspace-scoped condition without
+ * `workspaceId`) matches NO contact: returning `{}` there would match every
+ * contact, and an invalid filter must never widen (s206). An empty
+ * conditions list still means "everyone".
+ */
 export function applyContactFilter(
+  criteria: FilterCriteriaInput,
+  workspaceId?: string,
+): ContactWhere {
+  const where = buildFilterWhere(criteria, workspaceId)
+  if (criteria.conditions.length > 0 && !hasWhereParts(where)) {
+    return { RAW: () => sql`FALSE` }
+  }
+  return where
+}
+
+/** `{}` when no condition yields a predicate; see `applyContactFilter`. */
+function buildFilterWhere(
   criteria: FilterCriteriaInput,
   workspaceId?: string,
 ): ContactWhere {

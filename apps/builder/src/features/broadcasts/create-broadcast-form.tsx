@@ -41,7 +41,11 @@ import {
   createBroadcastRequest,
 } from "@/features/broadcasts/schema/action"
 import { useWorkspaceId } from "@/hooks/routing"
-import { ContactFilter } from "../contact-filter"
+import {
+  ContactFilter,
+  EMPTY_CONTACT_FILTER,
+  InvalidContactFilterAlert,
+} from "../contact-filter"
 import type { ContactFilterCriteria } from "../contact-filter/schema"
 import { useContactStore } from "../contacts/provider/contact-store-context"
 import { useFlowStore } from "../flows/provider/flow-store-context"
@@ -102,6 +106,8 @@ type CreateBroadcastFormProps = {
   /** Pages preselected by a deep-link (resolved server-side from the integration). */
   initialInboxIds?: string[]
   initialContactFilter?: ContactFilterCriteria
+  /** The deep-link's `contactFilter` did not parse (see the prefill). */
+  invalidContactFilter?: boolean
   /**
    * Edit mode: an existing `draft` reopened from the list. The same schema and
    * footer apply — "Save as draft" keeps it a draft, "Confirm" schedules it —
@@ -116,10 +122,16 @@ export function CreateBroadcastForm({
   initialChannel,
   initialInboxIds,
   initialContactFilter,
+  invalidContactFilter = false,
   editDraft,
 }: CreateBroadcastFormProps) {
   const t = useTranslations()
   const router = useRouter()
+  // An unreadable filter (deep-link or stored draft) blocks every submit path
+  // until the operator clears it: it must never become "everyone" (s206).
+  const [contactFilterInvalid, setContactFilterInvalid] = useState(
+    editDraft ? editDraft.invalidContactFilter : invalidContactFilter,
+  )
 
   const { appendFilter, resetFilter, getAllActiveFlows } = useFlowStore(
     (state) => state,
@@ -170,6 +182,9 @@ export function CreateBroadcastForm({
   )
 
   const handleSaveAsDraft = async (): Promise<void> => {
+    if (contactFilterInvalid) {
+      return
+    }
     form.setValue("saveAsDraft", true, { shouldDirty: false })
     try {
       await handleSubmitWithAction()
@@ -231,7 +246,13 @@ export function CreateBroadcastForm({
         <form
           className="mx-auto mt-10 mb-10 w-full max-w-2xl flex-1 space-y-4"
           id="broadcast-form"
-          onSubmit={handleSubmitWithAction}
+          onSubmit={(event) => {
+            if (contactFilterInvalid) {
+              event.preventDefault()
+              return
+            }
+            return handleSubmitWithAction(event)
+          }}
         >
           {!watchedChannel && <CreateBroadcastChooseChannel />}
 
@@ -243,9 +264,16 @@ export function CreateBroadcastForm({
             <CreateBroadcastChooseFlow
               canViewEmailAndPhone={canViewEmailAndPhone}
               channel={watchedChannel}
+              contactFilterInvalid={contactFilterInvalid}
               hydrated={
                 editDraft && { targets: editDraft.defaultValues.targets }
               }
+              onClearInvalidContactFilter={() => {
+                form.setValue("contactFilter", EMPTY_CONTACT_FILTER, {
+                  shouldValidate: true,
+                })
+                setContactFilterInvalid(false)
+              }}
               onSaveAsDraft={handleSaveAsDraft}
               subaction={watchedSubAction}
             />
@@ -407,6 +435,8 @@ type CreateBroadcastChooseFlowProps = {
    * creating.
    */
   hydrated?: { targets: BroadcastTargetRequest[] }
+  contactFilterInvalid: boolean
+  onClearInvalidContactFilter: () => void
   onSaveAsDraft: () => Promise<void>
   subaction: BroadcastSubaction
 }
@@ -691,18 +721,27 @@ function CreateBroadcastChooseFlow(props: CreateBroadcastChooseFlowProps) {
 
       <Card>
         <CardContent className="flex flex-col gap-6">
-          <ContactFilter
-            excludeFields={excludeFields}
-            inboxChannel={props.channel}
-            parentName="contactFilter"
-          />
+          {props.contactFilterInvalid ? (
+            <InvalidContactFilterAlert
+              description={t("broadcasts.invalidFilterDescription")}
+              onClear={props.onClearInvalidContactFilter}
+            />
+          ) : (
+            <ContactFilter
+              excludeFields={excludeFields}
+              inboxChannel={props.channel}
+              parentName="contactFilter"
+            />
+          )}
         </CardContent>
       </Card>
 
       <div className="flex items-center justify-between">
         <Button
           className="h-auto px-0 text-gray-500 text-sm"
-          disabled={isReceiversCountLoading || !count}
+          disabled={
+            props.contactFilterInvalid || isReceiversCountLoading || !count
+          }
           onClick={() => setAudiencePreviewOpen(true)}
           type="button"
           variant="link"
@@ -724,7 +763,11 @@ function CreateBroadcastChooseFlow(props: CreateBroadcastChooseFlowProps) {
           </Button>
 
           <Button
-            disabled={!formState.isValid || formState.isSubmitting}
+            disabled={
+              props.contactFilterInvalid ||
+              !formState.isValid ||
+              formState.isSubmitting
+            }
             onClick={() => props.onSaveAsDraft()}
             type="button"
             variant="secondary"
@@ -733,7 +776,11 @@ function CreateBroadcastChooseFlow(props: CreateBroadcastChooseFlowProps) {
           </Button>
 
           <Button
-            disabled={!formState.isValid || formState.isSubmitting}
+            disabled={
+              props.contactFilterInvalid ||
+              !formState.isValid ||
+              formState.isSubmitting
+            }
             onClick={() => {
               setValue("saveAsDraft", false, { shouldDirty: false })
               setConfirmOpen(true)

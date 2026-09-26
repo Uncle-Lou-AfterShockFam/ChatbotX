@@ -9,6 +9,7 @@ const promoteAfterPrepare = vi.fn()
 const scheduleAddSpy = vi.fn()
 const loggerInfoSpy = vi.fn()
 const loggerWarnSpy = vi.fn()
+const loggerErrorSpy = vi.fn()
 const purgeBroadcastRecipientsSpy = vi.fn()
 const blockedWorkspaceIds = new Set<string>()
 
@@ -49,6 +50,7 @@ vi.mock("../src/lib/logger", () => ({
   logger: {
     info: (...args: unknown[]) => loggerInfoSpy(...args),
     warn: (...args: unknown[]) => loggerWarnSpy(...args),
+    error: (...args: unknown[]) => loggerErrorSpy(...args),
   },
 }))
 
@@ -99,6 +101,7 @@ beforeEach(() => {
   scheduleAddSpy.mockReset()
   loggerInfoSpy.mockReset()
   loggerWarnSpy.mockReset()
+  loggerErrorSpy.mockReset()
   purgeBroadcastRecipientsSpy.mockReset()
   purgeBroadcastRecipientsSpy.mockResolvedValue({
     deleted: 0,
@@ -514,5 +517,61 @@ describe("prepareBroadcast", () => {
 
       expect(scheduleAddSpy).toHaveBeenCalledTimes(1)
     })
+  })
+})
+
+describe("prepareBroadcast with an invalid stored contactFilter (s206: never widens)", () => {
+  test.each([
+    ["an unknown field", { operator: "and", conditions: [{ field: "nope" }] }],
+    ["a bad operator", { operator: "xor", conditions: [] }],
+    ["a non-object", "not-a-filter"],
+  ])("%s fails the broadcast with no recipient and no send", async (_label, contactFilter) => {
+    findScheduledForPrepare.mockResolvedValue({
+      ...baseBroadcast(),
+      resumeCount: 3,
+      contactFilter,
+    })
+
+    await prepareBroadcast(BROADCAST_ID)
+
+    expect(forEachAudienceChunk).not.toHaveBeenCalled()
+    expect(insertRecipients).not.toHaveBeenCalled()
+    expect(scheduleAddSpy).not.toHaveBeenCalled()
+    expect(promoteAfterPrepare).toHaveBeenCalledWith({
+      broadcastId: BROADCAST_ID,
+      status: "failed",
+      contactCount: 0,
+      promotionEpoch: 3,
+    })
+    expect(loggerErrorSpy).toHaveBeenCalledTimes(1)
+  })
+
+  test("a null stored filter (everyone, chosen) still builds the audience", async () => {
+    findScheduledForPrepare.mockResolvedValue(baseBroadcast())
+
+    await prepareBroadcast(BROADCAST_ID)
+
+    expect(forEachAudienceChunk).toHaveBeenCalledWith(
+      expect.objectContaining({ contactFilter: null }),
+      expect.any(Function),
+    )
+  })
+
+  test("a valid stored filter is passed through unchanged", async () => {
+    const contactFilter = {
+      operator: "or",
+      conditions: [{ field: "fullName", operator: "isNotEmpty" }],
+    }
+    findScheduledForPrepare.mockResolvedValue({
+      ...baseBroadcast(),
+      contactFilter,
+    })
+
+    await prepareBroadcast(BROADCAST_ID)
+
+    expect(forEachAudienceChunk).toHaveBeenCalledWith(
+      expect.objectContaining({ contactFilter }),
+      expect.any(Function),
+    )
   })
 })

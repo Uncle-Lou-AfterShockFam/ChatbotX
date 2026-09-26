@@ -507,7 +507,9 @@
     "resumeDialog": {
       "title": "Resume broadcast",
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
-    }
+    },
+    "invalidFilterDescription": "No se pudo leer el filtro de audiencia, así que esta difusión no se puede enviar. Bórralo y vuelve a crear la audiencia.",
+    "invalidStoredFilterDescription": "No se pudo leer el filtro de audiencia guardado. Esta difusión no se puede reenviar; crea una nueva en su lugar."
   },
   "commentAutomation": {
     "stats": {
@@ -4501,7 +4503,10 @@
     "countCapped": "{count}+ contactoos",
     "exportAllNotice": "Todos contactoos matching el current filter se be exported.",
     "exportTakingLong": "Export es taking longer than expected",
-    "exportTakingLongDescription": "The export es still processing. tú puede Cerrar este dialog y check back en un few minutos desde el export history."
+    "exportTakingLongDescription": "The export es still processing. tú puede Cerrar este dialog y check back en un few minutos desde el export history.",
+    "invalidFilterTitle": "No se puede leer este filtro",
+    "invalidFilterDescription": "No se pudo leer el filtro de contactos de este enlace, así que no se muestra ningún contacto. Bórralo y vuelve a crear el filtro.",
+    "clearInvalidFilter": "Borrar filtro"
   },
   "contactScan": {
     "menu": {

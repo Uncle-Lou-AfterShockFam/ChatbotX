@@ -27,7 +27,6 @@ import {
   broadcastSendsTemplate,
   broadcastStatuses,
   type ChannelType,
-  contactFilterFields,
   findBroadcastChannelCapability,
   hasDuplicateBroadcastTarget,
   hasFlowAndTemplate,
@@ -46,6 +45,7 @@ import {
   contactInboxInteractedWithin24hSQL,
   pruneEmailPhoneFilterConditions,
 } from "@chatbotx.io/database/queries"
+import { isContactFilterShape } from "@chatbotx.io/database/queries/contact-filter/shape"
 import {
   type BroadcastListInput,
   broadcastRepository,
@@ -90,7 +90,11 @@ import {
   type StatsContactRow,
 } from "../contact-inbox/map-stats-contact-row"
 import { contactInboxService } from "../contact-inbox/service"
-import { ChatbotXException, notFoundException } from "../errors"
+import {
+  ChatbotXException,
+  notFoundException,
+  validationException,
+} from "../errors"
 import { inboxService } from "../inbox/service"
 import type {
   BroadcastAudienceInput,
@@ -350,60 +354,6 @@ export const resolveBroadcastTargetsToPersist = (
     )
   }
   return { ...data, targets: readyTargets }
-}
-
-/**
- * Runtime shape-check for `Broadcast.contactFilter`, an untyped jsonb column
- * (`unknown`, not `ContactFilterCriteriaInput`) — used by
- * `resendWithPruning` before handing a persisted filter to
- * `pruneEmailPhoneFilterConditions`.
- *
- * `operator` is checked against the exact `"and" | "or"` union the type
- * declares, not merely for presence: `applyContactFilter` branches only on
- * `=== "or"`, so any other stored value would silently degrade to `AND` and
- * resend to a *different* audience than the one the filter describes.
- *
- * Every condition's `field` is checked against `contactFilterFields`
- * (`@chatbotx.io/database/partials`) — the same enum the SQL builder's
- * `buildConditionWhere` switch is written against. This is NOT optional:
- * `buildConditionWhere`'s `default` case returns `{}` for an unrecognised
- * field, `applyContactFilter` then filters out every empty where, and an
- * all-conditions-unknown filter collapses to `{}` — i.e. *no* filtering at
- * all, silently sending to the full workspace audience instead of the
- * narrower one the stored filter describes. Rejecting the whole filter here
- * reproduces the pre-refactor behaviour, where a failed
- * `contactFilterCriteriaSchema.safeParse` dropped the whole filter and the
- * resend fell back to the full eligible audience — the same fallback, just
- * reached deliberately instead of by accident.
- *
- * Per-field `value`/`timezone` shape (e.g. `timezone` string length) is
- * still unvalidated here — the full per-condition schema lives in
- * `apps/builder`, which this package cannot import — but an unknown/renamed
- * `field` is exactly the case that previously produced a silently-widened
- * audience, so it is the one this function must not let through.
- */
-const isContactFilterShape = (
-  value: unknown,
-): value is ContactFilterCriteriaInput => {
-  if (typeof value !== "object" || value === null) {
-    return false
-  }
-  const { operator, conditions } = value as {
-    operator?: unknown
-    conditions?: unknown
-  }
-  if (
-    !((operator === "and" || operator === "or") && Array.isArray(conditions))
-  ) {
-    return false
-  }
-  return conditions.every((condition) => {
-    if (typeof condition !== "object" || condition === null) {
-      return false
-    }
-    const { field } = condition as { field?: unknown }
-    return contactFilterFields.safeParse(field).success
-  })
 }
 
 class BroadcastService extends BaseService {
@@ -2190,11 +2140,31 @@ class BroadcastService extends BaseService {
       id: input.id,
     })
 
+    // A null stored filter is "everyone", chosen by the operator. A stored
+    // filter that no longer parses, or one whose every condition is pruned
+    // away for this caller, rejects: either would silently resend to
+    // everyone (s206).
     const persisted = broadcast.contactFilter as unknown
+    if (persisted != null && !isContactFilterShape(persisted)) {
+      throw validationException(
+        "contactFilter",
+        "The broadcast's stored audience filter is invalid; create a new broadcast instead of resending.",
+      )
+    }
     const contactFilter = pruneEmailPhoneFilterConditions(
-      isContactFilterShape(persisted) ? persisted : undefined,
+      persisted ?? undefined,
       input.canViewEmailAndPhone,
     )
+    if (
+      persisted != null &&
+      persisted.conditions.length > 0 &&
+      contactFilter?.conditions.length === 0
+    ) {
+      throw validationException(
+        "contactFilter",
+        "The broadcast's audience filter uses fields you cannot view; ask someone who can to resend it.",
+      )
+    }
 
     const newBroadcast = await db.transaction(async (tx) => {
       const inserted = await tx

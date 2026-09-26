@@ -30,13 +30,23 @@ describe("listContactsRequest contactFilter search param", () => {
     })
   })
 
-  test("falls back when contactFilter query value is invalid", () => {
-    const parsed = listContactsRequest.parse({
+  test("rejects a malformed contactFilter query value (s206: never widens)", () => {
+    const parsed = listContactsRequest.safeParse({
       workspaceId: "1",
       contactFilter: "{invalid",
     })
 
-    expect(parsed.contactFilter).toBeUndefined()
+    expect(parsed.success).toBe(false)
+    expect(parsed.error?.issues[0]?.path).toEqual(["contactFilter"])
+  })
+
+  test("treats a blank contactFilter query value as absent", () => {
+    for (const contactFilter of ["", "   "]) {
+      expect(
+        listContactsRequest.parse({ workspaceId: "1", contactFilter })
+          .contactFilter,
+      ).toBeUndefined()
+    }
   })
 
   test("accepts valueless operators without a value", () => {
@@ -83,7 +93,7 @@ describe("listContactsRequest contactFilter search param", () => {
   })
 
   test("rejects disabled operators for a field", () => {
-    const parsed = listContactsRequest.parse({
+    const parsed = listContactsRequest.safeParse({
       workspaceId: "1",
       contactFilter: JSON.stringify({
         operator: "and",
@@ -97,6 +107,6 @@ describe("listContactsRequest contactFilter search param", () => {
       }),
     })
 
-    expect(parsed.contactFilter).toBeUndefined()
+    expect(parsed.success).toBe(false)
   })
 })

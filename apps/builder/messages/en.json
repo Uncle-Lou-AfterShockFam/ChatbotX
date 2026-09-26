@@ -507,7 +507,9 @@
     "resumeDialog": {
       "title": "Resume broadcast",
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
-    }
+    },
+    "invalidFilterDescription": "The audience filter could not be read, so this broadcast cannot be sent. Clear it and build the audience again.",
+    "invalidStoredFilterDescription": "The stored audience filter could not be read. This broadcast cannot be resent; create a new one instead."
   },
   "commentAutomation": {
     "stats": {
@@ -4689,7 +4691,10 @@
     "countCapped": "{count}+ contacts",
     "exportAllNotice": "All contacts matching the current filter will be exported.",
     "exportTakingLong": "Export is taking longer than expected",
-    "exportTakingLongDescription": "The export is still processing. You can close this dialog and check back in a few minutes from the export history."
+    "exportTakingLongDescription": "The export is still processing. You can close this dialog and check back in a few minutes from the export history.",
+    "invalidFilterTitle": "This filter can't be read",
+    "invalidFilterDescription": "The contact filter in this link could not be read, so no contacts are shown. Clear it and build the filter again.",
+    "clearInvalidFilter": "Clear filter"
   },
   "contactScan": {
     "menu": {

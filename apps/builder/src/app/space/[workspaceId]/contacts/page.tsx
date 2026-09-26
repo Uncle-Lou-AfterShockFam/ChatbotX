@@ -3,18 +3,31 @@ import { notFound } from "next/navigation"
 import { getTranslations } from "next-intl/server"
 import type { SearchParams } from "nuqs/server"
 import { Suspense } from "react"
-import { EMPTY_CONTACT_FILTER } from "@/features/contact-filter"
+import {
+  EMPTY_CONTACT_FILTER,
+  parseContactFilterParam,
+} from "@/features/contact-filter"
 import { ContactsTable } from "@/features/contacts/contacts-table"
 import { CreateContactDialog } from "@/features/contacts/create-contact-dialog"
 import { requireContactPermissionScope } from "@/features/contacts/permissions"
 import { listContactsRSC } from "@/features/contacts/queries/list-contacts.queries"
-import { listContactsRequest } from "@/features/contacts/schema/query"
+import {
+  type ListContactsResponse,
+  listContactsRequest,
+} from "@/features/contacts/schema/query"
 import { CustomFieldStoreProvider } from "@/features/custom-fields/provider/custom-field-store-context"
 import { FlowStoreProvider } from "@/features/flows/provider/flow-store-context"
 import { InboxStoreProvider } from "@/features/inboxes/provider/inbox-store-context"
 import { SequenceStoreProvider } from "@/features/sequences/provider/sequence-store-context"
 import { UserStoreProvider } from "@/features/users/provider/user-store-context"
 import { requireContactsAccess } from "@/lib/auth/require-workspace-permission"
+
+const EMPTY_CONTACTS_RESPONSE = {
+  data: [],
+  pageCount: 0,
+  totalCount: 0,
+  totalCountCapped: false,
+} satisfies ListContactsResponse
 
 export default async function ContactsPage(props: {
   params: Promise<{ workspaceId: string }>
@@ -30,16 +43,31 @@ export default async function ContactsPage(props: {
 
   const t = await getTranslations()
   const searchParams = await props.searchParams
+  // The filter parses on its own: a broken filter must not drop keyword /
+  // page, and a broken keyword / page must not drop the filter. An invalid
+  // filter lists NO contact (the table shows the invalid-filter alert): it
+  // never widens to everyone (s206).
+  const contactFilterParam = parseContactFilterParam(searchParams.contactFilter)
+  const invalidContactFilter = contactFilterParam.status === "invalid"
+  const initialContactFilter =
+    contactFilterParam.status === "valid"
+      ? contactFilterParam.filter
+      : EMPTY_CONTACT_FILTER
   const { data: search } = listContactsRequest
-    .omit({ workspaceId: true })
+    .omit({ workspaceId: true, contactFilter: true })
     .safeParse(searchParams)
-  const initialContactFilter = search?.contactFilter ?? EMPTY_CONTACT_FILTER
 
   const promises = Promise.all([
-    listContactsRSC({
-      ...search,
-      workspaceId,
-    }),
+    invalidContactFilter
+      ? EMPTY_CONTACTS_RESPONSE
+      : listContactsRSC({
+          ...search,
+          contactFilter:
+            contactFilterParam.status === "valid"
+              ? contactFilterParam.filter
+              : undefined,
+          workspaceId,
+        }),
   ])
 
   return (

@@ -23,6 +23,7 @@ import {
   ContactListFilterButton,
   ContactListFilterPanel,
   EMPTY_CONTACT_FILTER,
+  InvalidContactFilterAlert,
   useContactFilterQueryState,
 } from "@/features/contact-filter"
 import { EMAIL_PHONE_RESTRICTED_FILTER_FIELDS } from "@/features/contact-filter/lib/restricted-fields"
@@ -113,6 +114,13 @@ const parseSortParam = (value: string | null) => {
   }
 }
 
+const EMPTY_CONTACTS_PAGE: ListContactsResponse = {
+  data: [],
+  pageCount: 0,
+  totalCount: 0,
+  totalCountCapped: false,
+}
+
 type ContactsTableProps = {
   canViewEmailAndPhone?: boolean
   initialContactFilter?: ContactFilterCriteria
@@ -136,6 +144,8 @@ export function ContactsTable({
     filter: contactFilter,
     setFilter: setContactFilter,
     isActive: isContactFilterActive,
+    invalid: isContactFilterInvalid,
+    clearInvalidFilter,
   } = useContactFilterQueryState({ initialFilter: initialContactFilter })
   const [optimisticContactFilter, setOptimisticContactFilter] =
     useState<ContactFilterCriteria>(contactFilter)
@@ -178,21 +188,31 @@ export function ContactsTable({
   // to every new key, and under the client's 30 s `staleTime` a changed
   // filter / page / sort then counts as fresh and never fetches (s203: the
   // filter panel showed its chips over the unfiltered list).
-  const [initialInputKey] = useState(() => listInputKey(listContactsInput))
+  // An invalid `?contactFilter=` lists NO contact (s206): the query stays
+  // off and the server skipped the RSC fetch, so its empty first page must
+  // not seed the unfiltered key either (Clear would then show 0 rows).
+  const [initialInputKey] = useState(() =>
+    isContactFilterInvalid ? undefined : listInputKey(listContactsInput),
+  )
   const { data: fetchedResponse } = useQuery(
     orpc.contactsAPIs.listContactsByPOSTAuthenticatedAPI.queryOptions({
       input: listContactsInput,
-      initialData: seedForFirstKey(
-        listInputKey(listContactsInput),
-        initialInputKey,
-        initialResponse,
-      ),
+      initialData: initialInputKey
+        ? seedForFirstKey(
+            listInputKey(listContactsInput),
+            initialInputKey,
+            initialResponse,
+          )
+        : undefined,
       placeholderData: keepPreviousData,
+      enabled: !isContactFilterInvalid,
     }),
   )
   // Never undefined in practice (the first key is seeded, later keys keep
   // the previous data as a placeholder); the fallback satisfies the type.
-  const contactsResponse = fetchedResponse ?? initialResponse
+  const contactsResponse = isContactFilterInvalid
+    ? EMPTY_CONTACTS_PAGE
+    : (fetchedResponse ?? initialResponse)
   const tableData = contactsResponse.data
   const tablePageCount = contactsResponse.pageCount
   const tableTotalCount = contactsResponse.totalCount
@@ -428,6 +448,12 @@ export function ContactsTable({
       mobileCard={(row) => <ContactCard row={row} workspaceId={workspaceId} />}
       table={table}
     >
+      {isContactFilterInvalid && (
+        <InvalidContactFilterAlert
+          description={t("contacts.invalidFilterDescription")}
+          onClear={clearInvalidFilter}
+        />
+      )}
       {showContactFilterPanel && (
         <ContactListFilterPanel
           excludeFields={excludedFilterFields}
@@ -445,11 +471,14 @@ export function ContactsTable({
           onToggle={() => setShowContactFilterPanel((current) => !current)}
           open={showContactFilterPanel}
         />
-        <ContactListAction
-          filter={exportFilter}
-          table={table}
-          workspaceId={workspaceId}
-        />
+        {/* No export while the filter is unreadable: it would export everyone. */}
+        {!isContactFilterInvalid && (
+          <ContactListAction
+            filter={exportFilter}
+            table={table}
+            workspaceId={workspaceId}
+          />
+        )}
       </DataTableToolbar>
     </DataTable>
   )

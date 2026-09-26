@@ -29,15 +29,23 @@ import { listConversationsResponse } from "../schema/resource"
 
 const workspaceTokenAuthAPI = workspaceTokenAuthAPIForScope("inbox")
 
+/**
+ * A JSON-encoded query value. Malformed JSON is an input error (422), never
+ * "absent": dropping a broken filter would widen the list (s206).
+ */
 function jsonQueryParam<T>(schema: z.ZodType<T>) {
-  return z.preprocess((val) => {
+  return z.preprocess((val, ctx) => {
     if (val === undefined || val === null || val === "") {
       return
     }
     try {
       return JSON.parse(decodeURIComponent(String(val)))
     } catch {
-      return
+      ctx.addIssue({
+        code: "custom",
+        message: "Expected a JSON-encoded value.",
+      })
+      return z.NEVER
     }
   }, schema)
 }

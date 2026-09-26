@@ -507,7 +507,9 @@
     "resumeDialog": {
       "title": "Resume broadcast",
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
-    }
+    },
+    "invalidFilterDescription": "تعذّرت قراءة فلتر الجمهور، لذلك لا يمكن إرسال هذا البث. امسحه وأنشئ الجمهور من جديد.",
+    "invalidStoredFilterDescription": "تعذّرت قراءة فلتر الجمهور المحفوظ. لا يمكن إعادة إرسال هذا البث؛ أنشئ بثًا جديدًا بدلًا من ذلك."
   },
   "commentAutomation": {
     "stats": {
@@ -4501,7 +4503,10 @@
     "countCapped": "أكثر من {count} جهة اتصال",
     "exportAllNotice": "سيتم تصدير جميع جهات الاتصال المطابقة لعامل التصفية الحالي.",
     "exportTakingLong": "يستغرق التصدير وقتًا أطول من المتوقع",
-    "exportTakingLongDescription": "لا تزال عملية التصدير جارية. يمكنك إغلاق مربع الحوار هذا والتحقق مرة أخرى بعد بضع دقائق من سجل التصدير."
+    "exportTakingLongDescription": "لا تزال عملية التصدير جارية. يمكنك إغلاق مربع الحوار هذا والتحقق مرة أخرى بعد بضع دقائق من سجل التصدير.",
+    "invalidFilterTitle": "تعذّرت قراءة هذا الفلتر",
+    "invalidFilterDescription": "تعذّرت قراءة فلتر جهات الاتصال في هذا الرابط، لذلك لا تُعرض أي جهات اتصال. امسحه وأنشئ الفلتر من جديد.",
+    "clearInvalidFilter": "مسح الفلتر"
   },
   "contactScan": {
     "menu": {

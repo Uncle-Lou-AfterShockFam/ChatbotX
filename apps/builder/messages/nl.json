@@ -507,7 +507,9 @@
     "resumeDialog": {
       "title": "Resume broadcast",
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
-    }
+    },
+    "invalidFilterDescription": "Het doelgroepfilter kon niet worden gelezen, dus deze broadcast kan niet worden verzonden. Wis het en maak de doelgroep opnieuw.",
+    "invalidStoredFilterDescription": "Het opgeslagen doelgroepfilter kon niet worden gelezen. Deze broadcast kan niet opnieuw worden verzonden; maak in plaats daarvan een nieuwe."
   },
   "commentAutomation": {
     "stats": {
@@ -4501,7 +4503,10 @@
     "countCapped": "{count}+ contacten",
     "exportAllNotice": "Alle contacten die overeenkomen met het huidige filter worden geëxporteerd.",
     "exportTakingLong": "Het exporteren duurt langer dan verwacht",
-    "exportTakingLongDescription": "De export wordt nog verwerkt. Je kunt dit dialoogvenster sluiten en over enkele minuten de exportgeschiedenis bekijken."
+    "exportTakingLongDescription": "De export wordt nog verwerkt. Je kunt dit dialoogvenster sluiten en over enkele minuten de exportgeschiedenis bekijken.",
+    "invalidFilterTitle": "Dit filter kan niet worden gelezen",
+    "invalidFilterDescription": "Het contactfilter in deze link kon niet worden gelezen, dus er worden geen contacten getoond. Wis het en maak het filter opnieuw.",
+    "clearInvalidFilter": "Filter wissen"
   },
   "contactScan": {
     "menu": {

@@ -76,6 +76,7 @@ export default async function CreateBroadcastPage({
                         initialChannel={prefill.channel}
                         initialContactFilter={prefill.contactFilter}
                         initialInboxIds={initialInboxIds}
+                        invalidContactFilter={prefill.invalidContactFilter}
                         workspaceId={workspaceId}
                       />
                     </ContactStoreProvider>

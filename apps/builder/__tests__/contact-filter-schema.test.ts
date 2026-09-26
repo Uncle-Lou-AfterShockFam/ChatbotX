@@ -661,8 +661,8 @@ describe("listContactsRequest contactFilter preprocess", () => {
     expect(parsed.contactFilter).toEqual(criteria)
   })
 
-  test("drops invalid JSON contactFilter values without breaking pagination parsing", () => {
-    const parsed = listContactsRequest.parse({
+  test("rejects invalid JSON contactFilter values instead of dropping them (s206: never widens)", () => {
+    const parsed = listContactsRequest.safeParse({
       workspaceId: "1",
       page: 2,
       perPage: 25,
@@ -670,7 +670,9 @@ describe("listContactsRequest contactFilter preprocess", () => {
       contactFilter: "{invalid",
     })
 
-    expect(parsed.contactFilter).toBeUndefined()
-    expect(parsed.keyword).toBe("Acme")
+    expect(parsed.success).toBe(false)
+    expect(parsed.error?.issues.map((issue) => issue.path)).toEqual([
+      ["contactFilter"],
+    ])
   })
 })

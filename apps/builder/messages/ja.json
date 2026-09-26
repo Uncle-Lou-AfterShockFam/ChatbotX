@@ -507,7 +507,9 @@
     "resumeDialog": {
       "title": "Resume broadcast",
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
-    }
+    },
+    "invalidFilterDescription": "オーディエンスフィルターを読み取れなかったため、この配信は送信できません。クリアしてオーディエンスを作り直してください。",
+    "invalidStoredFilterDescription": "保存されたオーディエンスフィルターを読み取れませんでした。この配信は再送信できません。新しい配信を作成してください。"
   },
   "commentAutomation": {
     "stats": {
@@ -4480,7 +4482,10 @@
     "countCapped": "{count}件以上の連絡先",
     "exportAllNotice": "現在のフィルターに一致するすべての連絡先がエクスポートされます。",
     "exportTakingLong": "エクスポートに予想以上の時間がかかっています",
-    "exportTakingLongDescription": "エクスポートは引き続き処理中です。このダイアログを閉じ、数分後にエクスポート履歴から確認できます。"
+    "exportTakingLongDescription": "エクスポートは引き続き処理中です。このダイアログを閉じ、数分後にエクスポート履歴から確認できます。",
+    "invalidFilterTitle": "このフィルターを読み取れません",
+    "invalidFilterDescription": "このリンクの連絡先フィルターを読み取れなかったため、連絡先は表示されていません。クリアしてフィルターを作り直してください。",
+    "clearInvalidFilter": "フィルターをクリア"
   },
   "contactScan": {
     "menu": {

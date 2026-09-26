@@ -507,7 +507,9 @@
     "resumeDialog": {
       "title": "Resume broadcast",
       "description": "\"{name}\" will continue sending to recipients who have not received it yet."
-    }
+    },
+    "invalidFilterDescription": "Kohderyhmän suodatinta ei voitu lukea, joten tätä lähetystä ei voi lähettää. Tyhjennä se ja luo kohderyhmä uudelleen.",
+    "invalidStoredFilterDescription": "Tallennettua kohderyhmän suodatinta ei voitu lukea. Tätä lähetystä ei voi lähettää uudelleen; luo sen sijaan uusi."
   },
   "commentAutomation": {
     "stats": {
@@ -4501,7 +4503,10 @@
     "countCapped": "{count}+ yhteystietoa",
     "exportAllNotice": "Kaikki nykyistä suodatinta vastaavat yhteystiedot viedään.",
     "exportTakingLong": "Vienti kestää odotettua kauemmin",
-    "exportTakingLongDescription": "Vientiä käsitellään edelleen. Voit sulkea tämän valintaikkunan ja tarkistaa tilanteen muutaman minuutin kuluttua vientihistoriasta."
+    "exportTakingLongDescription": "Vientiä käsitellään edelleen. Voit sulkea tämän valintaikkunan ja tarkistaa tilanteen muutaman minuutin kuluttua vientihistoriasta.",
+    "invalidFilterTitle": "Tätä suodatinta ei voi lukea",
+    "invalidFilterDescription": "Tämän linkin yhteystietosuodatinta ei voitu lukea, joten yhteystietoja ei näytetä. Tyhjennä se ja luo suodatin uudelleen.",
+    "clearInvalidFilter": "Tyhjennä suodatin"
   },
   "contactScan": {
     "menu": {

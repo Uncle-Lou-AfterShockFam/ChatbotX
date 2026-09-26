@@ -206,21 +206,20 @@ describe("broadcastService.resendWithPruning", () => {
     )
   })
 
-  test("passes undefined contactFilter when the persisted value has an unexpected shape", async () => {
+  test("rejects (422) when the persisted value has an unexpected shape (s206: never resends to everyone)", async () => {
     mockFindOrFail.mockResolvedValue({
       ...sourceBroadcast,
       contactFilter: { unexpected: true },
     })
 
-    await broadcastService.resendWithPruning({
-      workspaceId: WS,
-      id: SOURCE_ID,
-      canViewEmailAndPhone: true,
-    })
-
-    expect(mockTxInsertValues).toHaveBeenCalledWith(
-      expect.objectContaining({ contactFilter: undefined }),
-    )
+    await expect(
+      broadcastService.resendWithPruning({
+        workspaceId: WS,
+        id: SOURCE_ID,
+        canViewEmailAndPhone: true,
+      }),
+    ).rejects.toMatchObject({ field: "contactFilter", httpStatusCode: 422 })
+    expect(mockTxInsertValues).not.toHaveBeenCalled()
   })
 
   test.each([
@@ -228,22 +227,21 @@ describe("broadcastService.resendWithPruning", () => {
     ["AND (uppercase)", { operator: "AND", conditions: [] }],
     ["a non-array conditions", { operator: "and", conditions: "nope" }],
     ["a missing operator", { conditions: [] }],
-  ])("drops the persisted contactFilter when it has %s", async (_label, contactFilter) => {
+  ])("rejects (422) a persisted contactFilter with %s", async (_label, contactFilter) => {
     mockFindOrFail.mockResolvedValue({ ...sourceBroadcast, contactFilter })
-
-    await broadcastService.resendWithPruning({
-      workspaceId: WS,
-      id: SOURCE_ID,
-      canViewEmailAndPhone: true,
-    })
 
     // `applyContactFilter` branches only on `operator === "or"`, so any
     // other value would silently degrade to AND and resend to a different
-    // audience than the filter describes. Dropping it reproduces the
-    // pre-refactor `safeParse` failure path: full eligible audience.
-    expect(mockTxInsertValues).toHaveBeenCalledWith(
-      expect.objectContaining({ contactFilter: undefined }),
-    )
+    // audience than the filter describes; dropping it would resend to the
+    // full eligible audience. s206: the resend is refused instead.
+    await expect(
+      broadcastService.resendWithPruning({
+        workspaceId: WS,
+        id: SOURCE_ID,
+        canViewEmailAndPhone: true,
+      }),
+    ).rejects.toMatchObject({ field: "contactFilter", httpStatusCode: 422 })
+    expect(mockTxInsertValues).not.toHaveBeenCalled()
   })
 
   test("passes the persisted contactFilter through when every condition has a known field", async () => {
@@ -299,18 +297,17 @@ describe("broadcastService.resendWithPruning", () => {
   // filtering, silently widening the resend to the full workspace
   // audience instead of throwing or narrowing. This is the regression
   // `isContactFilterShape` must prevent.
-  "drops the persisted contactFilter when %s", async (_label, contactFilter) => {
+  "rejects (422) the resend when %s", async (_label, contactFilter) => {
     mockFindOrFail.mockResolvedValue({ ...sourceBroadcast, contactFilter })
 
-    await broadcastService.resendWithPruning({
-      workspaceId: WS,
-      id: SOURCE_ID,
-      canViewEmailAndPhone: true,
-    })
-
-    expect(mockTxInsertValues).toHaveBeenCalledWith(
-      expect.objectContaining({ contactFilter: undefined }),
-    )
+    await expect(
+      broadcastService.resendWithPruning({
+        workspaceId: WS,
+        id: SOURCE_ID,
+        canViewEmailAndPhone: true,
+      }),
+    ).rejects.toMatchObject({ field: "contactFilter", httpStatusCode: 422 })
+    expect(mockTxInsertValues).not.toHaveBeenCalled()
   })
 
   test("keeps an 'or' filter, which is a valid operator", async () => {
@@ -333,8 +330,11 @@ describe("broadcastService.resendWithPruning", () => {
   })
 
   test("prunes email/phone conditions when the caller may not view them", async () => {
-    const persisted = { operator: "and", conditions: [{ field: "email" }] }
-    const pruned = { operator: "and", conditions: [] }
+    const persisted = {
+      operator: "and",
+      conditions: [{ field: "email" }, { field: "fullName" }],
+    }
+    const pruned = { operator: "and", conditions: [{ field: "fullName" }] }
     vi.mocked(pruneEmailPhoneFilterConditions).mockReturnValueOnce(
       pruned as never,
     )
@@ -356,6 +356,27 @@ describe("broadcastService.resendWithPruning", () => {
     expect(mockTxInsertValues).toHaveBeenCalledWith(
       expect.objectContaining({ contactFilter: pruned }),
     )
+  })
+
+  test("rejects (422) when pruning removes EVERY condition (s206: that would resend to everyone)", async () => {
+    const persisted = { operator: "and", conditions: [{ field: "email" }] }
+    vi.mocked(pruneEmailPhoneFilterConditions).mockReturnValueOnce({
+      operator: "and",
+      conditions: [],
+    } as never)
+    mockFindOrFail.mockResolvedValue({
+      ...sourceBroadcast,
+      contactFilter: persisted,
+    })
+
+    await expect(
+      broadcastService.resendWithPruning({
+        workspaceId: WS,
+        id: SOURCE_ID,
+        canViewEmailAndPhone: false,
+      }),
+    ).rejects.toMatchObject({ field: "contactFilter", httpStatusCode: 422 })
+    expect(mockTxInsertValues).not.toHaveBeenCalled()
   })
 
   test("propagates a 'Broadcast is not sent' error from the existence/status guard", async () => {

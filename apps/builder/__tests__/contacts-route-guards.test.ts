@@ -29,8 +29,8 @@ vi.mock("next-intl/server", () => ({
   getTranslations: vi.fn(async () => (key: string) => key),
 }))
 
-vi.mock("@/features/contacts/queries/list-contacts.queries", () => ({
-  listContactsRSC: vi.fn(async () => ({
+const { mockListContactsRSC } = vi.hoisted(() => ({
+  mockListContactsRSC: vi.fn(async (_input: Record<string, unknown>) => ({
     data: [],
     pageCount: 0,
     totalCount: 0,
@@ -38,10 +38,16 @@ vi.mock("@/features/contacts/queries/list-contacts.queries", () => ({
   })),
 }))
 
+vi.mock("@/features/contacts/queries/list-contacts.queries", () => ({
+  listContactsRSC: mockListContactsRSC,
+}))
+
 vi.mock("@/features/contacts/schema/query", () => ({
   listContactsRequest: {
     omit: () => ({
-      safeParse: () => ({ data: {} }),
+      safeParse: (params: Record<string, unknown>) => ({
+        data: { keyword: params.keyword },
+      }),
     }),
   },
 }))
@@ -165,5 +171,55 @@ describe("contacts route guards", () => {
         searchParams: Promise.resolve({}),
       }),
     ).rejects.toThrow("not found")
+  })
+})
+
+describe("contacts page with a ?contactFilter= (s206: an invalid filter never widens)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetCurrentUserAndTargetWorkspace.mockResolvedValue({
+      user: { id: "user-1" },
+      targetWorkspaceMember: {
+        permissions: { ...basePermissions, contacts: true },
+      },
+    })
+  })
+
+  const render = (searchParams: Record<string, string | string[]>) =>
+    ContactsPage({
+      params: Promise.resolve({ workspaceId: "ws-1" }),
+      searchParams: Promise.resolve(searchParams),
+    })
+
+  test.each([
+    ["malformed JSON", "{bad"],
+    ["a bad operator", JSON.stringify({ operator: "xor", conditions: [] })],
+    ["a repeated param", ["{}", "{}"]],
+  ])("%s lists NO contact: the unfiltered RSC fetch never runs", async (_label, contactFilter) => {
+    await expect(
+      render({ contactFilter, keyword: "ann" }),
+    ).resolves.toBeDefined()
+    expect(mockListContactsRSC).not.toHaveBeenCalled()
+  })
+
+  test("a valid filter is applied and keyword survives beside it", async () => {
+    const contactFilter = {
+      operator: "and",
+      conditions: [{ field: "fullName", operator: "isNotEmpty" }],
+    }
+    await render({
+      contactFilter: JSON.stringify(contactFilter),
+      keyword: "ann",
+    })
+    expect(mockListContactsRSC).toHaveBeenCalledWith(
+      expect.objectContaining({ contactFilter, keyword: "ann" }),
+    )
+  })
+
+  test("no filter lists every contact (the operator's choice)", async () => {
+    await render({})
+    expect(mockListContactsRSC).toHaveBeenCalledWith(
+      expect.objectContaining({ contactFilter: undefined }),
+    )
   })
 })
