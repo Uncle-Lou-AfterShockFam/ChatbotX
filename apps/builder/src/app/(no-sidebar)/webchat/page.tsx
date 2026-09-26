@@ -160,7 +160,7 @@ export default async function WebchatPage(props: WebchatPageProps) {
       {targetWebchat.customCss && (
         <CustomWidgetStyle css={targetWebchat.customCss} />
       )}
-      <WebchatWrapper parentOrigin={embeddingOrigin} referral={data.ref} />
+      <WebchatWrapper referral={data.ref} />
     </GuestSessionStoreProvider>
   )
 }
