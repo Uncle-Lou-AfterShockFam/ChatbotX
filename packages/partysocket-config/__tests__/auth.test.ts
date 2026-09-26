@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest"
 import {
   extractBearerToken,
   LEGACY_PURPOSE_WINDOW_CUTOFF,
@@ -136,6 +136,13 @@ describe("signRealtimeToken / verifyRealtimeToken", () => {
   })
 
   it("accepts a purpose-less legacy token when allowLegacyMissingPurpose is set — rolling-deploy compat window (BLOCKER-a)", async () => {
+    // Inside the window: on real time this test expired with the window itself
+    // (LEGACY_PURPOSE_WINDOW_CUTOFF, 2026-09-25) and failed every run after.
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date(LEGACY_PURPOSE_WINDOW_CUTOFF.getTime() - 60_000))
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
     const { SignJWT } = await import("jose")
     const legacyToken = await new SignJWT({})
       .setProtectedHeader({ alg: "HS256" })
