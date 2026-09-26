@@ -147,7 +147,8 @@
       "setDealStatus": "Mark Deal Won / Lost",
       "createTask": "Create task",
       "completeTask": "Complete task",
-      "sendDocumentForSignature": "Trimite documentul spre semnare"
+      "sendDocumentForSignature": "Trimite documentul spre semnare",
+      "createInvoice": "Create invoice"
     },
     "splitTraffic": {
       "balanceHint": "Suma totală trebuie să fie egală cu 100%.",
@@ -4449,7 +4450,10 @@
       "taskOverdue": "Task overdue",
       "taskAssigned": "Task assigned",
       "dealMentioned": "Teammate mentioned on a deal",
-      "formSubmitted": "Web form submitted"
+      "formSubmitted": "Web form submitted",
+      "invoiceCreated": "Invoice created",
+      "invoicePaid": "Invoice paid",
+      "invoicePaymentFailed": "Invoice payment failed"
     },
     "actions": {
       "addTag": "Adaugă etichetă",
@@ -7193,7 +7197,8 @@
       "contacts": "Contacts",
       "activity": "Change log",
       "conversations": "Conversations",
-      "documents": "Documente"
+      "documents": "Documente",
+      "invoices": "Invoices"
     },
     "kinds": {
       "companyActivity": "Change",
@@ -7356,6 +7361,64 @@
       "empty": "No open tasks are assigned to you.",
       "emptyDone": "You have not completed any tasks yet.",
       "more": "Load more"
+    }
+  },
+  "stripe": {
+    "title": "Stripe",
+    "setting": {
+      "label": "Stripe",
+      "description": "Bill contacts through your own Stripe account. Paste a secret key (Developers > API keys); the hub registers its webhook on your account for you. Use a test key (sk_test_) to try it without real money."
+    },
+    "fields": {
+      "secretKey": "Secret key"
+    },
+    "live": "Live",
+    "test": "Test mode",
+    "keyEnding": "Key ending {last4}"
+  },
+  "invoices": {
+    "title": "Invoices",
+    "empty": "No invoices yet.",
+    "pageHint": "Invoices are collected through the workspace's connected Stripe account (Settings > Integrations > Stripe). Create one from a contact's Invoices tab or with the Create invoice flow step.",
+    "create": "Create invoice",
+    "createHint": "Stripe hosts the pay page; copy its link or send it in a flow.",
+    "created": "Invoice created",
+    "addLine": "Add line",
+    "void": "Void invoice",
+    "voided": "Invoice voided",
+    "copyLink": "Copy pay link",
+    "openLink": "Open pay page",
+    "linkCopied": "Pay link copied",
+    "linkCopyFailed": "Could not copy the link",
+    "allStatuses": "All statuses",
+    "fields": {
+      "lines": "Line items",
+      "description": "Description",
+      "quantity": "Qty",
+      "unitAmount": "Unit price",
+      "currency": "Currency",
+      "dueInDays": "Due in days",
+      "memo": "Memo",
+      "number": "Number",
+      "status": "Status",
+      "total": "Total",
+      "created": "Created",
+      "due": "Due"
+    },
+    "status": {
+      "draft": "Draft",
+      "open": "Open",
+      "paid": "Paid",
+      "void": "Void",
+      "uncollectible": "Uncollectible",
+      "refunded": "Refunded"
+    },
+    "step": {
+      "hint": "Bills the contact through the workspace's Stripe. On success the pay link is saved in the contact field invoice_link and the invoice id in invoice_last_id. To wait for payment, add a Wait step on the event Custom field changed for invoice_paid_id, with the value set to the raw invoice_last_id variable.",
+      "dueInDaysHint": "Days until the invoice is due (Stripe shows at least 1).",
+      "memoPlaceholder": "Thanks for your order",
+      "summary": "{count, plural, one {# line} other {# lines}}: {description} ({currency})",
+      "noLines": "No line items"
     }
   }
 }

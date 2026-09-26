@@ -16,6 +16,11 @@ import {
 } from "./deal-conditions"
 import { formSubmitted } from "./form-conditions"
 import {
+  invoiceCreated,
+  invoicePaid,
+  invoicePaymentFailed,
+} from "./invoice-conditions"
+import {
   archived,
   contactReferredANewContact,
   contactReferredExistingContact,
@@ -61,6 +66,9 @@ export const allConditions = {
   taskAssigned,
   dealMentioned,
   formSubmitted,
+  invoiceCreated,
+  invoicePaid,
+  invoicePaymentFailed,
 }
 
 export const conditionSchema = z.union(Object.values(allConditions))

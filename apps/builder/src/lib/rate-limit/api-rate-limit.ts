@@ -25,6 +25,7 @@ export type ApiRateLimitScope =
   | "workspace-token-rate-limit"
   | "workspace-token-preauth-rate-limit"
   | "documenso-webhook-rate-limit"
+  | "stripe-webhook-rate-limit"
 
 type ApiRateLimitInput = {
   scope: ApiRateLimitScope

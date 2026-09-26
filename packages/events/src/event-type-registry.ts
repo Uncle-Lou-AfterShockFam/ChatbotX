@@ -36,6 +36,9 @@ export const EMITTED_EVENT_TYPES = [
   triggerEventTypes.enum.taskAssigned,
   triggerEventTypes.enum.dealMentioned,
   triggerEventTypes.enum.formSubmitted,
+  triggerEventTypes.enum.invoiceCreated,
+  triggerEventTypes.enum.invoicePaid,
+  triggerEventTypes.enum.invoicePaymentFailed,
 ] as const
 
 export const SCANNER_VERIFIED_EVENT_TYPES = [

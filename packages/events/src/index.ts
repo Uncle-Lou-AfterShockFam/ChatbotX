@@ -11,6 +11,7 @@ export type {
   DealTaskEventMetadata,
   DealValueChangedMetadata,
   FormSubmittedMetadata,
+  InvoiceEventMetadata,
 } from "./base-emitter"
 export * from "./contact-inbox-context"
 export * from "./context"

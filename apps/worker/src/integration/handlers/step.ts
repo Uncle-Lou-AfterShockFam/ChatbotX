@@ -43,6 +43,7 @@ import {
   unsubscribeBroadcast,
 } from "./contact"
 import { markCouponUsed, setUpCoupon } from "./coupon"
+import { handleCreateInvoice } from "./create-invoice"
 import {
   completeTask,
   createDeal,
@@ -563,6 +564,7 @@ export const flowStepHandlers: Record<
   [stepTypes.enum.subscribeSequence]: addContactSequence,
   [stepTypes.enum.unsubscribeSequence]: removeContactSequence,
   [stepTypes.enum.createDeal]: createDeal,
+  [stepTypes.enum.createInvoice]: handleCreateInvoice,
   [stepTypes.enum.moveDealStage]: moveDealStage,
   [stepTypes.enum.setDealStatus]: setDealStatus,
   [stepTypes.enum.createTask]: createTask,

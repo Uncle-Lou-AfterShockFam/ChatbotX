@@ -110,6 +110,7 @@ import { integrationTiktokRelations } from "./integration-tiktok"
 import { integrationWebchatRelations } from "./integration-webchat"
 import { integrationWhatsappRelations } from "./integration-whatsapp"
 import { integrationZaloRelations } from "./integration-zalo"
+import { invoiceRelations } from "./invoice"
 import { magicLinkRelations } from "./magic-link"
 import { mediaLibraryFileRelations } from "./media-library-file"
 import { mediaLibraryFolderRelations } from "./media-library-folder"
@@ -220,6 +221,7 @@ export const relations = {
   ...dealRelations,
   ...dealCommentRelations,
   ...dealTaskRelations,
+  ...invoiceRelations,
   ...documentRelations,
   ...formRelations,
   ...notificationRelations,

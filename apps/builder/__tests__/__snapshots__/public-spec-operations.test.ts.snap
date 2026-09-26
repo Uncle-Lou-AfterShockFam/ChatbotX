@@ -1554,6 +1554,26 @@ exports[`public API spec — operation naming guard > operation list (operationI
   },
   {
     "method": "POST",
+    "operationId": "invoices.create",
+    "path": "/v1/invoices",
+  },
+  {
+    "method": "GET",
+    "operationId": "invoices.get",
+    "path": "/v1/invoices/{id}",
+  },
+  {
+    "method": "GET",
+    "operationId": "invoices.list",
+    "path": "/v1/invoices",
+  },
+  {
+    "method": "POST",
+    "operationId": "invoices.void",
+    "path": "/v1/invoices/{id}/void",
+  },
+  {
+    "method": "POST",
     "operationId": "keywords.create",
     "path": "/v1/keywords",
   },

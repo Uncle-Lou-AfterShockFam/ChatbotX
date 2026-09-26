@@ -20,6 +20,7 @@ import { completeTaskStepSchema } from "./steps/complete-task"
 import { countCharactersStepSchema } from "./steps/count-characters"
 import { markCouponUsedStepSchema, setUpCouponStepSchema } from "./steps/coupon"
 import { createDealStepSchema } from "./steps/create-deal"
+import { createInvoiceStepSchema } from "./steps/create-invoice"
 import { createTaskStepSchema } from "./steps/create-task"
 import { deleteContactStepSchema } from "./steps/delete-contact"
 import { disableBotStepSchema } from "./steps/disable-bot"
@@ -110,6 +111,7 @@ const sequenceSteps = [
 
 const dealSteps = [
   createDealStepSchema,
+  createInvoiceStepSchema,
   moveDealStageStepSchema,
   setDealStatusStepSchema,
   createTaskStepSchema,

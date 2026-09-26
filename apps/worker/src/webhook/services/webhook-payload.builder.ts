@@ -60,7 +60,30 @@ const EVENT_NAMES = {
   [triggerEventTypes.enum.taskAssigned]: "deal_task_assigned",
   [triggerEventTypes.enum.dealMentioned]: "deal_mentioned",
   [triggerEventTypes.enum.formSubmitted]: "form_submitted",
+  [triggerEventTypes.enum.invoiceCreated]: "invoice_created",
+  [triggerEventTypes.enum.invoicePaid]: "invoice_paid",
+  [triggerEventTypes.enum.invoicePaymentFailed]: "invoice_payment_failed",
 } satisfies Record<MatchableEventType, string>
+
+/** Hub invoicing (s205b): the invoice summary, never provider secrets. */
+function buildInvoicePayload(
+  basePayload: WebhookPayloadBase,
+  data: Record<string, unknown>,
+): WebhookPayload {
+  return {
+    ...basePayload,
+    invoice: {
+      id: data.invoiceId as string,
+      number: Number(data.number ?? 0),
+      status: data.status as string,
+      method: data.method as string,
+      total: data.total as string,
+      currency: data.currency as string,
+      hosted_url: (data.hostedUrl as string | null) ?? null,
+      deal_id: (data.dealId as string | null) ?? null,
+    },
+  }
+}
 
 async function buildTagPayload(
   basePayload: WebhookPayloadBase,
@@ -318,6 +341,9 @@ const PAYLOAD_BUILDERS = {
       values: isPlainRecord(data.values) ? data.values : {},
     },
   }),
+  [triggerEventTypes.enum.invoiceCreated]: buildInvoicePayload,
+  [triggerEventTypes.enum.invoicePaid]: buildInvoicePayload,
+  [triggerEventTypes.enum.invoicePaymentFailed]: buildInvoicePayload,
 } satisfies Record<MatchableEventType, PayloadBuilder>
 
 /**
