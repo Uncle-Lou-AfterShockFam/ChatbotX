@@ -658,3 +658,121 @@ describe.skipIf(!databaseUrl)(
     })
   },
 )
+
+/** A row written the way scheduleSmartDelayResume writes it (create / upsertFollowUp). */
+async function writeFreshRow(props: {
+  type: "waitNode" | "followUp"
+  workspaceId: string
+  stepId: string
+  triggerAt: Date
+}): Promise<{ id: string; triggerAt: Date }> {
+  const id = mintId()
+  const data = {
+    id,
+    workspaceId: props.workspaceId,
+    flowId: "1",
+    flowVersionId: null,
+    contactInboxId: "1",
+    appointmentId: null,
+    conversationId: "1",
+    nodeId: "next-node",
+    stepId: props.stepId,
+    metadata: null,
+    eventNodeId: null,
+    eventSpec: null,
+    type: props.type,
+    createdAt: new Date(),
+    triggerAt: props.triggerAt,
+    status: "pending" as const,
+    claimGeneration: 0,
+    claimedAt: null,
+  }
+  const row = await db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL session_replication_role = replica`)
+    if (props.type === "followUp") {
+      return await smartDelayService.upsertFollowUp({ tx, data })
+    }
+    await smartDelayService.create({ tx, data })
+    return data
+  })
+  seeded.push(row.id)
+  return { id: row.id, triggerAt: row.triggerAt }
+}
+
+function soon(offsetMs = 0): Date {
+  return new Date(Date.now() + 30_000 + offsetMs)
+}
+
+describe.skipIf(!databaseUrl)("markScheduled never resurrects a row", () => {
+  test.each([
+    "waitNode",
+    "followUp",
+  ] as const)("%s: a stop that canceled the row after its write keeps it canceled", async (type) => {
+    const workspaceId = mintId()
+    const row = await writeFreshRow({
+      type,
+      workspaceId,
+      stepId: mintId(),
+      triggerAt: soon(),
+    })
+    await expect(cancelWorkspace(workspaceId, 50)).resolves.toBe(1)
+
+    expect(await smartDelayService.markScheduled(row)).toBe(false)
+    expect((await readRow(row.id)).status).toBe("canceled")
+  })
+
+  test("a fresh pending row is marked scheduled", async () => {
+    const row = await writeFreshRow({
+      type: "waitNode",
+      workspaceId: mintId(),
+      stepId: mintId(),
+      triggerAt: soon(),
+    })
+    expect(await smartDelayService.markScheduled(row)).toBe(true)
+    expect((await readRow(row.id)).status).toBe("scheduled")
+  })
+
+  test("two overlapping follow-up arms: only the arm the row now holds marks it", async () => {
+    const workspaceId = mintId()
+    const stepId = mintId()
+    const first = await writeFreshRow({
+      type: "followUp",
+      workspaceId,
+      stepId,
+      triggerAt: soon(),
+    })
+    const second = await writeFreshRow({
+      type: "followUp",
+      workspaceId,
+      stepId,
+      triggerAt: soon(5000),
+    })
+    // Same row re-armed in place, not a second row.
+    expect(second.id).toBe(first.id)
+
+    expect(await smartDelayService.markScheduled(first)).toBe(false)
+    expect(await smartDelayService.markScheduled(second)).toBe(true)
+    expect((await readRow(first.id)).status).toBe("scheduled")
+  })
+
+  test(`a cancel racing the mark always ends canceled (${RACE_ITERATIONS} rounds)`, async () => {
+    const workspaceId = mintId()
+    const leaked: string[] = []
+    for (let round = 0; round < RACE_ITERATIONS; round++) {
+      const row = await writeFreshRow({
+        type: round % 2 === 0 ? "waitNode" : "followUp",
+        workspaceId,
+        stepId: mintId(),
+        triggerAt: soon(),
+      })
+      // Stagger the mark 0-3 ms behind the cancel so both orders occur.
+      const cancel = cancelWorkspace(workspaceId, 50)
+      await new Promise((resolve) => setTimeout(resolve, round % 4))
+      await Promise.all([smartDelayService.markScheduled(row), cancel])
+      if ((await readRow(row.id)).status !== "canceled") {
+        leaked.push(row.id)
+      }
+    }
+    expect(leaked).toEqual([])
+  })
+})

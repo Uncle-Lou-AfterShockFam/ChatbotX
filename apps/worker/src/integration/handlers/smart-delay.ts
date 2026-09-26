@@ -169,10 +169,12 @@ export async function scheduleSmartDelayResume(props: {
   try {
     const marked = await smartDelayService.markScheduled({
       id: persistedRow.id,
-      ifPending: persistedRow.type === smartDelayTypes.enum.waitForEvent,
+      triggerAt: persistedRow.triggerAt,
     })
     if (!marked) {
-      return // an event already claimed this wait: nothing left to time out
+      // Canceled, claimed (event / scanner) or re-armed since the write: the
+      // row's new owner decides, and a canceled row must stay canceled.
+      return
     }
 
     const job = smartDelayResumeJobFactories[persistedRow.type](persistedRow, {

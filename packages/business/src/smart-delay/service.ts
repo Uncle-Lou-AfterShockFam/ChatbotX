@@ -114,33 +114,32 @@ class SmartDelayService extends BaseService {
   }
 
   /**
-   * Mark a row scheduled before its immediate job is enqueued. `ifPending`
-   * makes it a pending -> scheduled CAS: a waitForEvent row can be claimed
-   * (completed) by its event between insert and this call, and an
-   * unconditional write would resurrect it so its timeout edge ran too
-   * (double resume). Other types keep the unconditional write: upsertFollowUp
-   * re-arms a SCHEDULED row back to pending, and a CAS there could skip the
-   * re-armed row's job. False = not marked: do not enqueue.
+   * Mark a freshly written row scheduled before its immediate job is enqueued:
+   * a pending -> scheduled CAS on the caller's own triggerAt. False = not
+   * marked, do not enqueue. A miss means the row moved on since the caller
+   * wrote it, and every such mover owns what happens next:
+   * - canceled (company stop / workspace freeze) or completed: an unguarded
+   *   write would resurrect it and the job would run for a stopped contact;
+   * - claimed by its event (waitForEvent): its timeout must not run too;
+   * - claimed by the scanner (claimDueRows), which enqueues it itself;
+   * - re-armed by a newer upsertFollowUp (a different triggerAt), whose own
+   *   mark enqueues the job at the NEW time instead of this stale one.
    */
   async markScheduled(props: {
     tx?: DatabaseClient
     id: string
-    ifPending?: boolean
+    triggerAt: Date
   }): Promise<boolean> {
-    const { tx = db, id, ifPending = false } = props
+    const { tx = db, id, triggerAt } = props
     const rows = await tx
       .update(contactOnSmartDelayModel)
       .set({ status: smartDelayStatuses.enum.scheduled })
       .where(
-        ifPending
-          ? and(
-              eq(contactOnSmartDelayModel.id, id),
-              eq(
-                contactOnSmartDelayModel.status,
-                smartDelayStatuses.enum.pending,
-              ),
-            )
-          : eq(contactOnSmartDelayModel.id, id),
+        and(
+          eq(contactOnSmartDelayModel.id, id),
+          eq(contactOnSmartDelayModel.status, smartDelayStatuses.enum.pending),
+          eq(contactOnSmartDelayModel.triggerAt, triggerAt),
+        ),
       )
       .returning({ id: contactOnSmartDelayModel.id })
     return rows.length > 0

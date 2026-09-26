@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, test, vi } from "vitest"
 
-// An event can claim a fresh waitForEvent row between its insert and the
-// immediate timeout enqueue; marking it scheduled then would resurrect it and
-// its timeout edge would ALSO run (codex probe #4). Only waitForEvent uses the
-// pending -> scheduled CAS (followUp re-arms scheduled rows, skeptic HIGH).
+// Between a row's write and the immediate enqueue, an event can claim it
+// (waitForEvent, codex probe #4) and a company stop / freeze can cancel it
+// (any type, s202). Marking it scheduled then would resurrect it, so every
+// type marks through the pending -> scheduled CAS on its own triggerAt, and a
+// miss enqueues nothing.
 
 const { integrationQueueAdd, smartDelayService } = vi.hoisted(() => ({
   integrationQueueAdd: vi.fn(),
@@ -60,28 +61,26 @@ describe("scheduleSmartDelayResume: immediate enqueue", () => {
     integrationQueueAdd.mockResolvedValue(undefined)
   })
 
-  test("waitForEvent: CAS; an event that already claimed the row means no timeout job", async () => {
+  test.each([
+    "waitForEvent",
+    "waitNode",
+  ] as const)("%s: CAS on the row's own triggerAt; a miss (claimed / canceled) enqueues nothing", async (type) => {
     smartDelayService.markScheduled.mockResolvedValueOnce(false)
-    await scheduleSmartDelayResume(props("waitForEvent"))
-    expect(smartDelayService.markScheduled).toHaveBeenCalledWith(
-      expect.objectContaining({ ifPending: true }),
-    )
+    await scheduleSmartDelayResume(props(type))
+    expect(smartDelayService.markScheduled).toHaveBeenCalledWith({
+      id: expect.any(String),
+      triggerAt: new Date(NOW.getTime() + 120_000),
+    })
     expect(integrationQueueAdd).not.toHaveBeenCalled()
     expect(smartDelayService.resetToPending).not.toHaveBeenCalled()
   })
 
-  test("waitForEvent: still pending -> marked and enqueued", async () => {
+  test.each([
+    "waitForEvent",
+    "waitNode",
+  ] as const)("%s: still pending -> marked and enqueued", async (type) => {
     smartDelayService.markScheduled.mockResolvedValueOnce(true)
-    await scheduleSmartDelayResume(props("waitForEvent"))
-    expect(integrationQueueAdd).toHaveBeenCalledTimes(1)
-  })
-
-  test("waitNode keeps the unconditional write", async () => {
-    smartDelayService.markScheduled.mockResolvedValueOnce(true)
-    await scheduleSmartDelayResume(props("waitNode"))
-    expect(smartDelayService.markScheduled).toHaveBeenCalledWith(
-      expect.objectContaining({ ifPending: false }),
-    )
+    await scheduleSmartDelayResume(props(type))
     expect(integrationQueueAdd).toHaveBeenCalledTimes(1)
   })
 })

@@ -120,11 +120,13 @@ describe("handleFollowUp", () => {
       },
       { delay: 60_000, jobId: `smart-delay-${rowId}-${triggerAt.getTime()}` },
     )
-    // Unconditional for followUp: upsertFollowUp re-arms a scheduled row, and a
-    // pending-only CAS there could skip the re-armed row's job (skeptic HIGH).
+    // CAS on the arm's own triggerAt: of two overlapping arms (upsertFollowUp
+    // re-arms a scheduled row back to pending), only the one whose triggerAt
+    // the row holds marks it, so the job follows the NEWEST arm (skeptic HIGH
+    // on #39), and a row canceled since the upsert stays canceled (s203).
     expect(smartDelayService.markScheduled).toHaveBeenCalledWith({
       id: rowId,
-      ifPending: false,
+      triggerAt,
     })
     expect(
       smartDelayService.markScheduled.mock.invocationCallOrder[0],
@@ -147,6 +149,16 @@ describe("handleFollowUp", () => {
     expect(smartDelayService.upsertFollowUp).toHaveBeenCalledOnce()
     expect(integrationQueueAdd).not.toHaveBeenCalled()
     expect(smartDelayService.markScheduled).not.toHaveBeenCalled()
+  })
+
+  test("a row canceled or re-armed since the upsert is not enqueued", async () => {
+    smartDelayService.markScheduled.mockResolvedValueOnce(false)
+
+    const result = await handleFollowUp(makeProps())
+
+    expect(result).toEqual({ status: "wait", result: null })
+    expect(integrationQueueAdd).not.toHaveBeenCalled()
+    expect(smartDelayService.resetToPending).not.toHaveBeenCalled()
   })
 
   test("scheduling the same follow-up twice reuses the upsert path", async () => {
