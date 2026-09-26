@@ -11,7 +11,12 @@ import { ContactFilter } from "@/features/contact-filter"
 import { SequenceStoreProvider } from "@/features/sequences/provider/sequence-store-context"
 import { useWorkspaceId } from "@/hooks/routing"
 
-const CONDITION_EXCLUDED_FILTER_FIELDS: ContactFilterField[] = []
+// Empty on purpose, and pinned by a test (s208): `ContactFilter` silently
+// DELETES a saved condition on an excluded field unless the caller passes
+// `onExcludedConditions`, and this editor has nowhere to surface that. A
+// flow condition is evaluated per contact, never an audience, so no field
+// needs excluding here; adding one means wiring `onExcludedConditions` first.
+export const CONDITION_EXCLUDED_FILTER_FIELDS: ContactFilterField[] = []
 
 type ConditionStepEditorProps = {
   parentName: string

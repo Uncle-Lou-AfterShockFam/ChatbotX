@@ -94,6 +94,11 @@ const ContactFilterDialogCore = ({
         </DialogHeader>
 
         <div className="flex flex-col gap-6">
+          {/* No `onExcludedConditions` (s208): nothing can prune here. The
+              conversation filter is never persisted (store only), the picker
+              hides excluded fields, and `excludeFields` is fixed for the
+              page's life; the server still fails a blocked field closed
+              (`build-conversation-where`). */}
           <ContactListFilterPanel
             excludeFields={excludeFields}
             filter={draft}
