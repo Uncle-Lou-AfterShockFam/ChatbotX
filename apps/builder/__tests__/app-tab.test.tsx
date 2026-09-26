@@ -69,6 +69,8 @@ describe("AppTab", () => {
 
   beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+    // jsdom computes no default font size; browsers report the root's in px.
+    document.documentElement.style.fontSize = "16px"
     container = document.createElement("div")
     document.body.append(container)
     root = createRoot(container)
@@ -79,6 +81,7 @@ describe("AppTab", () => {
       root.unmount()
     })
     container.remove()
+    document.documentElement.style.fontSize = ""
   })
 
   test("renders every tab", () => {
@@ -145,6 +148,19 @@ describe("AppTab", () => {
 
       // 396 - 372 to show the tab, plus 24 px so the end fade misses it.
       expect(strip()?.scrollLeft).toBe(48)
+    } finally {
+      rects.mockRestore()
+    }
+  })
+
+  test("the clearance tracks the fade's rem width at a larger root font", () => {
+    document.documentElement.style.fontSize = "20px"
+    const rects = stubRects({ left: 16, right: 372 }, { left: 331, right: 396 })
+    try {
+      render(withLastTabActive)
+
+      // 1.5rem at 20 px is 30 px.
+      expect(strip()?.scrollLeft).toBe(54)
     } finally {
       rects.mockRestore()
     }

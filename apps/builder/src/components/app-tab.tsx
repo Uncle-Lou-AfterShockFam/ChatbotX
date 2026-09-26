@@ -39,10 +39,18 @@ function getTabClassName(tab: AppTabProps["tabs"][number]) {
 }
 
 /**
- * Room past the revealed tab, matching `scroll-fade-x`'s 1.5rem fade: a tab
- * scrolled exactly flush with the edge would sit under that fade.
+ * Room past the revealed tab: `scroll-fade-x`'s `--scroll-fade-size` (1.5rem),
+ * in px at the current root font size. A tab scrolled exactly flush with the
+ * edge would sit under that fade.
  */
-const REVEAL_CLEARANCE_PX = 24
+const REVEAL_CLEARANCE_REM = 1.5
+
+function revealClearancePx() {
+  return (
+    REVEAL_CLEARANCE_REM *
+    Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
+  )
+}
 
 /**
  * Scrolls the strip just far enough to show the active tab whole: a deep link
@@ -58,12 +66,13 @@ function revealActiveTab(strip: HTMLElement) {
   if (!active) {
     return
   }
+  const clearance = revealClearancePx()
   const view = strip.getBoundingClientRect()
   const tab = active.getBoundingClientRect()
   if (tab.right > view.right) {
-    strip.scrollLeft += tab.right - view.right + REVEAL_CLEARANCE_PX
+    strip.scrollLeft += tab.right - view.right + clearance
   } else if (tab.left < view.left) {
-    strip.scrollLeft -= view.left - tab.left + REVEAL_CLEARANCE_PX
+    strip.scrollLeft -= view.left - tab.left + clearance
   }
 }
 
