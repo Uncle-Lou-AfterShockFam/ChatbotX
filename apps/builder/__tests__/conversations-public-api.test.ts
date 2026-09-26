@@ -10,7 +10,15 @@ type RouteConfig = {
 
 type CapturedProcedure = {
   route: RouteConfig
-  input?: { safeParse: (value: unknown) => { success: boolean } }
+  input?: {
+    safeParse: (value: unknown) => {
+      success: boolean
+      data?: {
+        contactFilter?: { conditions: { value?: unknown }[] }
+        sort?: unknown
+      }
+    }
+  }
   handler?: (...args: any[]) => any
 }
 
@@ -365,22 +373,30 @@ describe("GET /v1/conversations parses JSON query values exactly once", () => {
       conditions: [{ field: "fullName", operator: "contains", value }],
     })
 
-  test.each(["50%", "100% off", "%"])("a contactFilter value %j is accepted", (value) => {
-    const result = procedure.input?.safeParse({ contactFilter: filterWith(value) })
+  test.each([
+    "50%",
+    "100% off",
+    "%",
+  ])("a contactFilter value %j is accepted", (value) => {
+    const result = procedure.input?.safeParse({
+      contactFilter: filterWith(value),
+    })
     expect(result?.success).toBe(true)
-    expect(result?.data.contactFilter.conditions[0].value).toBe(value)
+    expect(result?.data?.contactFilter?.conditions[0]?.value).toBe(value)
   })
 
   test("a contactFilter value %41 stays literal, never decoded to A", () => {
-    const result = procedure.input?.safeParse({ contactFilter: filterWith("%41") })
+    const result = procedure.input?.safeParse({
+      contactFilter: filterWith("%41"),
+    })
     expect(result?.success).toBe(true)
-    expect(result?.data.contactFilter.conditions[0].value).toBe("%41")
+    expect(result?.data?.contactFilter?.conditions[0]?.value).toBe("%41")
   })
 
   test("a sort id containing % is kept, not silently dropped", () => {
     const sort = [{ id: "50%", desc: true }]
     const result = procedure.input?.safeParse({ sort: JSON.stringify(sort) })
     expect(result?.success).toBe(true)
-    expect(result?.data.sort).toEqual(sort)
+    expect(result?.data?.sort).toEqual(sort)
   })
 })
