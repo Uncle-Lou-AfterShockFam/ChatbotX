@@ -23,6 +23,7 @@
  */
 
 import { type DatabaseClient, db, sql } from "@chatbotx.io/database/client"
+import { requireRealDatabaseUrl } from "@chatbotx.io/vitest-config/real-db"
 import { afterAll, afterEach, describe, expect, test, vi } from "vitest"
 import { MAX_RESUME_CLAIMS, smartDelayService } from "../../src/smart-delay"
 import {
@@ -36,29 +37,7 @@ vi.mock("@chatbotx.io/worker-config", () => ({
   integrationQueue: { remove: vi.fn().mockResolvedValue(undefined) },
 }))
 
-/** The `setup-env` sentinel: a real database never listens on port 1. */
-const NON_ROUTABLE_PORT = "1"
-
-function realDatabaseUrl(): string | null {
-  const url = process.env.DATABASE_URL
-  if (!url) {
-    return null
-  }
-  try {
-    return new URL(url).port === NON_ROUTABLE_PORT ? null : url
-  } catch {
-    return null
-  }
-}
-
-const databaseUrl = realDatabaseUrl()
-
-// `test:db` sets this: there, a skip would be a silent green with nothing run.
-if (process.env.REQUIRE_REAL_DB === "1" && !databaseUrl) {
-  throw new Error(
-    "test:db needs DATABASE_URL pointing at a migrated Postgres (it is unset or the setup-env sentinel)",
-  )
-}
+const databaseUrl = requireRealDatabaseUrl()
 
 /** Ids far above any snowflake a scratch database would hold. */
 const ID_BASE = 9_100_000_000_000_000n

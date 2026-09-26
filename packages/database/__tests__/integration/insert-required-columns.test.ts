@@ -31,6 +31,7 @@
  *     pnpm --filter @chatbotx.io/database test:db
  */
 
+import { requireRealDatabaseUrl } from "@chatbotx.io/vitest-config/real-db"
 import { getTableColumns, getTableName } from "drizzle-orm"
 import type { PgTable } from "drizzle-orm/pg-core"
 import { Client } from "pg"
@@ -47,22 +48,7 @@ import {
   whatsappSignupSessionModel,
 } from "../../src/schema"
 
-/** The `setup-env` sentinel: a real database never listens on port 1. */
-const NON_ROUTABLE_PORT = "1"
-
-function realDatabaseUrl(): string | null {
-  const url = process.env.DATABASE_URL
-  if (!url) {
-    return null
-  }
-  try {
-    return new URL(url).port === NON_ROUTABLE_PORT ? null : url
-  } catch {
-    return null
-  }
-}
-
-const databaseUrl = realDatabaseUrl()
+const databaseUrl = requireRealDatabaseUrl()
 
 type ColumnFact = {
   isNullable: boolean
