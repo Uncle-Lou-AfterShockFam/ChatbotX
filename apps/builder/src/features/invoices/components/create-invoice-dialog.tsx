@@ -54,14 +54,17 @@ export function CreateInvoiceDialog({
   const [currency, setCurrency] = useState("USD")
   const [dueInDays, setDueInDays] = useState("7")
   const [memo, setMemo] = useState("")
-  const [idempotencyKey, setIdempotencyKey] = useState("")
+  // One key per request CONTENT: a double submit of the same form reuses it,
+  // an edited resubmit gets a new one (the server refuses a reused key with
+  // different content).
+  const [submitted, setSubmitted] = useState<{ key: string; body: string }>()
 
   const onOpenChange = (next: boolean) => {
     setOpen(next)
     if (next) {
       setLines([newLine(0)])
       setMemo("")
-      setIdempotencyKey(crypto.randomUUID())
+      setSubmitted(undefined)
     }
   }
   const update = (key: number, patch: Partial<Line>) =>
@@ -78,21 +81,24 @@ export function CreateInvoiceDialog({
         Number(line.quantity) >= 1,
     ) && CURRENCY_CODE.test(currency.trim())
 
-  const onSubmit = () =>
+  const onSubmit = () => {
+    const request = {
+      workspaceId,
+      contactId,
+      currency: currency.trim().toUpperCase(),
+      dueInDays: Math.max(0, Math.min(365, Number(dueInDays) || 0)),
+      memo: memo.trim() || undefined,
+      lines: lines.map((line) => ({
+        description: line.description.trim(),
+        quantity: Number(line.quantity),
+        unitAmount: line.unitAmount.trim(),
+      })),
+    }
+    const body = JSON.stringify(request)
+    const key = submitted?.body === body ? submitted.key : crypto.randomUUID()
+    setSubmitted({ key, body })
     create.mutate(
-      {
-        workspaceId,
-        contactId,
-        currency: currency.trim().toUpperCase(),
-        dueInDays: Math.max(0, Math.min(365, Number(dueInDays) || 0)),
-        memo: memo.trim() || undefined,
-        idempotencyKey,
-        lines: lines.map((line) => ({
-          description: line.description.trim(),
-          quantity: Number(line.quantity),
-          unitAmount: line.unitAmount.trim(),
-        })),
-      },
+      { ...request, idempotencyKey: key },
       {
         onSuccess: () => {
           toast.success(t("invoices.created"))
@@ -102,6 +108,7 @@ export function CreateInvoiceDialog({
           toast.error(err instanceof Error ? err.message : String(err)),
       },
     )
+  }
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>

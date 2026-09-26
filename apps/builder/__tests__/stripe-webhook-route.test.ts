@@ -72,7 +72,7 @@ test.each([
   ["ignored", 200],
   ["retry", 503],
   ["rejected", 400],
-  ["unknown", 404],
+  ["unknown", 400],
 ] as const)("outcome %s answers %i and never echoes the detail", async (outcome, status) => {
   const { POST } = await import(
     "@/app/integrations/stripe/webhook/[integrationId]/route"
@@ -81,6 +81,21 @@ test.each([
   const res = await POST(post(BODY), ctx())
   expect(res.status).toBe(status)
   expect(await res.text()).not.toContain("secret-ish")
+})
+
+test("an unknown integration and a bad signature give the SAME answer (no id oracle)", async () => {
+  const { POST } = await import(
+    "@/app/integrations/stripe/webhook/[integrationId]/route"
+  )
+  handleStripeWebhook.mockResolvedValueOnce({ outcome: "unknown", detail: "a" })
+  const unknown = await POST(post(BODY), ctx("999"))
+  handleStripeWebhook.mockResolvedValueOnce({
+    outcome: "rejected",
+    detail: "b",
+  })
+  const rejected = await POST(post(BODY), ctx())
+  expect(unknown.status).toBe(rejected.status)
+  expect(await unknown.text()).toBe(await rejected.text())
 })
 
 test("a thrown handler answers 503 so Stripe redelivers", async () => {

@@ -29,7 +29,7 @@ CREATE TABLE "InvoiceEvent" (
 	"createdAt" timestamp(6) with time zone DEFAULT now() NOT NULL,
 	"updatedAt" timestamp(6) with time zone DEFAULT now() NOT NULL,
 	"workspaceId" bigint NOT NULL,
-	"integrationId" bigint NOT NULL,
+	"integrationId" bigint,
 	"invoiceId" bigint,
 	"providerEventId" text NOT NULL,
 	"type" text NOT NULL,
@@ -63,12 +63,14 @@ CREATE TABLE "Invoice" (
 	"paidAt" timestamp(6) with time zone,
 	"voidedAt" timestamp(6) with time zone,
 	"sourceKey" text,
+	"requestHash" text,
 	"lastError" text,
 	"contactId" bigint NOT NULL,
 	"companyId" bigint,
 	"dealId" bigint,
 	"integrationId" bigint,
 	"providerInvoiceId" text,
+	"providerAccountId" text,
 	"providerCustomerId" text,
 	"hostedUrl" text,
 	"pdfUrl" text
@@ -91,7 +93,7 @@ ALTER TABLE "StripeCustomer" ADD CONSTRAINT "StripeCustomer_workspaceId_Workspac
 ALTER TABLE "StripeCustomer" ADD CONSTRAINT "StripeCustomer_integrationId_Integration_id_fkey" FOREIGN KEY ("integrationId") REFERENCES "Integration"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
 ALTER TABLE "StripeCustomer" ADD CONSTRAINT "StripeCustomer_contactId_Contact_id_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
 ALTER TABLE "InvoiceEvent" ADD CONSTRAINT "InvoiceEvent_workspaceId_Workspace_id_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
-ALTER TABLE "InvoiceEvent" ADD CONSTRAINT "InvoiceEvent_integrationId_Integration_id_fkey" FOREIGN KEY ("integrationId") REFERENCES "Integration"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
+ALTER TABLE "InvoiceEvent" ADD CONSTRAINT "InvoiceEvent_integrationId_Integration_id_fkey" FOREIGN KEY ("integrationId") REFERENCES "Integration"("id") ON DELETE SET NULL ON UPDATE CASCADE;--> statement-breakpoint
 ALTER TABLE "InvoiceEvent" ADD CONSTRAINT "InvoiceEvent_invoiceId_Invoice_id_fkey" FOREIGN KEY ("invoiceId") REFERENCES "Invoice"("id") ON DELETE SET NULL ON UPDATE CASCADE;--> statement-breakpoint
 ALTER TABLE "InvoiceLineItem" ADD CONSTRAINT "InvoiceLineItem_invoiceId_Invoice_id_fkey" FOREIGN KEY ("invoiceId") REFERENCES "Invoice"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
 ALTER TABLE "Invoice" ADD CONSTRAINT "Invoice_workspaceId_Workspace_id_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint

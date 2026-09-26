@@ -28,8 +28,27 @@ export const createInvoiceInputSchema = z
     dueDays: z.number().int().min(0).max(INVOICE_MAX_DUE_DAYS),
     memo: z.string().trim().max(INVOICE_MEMO_MAX).optional(),
     dealId: idSchema.optional(),
-    /** Idempotency: the same key in a workspace returns the first invoice. */
+    /**
+     * Idempotency: the same key in a workspace returns the first invoice; the
+     * same key with different content is refused (409), never billed.
+     */
     sourceKey: z.string().trim().min(1).max(200).optional(),
+    /**
+     * Flow steps: also reuse this contact's non-void invoice whose sourceKey
+     * starts with `sourcePrefix` if it is younger than `withinMs` (a
+     * duplicated continuation job runs the step under a new run key).
+     */
+    reuseRecent: z
+      .object({
+        sourcePrefix: z.string().regex(/^[a-z]+:[0-9a-f]{16,64}:$/),
+        withinMs: z
+          .number()
+          .int()
+          .min(1)
+          .max(24 * 60 * 60 * 1000),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
 export type CreateInvoiceInput = z.input<typeof createInvoiceInputSchema>

@@ -43,6 +43,15 @@ export const useCreateInvoice = () => {
   )
 }
 
+export const useFinalizeInvoice = () => {
+  const invalidate = useInvalidateInvoices()
+  return useMutation(
+    orpc.invoicesAPI.privateFinalizeInvoiceAPI.mutationOptions({
+      onSettled: () => invalidate(),
+    }),
+  )
+}
+
 export const useVoidInvoice = () => {
   const invalidate = useInvalidateInvoices()
   return useMutation(

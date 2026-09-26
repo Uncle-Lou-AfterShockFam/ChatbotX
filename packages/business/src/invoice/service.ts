@@ -1,11 +1,15 @@
+import { createHash } from "node:crypto"
 import {
   and,
   db,
   desc,
   eq,
   exists,
+  gt,
   inArray,
+  like,
   lt,
+  ne,
   or,
   type SQL,
   sql,
@@ -71,6 +75,47 @@ export const invoiceEventMetadata = (
   hostedUrl: invoice.hostedUrl,
   dealId: invoice.dealId,
 })
+
+/** The same idempotency key replayed with different content: never billed. */
+export const idempotencyConflictException = () =>
+  new ChatbotXException(
+    "This idempotency key was already used for a different invoice",
+    "conflict",
+    409,
+  )
+
+/**
+ * What a sourceKey replay must match to return the first invoice: the
+ * NORMALISED request (currency upper-cased, amounts as stored strings).
+ */
+export const invoiceRequestHash = (request: {
+  contactId: string
+  currency: string
+  lines: { description: string; quantity: number; unitAmount: string }[]
+  dueDays: number
+  memo?: string
+  dealId?: string
+}): string =>
+  createHash("sha256")
+    .update(
+      JSON.stringify([
+        request.contactId,
+        request.currency,
+        request.lines.map((l) => [l.description, l.quantity, l.unitAmount]),
+        request.dueDays,
+        request.memo ?? "",
+        request.dealId ?? "",
+      ]),
+    )
+    .digest("hex")
+
+/** Stripe status after finalize -> hub status; anything else is an error. */
+const FINALIZED_STATUS: Partial<Record<string, InvoiceStatus>> = {
+  open: "open",
+  paid: "paid",
+  void: "void",
+  uncollectible: "uncollectible",
+}
 
 /** A provider failure surfaced to callers: `retryable` = a job may retry. */
 export class InvoiceFinalizeError extends ChatbotXException {
@@ -243,6 +288,7 @@ class InvoiceService extends BaseService {
       await integrationStripeService.credentialsByWorkspaceIdOrFail(
         props.workspaceId,
       )
+    const requestHash = invoiceRequestHash({ ...props, currency, lines })
 
     const { invoice, created } = await db.transaction(async (tx) => {
       await tx.execute(
@@ -253,7 +299,35 @@ class InvoiceService extends BaseService {
           where: { workspaceId: props.workspaceId, sourceKey: props.sourceKey },
         })
         if (existing) {
+          if (existing.requestHash !== requestHash) {
+            throw idempotencyConflictException()
+          }
           return { invoice: existing, created: false }
+        }
+      }
+      if (props.reuseRecent) {
+        const [recent] = await tx
+          .select()
+          .from(invoiceModel)
+          .where(
+            and(
+              eq(invoiceModel.workspaceId, props.workspaceId),
+              eq(invoiceModel.contactId, props.contactId),
+              like(
+                invoiceModel.sourceKey,
+                `${props.reuseRecent.sourcePrefix}%`,
+              ),
+              ne(invoiceModel.status, "void"),
+              gt(
+                invoiceModel.createdAt,
+                new Date(Date.now() - props.reuseRecent.withinMs),
+              ),
+            ),
+          )
+          .orderBy(desc(invoiceModel.createdAt))
+          .limit(1)
+        if (recent) {
+          return { invoice: recent, created: false }
         }
       }
       const [contact] = await tx
@@ -303,6 +377,7 @@ class InvoiceService extends BaseService {
           memo: props.memo || null,
           dueAt: new Date(now.getTime() + props.dueDays * DAY_MS),
           sourceKey: props.sourceKey ?? null,
+          requestHash,
           contactId: contact.id,
           companyId: contact.companyId,
           dealId: props.dealId ?? null,
@@ -353,8 +428,10 @@ class InvoiceService extends BaseService {
         invoice.workspaceId,
       )
     if (
-      invoice.integrationId &&
-      invoice.integrationId !== credentials.integrationId
+      (invoice.integrationId &&
+        invoice.integrationId !== credentials.integrationId) ||
+      (invoice.providerAccountId &&
+        invoice.providerAccountId !== credentials.accountId)
     ) {
       throw validationException(
         "invoice",
@@ -395,17 +472,27 @@ class InvoiceService extends BaseService {
         invoice,
       )
     }
-    const status: InvoiceStatus = result.status === "paid" ? "paid" : "open"
+    const status = result.status ? FINALIZED_STATUS[result.status] : undefined
+    if (!status) {
+      throw new InvoiceFinalizeError(
+        `Stripe left the invoice in status ${result.status ?? "unknown"}`,
+        true,
+        invoice,
+      )
+    }
     const [opened] = await db
       .update(invoiceModel)
       .set({
         status,
         providerInvoiceId: result.providerInvoiceId,
+        providerAccountId: credentials.accountId,
         providerCustomerId: result.providerCustomerId,
+        integrationId: credentials.integrationId,
         hostedUrl: result.hostedUrl,
         pdfUrl: result.pdfUrl,
         dueAt: result.dueAt ?? invoice.dueAt,
         paidAt: status === "paid" ? new Date() : null,
+        voidedAt: status === "void" ? new Date() : null,
         lastError: null,
         updatedAt: new Date(),
       })
@@ -413,7 +500,10 @@ class InvoiceService extends BaseService {
         and(eq(invoiceModel.id, invoice.id), eq(invoiceModel.status, "draft")),
       )
       .returning()
-    if (opened) {
+    if (!opened) {
+      await this.voidAtStripeIfVoidedMeanwhile(invoice, result.status)
+    }
+    if (opened?.status === "open") {
       try {
         await emitInvoiceCreated(
           opened.workspaceId,
@@ -428,6 +518,51 @@ class InvoiceService extends BaseService {
       }
     }
     return await this.get(ref)
+  }
+
+  /**
+   * The draft was voided here while this finalize was talking to Stripe (a
+   * void of a draft without a Stripe id skips Stripe): the Stripe invoice
+   * this finalize just opened must not stay payable under a void hub row.
+   */
+  private async voidAtStripeIfVoidedMeanwhile(
+    invoice: InvoiceModel,
+    stripeStatus: string | null,
+  ): Promise<void> {
+    const [current] = await db
+      .select({ status: invoiceModel.status })
+      .from(invoiceModel)
+      .where(eq(invoiceModel.id, invoice.id))
+      .limit(1)
+    if (current?.status !== "void" || stripeStatus !== "open") {
+      return
+    }
+    try {
+      const credentials =
+        await integrationStripeService.credentialsByWorkspaceIdOrFail(
+          invoice.workspaceId,
+        )
+      const [withId] = await db
+        .select()
+        .from(invoiceModel)
+        .where(eq(invoiceModel.id, invoice.id))
+        .limit(1)
+      if (withId) {
+        await voidWithStripe({ credentials, invoice: withId })
+      }
+    } catch (error) {
+      logger.error(
+        { err: error, invoiceId: invoice.id },
+        "invoice: voided during finalize, but the Stripe invoice could not be voided",
+      )
+      await db
+        .update(invoiceModel)
+        .set({
+          lastError: "Voided here while Stripe opened it: void it in Stripe",
+          updatedAt: new Date(),
+        })
+        .where(eq(invoiceModel.id, invoice.id))
+    }
   }
 
   /** Void an unpaid invoice here and at the provider. */

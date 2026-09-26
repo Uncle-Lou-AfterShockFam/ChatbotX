@@ -33,10 +33,14 @@ vi.mock("../src/lib/logger", () => ({
   logger: { warn: m.logWarn, error: vi.fn(), info: vi.fn() },
 }))
 
-const { handleCreateInvoice, invoiceSourceKey } = await import(
-  "../src/integration/handlers/create-invoice"
-)
+const {
+  FLOW_INVOICE_REUSE_MS,
+  handleCreateInvoice,
+  invoiceSourceKey,
+  invoiceSourcePrefix,
+} = await import("../src/integration/handlers/create-invoice")
 
+const PREFIX_SHAPE = /^flow:[0-9a-f]{32}:$/
 const conversation = { workspaceId: "11", contactId: "22" }
 const step = {
   id: "s1",
@@ -57,6 +61,7 @@ const props = (overrides: Record<string, unknown> = {}) =>
   ({
     conversation,
     contactInbox: { id: "ci-1" },
+    flowVersion: { flowId: "flow-1" },
     step,
     flowExecutionKey: "run-1",
     ...overrides,
@@ -93,9 +98,14 @@ describe("worker registration", () => {
 })
 
 describe("createInvoice step", () => {
-  test("renders variables, creates with a run-derived source key, writes the link fields", async () => {
+  test("renders variables, creates with a run-derived key under the step+contact prefix, and a reuse window", async () => {
     const result = await handleCreateInvoice(props())
     expect(result.status).toBe("success")
+    const prefix = invoiceSourcePrefix({
+      flowId: "flow-1",
+      stepId: "s1",
+      contactId: "22",
+    })
     expect(m.create).toHaveBeenCalledWith({
       workspaceId: "11",
       contactId: "22",
@@ -104,7 +114,8 @@ describe("createInvoice step", () => {
         { description: "Order for Lou", quantity: 2, unitAmount: "12.50" },
       ],
       dueDays: 7,
-      sourceKey: invoiceSourceKey("run-1", "s1"),
+      sourceKey: invoiceSourceKey(prefix, "run-1"),
+      reuseRecent: { sourcePrefix: prefix, withinMs: FLOW_INVOICE_REUSE_MS },
     })
     expect(m.markCreated).toHaveBeenCalledWith({
       invoice,
@@ -112,16 +123,18 @@ describe("createInvoice step", () => {
     })
   })
 
-  test("the source key is stable per (run, step) and differs across runs and steps", () => {
-    expect(invoiceSourceKey("run-1", "s1")).toBe(
-      invoiceSourceKey("run-1", "s1"),
-    )
-    expect(invoiceSourceKey("run-1", "s1")).not.toBe(
-      invoiceSourceKey("run-2", "s1"),
-    )
-    expect(invoiceSourceKey("run-1", "s1")).not.toBe(
-      invoiceSourceKey("run-1", "s2"),
-    )
+  test("the prefix is per (flow, step, contact); the key adds the run", () => {
+    const p = (flowId: string, stepId: string, contactId: string) =>
+      invoiceSourcePrefix({ flowId, stepId, contactId })
+    expect(p("f", "s", "c")).toBe(p("f", "s", "c"))
+    expect(p("f", "s", "c")).not.toBe(p("f", "s", "other-contact"))
+    expect(p("f", "s", "c")).not.toBe(p("f", "s2", "c"))
+    expect(p("f", "s", "c")).not.toBe(p("f2", "s", "c"))
+    expect(PREFIX_SHAPE.test(p("f", "s", "c"))).toBe(true)
+    const key = invoiceSourceKey(p("f", "s", "c"), "run-1")
+    expect(key.startsWith(p("f", "s", "c"))).toBe(true)
+    expect(key).not.toBe(invoiceSourceKey(p("f", "s", "c"), "run-2"))
+    expect(key.length).toBeLessThanOrEqual(200)
   })
 
   test("no execution key: error branch, nothing billed", async () => {

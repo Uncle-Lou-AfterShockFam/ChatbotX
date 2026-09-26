@@ -45,6 +45,7 @@ vi.mock("../../src/integration-stripe/service", () => {
   const credentialsFor = (workspaceId: string, integrationId: string) => ({
     integrationId,
     workspaceId,
+    accountId: "acct_rdb",
     livemode: false,
     auth: {
       secretKey: ["sk", "test", "realDbSuiteKey0123456789"].join("_"),
@@ -282,6 +283,78 @@ describe.skipIf(!databaseUrl)("invoiceService.create under concurrency", () => {
     expect(await countRows("Invoice", workspaceId)).toBe(1)
     expect(await countRows("InvoiceLineItem", workspaceId)).toBe(1)
     expect(invoices[0]?.number).toBe(1)
+  })
+
+  test("flow reuse window: a new run key under the same step prefix returns the recent invoice", async () => {
+    const { workspaceId, contactId } = await seedWorkspace()
+    const prefix = "flow:0123456789abcdef0123456789abcdef:"
+    const reuseRecent = { sourcePrefix: prefix, withinMs: 600_000 }
+    const [a, b] = await Promise.all([
+      invoiceService.create(
+        createInput(workspaceId, contactId, {
+          sourceKey: `${prefix}run-a`,
+          reuseRecent,
+        }),
+      ),
+      invoiceService.create(
+        createInput(workspaceId, contactId, {
+          sourceKey: `${prefix}run-b`,
+          reuseRecent,
+        }),
+      ),
+    ])
+    expect(a.id).toBe(b.id)
+    expect(await countRows("Invoice", workspaceId)).toBe(1)
+  })
+
+  test("flow reuse window never reuses a VOID invoice or another contact's", async () => {
+    const { workspaceId, contactId } = await seedWorkspace()
+    const otherContact = mintId()
+    await asReplica(sql`
+      INSERT INTO "Contact" (id, "workspaceId") VALUES (${otherContact}, ${workspaceId})`)
+    seeded.Contact?.push(otherContact)
+    const prefix = "flow:fedcba9876543210fedcba9876543210:"
+    const reuseRecent = { sourcePrefix: prefix, withinMs: 600_000 }
+    const first = await invoiceService.create(
+      createInput(workspaceId, contactId, {
+        sourceKey: `${prefix}run-1`,
+        reuseRecent,
+      }),
+    )
+    const other = await invoiceService.create(
+      createInput(workspaceId, otherContact, {
+        sourceKey: `${prefix}run-2`,
+        reuseRecent,
+      }),
+    )
+    expect(other.id).not.toBe(first.id)
+    await db.execute(
+      sql`UPDATE "Invoice" SET status = 'void' WHERE id = ${first.id}`,
+    )
+    const again = await invoiceService.create(
+      createInput(workspaceId, contactId, {
+        sourceKey: `${prefix}run-3`,
+        reuseRecent,
+      }),
+    )
+    expect(again.id).not.toBe(first.id)
+    expect(await countRows("Invoice", workspaceId)).toBe(3)
+  })
+
+  test("a reused sourceKey with different content is refused and writes nothing", async () => {
+    const { workspaceId, contactId } = await seedWorkspace()
+    await invoiceService.create(
+      createInput(workspaceId, contactId, { sourceKey: "api:k1" }),
+    )
+    await expect(
+      invoiceService.create(
+        createInput(workspaceId, contactId, {
+          sourceKey: "api:k1",
+          lines: [{ description: "Session", quantity: 1, unitAmount: "99.00" }],
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "conflict" })
+    expect(await countRows("Invoice", workspaceId)).toBe(1)
   })
 
   test("a contact of another workspace is not found and writes nothing", async () => {

@@ -1,7 +1,8 @@
-import { and, db, eq, sql } from "@chatbotx.io/database/client"
+import { and, db, eq, isNull, sql } from "@chatbotx.io/database/client"
 import {
   integrationModel,
   integrationStripeModel,
+  invoiceModel,
   stripeCustomerModel,
 } from "@chatbotx.io/database/schema"
 import type { IntegrationStripeModel } from "@chatbotx.io/database/types"
@@ -88,6 +89,7 @@ const isStripeAuthError = (error: unknown): boolean =>
 export type StripeCredentials = {
   integrationId: string
   workspaceId: string
+  accountId: string
   livemode: boolean
   auth: StripeAuth
 }
@@ -142,6 +144,7 @@ class IntegrationStripeService extends BaseService {
     return {
       integrationId: row.integrationId,
       workspaceId: row.workspaceId,
+      accountId: row.accountId,
       livemode: row.livemode,
       auth,
     }
@@ -249,6 +252,18 @@ class IntegrationStripeService extends BaseService {
         if (!row) {
           throw new Error("stripe connect: write returned no row")
         }
+        // Invoices left by a disconnect (integrationId SET NULL) on this SAME
+        // Stripe account are re-adopted, so their webhooks resolve again.
+        await tx
+          .update(invoiceModel)
+          .set({ integrationId, updatedAt: new Date() })
+          .where(
+            and(
+              eq(invoiceModel.workspaceId, props.workspaceId),
+              isNull(invoiceModel.integrationId),
+              eq(invoiceModel.providerAccountId, account.id),
+            ),
+          )
         return { summary: toSummary(row), previous: existing ?? null }
       })
       createdEndpointId = null

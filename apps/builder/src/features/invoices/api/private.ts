@@ -1,6 +1,5 @@
 import { crmTimelineService } from "@chatbotx.io/business"
 import { invoiceService } from "@chatbotx.io/business/invoice"
-import type z from "zod"
 import { requireContactPermissionScope } from "@/features/contacts/permissions"
 import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
 import { contactsAccessAuthorizedMiddleware } from "@/middlewares/auth"
@@ -11,6 +10,7 @@ import {
   invoiceIdInput,
   listInvoicesRequest,
   listInvoicesResponse,
+  toInvoiceDetailResource,
   toInvoiceResource,
 } from "../schema/resource"
 
@@ -23,19 +23,6 @@ const tags = ["Invoices"]
 
 const assignedOnly = async (workspaceId: string) =>
   (await requireContactPermissionScope(workspaceId)).restrictToAssignedUserId
-
-const toDetail = (
-  row: Awaited<ReturnType<typeof invoiceService.get>>,
-): z.infer<typeof invoiceDetailResource> => ({
-  ...toInvoiceResource(row),
-  lineItems: row.lineItems.map((line) => ({
-    position: line.position,
-    description: line.description,
-    quantity: line.quantity,
-    unitAmount: line.unitAmount,
-    amount: line.amount,
-  })),
-})
 
 const privateListInvoicesAPI = authorizedAPI
   .route({
@@ -73,7 +60,7 @@ const privateGetInvoiceAPI = authorizedAPI
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(invoiceDetailResource)
   .handler(async ({ input }) =>
-    toDetail(
+    toInvoiceDetailResource(
       await invoiceService.get({
         workspaceId: input.workspaceId,
         id: input.id,
@@ -98,7 +85,7 @@ const privateCreateInvoiceAPI = authorizedAPI
       contactId: input.contactId,
       accessScope: await requireContactPermissionScope(input.workspaceId),
     })
-    return toDetail(
+    return toInvoiceDetailResource(
       await invoiceService.create({
         workspaceId: input.workspaceId,
         contactId: input.contactId,
@@ -125,8 +112,28 @@ const privateVoidInvoiceAPI = authorizedAPI
   .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
   .output(invoiceDetailResource)
   .handler(async ({ input }) =>
-    toDetail(
+    toInvoiceDetailResource(
       await invoiceService.void({
+        workspaceId: input.workspaceId,
+        id: input.id,
+        restrictToAssignedUserId: await assignedOnly(input.workspaceId),
+      }),
+    ),
+  )
+
+const privateFinalizeInvoiceAPI = authorizedAPI
+  .route({
+    method: "POST",
+    path: "/workspaces/{workspaceId}/invoices/{id}/finalize",
+    summary: "Retry sending a draft invoice to Stripe",
+    tags,
+  })
+  .input(withWorkspaceIdSchema.and(invoiceIdInput))
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
+  .output(invoiceDetailResource)
+  .handler(async ({ input }) =>
+    toInvoiceDetailResource(
+      await invoiceService.finalize({
         workspaceId: input.workspaceId,
         id: input.id,
         restrictToAssignedUserId: await assignedOnly(input.workspaceId),
@@ -139,4 +146,5 @@ export const privateInvoicesAPI = {
   privateGetInvoiceAPI,
   privateCreateInvoiceAPI,
   privateVoidInvoiceAPI,
+  privateFinalizeInvoiceAPI,
 }

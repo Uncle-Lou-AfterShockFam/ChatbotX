@@ -12,21 +12,11 @@ import {
   invoiceIdInput,
   listInvoicesRequest,
   listInvoicesResponse,
+  toInvoiceDetailResource,
   toInvoiceResource,
 } from "../schema/resource"
 
 const workspaceTokenAuthAPI = workspaceTokenAuthAPIForScope("ecommerce")
-
-const toDetail = (row: Awaited<ReturnType<typeof invoiceService.get>>) => ({
-  ...toInvoiceResource(row),
-  lineItems: row.lineItems.map((line) => ({
-    position: line.position,
-    description: line.description,
-    quantity: line.quantity,
-    unitAmount: line.unitAmount,
-    amount: line.amount,
-  })),
-})
 
 export const invoicesPublicRouter = {
   list: workspaceTokenAuthAPI
@@ -65,7 +55,7 @@ export const invoicesPublicRouter = {
     .output(invoiceDetailResource)
     .errors(possibleErrorsOnFindingResource)
     .handler(async ({ context, input }) =>
-      toDetail(
+      toInvoiceDetailResource(
         await invoiceService.get({
           workspaceId: context.workspace.id,
           id: input.id,
@@ -86,7 +76,7 @@ export const invoicesPublicRouter = {
     .output(invoiceDetailResource)
     .errors(possibleErrorsOnCreatingResource)
     .handler(async ({ context, input }) =>
-      toDetail(
+      toInvoiceDetailResource(
         await invoiceService.create({
           workspaceId: context.workspace.id,
           contactId: input.contactId,
@@ -98,6 +88,27 @@ export const invoicesPublicRouter = {
           sourceKey: input.idempotencyKey
             ? `api:${input.idempotencyKey}`
             : undefined,
+        }),
+      ),
+    ),
+
+  finalize: workspaceTokenAuthAPI
+    .route({
+      method: "POST",
+      path: "/v1/invoices/{id}/finalize",
+      summary: "Retry invoice finalize",
+      description:
+        "Retries sending a draft invoice (one whose Stripe step failed, see `lastError`) to Stripe. An invoice that is already open or paid is returned unchanged.",
+      tags: ["Invoices"],
+    })
+    .input(invoiceIdInput)
+    .output(invoiceDetailResource)
+    .errors(possibleErrorsOnMutatingResource)
+    .handler(async ({ context, input }) =>
+      toInvoiceDetailResource(
+        await invoiceService.finalize({
+          workspaceId: context.workspace.id,
+          id: input.id,
         }),
       ),
     ),
@@ -115,7 +126,7 @@ export const invoicesPublicRouter = {
     .output(invoiceDetailResource)
     .errors(possibleErrorsOnMutatingResource)
     .handler(async ({ context, input }) =>
-      toDetail(
+      toInvoiceDetailResource(
         await invoiceService.void({
           workspaceId: context.workspace.id,
           id: input.id,

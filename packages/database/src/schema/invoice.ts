@@ -42,7 +42,8 @@ export const invoiceMethod = pgEnum(
  * workspace (allocated max+1 inside the create transaction, the unique index
  * arbitrates a race). `sourceKey` makes a create idempotent: a flow retry or
  * an API Idempotency-Key replay returns the first invoice. `integrationId` is
- * SET NULL so disconnecting Stripe keeps the ledger.
+ * SET NULL so disconnecting Stripe keeps the ledger; reconnecting the same
+ * Stripe account (`providerAccountId`) re-adopts those invoices.
  */
 export const invoiceModel = pgTable(
   "Invoice",
@@ -64,6 +65,8 @@ export const invoiceModel = pgTable(
     paidAt: timestamp(timestampConfig),
     voidedAt: timestamp(timestampConfig),
     sourceKey: text(),
+    /** sha256 of the create request; a sourceKey replay with other content is refused. */
+    requestHash: text(),
     lastError: text(),
     contactId: bigintAsString()
       .notNull()
@@ -84,6 +87,8 @@ export const invoiceModel = pgTable(
       onUpdate: "cascade",
     }),
     providerInvoiceId: text(),
+    /** The Stripe account that holds `providerInvoiceId` (re-adopted on reconnect). */
+    providerAccountId: text(),
     providerCustomerId: text(),
     hostedUrl: text(),
     pdfUrl: text(),
@@ -148,12 +153,11 @@ export const invoiceEventModel = pgTable(
         onDelete: "cascade",
         onUpdate: "cascade",
       }),
-    integrationId: bigintAsString()
-      .notNull()
-      .references(() => integrationModel.id, {
-        onDelete: "cascade",
-        onUpdate: "cascade",
-      }),
+    /** SET NULL: a disconnect keeps the audit trail of surviving invoices. */
+    integrationId: bigintAsString().references(() => integrationModel.id, {
+      onDelete: "set null",
+      onUpdate: "cascade",
+    }),
     invoiceId: bigintAsString().references(() => invoiceModel.id, {
       onDelete: "set null",
       onUpdate: "cascade",

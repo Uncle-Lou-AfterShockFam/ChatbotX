@@ -64,7 +64,6 @@ const ZERO_DECIMAL_CURRENCIES = new Set([
   "MGA",
   "PYG",
   "RWF",
-  "UGX",
   "VND",
   "VUV",
   "XAF",
@@ -72,28 +71,44 @@ const ZERO_DECIMAL_CURRENCIES = new Set([
   "XPF",
 ])
 
-/** Stripe three-decimal currencies: not supported (numeric(14,2) storage). */
-const THREE_DECIMAL_CURRENCIES = new Set(["BHD", "JOD", "KWD", "OMR", "TND"])
+/**
+ * Refused: Stripe's three-decimal currencies (numeric(14,2) storage) and its
+ * special cases ISK / UGX, zero-decimal currencies Stripe still takes in
+ * two-decimal amounts. Fail closed rather than bill 100x.
+ */
+const UNSUPPORTED_CURRENCIES = new Set([
+  "BHD",
+  "JOD",
+  "KWD",
+  "OMR",
+  "TND",
+  "ISK",
+  "UGX",
+])
 
 const ISO_CURRENCY = /^[A-Z]{3}$/
 const MONEY_INPUT = /^(\d{1,12})(?:\.(\d{1,2}))?$/
-/** Commas only as 3-digit thousands groups: "1,250.50" yes, "12,50" no (that is a decimal comma). */
-const GROUPED_MONEY_INPUT = /^\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?$/
-const MONEY_SPACES = /[\s_]/g
+/**
+ * Commas only as thousands groups, and only where that reading is certain:
+ * two or more groups, or a decimal point ("1,250.50", "1,234,567"). A single
+ * group ("12,500") is refused: a decimal-comma writer means 12.5.
+ */
+const GROUPED_MONEY_INPUT =
+  /^\d{1,3}(?:(?:,\d{3}){2,}(?:\.\d{1,2})?|,\d{3}\.\d{1,2})$/
 
 /** Upper bound of numeric(14,2): 12 integer digits. */
 const MAX_MINOR = 999_999_999_999_99n
 
 /**
  * Normalise an invoice currency to upper-case ISO 4217, or null when it is not
- * a three-letter code or is a three-decimal currency the hub cannot store.
+ * a three-letter code or is a currency the hub refuses (see UNSUPPORTED_CURRENCIES).
  */
 export function normalizeInvoiceCurrency(value: unknown): string | null {
   if (typeof value !== "string") {
     return null
   }
   const upper = value.trim().toUpperCase()
-  if (!ISO_CURRENCY.test(upper) || THREE_DECIMAL_CURRENCIES.has(upper)) {
+  if (!ISO_CURRENCY.test(upper) || UNSUPPORTED_CURRENCIES.has(upper)) {
     return null
   }
   return upper
@@ -105,7 +120,7 @@ export function currencyExponent(currency: string): 0 | 2 {
 
 /**
  * Parse a money input EXACTLY (no floating point) into minor units of
- * `currency`. Accepts "1,250.50", "1250.5", "7" (a decimal comma like "12,50" is rejected, never read as 1250); numbers only when they are
+ * `currency`. Accepts "1,250.50", "1250.5", "7"; refuses a decimal comma ("12,50"), an ambiguous single group ("12,500") and inner spaces ("12 50"); numbers only when they are
  * safe integers or have at most two decimals when printed. Returns null for
  * negatives, NaN, more than two decimals, a fraction in a zero-decimal
  * currency, or anything past numeric(14,2).
@@ -121,7 +136,8 @@ export function parseMoneyToMinor(
     }
     text = String(value)
   } else if (typeof value === "string") {
-    text = value.replace(MONEY_SPACES, "")
+    // Only the edges are trimmed: "12 50" is refused, never read as 1250.
+    text = value.trim()
     if (text.includes(",")) {
       if (!GROUPED_MONEY_INPUT.test(text)) {
         return null

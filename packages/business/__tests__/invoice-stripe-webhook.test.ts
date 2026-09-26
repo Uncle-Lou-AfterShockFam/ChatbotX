@@ -85,6 +85,7 @@ const m = vi.hoisted(() => {
     credentials: vi.fn(),
     retrieve: vi.fn(),
     paymentsList: vi.fn(),
+    chargeRetrieve: vi.fn(),
     marks: vi.fn(),
     emitPaid: vi.fn(),
     emitFailed: vi.fn(),
@@ -127,6 +128,7 @@ vi.mock("../src/integration-stripe/client", async (importOriginal) => {
       webhooks: real.webhooks,
       invoices: { retrieve: (...a: unknown[]) => m.retrieve(...a) },
       invoicePayments: { list: (...a: unknown[]) => m.paymentsList(...a) },
+      charges: { retrieve: (...a: unknown[]) => m.chargeRetrieve(...a) },
     }),
   }
 })
@@ -216,6 +218,9 @@ const stripeInvoice = (status: string, hubId: string = HUB_ID) => ({
 })
 
 beforeEach(() => {
+  m.chargeRetrieve.mockImplementation((id: string) =>
+    Promise.resolve({ id, refunded: true, payment_intent: "pi_1" }),
+  )
   vi.clearAllMocks()
   m.state.hubRow = hubRow("open")
   m.state.insertResult = [{ id: "ev-row" }]
@@ -475,6 +480,11 @@ describe("handleStripeWebhook: dedup, confirmation and the transition", () => {
 
   test("a PARTIAL refund is recorded only (no lookup, no transition)", async () => {
     m.state.hubRow = hubRow("paid")
+    m.chargeRetrieve.mockResolvedValue({
+      id: "ch_1",
+      refunded: false,
+      payment_intent: "pi_1",
+    })
     const result = await deliver({
       type: "charge.refunded",
       object: {
@@ -545,6 +555,28 @@ describe("handleStripeWebhook: failure paths", () => {
     expect(result).toEqual({ outcome: "retry", detail: "stripe unreachable" })
     expect(m.state.inserted).toEqual([])
     expectNoSideEffects()
+  })
+
+  test("a FORGED refunded:true is not trusted: Stripe's own charge says not refunded -> no lookup, no transition", async () => {
+    m.state.hubRow = hubRow("paid")
+    m.chargeRetrieve.mockResolvedValue({
+      id: "ch_1",
+      refunded: false,
+      payment_intent: "pi_1",
+    })
+    const result = await deliver({
+      type: "charge.refunded",
+      object: {
+        id: "ch_1",
+        object: "charge",
+        refunded: true,
+        payment_intent: "pi_1",
+      },
+    })
+    expect(m.chargeRetrieve).toHaveBeenCalledWith("ch_1")
+    expect(m.paymentsList).not.toHaveBeenCalled()
+    expect(result.outcome).not.toBe("applied")
+    expect(m.state.updates).toEqual([])
   })
 
   test("a Stripe rate limit on the refund lookup: retry", async () => {

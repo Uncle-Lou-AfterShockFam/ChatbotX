@@ -11,7 +11,8 @@ import { checkApiRateLimit } from "@/lib/rate-limit/api-rate-limit"
  * integration's `whsec_` (`Stripe-Signature`, 300 s tolerance) before
  * anything is parsed, and every state change is re-confirmed against the
  * Stripe API. 503 = Stripe redelivers (it retries with backoff for 3 days);
- * 200 = final; 400 = bad signature / mode; 404 = no such integration.
+ * 200 = final; 400 = bad signature, mode or no such integration (one
+ * indistinguishable answer).
  */
 export const MAX_STRIPE_WEBHOOK_BYTES = 256 * 1024
 
@@ -25,7 +26,8 @@ const STATUS = {
   ignored: 200,
   retry: 503,
   rejected: 400,
-  unknown: 404,
+  // Same answer as a bad signature: no oracle for which integration ids exist.
+  unknown: 400,
 } as const
 
 export async function POST(
@@ -66,8 +68,9 @@ export async function POST(
   if (result.outcome === "retry") {
     logger.warn(`stripe webhook will be retried: ${result.detail}`)
   }
+  const status = STATUS[result.outcome]
   return NextResponse.json(
-    { outcome: result.outcome },
-    { status: STATUS[result.outcome] },
+    status === 400 ? { code: "badRequest" } : { outcome: result.outcome },
+    { status },
   )
 }

@@ -56,8 +56,13 @@ async function stripeInvoiceIdOf(
     return typeof object.id === "string" ? object.id : null
   }
   if (event.type === "charge.refunded") {
-    const charge = event.data.object as Stripe.Charge
-    // Only a FULL refund moves the invoice; a partial one is recorded only.
+    const signed = event.data.object as { id?: unknown }
+    if (typeof signed.id !== "string") {
+      return null
+    }
+    // Re-read the charge: the event body alone never marks an invoice
+    // refunded. Only a FULL refund moves it; a partial one is recorded only.
+    const charge = await stripe.charges.retrieve(signed.id)
     if (!charge.refunded) {
       return null
     }
@@ -118,6 +123,47 @@ async function findHubInvoice(
     return null
   }
   return row
+}
+
+/**
+ * What a confirmed, freshly recorded event writes onto the contact and emits.
+ * A fresh event whose target the invoice already holds re-runs the marks: the
+ * only way there without `applied` is a redelivery after a failed mark
+ * attempt (its event row was removed), since a dashboard resend reuses the
+ * event id and is a duplicate.
+ */
+async function markAndEmit(props: {
+  event: Stripe.Event
+  target: InvoiceStatus | null
+  applied: InvoiceModel | null
+  hubInvoice: InvoiceModel
+  stripeStatus: Stripe.Invoice.Status | null
+}): Promise<void> {
+  const { event, target, applied, hubInvoice } = props
+  const current = applied ?? hubInvoice
+  if (target && (applied || hubInvoice.status === target)) {
+    await markInvoiceOnContact({ invoice: current, status: target })
+    if (target === "paid") {
+      await emitInvoicePaid(
+        current.workspaceId,
+        current.contactId,
+        invoiceEventMetadata(current),
+      )
+    }
+    return
+  }
+  if (
+    event.type === "invoice.payment_failed" &&
+    current.status === "open" &&
+    props.stripeStatus === "open"
+  ) {
+    await markInvoiceOnContact({ invoice: current, status: "payment_failed" })
+    await emitInvoicePaymentFailed(
+      current.workspaceId,
+      current.contactId,
+      invoiceEventMetadata(current),
+    )
+  }
 }
 
 /**
@@ -240,33 +286,14 @@ export async function handleStripeWebhook(props: {
     return { outcome: "noop", detail: outcomeLabel }
   }
 
-  const current: InvoiceModel = applied ?? hubInvoice
   try {
-    if (target && (applied || hubInvoice.status === target)) {
-      // A fresh event whose target the invoice already holds re-runs the
-      // marks: the only way here without `applied` is a redelivery after a
-      // failed mark attempt (its event row was removed below), since a
-      // dashboard resend reuses the event id and is a duplicate.
-      await markInvoiceOnContact({ invoice: current, status: target })
-      if (target === "paid") {
-        await emitInvoicePaid(
-          current.workspaceId,
-          current.contactId,
-          invoiceEventMetadata(current),
-        )
-      }
-    } else if (
-      event.type === "invoice.payment_failed" &&
-      current.status === "open" &&
-      stripeInvoice?.status === "open"
-    ) {
-      await markInvoiceOnContact({ invoice: current, status: "payment_failed" })
-      await emitInvoicePaymentFailed(
-        current.workspaceId,
-        current.contactId,
-        invoiceEventMetadata(current),
-      )
-    }
+    await markAndEmit({
+      event,
+      target,
+      applied,
+      hubInvoice,
+      stripeStatus: stripeInvoice?.status ?? null,
+    })
   } catch (error) {
     // Let Stripe redeliver: drop the dedup row so the retry is not a duplicate.
     await db

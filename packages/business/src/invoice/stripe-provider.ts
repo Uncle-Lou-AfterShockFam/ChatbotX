@@ -12,6 +12,7 @@ import type {
 } from "@chatbotx.io/database/types"
 import { createStripeClient, Stripe } from "../integration-stripe/client"
 import type { StripeCredentials } from "../integration-stripe/service"
+import { logger } from "../logger"
 
 /**
  * Stripe caps a single charge at 8 digits of minor units (USD $999,999.99);
@@ -134,6 +135,58 @@ async function ensureCustomer(
 }
 
 /**
+ * Add the hub lines the Stripe draft does not carry yet. Re-entrant: a line
+ * already on the invoice (metadata `hub_line_position`) is skipped, and each
+ * create has its own Idempotency-Key.
+ */
+async function addMissingLineItems(props: {
+  stripe: Stripe
+  invoice: InvoiceModel
+  lines: InvoiceLineItemModel[]
+  customerId: string
+  stripeInvoiceId: string
+}): Promise<void> {
+  const { stripe, invoice, customerId, stripeInvoiceId } = props
+  const present = new Set<string>()
+  try {
+    for await (const line of stripe.invoices.listLineItems(stripeInvoiceId, {
+      limit: 100,
+    })) {
+      const position = line.metadata?.hub_line_position
+      if (position) {
+        present.add(position)
+      }
+    }
+  } catch (error) {
+    throw wrap(error, "list line items")
+  }
+  for (const line of props.lines) {
+    const position = String(line.position)
+    if (present.has(position)) {
+      continue
+    }
+    try {
+      await stripe.invoiceItems.create(
+        {
+          customer: customerId,
+          invoice: stripeInvoiceId,
+          currency: invoice.currency.toLowerCase(),
+          description: line.description,
+          quantity: line.quantity,
+          unit_amount_decimal: Stripe.Decimal.from(
+            decimalStringToMinor(line.unitAmount, invoice.currency),
+          ),
+          metadata: { hub_line_position: position },
+        },
+        { idempotencyKey: `hub-inv-${invoice.id}-line-${position}` },
+      )
+    } catch (error) {
+      throw wrap(error, "add line item")
+    }
+  }
+}
+
+/**
  * Create (or resume) the Stripe invoice behind a hub draft. Every mutating
  * call carries a deterministic Idempotency-Key and every step is re-entrant:
  * the Stripe invoice id is persisted the moment it exists, line items already
@@ -199,6 +252,7 @@ export async function finalizeWithStripe(props: {
       .update(invoiceModel)
       .set({
         providerInvoiceId: stripeInvoiceId,
+        providerAccountId: credentials.accountId,
         providerCustomerId: customerId,
         updatedAt: new Date(),
       })
@@ -218,43 +272,13 @@ export async function finalizeWithStripe(props: {
   }
 
   if (current.status === "draft") {
-    const present = new Set<string>()
-    try {
-      for await (const line of stripe.invoices.listLineItems(stripeInvoiceId, {
-        limit: 100,
-      })) {
-        const position = line.metadata?.hub_line_position
-        if (position) {
-          present.add(position)
-        }
-      }
-    } catch (error) {
-      throw wrap(error, "list line items")
-    }
-    for (const line of lines) {
-      const position = String(line.position)
-      if (present.has(position)) {
-        continue
-      }
-      try {
-        await stripe.invoiceItems.create(
-          {
-            customer: customerId,
-            invoice: stripeInvoiceId,
-            currency,
-            description: line.description,
-            quantity: line.quantity,
-            unit_amount_decimal: Stripe.Decimal.from(
-              decimalStringToMinor(line.unitAmount, invoice.currency),
-            ),
-            metadata: { hub_line_position: position },
-          },
-          { idempotencyKey: `hub-inv-${invoice.id}-line-${position}` },
-        )
-      } catch (error) {
-        throw wrap(error, "add line item")
-      }
-    }
+    await addMissingLineItems({
+      stripe,
+      invoice,
+      lines,
+      customerId,
+      stripeInvoiceId,
+    })
     try {
       current = await stripe.invoices.finalizeInvoice(
         stripeInvoiceId,
@@ -271,11 +295,20 @@ export async function finalizeWithStripe(props: {
     current.currency.toLowerCase() !== currency
   ) {
     if (current.status === "open") {
-      await stripe.invoices
-        .voidInvoice(stripeInvoiceId, undefined, {
+      try {
+        await stripe.invoices.voidInvoice(stripeInvoiceId, undefined, {
           idempotencyKey: `hub-inv-${invoice.id}-void-mismatch`,
         })
-        .catch(() => undefined)
+      } catch (error) {
+        logger.error(
+          { err: error, invoiceId: invoice.id, stripeInvoiceId },
+          "invoice: total mismatch and the Stripe invoice could not be voided",
+        )
+        throw new InvoiceProviderError(
+          `Stripe total ${current.total} ${current.currency} does not match the hub total ${totalMinor} ${currency}, and the Stripe invoice is STILL OPEN: void it in Stripe`,
+          false,
+        )
+      }
     }
     throw new InvoiceProviderError(
       `Stripe total ${current.total} ${current.currency} does not match the hub total ${totalMinor} ${currency}; the Stripe invoice was voided`,

@@ -170,3 +170,20 @@ export const toInvoiceResource = <
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 })
+
+/** A service row with its lines -> the detail resource (both API layers). */
+export const toInvoiceDetailResource = (
+  row: InvoiceResource &
+    Record<string, unknown> & {
+      lineItems: z.infer<typeof invoiceLineItemResource>[]
+    },
+): InvoiceDetailResource => ({
+  ...toInvoiceResource(row),
+  lineItems: row.lineItems.map((line) => ({
+    position: line.position,
+    description: line.description,
+    quantity: line.quantity,
+    unitAmount: line.unitAmount,
+    amount: line.amount,
+  })),
+})

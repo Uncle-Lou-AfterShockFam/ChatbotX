@@ -7419,6 +7419,8 @@
       "memoPlaceholder": "Thanks for your order",
       "summary": "{count, plural, one {# line} other {# lines}}: {description} ({currency})",
       "noLines": "No line items"
-    }
+    },
+    "retry": "Retry sending to Stripe",
+    "retried": "Invoice sent to Stripe"
   }
 }

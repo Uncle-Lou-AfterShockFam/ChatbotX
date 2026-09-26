@@ -11,10 +11,20 @@ import {
   TableHeader,
   TableRow,
 } from "@chatbotx.io/ui/components/ui/table"
-import { BanIcon, CopyIcon, ExternalLinkIcon, Loader2Icon } from "lucide-react"
+import {
+  BanIcon,
+  CopyIcon,
+  ExternalLinkIcon,
+  Loader2Icon,
+  RotateCwIcon,
+} from "lucide-react"
 import { useFormatter, useTranslations } from "next-intl"
 import { toast } from "sonner"
-import { useInvoices, useVoidInvoice } from "../provider/invoice-hooks"
+import {
+  useFinalizeInvoice,
+  useInvoices,
+  useVoidInvoice,
+} from "../provider/invoice-hooks"
 import type { InvoiceResource } from "../schema/resource"
 
 const STATUS_VARIANT = {
@@ -49,6 +59,7 @@ export function InvoiceList({
   const format = useFormatter()
   const invoices = useInvoices(workspaceId, { contactId, status })
   const voidInvoice = useVoidInvoice()
+  const finalizeInvoice = useFinalizeInvoice()
   const rows = invoices.data?.pages.flatMap((page) => page.data) ?? []
 
   const money = (row: InvoiceResource) =>
@@ -71,6 +82,16 @@ export function InvoiceList({
       { workspaceId, id: row.id },
       {
         onSuccess: () => toast.success(t("invoices.voided")),
+        onError: (err) =>
+          toast.error(err instanceof Error ? err.message : String(err)),
+      },
+    )
+
+  const onRetry = (row: InvoiceResource) =>
+    finalizeInvoice.mutate(
+      { workspaceId, id: row.id },
+      {
+        onSuccess: () => toast.success(t("invoices.retried")),
         onError: (err) =>
           toast.error(err instanceof Error ? err.message : String(err)),
       },
@@ -157,6 +178,18 @@ export function InvoiceList({
                           <ExternalLinkIcon className="size-4" />
                         </Button>
                       </>
+                    ) : null}
+                    {row.status === "draft" ? (
+                      <Button
+                        aria-label={t("invoices.retry")}
+                        data-testid={`invoice-retry-${row.id}`}
+                        disabled={finalizeInvoice.isPending}
+                        onClick={() => onRetry(row)}
+                        size="icon"
+                        variant="ghost"
+                      >
+                        <RotateCwIcon className="size-4" />
+                      </Button>
                     ) : null}
                     {VOIDABLE.has(row.status) ? (
                       <Button

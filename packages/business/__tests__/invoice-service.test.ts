@@ -161,9 +161,8 @@ vi.mock("../src/logger", () => ({
   logger: { warn: m.loggerWarn, error: vi.fn(), info: vi.fn() },
 }))
 
-const { invoiceService, InvoiceFinalizeError } = await import(
-  "../src/invoice/service"
-)
+const { invoiceService, InvoiceFinalizeError, invoiceRequestHash } =
+  await import("../src/invoice/service")
 const { integrationStripeService } = await import(
   "../src/integration-stripe/service"
 )
@@ -174,6 +173,7 @@ const { InvoiceProviderError, STRIPE_MAX_AMOUNT_MINOR } = await import(
 const CREDENTIALS = {
   integrationId: INTEGRATION,
   workspaceId: WS,
+  accountId: "acct_test_1",
   livemode: false,
   auth: {
     secretKey: ["sk", "test", "unitTestKey0123456789"].join("_"),
@@ -201,6 +201,18 @@ const validInput = (overrides: Record<string, unknown> = {}) => ({
   ],
   ...overrides,
 })
+
+/** The hash create() stores for validInput(): what a replay must match. */
+const VALID_INPUT_HASH = () =>
+  invoiceRequestHash({
+    contactId: CONTACT,
+    currency: "USD",
+    dueDays: 14,
+    lines: [
+      { description: "Consult", quantity: 2, unitAmount: "12.50" },
+      { description: "Report", quantity: 1, unitAmount: "100.00" },
+    ],
+  })
 
 const line = (unitAmount: unknown, quantity = 1) => ({
   description: "Item",
@@ -431,7 +443,10 @@ describe("invoiceService.create: the write", () => {
   })
 
   test("a sourceKey replay of an OPEN invoice returns it: no insert, no provider call", async () => {
-    const existing = storedInvoice("open", { sourceKey: "flow-run-1" })
+    const existing = storedInvoice("open", {
+      sourceKey: "flow-run-1",
+      requestHash: VALID_INPUT_HASH(),
+    })
     m.state.bySourceKey = existing
     m.state.stored = existing
     const invoice = await invoiceService.create(
@@ -446,7 +461,10 @@ describe("invoiceService.create: the write", () => {
   })
 
   test("a sourceKey replay of a DRAFT resumes its finalize (one provider call, no insert)", async () => {
-    const existing = storedInvoice("draft", { sourceKey: "flow-run-2" })
+    const existing = storedInvoice("draft", {
+      sourceKey: "flow-run-2",
+      requestHash: VALID_INPUT_HASH(),
+    })
     m.state.bySourceKey = existing
     m.state.stored = existing
     const invoice = await invoiceService.create(
@@ -455,6 +473,38 @@ describe("invoiceService.create: the write", () => {
     expect(m.state.inserts).toEqual([])
     expect(m.finalize).toHaveBeenCalledTimes(1)
     expect(invoice.status).toBe("open")
+  })
+
+  test("a sourceKey replay with DIFFERENT content is refused (409) and bills nothing", async () => {
+    const existing = storedInvoice("open", {
+      sourceKey: "api-key-1",
+      requestHash: VALID_INPUT_HASH(),
+    })
+    m.state.bySourceKey = existing
+    m.state.stored = existing
+    const error = await invoiceService
+      .create(
+        validInput({
+          sourceKey: "api-key-1",
+          lines: [{ description: "Consult", quantity: 2, unitAmount: "6.25" }],
+        }),
+      )
+      .catch((e) => e)
+    expect(error).toMatchObject({ code: "conflict", httpStatusCode: 409 })
+    expect(m.state.inserts).toEqual([])
+    expect(m.finalize).not.toHaveBeenCalled()
+  })
+
+  test("a replay for ANOTHER contact under the same key is refused, never returns that invoice", async () => {
+    const existing = storedInvoice("open", {
+      sourceKey: "api-key-2",
+      requestHash: VALID_INPUT_HASH(),
+    })
+    m.state.bySourceKey = existing
+    const error = await invoiceService
+      .create(validInput({ sourceKey: "api-key-2", contactId: "99" }))
+      .catch((e) => e)
+    expect(error).toMatchObject({ code: "conflict" })
   })
 
   test("a non-retryable provider failure leaves the draft with lastError and throws InvoiceFinalizeError", async () => {
@@ -605,5 +655,54 @@ describe("invoiceService.finalize / void / transition", () => {
     await expect(
       invoiceService.get({ workspaceId: WS, id: "404" }),
     ).rejects.toMatchObject({ code: "notFound" })
+  })
+})
+
+describe("invoiceService.finalize: Stripe status mapping and the void race (s205b review)", () => {
+  test("a Stripe invoice found VOID at resume is stored void, never open with a dead link", async () => {
+    m.finalize.mockResolvedValue({ ...FINALIZED, status: "void" })
+    const invoice = await invoiceService.create(validInput())
+    expect(invoice.status).toBe("void")
+    expect(m.state.updates.at(-1)).toMatchObject({ status: "void" })
+    expect(m.emitCreated).not.toHaveBeenCalled()
+  })
+
+  test("a Stripe status the hub cannot map (still draft) is a retryable finalize error", async () => {
+    m.finalize.mockResolvedValue({ ...FINALIZED, status: "draft" })
+    const error = await invoiceService.create(validInput()).catch((e) => e)
+    expect(error).toBeInstanceOf(InvoiceFinalizeError)
+    expect(error.retryable).toBe(true)
+  })
+
+  test("voided here while Stripe opened it: the Stripe invoice is voided too", async () => {
+    // The finalize CAS (draft -> open) misses because the row went void.
+    m.finalize.mockImplementation(() => {
+      m.state.updateMatches = false
+      return Promise.resolve(FINALIZED)
+    })
+    // create: contact lookup; then the race re-read: status, then the row.
+    m.state.limitResults = [
+      [{ id: CONTACT, companyId: "31" }],
+      [{ status: "void" }],
+      [{ id: "1001", providerInvoiceId: "in_1", status: "void" }],
+    ]
+    await invoiceService.create(validInput())
+    expect(m.voidStripe).toHaveBeenCalledTimes(1)
+    expect(m.voidStripe.mock.calls[0]?.[0].invoice).toMatchObject({
+      providerInvoiceId: "in_1",
+    })
+  })
+
+  test("a lost CAS on a row that is NOT void leaves Stripe alone", async () => {
+    m.finalize.mockImplementation(() => {
+      m.state.updateMatches = false
+      return Promise.resolve(FINALIZED)
+    })
+    m.state.limitResults = [
+      [{ id: CONTACT, companyId: "31" }],
+      [{ status: "paid" }],
+    ]
+    await invoiceService.create(validInput())
+    expect(m.voidStripe).not.toHaveBeenCalled()
   })
 })
