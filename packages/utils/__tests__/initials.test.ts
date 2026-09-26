@@ -16,11 +16,12 @@ describe("nameInitials", () => {
     expect(nameInitials("\u{1F600}\u{1F601}x")).toBe("\u{1F600}\u{1F601}")
   })
 
-  test("keeps grapheme clusters whole: ZWJ family, flag, combining mark", () => {
-    const family = "\u{1F468}‍\u{1F469}‍\u{1F467}"
-    expect(nameInitials(`${family}Smith`)).toBe(`${family}S`)
-    expect(nameInitials("\u{1F1FA}\u{1F1F8}USA")).toBe("\u{1F1FA}\u{1F1F8}U")
-    expect(nameInitials("émile")).toBe("ém")
+  test("counts code points, the same on every engine: ZWJ family, flag, combining mark", () => {
+    expect(nameInitials("\u{1F468}\u200D\u{1F469}Smith")).toBe(
+      "\u{1F468}\u200D",
+    )
+    expect(nameInitials("\u{1F1FA}\u{1F1F8}USA")).toBe("\u{1F1FA}\u{1F1F8}")
+    expect(nameInitials("e\u0301mile")).toBe("e\u0301")
   })
 
   test("empty, null, undefined, non-string and a non-positive count give an empty string", () => {
