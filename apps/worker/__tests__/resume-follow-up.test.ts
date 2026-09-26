@@ -77,6 +77,7 @@ describe("runFollowUpResume", () => {
     })
     expect(smartDelayService.claimForRun).toHaveBeenCalledWith({
       id: "smart-delay-1",
+      triggerAt: new Date("2026-07-16T00:01:00.000Z"),
       to: "canceled",
     })
     expect(integrationQueueAdd).not.toHaveBeenCalled()
@@ -97,6 +98,7 @@ describe("runFollowUpResume", () => {
     })
     expect(smartDelayService.claimForRun).toHaveBeenCalledWith({
       id: "smart-delay-1",
+      triggerAt: new Date("2026-07-16T00:01:00.000Z"),
       to: "completed",
     })
   })

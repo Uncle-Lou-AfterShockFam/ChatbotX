@@ -92,6 +92,7 @@ export async function runFollowUpResume(
   if (hasReplied) {
     const canceled = await smartDelayService.claimForRun({
       id: row.id,
+      triggerAt: row.triggerAt,
       to: smartDelayStatuses.enum.canceled,
     })
     if (!canceled) {
@@ -106,6 +107,7 @@ export async function runFollowUpResume(
 
   const completed = await smartDelayService.claimForRun({
     id: row.id,
+    triggerAt: row.triggerAt,
     to: smartDelayStatuses.enum.completed,
   })
   if (!completed) {

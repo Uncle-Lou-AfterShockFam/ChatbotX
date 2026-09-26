@@ -253,13 +253,18 @@ class SmartDelayService extends BaseService {
   /**
    * Terminal claim of a scheduled row (follow-up decided, terminal wait):
    * nothing runs after it, so the row goes straight to its final status.
+   * `triggerAt` is the one the caller decided on: upsertFollowUp re-arms a
+   * row in place (new triggerAt / createdAt), so a job that read the row
+   * before a re-arm must not complete or cancel the newer arm with its stale
+   * decision (a reply check against the old createdAt).
    */
   async claimForRun(props: {
     tx?: DatabaseClient
     id: string
+    triggerAt: Date
     to: "completed" | "canceled"
   }): Promise<boolean> {
-    const { tx = db, id, to } = props
+    const { tx = db, id, triggerAt, to } = props
     const rows = await tx
       .update(contactOnSmartDelayModel)
       .set({ status: smartDelayStatuses.enum[to] })
@@ -270,6 +275,7 @@ class SmartDelayService extends BaseService {
             contactOnSmartDelayModel.status,
             smartDelayStatuses.enum.scheduled,
           ),
+          eq(contactOnSmartDelayModel.triggerAt, triggerAt),
         ),
       )
       .returning({ id: contactOnSmartDelayModel.id })
@@ -565,14 +571,17 @@ class SmartDelayService extends BaseService {
   // may complete/cancel a row between the caller's read and this write — an
   // unguarded reset would resurrect it and re-run its side effects.
   // `triggerAtBefore` (sweep path) additionally skips rows that were
-  // rescheduled to a fresh future triggerAt in that same window.
+  // rescheduled to a fresh future triggerAt in that same window; `triggerAt`
+  // (one row's failed immediate enqueue) skips a row a newer follow-up arm
+  // re-armed and scheduled meanwhile, whose own job is already queued.
   // Returns how many rows were actually reset.
   async resetToPending(props: {
     tx?: DatabaseClient
     ids: string[]
     triggerAtBefore?: Date
+    triggerAt?: Date
   }): Promise<number> {
-    const { tx = db, ids, triggerAtBefore } = props
+    const { tx = db, ids, triggerAtBefore, triggerAt } = props
     if (ids.length === 0) {
       return 0
     }
@@ -589,6 +598,9 @@ class SmartDelayService extends BaseService {
           ),
           triggerAtBefore
             ? lt(contactOnSmartDelayModel.triggerAt, triggerAtBefore)
+            : undefined,
+          triggerAt
+            ? eq(contactOnSmartDelayModel.triggerAt, triggerAt)
             : undefined,
         ),
       )

@@ -437,6 +437,7 @@ describe("scanSmartDelay", () => {
     )
     expect(smartDelayService.claimForRun).toHaveBeenCalledWith({
       id: "terminal-row",
+      triggerAt: expect.any(Date),
       to: "completed",
     })
     expect(integrationQueueAddBulk).not.toHaveBeenCalled()

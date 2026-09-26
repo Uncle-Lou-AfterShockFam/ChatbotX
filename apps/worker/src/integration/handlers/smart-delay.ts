@@ -188,7 +188,10 @@ export async function scheduleSmartDelayResume(props: {
     })
   } catch (err) {
     try {
-      await smartDelayService.resetToPending({ ids: [persistedRow.id] })
+      await smartDelayService.resetToPending({
+        ids: [persistedRow.id],
+        triggerAt: persistedRow.triggerAt,
+      })
     } catch (resetErr) {
       logger.warn(
         { err: resetErr, rowId: persistedRow.id },

@@ -199,6 +199,8 @@ describe("handleFollowUp", () => {
     expect(smartDelayService.markScheduled).toHaveBeenCalledOnce()
     expect(smartDelayService.resetToPending).toHaveBeenCalledWith({
       ids: [smartDelayService.upsertFollowUp.mock.calls[0][0].data.id],
+      // Exact: an old arm's failure never resets a newer arm's scheduled row.
+      triggerAt: new Date("2026-07-16T00:01:00.000Z"),
     })
     expect(loggerWarn).toHaveBeenCalledWith(
       expect.objectContaining({ rowId: expect.any(String) }),

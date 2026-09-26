@@ -776,3 +776,56 @@ describe.skipIf(!databaseUrl)("markScheduled never resurrects a row", () => {
     expect(leaked).toEqual([])
   })
 })
+
+describe.skipIf(!databaseUrl)(
+  "a stale follow-up arm cannot act on a re-armed row",
+  () => {
+    async function scheduledRearm() {
+      const workspaceId = mintId()
+      const stepId = mintId()
+      const stale = await writeFreshRow({
+        type: "followUp",
+        workspaceId,
+        stepId,
+        triggerAt: soon(),
+      })
+      expect(await smartDelayService.markScheduled(stale)).toBe(true)
+      const fresh = await writeFreshRow({
+        type: "followUp",
+        workspaceId,
+        stepId,
+        triggerAt: soon(5000),
+      })
+      expect(await smartDelayService.markScheduled(fresh)).toBe(true)
+      return { stale, fresh }
+    }
+
+    test.each([
+      "completed",
+      "canceled",
+    ] as const)("a job that read the old arm cannot claim the newer one %s", async (to) => {
+      const { stale, fresh } = await scheduledRearm()
+      expect(await smartDelayService.claimForRun({ ...stale, to })).toBe(false)
+      expect((await readRow(fresh.id)).status).toBe("scheduled")
+      expect(await smartDelayService.claimForRun({ ...fresh, to })).toBe(true)
+      expect((await readRow(fresh.id)).status).toBe(to)
+    })
+
+    test("an old arm's failed enqueue does not reset the newer arm to pending", async () => {
+      const { stale, fresh } = await scheduledRearm()
+      expect(
+        await smartDelayService.resetToPending({
+          ids: [stale.id],
+          triggerAt: stale.triggerAt,
+        }),
+      ).toBe(0)
+      expect((await readRow(fresh.id)).status).toBe("scheduled")
+      expect(
+        await smartDelayService.resetToPending({
+          ids: [fresh.id],
+          triggerAt: fresh.triggerAt,
+        }),
+      ).toBe(1)
+    })
+  },
+)
