@@ -94,6 +94,7 @@ const privateCreateInvoiceAPI = authorizedAPI
         dueDays: input.dueInDays,
         memo: input.memo,
         dealId: input.dealId,
+        method: input.method,
         sourceKey: input.idempotencyKey
           ? `ui:${input.idempotencyKey}`
           : undefined,

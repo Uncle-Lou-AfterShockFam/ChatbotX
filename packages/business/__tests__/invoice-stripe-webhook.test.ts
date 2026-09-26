@@ -29,6 +29,14 @@ const m = vi.hoisted(() => {
     updates: [] as Record<string, unknown>[],
     deleteWheres: [] as unknown[],
     transactionError: null as Error | null,
+    /** db.query.invoiceEventModel.findFirst: a "marked" event of the invoice. */
+    markedEvent: null as { id: string } | null,
+    /** Fail only the Nth db.transaction (1-based); 0 = none. */
+    failTransactionNumber: 0,
+    transactions: 0,
+    deleteError: null as Error | null,
+    /** The "marked" outcome claim fails. */
+    failMarkedClaim: false,
   }
   const selectChain: Record<string, unknown> = {}
   selectChain.from = () => selectChain
@@ -49,6 +57,15 @@ const m = vi.hoisted(() => {
           ? [{ ...state.hubRow, ...updateChain.pending }]
           : [],
       ),
+    // An update awaited without .returning() (the event outcome writes).
+    // biome-ignore lint/suspicious/noThenProperty: awaited query-builder stub
+    then: (
+      resolve: (v: unknown) => unknown,
+      reject: (e: unknown) => unknown,
+    ) =>
+      state.failMarkedClaim && updateChain.pending.outcome === "marked"
+        ? reject(new Error("db down"))
+        : resolve(undefined),
   }
   const tx = {
     insert: () => ({
@@ -64,18 +81,29 @@ const m = vi.hoisted(() => {
     update: () => updateChain,
   }
   const db = {
+    query: {
+      invoiceEventModel: {
+        findFirst: () => Promise.resolve(state.markedEvent ?? undefined),
+      },
+    },
     select: () => selectChain,
     update: () => updateChain,
     transaction: async (cb: (t: unknown) => unknown) => {
       if (state.transactionError) {
         throw state.transactionError
       }
+      state.transactions += 1
+      if (state.transactions === state.failTransactionNumber) {
+        throw new Error("connection terminated")
+      }
       return await cb(tx)
     },
     delete: () => ({
       where: (w: unknown) => {
         state.deleteWheres.push(w)
-        return Promise.resolve()
+        return state.deleteError
+          ? Promise.reject(state.deleteError)
+          : Promise.resolve()
       },
     }),
   }
@@ -86,6 +114,8 @@ const m = vi.hoisted(() => {
     retrieve: vi.fn(),
     paymentsList: vi.fn(),
     chargeRetrieve: vi.fn(),
+    sessionRetrieve: vi.fn(),
+    piRetrieve: vi.fn(),
     marks: vi.fn(),
     emitPaid: vi.fn(),
     emitFailed: vi.fn(),
@@ -129,6 +159,10 @@ vi.mock("../src/integration-stripe/client", async (importOriginal) => {
       invoices: { retrieve: (...a: unknown[]) => m.retrieve(...a) },
       invoicePayments: { list: (...a: unknown[]) => m.paymentsList(...a) },
       charges: { retrieve: (...a: unknown[]) => m.chargeRetrieve(...a) },
+      checkout: {
+        sessions: { retrieve: (...a: unknown[]) => m.sessionRetrieve(...a) },
+      },
+      paymentIntents: { retrieve: (...a: unknown[]) => m.piRetrieve(...a) },
     }),
   }
 })
@@ -229,6 +263,11 @@ beforeEach(() => {
   m.state.updates = []
   m.state.deleteWheres = []
   m.state.transactionError = null
+  m.state.markedEvent = null
+  m.state.failTransactionNumber = 0
+  m.state.transactions = 0
+  m.state.deleteError = null
+  m.state.failMarkedClaim = false
   m.credentials.mockResolvedValue({
     integrationId: INTEGRATION_ID,
     workspaceId: WORKSPACE_ID,
@@ -612,6 +651,335 @@ describe("handleStripeWebhook: failure paths", () => {
     m.state.transactionError = new Error("connection terminated")
     const result = await deliver()
     expect(result).toEqual({ outcome: "retry", detail: "database" })
+    expectNoSideEffects()
+  })
+})
+
+describe("stripeCheckout (s207b): checkout.session.* and refunds", () => {
+  const SESSION_ID = "cs_test_1"
+  const checkoutRow = (
+    status: string,
+    extra: Record<string, unknown> = {},
+  ) => ({
+    ...hubRow(status),
+    method: "stripeCheckout",
+    providerInvoiceId: null,
+    hostedUrl: "https://chat.example.org/pay/0123456789ABCDEFGHIJKL",
+    ...extra,
+  })
+  const session = (extra: Record<string, unknown> = {}) => ({
+    id: SESSION_ID,
+    object: "checkout.session",
+    mode: "payment",
+    status: "complete",
+    payment_status: "paid",
+    amount_total: 1000,
+    currency: "usd",
+    payment_intent: "pi_1",
+    metadata: { hub_invoice_id: HUB_ID, hub_workspace_id: WORKSPACE_ID },
+    ...extra,
+  })
+  const completed = (type = "checkout.session.completed", id = "evt_cs_1") =>
+    deliver({
+      id,
+      type,
+      object: { id: SESSION_ID, object: "checkout.session" },
+    })
+
+  beforeEach(() => {
+    m.state.hubRow = checkoutRow("open")
+    m.sessionRetrieve.mockResolvedValue(session())
+    m.paymentsList.mockResolvedValue({ data: [] })
+    m.piRetrieve.mockResolvedValue({
+      id: "pi_1",
+      metadata: { hub_invoice_id: HUB_ID, hub_workspace_id: WORKSPACE_ID },
+    })
+  })
+
+  test("a paid session for the hub total marks paid, stores the PaymentIntent, marks and emits once", async () => {
+    const result = await completed()
+    expect(result.outcome).toBe("applied")
+    expect(m.sessionRetrieve).toHaveBeenCalledWith(SESSION_ID)
+    expect(m.retrieve).not.toHaveBeenCalled()
+    expect(m.state.updates[0]).toMatchObject({
+      status: "paid",
+      providerInvoiceId: "pi_1",
+      paidAt: expect.any(Date),
+    })
+    expect(m.marks).toHaveBeenCalledWith({
+      invoice: expect.objectContaining({ id: HUB_ID, status: "paid" }),
+      status: "paid",
+    })
+    expect(m.emitPaid).toHaveBeenCalledTimes(1)
+  })
+
+  test("async_payment_succeeded settles the same way", async () => {
+    const result = await completed("checkout.session.async_payment_succeeded")
+    expect(result.outcome).toBe("applied")
+    expect(m.emitPaid).toHaveBeenCalledTimes(1)
+  })
+
+  test.each([
+    ["an unpaid session (async payment pending)", { payment_status: "unpaid" }],
+    ["a different amount", { amount_total: 999 }],
+    ["a different currency", { currency: "eur" }],
+    ["no amount", { amount_total: null }],
+    ["no PaymentIntent", { payment_intent: null }],
+  ])("%s is recorded unconfirmed: no transition, no marks", async (_label, extra) => {
+    m.sessionRetrieve.mockResolvedValue(session(extra))
+    const result = await completed()
+    expect(result).toEqual({ outcome: "noop", detail: "unconfirmed" })
+    expect(m.state.inserted[0]).toMatchObject({ outcome: "unconfirmed" })
+    expect(m.state.updates).toEqual([])
+    expectNoSideEffects()
+  })
+
+  test("an amount mismatch on a PAID session is logged loudly", async () => {
+    m.sessionRetrieve.mockResolvedValue(session({ amount_total: 1 }))
+    await completed()
+    expect(m.loggerError).toHaveBeenCalled()
+  })
+
+  test.each([
+    ["another workspace", { hub_invoice_id: HUB_ID, hub_workspace_id: "999" }],
+    ["no hub id", { hub_workspace_id: WORKSPACE_ID }],
+    [
+      "a non-numeric hub id",
+      { hub_invoice_id: "1 OR 1=1", hub_workspace_id: WORKSPACE_ID },
+    ],
+    ["no metadata", null],
+  ])("session metadata naming %s resolves to no invoice", async (_label, metadata) => {
+    m.sessionRetrieve.mockResolvedValue(session({ metadata }))
+    const result = await completed()
+    expect(result).toEqual({ outcome: "noop", detail: "unknown-invoice" })
+    expect(m.state.updates).toEqual([])
+    expectNoSideEffects()
+  })
+
+  test("a SECOND payment on a paid invoice is never applied: flagged on the event and in lastError", async () => {
+    m.state.hubRow = checkoutRow("paid", { providerInvoiceId: "pi_first" })
+    m.state.transitionMatches = false
+    const result = await completed()
+    expect(result).toEqual({ outcome: "noop", detail: "duplicate-payment" })
+    expect(m.state.updates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ outcome: "duplicate-payment" }),
+        expect.objectContaining({
+          lastError: expect.stringContaining("pi_1"),
+        }),
+      ]),
+    )
+    expect(m.loggerError).toHaveBeenCalled()
+    expectNoSideEffects()
+  })
+
+  test("a payment on a VOID invoice is flagged the same way", async () => {
+    m.state.hubRow = checkoutRow("void")
+    m.state.transitionMatches = false
+    const result = await completed()
+    expect(result.detail).toBe("duplicate-payment")
+    expectNoSideEffects()
+  })
+
+  test("a redelivery of the RECORDED payment (after a failed mark) re-runs the marks", async () => {
+    m.state.hubRow = checkoutRow("paid", { providerInvoiceId: "pi_1" })
+    m.state.transitionMatches = false
+    const result = await completed()
+    expect(result.outcome).toBe("noop")
+    expect(m.marks).toHaveBeenCalledTimes(1)
+    expect(m.emitPaid).toHaveBeenCalledTimes(1)
+  })
+
+  test("async_payment_failed on an open invoice marks payment_failed", async () => {
+    m.sessionRetrieve.mockResolvedValue(session({ payment_status: "unpaid" }))
+    await completed("checkout.session.async_payment_failed")
+    expect(m.marks).toHaveBeenCalledWith({
+      invoice: expect.objectContaining({ id: HUB_ID }),
+      status: "payment_failed",
+    })
+    expect(m.emitFailed).toHaveBeenCalledTimes(1)
+    expect(m.state.updates).toEqual([])
+  })
+
+  test("a duplicate event id is a duplicate: nothing re-applied", async () => {
+    m.state.insertResult = []
+    const result = await completed()
+    expect(result.outcome).toBe("duplicate")
+    expectNoSideEffects()
+  })
+
+  test("Stripe unreachable while re-reading the session asks for a retry", async () => {
+    m.sessionRetrieve.mockRejectedValue(
+      new Stripe.errors.StripeConnectionError({ message: "down" }),
+    )
+    const result = await completed()
+    expect(result).toEqual({ outcome: "retry", detail: "stripe unreachable" })
+    expect(m.state.inserted).toEqual([])
+  })
+
+  test("a full refund of a checkout payment resolves through the PaymentIntent metadata", async () => {
+    m.state.hubRow = checkoutRow("paid", { providerInvoiceId: "pi_1" })
+    const result = await deliver({
+      id: "evt_ref_1",
+      type: "charge.refunded",
+      object: { id: "ch_1", object: "charge" },
+    })
+    expect(result.outcome).toBe("applied")
+    expect(m.retrieve).not.toHaveBeenCalled()
+    expect(m.piRetrieve).toHaveBeenCalledWith("pi_1")
+    expect(m.state.updates[0]).toMatchObject({ status: "refunded" })
+  })
+
+  test("a refund whose PaymentIntent is not the one the invoice recorded is not applied", async () => {
+    m.state.hubRow = checkoutRow("paid", { providerInvoiceId: "pi_other" })
+    const result = await deliver({
+      id: "evt_ref_2",
+      type: "charge.refunded",
+      object: { id: "ch_1", object: "charge" },
+    })
+    expect(result).toEqual({ outcome: "noop", detail: "unknown-invoice" })
+    expect(m.state.updates).toEqual([])
+  })
+
+  test("a PARTIAL refund of a checkout payment moves nothing", async () => {
+    m.state.hubRow = checkoutRow("paid", { providerInvoiceId: "pi_1" })
+    m.chargeRetrieve.mockResolvedValue({
+      id: "ch_1",
+      refunded: false,
+      payment_intent: "pi_1",
+    })
+    const result = await deliver({
+      id: "evt_ref_3",
+      type: "charge.refunded",
+      object: { id: "ch_1", object: "charge" },
+    })
+    expect(result.outcome).toBe("noop")
+    expect(m.piRetrieve).not.toHaveBeenCalled()
+  })
+
+  test("a non-Stripe error while resolving (a DB blip) asks Stripe to redeliver, records nothing", async () => {
+    m.sessionRetrieve.mockRejectedValue(new TypeError("pool exhausted"))
+    const result = await completed()
+    expect(result).toEqual({ outcome: "retry", detail: "resolution failed" })
+    expect(m.state.inserted).toEqual([])
+  })
+
+  test.each([
+    ["a rolled key", Stripe.errors.StripeAuthenticationError],
+    ["an under-scoped key", Stripe.errors.StripePermissionError],
+  ])("%s while re-reading asks Stripe to redeliver, records nothing", async (_l, ErrorClass) => {
+    m.sessionRetrieve.mockRejectedValue(new ErrorClass({ message: "no" }))
+    const result = await completed()
+    expect(result).toEqual({ outcome: "retry", detail: "stripe key rejected" })
+    expect(m.state.inserted).toEqual([])
+  })
+
+  test("a session that is not a one-time payment resolves to no invoice", async () => {
+    m.sessionRetrieve.mockResolvedValue(session({ mode: "subscription" }))
+    const result = await completed()
+    expect(result).toEqual({ outcome: "noop", detail: "unknown-invoice" })
+    expectNoSideEffects()
+  })
+
+  test("a refund that arrives before its payment was recorded is retried, never dropped", async () => {
+    m.state.hubRow = checkoutRow("open")
+    const result = await deliver({
+      id: "evt_ref_early",
+      type: "charge.refunded",
+      object: { id: "ch_1", object: "charge" },
+    })
+    expect(result).toEqual({
+      outcome: "retry",
+      detail: "payment not recorded yet",
+    })
+    expect(m.state.inserted).toEqual([])
+  })
+
+  test("the second event type for an ALREADY-MARKED payment neither marks nor emits again", async () => {
+    m.state.hubRow = checkoutRow("paid", { providerInvoiceId: "pi_1" })
+    m.state.transitionMatches = false
+    m.state.markedEvent = { id: "ev-earlier" }
+    const result = await completed("checkout.session.completed", "evt_cs_2")
+    expect(result).toEqual({ outcome: "noop", detail: "already-marked" })
+    expectNoSideEffects()
+  })
+
+  test("a fresh paid event records that its marks ran (outcome marked)", async () => {
+    await completed()
+    expect(m.state.updates).toEqual(
+      expect.arrayContaining([expect.objectContaining({ outcome: "marked" })]),
+    )
+  })
+
+  test("the duplicate-payment flag failing to write drops the dedup row and asks for a retry", async () => {
+    m.state.hubRow = checkoutRow("paid", { providerInvoiceId: "pi_first" })
+    m.state.transitionMatches = false
+    m.state.failTransactionNumber = 2
+    const result = await completed()
+    expect(result).toEqual({
+      outcome: "retry",
+      detail: "duplicate-payment flag",
+    })
+    expect(m.state.deleteWheres).toHaveLength(1)
+    expectNoSideEffects()
+  })
+
+  test("a dedup-row delete that fails after failed marks is logged as an error", async () => {
+    m.marks.mockRejectedValue(new Error("fields down"))
+    m.state.deleteError = new Error("db down")
+    const result = await completed()
+    expect(result.outcome).toBe("retry")
+    expect(m.loggerError).toHaveBeenCalledWith(
+      expect.objectContaining({ eventId: "evt_cs_1" }),
+      expect.stringContaining("redelivery will be skipped"),
+    )
+  })
+
+  test("a failed async payment on the RECORDED session frees the pay link", async () => {
+    m.state.hubRow = checkoutRow("open", {
+      checkoutSessionId: SESSION_ID,
+      checkoutGeneration: 2,
+    })
+    m.sessionRetrieve.mockResolvedValue(session({ payment_status: "unpaid" }))
+    await completed("checkout.session.async_payment_failed")
+    expect(m.state.updates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          checkoutSessionId: null,
+          checkoutMintedAt: null,
+          checkoutGeneration: 3,
+        }),
+      ]),
+    )
+  })
+
+  test("a failed async payment on an OLDER session leaves the current one alone", async () => {
+    m.state.hubRow = checkoutRow("open", { checkoutSessionId: "cs_newer" })
+    m.sessionRetrieve.mockResolvedValue(session({ payment_status: "unpaid" }))
+    await completed("checkout.session.async_payment_failed")
+    expect(m.state.updates).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ checkoutSessionId: null }),
+      ]),
+    )
+  })
+
+  test("a refund of a payment a VOID invoice never took is final (recorded), never retried", async () => {
+    m.state.hubRow = checkoutRow("void")
+    const result = await deliver({
+      id: "evt_ref_void",
+      type: "charge.refunded",
+      object: { id: "ch_1", object: "charge" },
+    })
+    expect(result).toEqual({ outcome: "noop", detail: "unknown-invoice" })
+    expect(m.state.inserted).toHaveLength(1)
+  })
+
+  test("the marks claim failing retries BEFORE anything is marked or emitted", async () => {
+    m.state.failMarkedClaim = true
+    const result = await completed()
+    expect(result).toEqual({ outcome: "retry", detail: "marks claim" })
+    expect(m.state.deleteWheres).toHaveLength(1)
     expectNoSideEffects()
   })
 })

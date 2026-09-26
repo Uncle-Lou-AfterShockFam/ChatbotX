@@ -53,3 +53,11 @@ describe("public web forms (s200)", () => {
     expect(isPublicRoute("/forms-admin")).toBe(false)
   })
 })
+
+describe("invoice pay links (s207b)", () => {
+  test("/pay/<token> needs no session; a longer first segment stays closed", () => {
+    expect(isPublicRoute("/pay/0123456789ABCDEFGHIJKL")).toBe(true)
+    expect(isPublicRoute("/payments")).toBe(false)
+    expect(isPublicRoute("/payroll/1")).toBe(false)
+  })
+})

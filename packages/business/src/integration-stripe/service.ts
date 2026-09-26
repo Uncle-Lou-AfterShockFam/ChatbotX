@@ -1,4 +1,8 @@
-import { and, db, eq, isNull, sql } from "@chatbotx.io/database/client"
+import { and, db, eq, isNull, lt, sql } from "@chatbotx.io/database/client"
+import {
+  type InvoiceMethod,
+  invoiceMethods,
+} from "@chatbotx.io/database/partials"
 import {
   integrationModel,
   integrationStripeModel,
@@ -16,6 +20,7 @@ import {
   createStripeClient,
   STRIPE_SECRET_KEY_PATTERN,
   STRIPE_WEBHOOK_EVENTS,
+  STRIPE_WEBHOOK_EVENTS_VERSION,
   STRIPE_WEBHOOK_SECRET_PATTERN,
   type Stripe,
 } from "./client"
@@ -53,6 +58,7 @@ export type StripeConnectionSummary = Pick<
   | "livemode"
   | "keyLast4"
   | "webhookEndpointId"
+  | "defaultMethod"
   | "createdAt"
   | "updatedAt"
 >
@@ -68,6 +74,7 @@ const toSummary = (row: IntegrationStripeModel): StripeConnectionSummary => ({
   livemode: row.livemode,
   keyLast4: row.keyLast4,
   webhookEndpointId: row.webhookEndpointId,
+  defaultMethod: row.defaultMethod,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 })
@@ -86,13 +93,29 @@ const isStripeAuthError = (error: unknown): boolean =>
   ((error as { type: unknown }).type === "StripeAuthenticationError" ||
     (error as { type: unknown }).type === "StripePermissionError")
 
+const isStripeMissingError = (error: unknown): boolean =>
+  !!error &&
+  typeof error === "object" &&
+  "code" in error &&
+  (error as { code: unknown }).code === "resource_missing"
+
 export type StripeCredentials = {
   integrationId: string
   workspaceId: string
   accountId: string
   livemode: boolean
+  defaultMethod: InvoiceMethod
+  webhookEndpointId: string | null
+  webhookEventsVersion: number
   auth: StripeAuth
 }
+
+export const setDefaultMethodInputSchema = z
+  .object({
+    workspaceId: z.string().regex(/^\d{1,20}$/),
+    method: invoiceMethods,
+  })
+  .strict()
 
 class IntegrationStripeService extends BaseService {
   async findByWorkspaceId(
@@ -146,8 +169,84 @@ class IntegrationStripeService extends BaseService {
       workspaceId: row.workspaceId,
       accountId: row.accountId,
       livemode: row.livemode,
+      defaultMethod: row.defaultMethod,
+      webhookEndpointId: row.webhookEndpointId,
+      webhookEventsVersion: row.webhookEventsVersion,
       auth,
     }
+  }
+
+  /** The method a create asking for `default` gets in this workspace. */
+  async setDefaultMethod(
+    input: z.input<typeof setDefaultMethodInputSchema>,
+  ): Promise<StripeConnectionSummary> {
+    const props = setDefaultMethodInputSchema.parse(input)
+    const [row] = await db
+      .update(integrationStripeModel)
+      .set({ defaultMethod: props.method, updatedAt: new Date() })
+      .where(eq(integrationStripeModel.workspaceId, props.workspaceId))
+      .returning()
+    if (!row) {
+      throw credentialMissingException("Stripe is not connected")
+    }
+    await this.audit(
+      "update",
+      `set the default invoice method to ${props.method}`,
+    )
+    return toSummary(row)
+  }
+
+  /**
+   * Subscribe an endpoint created under an older `STRIPE_WEBHOOK_EVENTS` to
+   * the current list, in place (same URL, same secret). Called before a
+   * method that needs the newer events is used, so a workspace connected
+   * before them never takes a payment the hub would not hear about.
+   */
+  async ensureWebhookEvents(credentials: StripeCredentials): Promise<void> {
+    if (credentials.webhookEventsVersion >= STRIPE_WEBHOOK_EVENTS_VERSION) {
+      return
+    }
+    if (!credentials.webhookEndpointId) {
+      throw validationException(
+        "stripe",
+        "The Stripe webhook endpoint is unknown: reconnect Stripe in Settings > Integrations",
+      )
+    }
+    try {
+      await createStripeClient(
+        credentials.auth.secretKey,
+      ).webhookEndpoints.update(credentials.webhookEndpointId, {
+        enabled_events: [...STRIPE_WEBHOOK_EVENTS],
+      })
+    } catch (error) {
+      if (isStripeAuthError(error) || isStripeMissingError(error)) {
+        // Retrying cannot help: the key or the endpoint is gone.
+        throw validationException(
+          "stripe",
+          `The Stripe webhook endpoint cannot be updated (${stripeErrorMessage(error)}): reconnect Stripe in Settings > Integrations`,
+        )
+      }
+      throw error
+    }
+    await db
+      .update(integrationStripeModel)
+      .set({
+        webhookEventsVersion: STRIPE_WEBHOOK_EVENTS_VERSION,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(integrationStripeModel.integrationId, credentials.integrationId),
+          eq(
+            integrationStripeModel.webhookEndpointId,
+            credentials.webhookEndpointId,
+          ),
+          lt(
+            integrationStripeModel.webhookEventsVersion,
+            STRIPE_WEBHOOK_EVENTS_VERSION,
+          ),
+        ),
+      )
   }
 
   /**
@@ -219,6 +318,7 @@ class IntegrationStripeService extends BaseService {
           livemode,
           keyLast4: props.secretKey.slice(-4),
           webhookEndpointId,
+          webhookEventsVersion: STRIPE_WEBHOOK_EVENTS_VERSION,
         }
 
         let row: IntegrationStripeModel | undefined

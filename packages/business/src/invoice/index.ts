@@ -1,3 +1,4 @@
+export * from "./checkout-provider"
 export * from "./contact-marks"
 export * from "./schema"
 export * from "./service"

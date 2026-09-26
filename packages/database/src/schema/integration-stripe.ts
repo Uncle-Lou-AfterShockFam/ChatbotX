@@ -1,7 +1,15 @@
-import { boolean, jsonb, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core"
+import {
+  boolean,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/pg-core"
 import { bigintAsString, sharedColumns } from "../partials/shared"
 import { contactModel } from "./contact"
 import { integrationModel } from "./integration-base"
+import { invoiceMethod } from "./invoice"
 import { workspaceModel } from "./workspace"
 
 /**
@@ -32,6 +40,13 @@ export const integrationStripeModel = pgTable(
     livemode: boolean().notNull(),
     keyLast4: text().notNull(),
     webhookEndpointId: text(),
+    /** What a create that asks for method `default` uses (s207b). */
+    defaultMethod: invoiceMethod().notNull().default("stripeInvoice"),
+    /**
+     * `STRIPE_WEBHOOK_EVENTS_VERSION` the endpoint was last subscribed with;
+     * an older endpoint is upgraded in place before a method needs its events.
+     */
+    webhookEventsVersion: integer().notNull().default(1),
   },
   (table) => [
     uniqueIndex("IntegrationStripe_workspaceId_key").on(table.workspaceId),

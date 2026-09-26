@@ -1,12 +1,15 @@
 "use client"
 
+import { requestedInvoiceMethods } from "@chatbotx.io/database/partials"
 import { CREATE_INVOICE_MAX_LINES } from "@chatbotx.io/flow-config"
 import { InputField } from "@chatbotx.io/ui/components/form/input-field"
 import { InputNumberField } from "@chatbotx.io/ui/components/form/input-number-field"
+import { SelectField } from "@chatbotx.io/ui/components/form/select-field"
 import { TextareaField } from "@chatbotx.io/ui/components/form/textarea-field"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
 import { ReceiptTextIcon, XIcon } from "lucide-react"
 import { useTranslations } from "next-intl"
+import { useMemo } from "react"
 import { useFieldArray, useFormContext } from "react-hook-form"
 import { BaseStepEditor } from "../base/editor"
 
@@ -17,6 +20,14 @@ const CreateInvoiceStepEditor = ({ parentName }: { parentName: string }) => {
     control,
     name: `${parentName}.lines`,
   })
+  const methodOptions = useMemo(
+    () =>
+      requestedInvoiceMethods.options.map((value) => ({
+        value,
+        label: t(`invoices.method.${value}`),
+      })),
+    [t],
+  )
 
   return (
     <BaseStepEditor
@@ -81,6 +92,12 @@ const CreateInvoiceStepEditor = ({ parentName }: { parentName: string }) => {
             {t("invoices.addLine")}
           </Button>
         </div>
+        <SelectField
+          description={t("invoices.step.methodHint")}
+          label={t("invoices.fields.method")}
+          name={`${parentName}.method`}
+          options={methodOptions}
+        />
         <InputField
           label={t("invoices.fields.currency")}
           name={`${parentName}.currency`}

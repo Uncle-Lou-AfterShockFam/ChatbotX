@@ -55,7 +55,10 @@ export const isRetryableStripeError = (error: unknown): boolean => {
   )
 }
 
-const wrap = (error: unknown, step: string): InvoiceProviderError =>
+export const wrapStripeError = (
+  error: unknown,
+  step: string,
+): InvoiceProviderError =>
   error instanceof InvoiceProviderError
     ? error
     : new InvoiceProviderError(
@@ -66,7 +69,7 @@ const wrap = (error: unknown, step: string): InvoiceProviderError =>
 const paramsHash = (value: unknown): string =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 16)
 
-async function ensureCustomer(
+export async function ensureCustomer(
   stripe: Stripe,
   credentials: StripeCredentials,
   invoice: InvoiceModel,
@@ -114,7 +117,7 @@ async function ensureCustomer(
       idempotencyKey: `hub-cust-${credentials.integrationId}-${invoice.contactId}-${paramsHash(params)}`,
     })
   } catch (error) {
-    throw wrap(error, "customer")
+    throw wrapStripeError(error, "customer")
   }
   await db
     .insert(stripeCustomerModel)
@@ -157,7 +160,7 @@ async function chooseCollection(
   try {
     customer = await stripe.customers.retrieve(customerId)
   } catch (error) {
-    throw wrap(error, "retrieve customer")
+    throw wrapStripeError(error, "retrieve customer")
   }
   if (customer.deleted) {
     throw new InvoiceProviderError(
@@ -230,7 +233,7 @@ async function findUnrecordedInvoice(
       }
     }
   } catch (error) {
-    throw wrap(error, "list invoices")
+    throw wrapStripeError(error, "list invoices")
   }
   return null
 }
@@ -319,7 +322,7 @@ async function addMissingLineItems(props: {
       }
     }
   } catch (error) {
-    throw wrap(error, "list line items")
+    throw wrapStripeError(error, "list line items")
   }
   for (const line of props.lines) {
     const position = String(line.position)
@@ -342,7 +345,7 @@ async function addMissingLineItems(props: {
         { idempotencyKey: `hub-inv-${invoice.id}-line-${position}` },
       )
     } catch (error) {
-      throw wrap(error, "add line item")
+      throw wrapStripeError(error, "add line item")
     }
   }
 }
@@ -406,7 +409,7 @@ export async function finalizeWithStripe(props: {
         { idempotencyKey: collection.idempotencyKey },
       )
     } catch (error) {
-      throw wrap(error, "create invoice")
+      throw wrapStripeError(error, "create invoice")
     }
     if (!created.id) {
       throw new InvoiceProviderError("Stripe returned no invoice id", true)
@@ -426,7 +429,7 @@ export async function finalizeWithStripe(props: {
   try {
     current = await stripe.invoices.retrieve(stripeInvoiceId)
   } catch (error) {
-    throw wrap(error, "retrieve invoice")
+    throw wrapStripeError(error, "retrieve invoice")
   }
 
   if (current.status === "draft") {
@@ -444,7 +447,7 @@ export async function finalizeWithStripe(props: {
         { idempotencyKey: `hub-inv-${invoice.id}-finalize` },
       )
     } catch (error) {
-      throw wrap(error, "finalize invoice")
+      throw wrapStripeError(error, "finalize invoice")
     }
   }
 
@@ -509,6 +512,6 @@ export async function voidWithStripe(props: {
       throw new InvoiceProviderError("A paid invoice cannot be voided", false)
     }
   } catch (error) {
-    throw wrap(error, "void invoice")
+    throw wrapStripeError(error, "void invoice")
   }
 }

@@ -133,8 +133,12 @@ export function InvoiceList({
                   <Badge variant={STATUS_VARIANT[row.status]}>
                     {t(`invoices.status.${row.status}`)}
                   </Badge>
-                  {row.lastError && row.status === "draft" ? (
-                    <p className="mt-1 max-w-64 truncate text-destructive text-xs">
+                  {/* A draft's failed send, or (s207b) a payment that needs a human. */}
+                  {row.lastError ? (
+                    <p
+                      className="mt-1 max-w-64 truncate text-destructive text-xs"
+                      title={row.lastError}
+                    >
                       {row.lastError}
                     </p>
                   ) : null}

@@ -124,6 +124,9 @@ const m = vi.hoisted(() => {
     finalize: vi.fn(),
     voidStripe: vi.fn(),
     emitCreated: vi.fn(),
+    prepareCheckout: vi.fn(),
+    assertCheckoutNotPaid: vi.fn(),
+    expireAfterVoid: vi.fn(),
     audit: vi.fn(),
     loggerWarn: vi.fn(),
   }
@@ -148,6 +151,11 @@ vi.mock("../src/invoice/stripe-provider", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/invoice/stripe-provider")>()),
   finalizeWithStripe: (...a: unknown[]) => m.finalize(...a),
   voidWithStripe: (...a: unknown[]) => m.voidStripe(...a),
+}))
+vi.mock("../src/invoice/checkout-provider", () => ({
+  prepareCheckoutInvoice: (...a: unknown[]) => m.prepareCheckout(...a),
+  assertCheckoutNotPaid: (...a: unknown[]) => m.assertCheckoutNotPaid(...a),
+  expireCheckoutAfterVoid: (...a: unknown[]) => m.expireAfterVoid(...a),
 }))
 vi.mock("@chatbotx.io/events", () => ({
   emitInvoiceCreated: (...a: unknown[]) => m.emitCreated(...a),
@@ -175,6 +183,9 @@ const CREDENTIALS = {
   workspaceId: WS,
   accountId: "acct_test_1",
   livemode: false,
+  defaultMethod: "stripeInvoice" as const,
+  webhookEndpointId: "we_test_1",
+  webhookEventsVersion: 2,
   auth: {
     secretKey: ["sk", "test", "unitTestKey0123456789"].join("_"),
     webhookSecret: "whsec_unitTestSecret0123456789abcdef",
@@ -188,6 +199,12 @@ const FINALIZED = {
   pdfUrl: "https://pay.stripe.com/invoice/x/pdf",
   dueAt: new Date("2026-10-10T00:00:00Z"),
   status: "open" as const,
+}
+
+const PREPARED = {
+  providerCustomerId: "cus_test_1",
+  payToken: "0123456789ABCDEFGHIJKL",
+  hostedUrl: "https://chat.example.org/pay/0123456789ABCDEFGHIJKL",
 }
 
 const validInput = (overrides: Record<string, unknown> = {}) => ({
@@ -265,6 +282,9 @@ beforeEach(() => {
   m.finalize.mockResolvedValue(FINALIZED)
   m.voidStripe.mockResolvedValue(undefined)
   m.emitCreated.mockResolvedValue(undefined)
+  m.prepareCheckout.mockResolvedValue(PREPARED)
+  m.assertCheckoutNotPaid.mockResolvedValue(undefined)
+  m.expireAfterVoid.mockResolvedValue(undefined)
 })
 
 const expectNothingWritten = () => {
@@ -704,5 +724,192 @@ describe("invoiceService.finalize: Stripe status mapping and the void race (s205
     ]
     await invoiceService.create(validInput())
     expect(m.voidStripe).not.toHaveBeenCalled()
+  })
+})
+
+describe("stripeCheckout (s207b): method resolution", () => {
+  test("no method uses the workspace default (stripeCheckout here)", async () => {
+    credentialsSpy.mockResolvedValue({
+      ...CREDENTIALS,
+      defaultMethod: "stripeCheckout",
+    })
+    await invoiceService.create(validInput())
+    expect(m.state.inserts[0]).toMatchObject({ method: "stripeCheckout" })
+    expect(m.prepareCheckout).toHaveBeenCalledTimes(1)
+    expect(m.finalize).not.toHaveBeenCalled()
+  })
+
+  test('"default" is the same as no method', async () => {
+    await invoiceService.create(validInput({ method: "default" }))
+    expect(m.state.inserts[0]).toMatchObject({ method: "stripeInvoice" })
+    expect(m.finalize).toHaveBeenCalledTimes(1)
+  })
+
+  test("an explicit method overrides the workspace default", async () => {
+    credentialsSpy.mockResolvedValue({
+      ...CREDENTIALS,
+      defaultMethod: "stripeCheckout",
+    })
+    await invoiceService.create(validInput({ method: "stripeInvoice" }))
+    expect(m.state.inserts[0]).toMatchObject({ method: "stripeInvoice" })
+    expect(m.prepareCheckout).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    ["an unknown method", "paypal"],
+    ["null", null],
+    ["a number", 1],
+    ["woocommerce (not yet)", "woocommerce"],
+  ])("%s is rejected before any write", async (_label, method) => {
+    await expect(
+      invoiceService.create(validInput({ method }) as never),
+    ).rejects.toThrow()
+    expectNothingWritten()
+    expect(m.prepareCheckout).not.toHaveBeenCalled()
+  })
+
+  test("only an explicit method joins the request hash (a pre-s207b replay still matches)", () => {
+    const base = {
+      contactId: CONTACT,
+      currency: "USD",
+      dueDays: 14,
+      lines: [{ description: "A", quantity: 1, unitAmount: "1.00" }],
+    }
+    const plain = invoiceRequestHash(base)
+    expect(invoiceRequestHash({ ...base, method: "default" })).toBe(plain)
+    expect(invoiceRequestHash({ ...base, method: "stripeCheckout" })).not.toBe(
+      plain,
+    )
+    expect(invoiceRequestHash({ ...base, method: "stripeInvoice" })).not.toBe(
+      invoiceRequestHash({ ...base, method: "stripeCheckout" }),
+    )
+  })
+})
+
+describe("stripeCheckout (s207b): finalize and void", () => {
+  test("finalize opens with the pay link and token, creates no Stripe invoice, emits once", async () => {
+    m.state.stored = storedInvoice("draft", { method: "stripeCheckout" })
+    const invoice = await invoiceService.finalize({ workspaceId: WS, id: "9" })
+    expect(m.finalize).not.toHaveBeenCalled()
+    expect(m.prepareCheckout).toHaveBeenCalledWith({
+      credentials: CREDENTIALS,
+      invoice: expect.objectContaining({ id: "9" }),
+    })
+    expect(invoice).toMatchObject({
+      status: "open",
+      payToken: PREPARED.payToken,
+      hostedUrl: PREPARED.hostedUrl,
+      providerCustomerId: "cus_test_1",
+      providerAccountId: "acct_test_1",
+      providerInvoiceId: null,
+      lastError: null,
+    })
+    expect(m.emitCreated).toHaveBeenCalledTimes(1)
+  })
+
+  test("a prepare failure keeps the draft with lastError and throws InvoiceFinalizeError", async () => {
+    m.state.stored = storedInvoice("draft", { method: "stripeCheckout" })
+    m.prepareCheckout.mockRejectedValue(
+      new InvoiceProviderError("Stripe customer: boom", false),
+    )
+    const error = await invoiceService
+      .finalize({ workspaceId: WS, id: "9" })
+      .catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(InvoiceFinalizeError)
+    expect(error).toMatchObject({ retryable: false })
+    expect(m.state.stored).toMatchObject({
+      status: "draft",
+      lastError: "Stripe customer: boom",
+    })
+    expect(m.emitCreated).not.toHaveBeenCalled()
+  })
+
+  test("losing the open CAS (voided meanwhile) emits nothing", async () => {
+    m.state.stored = storedInvoice("draft", { method: "stripeCheckout" })
+    m.state.updateMatches = false
+    await invoiceService.finalize({ workspaceId: WS, id: "9" })
+    expect(m.emitCreated).not.toHaveBeenCalled()
+  })
+
+  test("void: checks the session, voids HERE, then expires the session the void row names", async () => {
+    m.state.stored = storedInvoice("open", {
+      method: "stripeCheckout",
+      checkoutSessionId: "cs_test_1",
+      providerAccountId: "acct_test_1",
+    })
+    const order: string[] = []
+    m.assertCheckoutNotPaid.mockImplementation(() => {
+      order.push(`assert:${m.state.stored?.status}`)
+      return Promise.resolve()
+    })
+    m.expireAfterVoid.mockImplementation(() => {
+      order.push(`expire:${m.state.stored?.status}`)
+      return Promise.resolve()
+    })
+    const invoice = await invoiceService.void({ workspaceId: WS, id: "9" })
+    expect(invoice.status).toBe("void")
+    expect(order).toEqual(["assert:open", "expire:void"])
+    expect(m.expireAfterVoid.mock.calls[0]?.[0]).toMatchObject({
+      invoice: expect.objectContaining({ checkoutSessionId: "cs_test_1" }),
+    })
+    expect(m.voidStripe).not.toHaveBeenCalled()
+  })
+
+  test("void refuses when the session already completed (paid at Stripe): row stays open", async () => {
+    m.state.stored = storedInvoice("open", {
+      method: "stripeCheckout",
+      checkoutSessionId: "cs_test_1",
+      providerAccountId: "acct_test_1",
+    })
+    m.assertCheckoutNotPaid.mockRejectedValue(
+      new InvoiceProviderError("This invoice was just paid at Stripe", false),
+    )
+    const error = await invoiceService
+      .void({ workspaceId: WS, id: "9" })
+      .catch((e: unknown) => e)
+    expect(error).toMatchObject({ code: "validation" })
+    expect(m.state.stored?.status).toBe("open")
+    expect(m.expireAfterVoid).not.toHaveBeenCalled()
+  })
+
+  test("an expire failure after the void keeps the void and records lastError", async () => {
+    m.state.stored = storedInvoice("open", {
+      method: "stripeCheckout",
+      checkoutSessionId: "cs_test_1",
+      providerAccountId: "acct_test_1",
+    })
+    m.expireAfterVoid.mockRejectedValue(new Error("Stripe down"))
+    const invoice = await invoiceService.void({ workspaceId: WS, id: "9" })
+    expect(invoice.status).toBe("void")
+    expect(invoice.lastError).toContain("cs_test_1")
+  })
+
+  test("void of a checkout DRAFT touches no Stripe credentials", async () => {
+    m.state.stored = storedInvoice("draft", { method: "stripeCheckout" })
+    const invoice = await invoiceService.void({ workspaceId: WS, id: "9" })
+    expect(invoice.status).toBe("void")
+    expect(credentialsSpy).not.toHaveBeenCalled()
+    expect(m.assertCheckoutNotPaid).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    [
+      "another Stripe account is connected now",
+      { ...CREDENTIALS, accountId: "acct_other" },
+    ],
+    ["Stripe is disconnected", null],
+  ])("void when %s: never refused, voids here and says which session to expire by hand", async (_l, credentials) => {
+    credentialsSpy.mockResolvedValue(credentials)
+    m.state.stored = storedInvoice("open", {
+      method: "stripeCheckout",
+      checkoutSessionId: "cs_test_1",
+      providerAccountId: "acct_test_1",
+    })
+    const invoice = await invoiceService.void({ workspaceId: WS, id: "9" })
+    expect(invoice.status).toBe("void")
+    expect(m.assertCheckoutNotPaid).not.toHaveBeenCalled()
+    expect(m.expireAfterVoid).not.toHaveBeenCalled()
+    expect(invoice.lastError).toContain("cs_test_1")
+    expect(invoice.lastError).toContain("acct_test_1")
   })
 })

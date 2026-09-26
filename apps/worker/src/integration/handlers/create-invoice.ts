@@ -85,6 +85,7 @@ export async function handleCreateInvoice({
       currency: step.currency,
       lines,
       dueDays: step.dueInDays,
+      method: step.method,
       ...(memo ? { memo: memo.slice(0, 1000) } : {}),
       sourceKey: invoiceSourceKey(sourcePrefix, flowExecutionKey),
       reuseRecent: { sourcePrefix, withinMs: FLOW_INVOICE_REUSE_MS },

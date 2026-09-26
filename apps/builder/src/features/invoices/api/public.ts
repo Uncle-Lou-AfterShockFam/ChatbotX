@@ -85,6 +85,7 @@ export const invoicesPublicRouter = {
           dueDays: input.dueInDays,
           memo: input.memo,
           dealId: input.dealId,
+          method: input.method,
           sourceKey: input.idempotencyKey
             ? `api:${input.idempotencyKey}`
             : undefined,

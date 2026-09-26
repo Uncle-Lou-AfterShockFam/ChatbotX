@@ -20,6 +20,7 @@ export default async function SettingIntegrationStripePage(props: {
           accountName: connection.accountName,
           livemode: connection.livemode,
           keyLast4: connection.keyLast4,
+          defaultMethod: connection.defaultMethod,
         }
       }
       workspaceId={workspaceId}

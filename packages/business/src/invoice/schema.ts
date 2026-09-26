@@ -4,6 +4,7 @@ import {
   INVOICE_MAX_LINE_ITEMS,
   INVOICE_MAX_QUANTITY,
   INVOICE_MEMO_MAX,
+  requestedInvoiceMethods,
 } from "@chatbotx.io/database/partials"
 import { z } from "zod"
 
@@ -28,6 +29,8 @@ export const createInvoiceInputSchema = z
     dueDays: z.number().int().min(0).max(INVOICE_MAX_DUE_DAYS),
     memo: z.string().trim().max(INVOICE_MEMO_MAX).optional(),
     dealId: idSchema.optional(),
+    /** How it is collected; absent or `default` = the workspace's Stripe default. */
+    method: requestedInvoiceMethods.optional(),
     /**
      * Idempotency: the same key in a workspace returns the first invoice; the
      * same key with different content is refused (409), never billed.

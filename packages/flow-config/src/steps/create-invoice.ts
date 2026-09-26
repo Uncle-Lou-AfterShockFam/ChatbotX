@@ -40,6 +40,13 @@ export const createInvoiceStepSchema = z.object({
   dueInDays: z.number().int().min(0).max(365).default(7),
   /** Shown on the invoice; may carry `{{variable}}` tokens. */
   memo: z.string().trim().max(1000).default(""),
+  /**
+   * How it is collected (s207b): `default` = the workspace's Stripe setting;
+   * `stripeCheckout` texts a stable `/pay` link and saves no card.
+   */
+  method: z
+    .enum(["default", "stripeInvoice", "stripeCheckout"])
+    .default("default"),
   states: z.tuple([successStateSchema, errorStateSchema]),
 })
 export type CreateInvoiceStepSchema = z.infer<typeof createInvoiceStepSchema>
@@ -51,5 +58,6 @@ export const createInvoiceStepDefaultFn = (): CreateInvoiceStepSchema => ({
   currency: "USD",
   dueInDays: 7,
   memo: "",
+  method: "default",
   states: [successStateDefaultFn(), errorStateDefaultFn()],
 })

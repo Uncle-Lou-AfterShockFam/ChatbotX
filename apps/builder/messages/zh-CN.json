@@ -7381,7 +7381,12 @@
     },
     "live": "Live",
     "test": "Test mode",
-    "keyEnding": "Key ending {last4}"
+    "keyEnding": "Key ending {last4}",
+    "defaultMethod": {
+      "label": "Default invoice method",
+      "description": "Used when an invoice or a flow step asks for the workspace default.",
+      "saved": "Default invoice method saved"
+    }
   },
   "invoices": {
     "title": "Invoices",
@@ -7410,7 +7415,8 @@
       "status": "Status",
       "total": "Total",
       "created": "Created",
-      "due": "Due"
+      "due": "Due",
+      "method": "Collect with"
     },
     "status": {
       "draft": "Draft",
@@ -7425,9 +7431,15 @@
       "dueInDaysHint": "Days until the invoice is due (Stripe shows at least 1).",
       "memoPlaceholder": "Thanks for your order",
       "summary": "{count, plural, one {# line} other {# lines}}: {description} ({currency})",
-      "noLines": "No line items"
+      "noLines": "No line items",
+      "methodHint": "Stripe Checkout texts a hub pay link that works until the invoice is paid or voided, and saves no card. Stripe invoice uses Stripe's own invoice page."
     },
     "retry": "Retry sending to Stripe",
-    "retried": "Invoice sent to Stripe"
+    "retried": "Invoice sent to Stripe",
+    "method": {
+      "default": "Workspace default",
+      "stripeInvoice": "Stripe invoice",
+      "stripeCheckout": "Stripe Checkout (pay link, no saved card)"
+    }
   }
 }

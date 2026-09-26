@@ -22,6 +22,7 @@ describe("createInvoice step (s205b)", () => {
       currency: "USD",
       dueInDays: 7,
       memo: "",
+      method: "default",
     })
     expect(step.states).toHaveLength(2)
   })
@@ -32,9 +33,12 @@ describe("createInvoice step (s205b)", () => {
       currency: _c,
       dueInDays: _d,
       memo: _m,
+      method: _method,
       ...legacy
     } = createInvoiceStepDefaultFn()
+    // A step saved before s207b has no method: it keeps the workspace default.
     expect(createInvoiceStepSchema.parse(legacy)).toMatchObject({
+      method: "default",
       lines: [],
       currency: "USD",
       dueInDays: 7,
@@ -62,6 +66,8 @@ describe("createInvoice step (s205b)", () => {
       "too many lines",
     ],
     [{ lines: "nope" }, "lines not an array"],
+    [{ method: "paypal" }, "unknown method"],
+    [{ method: null }, "null method"],
     [{ states: [] }, "missing states"],
   ])("rejects %j (%s)", (patch) => {
     expect(
@@ -70,5 +76,16 @@ describe("createInvoice step (s205b)", () => {
         ...patch,
       }).success,
     ).toBe(false)
+  })
+
+  test.each([
+    "default",
+    "stripeInvoice",
+    "stripeCheckout",
+  ])("accepts method %s", (method) => {
+    expect(
+      createInvoiceStepSchema.parse({ ...createInvoiceStepDefaultFn(), method })
+        .method,
+    ).toBe(method)
   })
 })
