@@ -64,6 +64,13 @@ export type GuestSessionActions = {
   setIsTyping: (isTyping: boolean) => void
 
   getMenus: () => WebchatPersistentMenu[]
+
+  /**
+   * Trades the guest token for a fresh one (s210). One request at a time;
+   * resolves false when the server refuses (the gate no longer passes) or the
+   * call fails, and the current token stays.
+   */
+  refreshAccessToken: () => Promise<boolean>
 }
 
 export type GuestSessionStore = GuestSessionState & GuestSessionActions
@@ -74,217 +81,272 @@ export const createGuestSessionStore = (
   workspaceLogoUrl?: string,
   parentOrigin: string | null = null,
 ) => {
-  return createStore<GuestSessionStore>((set, get) => ({
-    // default state
-    guestConversationId: null,
-    isNewGuestSession: false,
-    accessToken,
-    parentOrigin,
-    workspaceLogoUrl,
-    user: null,
-    config: props,
+  let refreshInFlight: Promise<boolean> | null = null
 
-    // messages related state
-    messages: [],
-    nextCursorMessage: null,
-    isLoadMoreMessage: false,
-    hasNextMessagePage: true,
-
-    isTyping: false,
-
-    initGuestSession: (serverGuestConversationId: string) => {
-      const { guestConversationId, config } = get()
-      if (guestConversationId) {
-        return
-      }
-
-      const scopedKey = buildGuestStorageKey(config.workspaceId, config.id)
-      const scopedGuestId = safeStorageGet(scopedKey)
-      if (scopedGuestId) {
-        set({ guestConversationId: scopedGuestId, isNewGuestSession: false })
-        return
-      }
-
-      const legacyGuestId = readLegacyGuestId()
-      if (legacyGuestId) {
-        safeStorageSet(scopedKey, legacyGuestId)
-        set({ guestConversationId: legacyGuestId, isNewGuestSession: false })
-        return
-      }
-
-      safeStorageSet(scopedKey, serverGuestConversationId)
-      set({
-        guestConversationId: serverGuestConversationId,
-        isNewGuestSession: true,
-      })
-    },
-
-    setGuestUser: (user: UserResource) => {
-      set({ user })
-    },
-
-    loadMoreMessages: async (guestConversationId: string, perPage: number) => {
-      const {
-        isLoadMoreMessage,
-        hasNextMessagePage,
-        nextCursorMessage,
-        messages,
-        config,
-        accessToken,
-        parentOrigin,
-      } = get()
-
-      if (isLoadMoreMessage || !hasNextMessagePage) {
-        return
-      }
-
-      set({ isLoadMoreMessage: true })
-
+  return createStore<GuestSessionStore>((set, get) => {
+    /** One guest call, retried once with a refreshed token after a 403. */
+    const withFreshToken = async <T>(
+      call: (accessToken: string | null) => Promise<T>,
+    ): Promise<T> => {
       try {
-        const params = new URLSearchParams({
-          perPage: `${perPage}`,
-          cursor: nextCursorMessage ?? "",
-          guestConversationId,
-          workspaceId: config.workspaceId,
-          webchatId: config.id,
-        })
-        if (parentOrigin) {
-          params.set("parentOrigin", parentOrigin)
-        }
-
-        const { data, nextCursor } = await ky
-          .get<ListMessagesResponse>(
-            `/api/guest/messages?${params.toString()}`,
-            {
-              headers: accessToken
-                ? { Authorization: `Bearer ${accessToken}` }
-                : undefined,
-            },
-          )
-          .json()
-
-        set({
-          messages: [...data.reverse(), ...messages],
-          nextCursorMessage: nextCursor,
-          hasNextMessagePage: Boolean(nextCursor),
-          isLoadMoreMessage: false,
-        })
+        return await call(get().accessToken)
       } catch (error) {
-        set({ isLoadMoreMessage: false })
-        console.error("Failed to load more messages:", error)
-        throw error
+        const status = (error as { response?: { status?: number } } | null)
+          ?.response?.status
+        if (status !== 403 || !(await get().refreshAccessToken())) {
+          throw error
+        }
+        return await call(get().accessToken)
       }
-    },
+    }
 
-    handleNewMessage: (message: MessageResource) => {
-      const { messages, appendMessage } = get()
+    return {
+      // default state
+      guestConversationId: null,
+      isNewGuestSession: false,
+      accessToken,
+      parentOrigin,
+      workspaceLogoUrl,
+      user: null,
+      config: props,
 
-      // If the message contains the clientId, it can be sent from this tab itself.
-      if (message.clientId) {
-        const messageIndex = messages.findIndex(
-          (m) => m.clientId === message.clientId,
-        )
+      // messages related state
+      messages: [],
+      nextCursorMessage: null,
+      isLoadMoreMessage: false,
+      hasNextMessagePage: true,
 
-        if (messageIndex > -1) {
-          // Replace the existing message with the updated one
-          set({
-            messages: messages.map((m, idx) =>
-              idx === messageIndex ? { ...m, ...message } : m,
-            ),
-          })
+      isTyping: false,
+
+      initGuestSession: (serverGuestConversationId: string) => {
+        const { guestConversationId, config } = get()
+        if (guestConversationId) {
           return
         }
-      }
 
-      // Append the message to the end of messages list
-      appendMessage(message)
-    },
-
-    sendMessage: (text: string) => {
-      const { appendMessage } = get()
-
-      appendMessage({ text })
-    },
-
-    sendPostback: async (button: MessageButtonTemplate) => {
-      const {
-        appendMessage,
-        config,
-        guestConversationId,
-        accessToken,
-        parentOrigin,
-      } = get()
-
-      const newMessage = appendMessage({
-        text: button.label,
-      })
-
-      await Promise.resolve()
-
-      try {
-        if (button.buttonType === "postback") {
-          await ky.post("/api/guest/messages", {
-            json: {
-              text: button.label,
-              postback: button.postback,
-              workspaceId: config.workspaceId,
-              guestConversationId,
-              clientId: newMessage.clientId,
-              webchatId: config.id,
-              ...getWebchatProfileFields(),
-              accessToken: accessToken ?? undefined,
-              parentOrigin: parentOrigin ?? undefined,
-            } as CreateWebchatMessageRequest,
-            headers: accessToken
-              ? { Authorization: `Bearer ${accessToken}` }
-              : undefined,
-          })
+        const scopedKey = buildGuestStorageKey(config.workspaceId, config.id)
+        const scopedGuestId = safeStorageGet(scopedKey)
+        if (scopedGuestId) {
+          set({ guestConversationId: scopedGuestId, isNewGuestSession: false })
+          return
         }
-      } catch (error) {
-        console.error("Failed to send postback:", error)
-        throw error
-      }
-    },
 
-    appendMessage: (message: Partial<MessageResource>) => {
-      const newMessage: MessageResource = {
-        id: createId(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        workspaceId: props.workspaceId,
-        // inboxId: props.inboxId,
-        sourceId: null,
-        conversationId: "",
-        text: null,
-        contentAttributes: null,
-        messageType: "incoming",
-        contentType: "text",
-        senderType: "contact",
-        senderId: "",
-        clientId: createId(),
-        contactInboxId: "",
-        deletedAt: null,
-        type: "message",
-        parentId: null,
-        attributes: null,
-        sendError: null,
-        ...message,
-      }
+        const legacyGuestId = readLegacyGuestId()
+        if (legacyGuestId) {
+          safeStorageSet(scopedKey, legacyGuestId)
+          set({ guestConversationId: legacyGuestId, isNewGuestSession: false })
+          return
+        }
 
-      set((state) => ({
-        messages: [...state.messages, newMessage],
-      }))
+        safeStorageSet(scopedKey, serverGuestConversationId)
+        set({
+          guestConversationId: serverGuestConversationId,
+          isNewGuestSession: true,
+        })
+      },
 
-      return newMessage
-    },
+      setGuestUser: (user: UserResource) => {
+        set({ user })
+      },
 
-    getMenus: () => {
-      const { config } = get()
-      return config.persistentMenus ?? []
-    },
+      loadMoreMessages: async (
+        guestConversationId: string,
+        perPage: number,
+      ) => {
+        const {
+          isLoadMoreMessage,
+          hasNextMessagePage,
+          nextCursorMessage,
+          messages,
+          config,
+          parentOrigin,
+        } = get()
 
-    setIsTyping: (isTyping: boolean) => {
-      set({ isTyping })
-    },
-  }))
+        if (isLoadMoreMessage || !hasNextMessagePage) {
+          return
+        }
+
+        set({ isLoadMoreMessage: true })
+
+        try {
+          const params = new URLSearchParams({
+            perPage: `${perPage}`,
+            cursor: nextCursorMessage ?? "",
+            guestConversationId,
+            workspaceId: config.workspaceId,
+            webchatId: config.id,
+          })
+          if (parentOrigin) {
+            params.set("parentOrigin", parentOrigin)
+          }
+
+          const { data, nextCursor } = await withFreshToken((accessToken) =>
+            ky
+              .get<ListMessagesResponse>(
+                `/api/guest/messages?${params.toString()}`,
+                {
+                  headers: accessToken
+                    ? { Authorization: `Bearer ${accessToken}` }
+                    : undefined,
+                },
+              )
+              .json(),
+          )
+
+          set({
+            messages: [...data.reverse(), ...messages],
+            nextCursorMessage: nextCursor,
+            hasNextMessagePage: Boolean(nextCursor),
+            isLoadMoreMessage: false,
+          })
+        } catch (error) {
+          set({ isLoadMoreMessage: false })
+          console.error("Failed to load more messages:", error)
+          throw error
+        }
+      },
+
+      handleNewMessage: (message: MessageResource) => {
+        const { messages, appendMessage } = get()
+
+        // If the message contains the clientId, it can be sent from this tab itself.
+        if (message.clientId) {
+          const messageIndex = messages.findIndex(
+            (m) => m.clientId === message.clientId,
+          )
+
+          if (messageIndex > -1) {
+            // Replace the existing message with the updated one
+            set({
+              messages: messages.map((m, idx) =>
+                idx === messageIndex ? { ...m, ...message } : m,
+              ),
+            })
+            return
+          }
+        }
+
+        // Append the message to the end of messages list
+        appendMessage(message)
+      },
+
+      sendMessage: (text: string) => {
+        const { appendMessage } = get()
+
+        appendMessage({ text })
+      },
+
+      sendPostback: async (button: MessageButtonTemplate) => {
+        const { appendMessage, config, guestConversationId, parentOrigin } =
+          get()
+
+        const newMessage = appendMessage({
+          text: button.label,
+        })
+
+        await Promise.resolve()
+
+        try {
+          if (button.buttonType === "postback") {
+            await withFreshToken((accessToken) =>
+              ky.post("/api/guest/messages", {
+                json: {
+                  text: button.label,
+                  postback: button.postback,
+                  workspaceId: config.workspaceId,
+                  guestConversationId,
+                  clientId: newMessage.clientId,
+                  webchatId: config.id,
+                  ...getWebchatProfileFields(),
+                  accessToken: accessToken ?? undefined,
+                  parentOrigin: parentOrigin ?? undefined,
+                } as CreateWebchatMessageRequest,
+                headers: accessToken
+                  ? { Authorization: `Bearer ${accessToken}` }
+                  : undefined,
+              }),
+            )
+          }
+        } catch (error) {
+          console.error("Failed to send postback:", error)
+          throw error
+        }
+      },
+
+      appendMessage: (message: Partial<MessageResource>) => {
+        const newMessage: MessageResource = {
+          id: createId(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          workspaceId: props.workspaceId,
+          // inboxId: props.inboxId,
+          sourceId: null,
+          conversationId: "",
+          text: null,
+          contentAttributes: null,
+          messageType: "incoming",
+          contentType: "text",
+          senderType: "contact",
+          senderId: "",
+          clientId: createId(),
+          contactInboxId: "",
+          deletedAt: null,
+          type: "message",
+          parentId: null,
+          attributes: null,
+          sendError: null,
+          ...message,
+        }
+
+        set((state) => ({
+          messages: [...state.messages, newMessage],
+        }))
+
+        return newMessage
+      },
+
+      getMenus: () => {
+        const { config } = get()
+        return config.persistentMenus ?? []
+      },
+
+      setIsTyping: (isTyping: boolean) => {
+        set({ isTyping })
+      },
+
+      refreshAccessToken: () => {
+        if (refreshInFlight) {
+          return refreshInFlight
+        }
+        const { accessToken, config, guestConversationId, parentOrigin } = get()
+        if (!(accessToken && guestConversationId)) {
+          return Promise.resolve(false)
+        }
+        refreshInFlight = ky
+          .post("/api/guest/token", {
+            json: {
+              workspaceId: config.workspaceId,
+              webchatId: config.id,
+              guestConversationId,
+              accessToken,
+              parentOrigin,
+            },
+            retry: 0,
+          })
+          .json<{ accessToken: string | null }>()
+          .then(({ accessToken: fresh }) => {
+            if (typeof fresh !== "string" || !fresh) {
+              return false
+            }
+            set({ accessToken: fresh })
+            return true
+          })
+          .catch(() => false)
+          .finally(() => {
+            refreshInFlight = null
+          })
+        return refreshInFlight
+      },
+    }
+  })
 }
