@@ -101,6 +101,7 @@ export const invoiceRequestHash = (request: {
   memo?: string
   dealId?: string
   method?: RequestedInvoiceMethod
+  integrationId?: string
 }): string =>
   createHash("sha256")
     .update(
@@ -117,6 +118,8 @@ export const invoiceRequestHash = (request: {
         ...(request.method && request.method !== "default"
           ? [request.method]
           : []),
+        // Only a named site joins it, for the same reason (s211b).
+        ...(request.integrationId ? [request.integrationId] : []),
       ]),
     )
     .digest("hex")
@@ -276,7 +279,11 @@ class InvoiceService extends BaseService {
         "The invoice total is larger than Stripe allows",
       )
     }
-    const binding = await bindNewInvoice(props.workspaceId, props.method)
+    const binding = await bindNewInvoice(props.method, {
+      workspaceId: props.workspaceId,
+      integrationId: props.integrationId,
+      currency,
+    })
     const requestHash = invoiceRequestHash({ ...props, currency, lines })
 
     const { invoice, created } = await db.transaction(async (tx) => {

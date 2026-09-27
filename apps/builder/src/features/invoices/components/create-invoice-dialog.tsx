@@ -28,7 +28,10 @@ import { Loader2Icon, PlusIcon, XIcon } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useId, useState } from "react"
 import { toast } from "sonner"
-import { useCreateInvoice } from "../provider/invoice-hooks"
+import {
+  useCreateInvoice,
+  useWooCommerceSiteOptions,
+} from "../provider/invoice-hooks"
 
 type Line = {
   key: number
@@ -66,6 +69,11 @@ export function CreateInvoiceDialog({
   const [dueInDays, setDueInDays] = useState("7")
   const [memo, setMemo] = useState("")
   const [method, setMethod] = useState<RequestedInvoiceMethod>("default")
+  const [siteId, setSiteId] = useState("")
+  const siteOptions = useWooCommerceSiteOptions(
+    workspaceId,
+    open && method === "woocommerce",
+  )
   const methodOptions = requestedInvoiceMethods.options.map((value) => ({
     value,
     label: t(`invoices.method.${value}`),
@@ -81,6 +89,7 @@ export function CreateInvoiceDialog({
       setLines([newLine(0)])
       setMemo("")
       setMethod("default")
+      setSiteId("")
       setSubmitted(undefined)
     }
   }
@@ -106,6 +115,7 @@ export function CreateInvoiceDialog({
       dueInDays: Math.max(0, Math.min(365, Number(dueInDays) || 0)),
       memo: memo.trim() || undefined,
       method,
+      ...(method === "woocommerce" && siteId ? { integrationId: siteId } : {}),
       lines: lines.map((line) => ({
         description: line.description.trim(),
         quantity: Number(line.quantity),
@@ -276,6 +286,33 @@ export function CreateInvoiceDialog({
               </SelectContent>
             </Select>
           </div>
+          {method === "woocommerce" && (
+            <div className="space-y-1">
+              <Label htmlFor={`${formId}-site`}>
+                {t("woocommerce.fields.site")}
+              </Label>
+              <Select
+                items={siteOptions}
+                onValueChange={(value) => setSiteId((value as string) ?? "")}
+                value={siteId}
+              >
+                <SelectTrigger
+                  className="w-full"
+                  data-testid="create-invoice-site"
+                  id={`${formId}-site`}
+                >
+                  <SelectValue placeholder={t("woocommerce.onlySite")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {siteOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-1">
             <Label htmlFor={`${formId}-memo`}>
               {t("invoices.fields.memo")}

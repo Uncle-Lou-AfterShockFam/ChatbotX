@@ -110,7 +110,12 @@ export const createInvoiceRequest = z
     method: requestedInvoiceMethods
       .optional()
       .describe(
-        "How it is collected: `stripeInvoice` (a Stripe invoice), `stripeCheckout` (a hub pay link to a one-time Stripe Checkout, no card saved) or `default` (the workspace setting, also when omitted).",
+        "How it is collected: `stripeInvoice` (a Stripe invoice), `stripeCheckout` (a hub pay link to a one-time Stripe Checkout, no card saved), `woocommerce` (a pending order on a linked WooCommerce site, paid on its order-pay page) or `default` (the workspace's Stripe setting, also when omitted).",
+      ),
+    integrationId: zodBigintAsString()
+      .optional()
+      .describe(
+        "Method `woocommerce` only: the linked site (Settings > Integrations > WooCommerce). Optional when the workspace has one site.",
       ),
     idempotencyKey: z
       .string()

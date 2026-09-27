@@ -127,6 +127,9 @@ const m = vi.hoisted(() => {
     prepareCheckout: vi.fn(),
     assertCheckoutNotPaid: vi.fn(),
     expireAfterVoid: vi.fn(),
+    wooForNew: vi.fn(),
+    wooByIntegration: vi.fn(),
+    wooOrder: vi.fn(),
     audit: vi.fn(),
     loggerWarn: vi.fn(),
   }
@@ -156,6 +159,18 @@ vi.mock("../src/invoice/checkout-provider", () => ({
   prepareCheckoutInvoice: (...a: unknown[]) => m.prepareCheckout(...a),
   assertCheckoutNotPaid: (...a: unknown[]) => m.assertCheckoutNotPaid(...a),
   expireCheckoutAfterVoid: (...a: unknown[]) => m.expireAfterVoid(...a),
+}))
+vi.mock("../src/integration-woocommerce/service", () => ({
+  integrationWooCommerceService: {
+    credentialsForNewInvoice: (...a: unknown[]) => m.wooForNew(...a),
+    credentialsByIntegrationId: (...a: unknown[]) => m.wooByIntegration(...a),
+  },
+}))
+vi.mock("../src/invoice/woocommerce-provider", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("../src/invoice/woocommerce-provider")
+  >()),
+  createWooCommerceOrder: (...a: unknown[]) => m.wooOrder(...a),
 }))
 vi.mock("@chatbotx.io/events", () => ({
   emitInvoiceCreated: (...a: unknown[]) => m.emitCreated(...a),
@@ -762,7 +777,6 @@ describe("stripeCheckout (s207b): method resolution", () => {
     ["an unknown method", "paypal"],
     ["null", null],
     ["a number", 1],
-    ["woocommerce (not yet)", "woocommerce"],
   ])("%s is rejected before any write", async (_label, method) => {
     await expect(
       invoiceService.create(validInput({ method }) as never),
@@ -923,6 +937,147 @@ describe("invoice providers registry (s211b PR 1)", () => {
     const { invoiceMethods } = await import("@chatbotx.io/database/partials")
     expect(Object.keys(invoiceProviders).sort()).toEqual(
       [...invoiceMethods.options].sort(),
+    )
+  })
+})
+
+describe("woocommerce (s211b PR3)", () => {
+  const SITE = {
+    integrationId: "88",
+    workspaceId: WS,
+    siteSlug: "bakery-test",
+    siteUrl: "https://bakery.example.org",
+    currency: "USD",
+    auth: { actionToken: "btc_x", webhookSecret: "whsec_x" },
+  }
+  const ORDER = {
+    orderId: "3701",
+    payUrl: "https://bakery.example.org/checkout/order-pay/3701/?key=wc_x",
+  }
+  beforeEach(() => {
+    m.wooForNew.mockResolvedValue(SITE)
+    m.wooByIntegration.mockResolvedValue(SITE)
+    m.wooOrder.mockResolvedValue(ORDER)
+  })
+
+  test("create binds the site, opens with the order-pay link and emits once; Stripe is never asked", async () => {
+    const invoice = await invoiceService.create(
+      validInput({ method: "woocommerce", integrationId: "88" }),
+    )
+    expect(m.wooForNew).toHaveBeenCalledWith(WS, "88")
+    expect(m.state.inserts[0]).toMatchObject({
+      method: "woocommerce",
+      integrationId: "88",
+    })
+    expect(m.state.updates.at(-1)).toMatchObject({
+      status: "open",
+      providerInvoiceId: "wc:88:3701",
+      providerAccountId: "https://bakery.example.org",
+      integrationId: "88",
+      hostedUrl: ORDER.payUrl,
+      lastError: null,
+    })
+    expect(invoice.status).toBe("open")
+    expect(m.emitCreated).toHaveBeenCalledTimes(1)
+    expect(credentialsSpy).not.toHaveBeenCalled()
+    expect(m.finalize).not.toHaveBeenCalled()
+  })
+
+  test("a workspace without Stripe can still invoice through its site", async () => {
+    credentialsSpy.mockResolvedValue(null)
+    const invoice = await invoiceService.create(
+      validInput({ method: "woocommerce" }),
+    )
+    expect(invoice.status).toBe("open")
+    expect(m.wooForNew).toHaveBeenCalledWith(WS, undefined)
+  })
+
+  test("an invoice in another currency than the store's is refused before any write", async () => {
+    await expect(
+      invoiceService.create(
+        validInput({ method: "woocommerce", currency: "EUR" }),
+      ),
+    ).rejects.toThrow("sells in USD")
+    expectNothingWritten()
+    expect(m.wooOrder).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    ["a Stripe method", "stripeInvoice"],
+    ["the default", "default"],
+    ["no method", undefined],
+  ])("a site id with %s is refused before any write", async (_l, method) => {
+    await expect(
+      invoiceService.create(validInput({ method, integrationId: "88" })),
+    ).rejects.toThrow("use it with method woocommerce")
+    expectNothingWritten()
+  })
+
+  test("a site refusal keeps the draft with lastError and throws a finalize error", async () => {
+    m.wooOrder.mockRejectedValue(
+      new InvoiceProviderError(
+        "WooCommerce refused the order: HTTP 409",
+        false,
+      ),
+    )
+    const error = await invoiceService
+      .create(validInput({ method: "woocommerce" }))
+      .catch((e) => e)
+    expect(error).toBeInstanceOf(InvoiceFinalizeError)
+    expect(error.retryable).toBe(false)
+    expect(m.state.stored?.status).toBe("draft")
+    expect(m.state.stored?.lastError).toContain("HTTP 409")
+  })
+
+  test("a draft whose site was disconnected is refused without a lastError write", async () => {
+    m.state.stored = storedInvoice("draft", {
+      method: "woocommerce",
+      integrationId: "88",
+    })
+    m.wooByIntegration.mockResolvedValue(null)
+    await expect(
+      invoiceService.finalize({ workspaceId: WS, id: "9" }),
+    ).rejects.toThrow("no longer connected")
+    expect(m.state.updates).toEqual([])
+    expect(m.wooOrder).not.toHaveBeenCalled()
+  })
+
+  test("another workspace's site id on a draft is refused", async () => {
+    m.state.stored = storedInvoice("draft", {
+      method: "woocommerce",
+      integrationId: "88",
+    })
+    m.wooByIntegration.mockResolvedValue({ ...SITE, workspaceId: "999" })
+    await expect(
+      invoiceService.finalize({ workspaceId: WS, id: "9" }),
+    ).rejects.toThrow("no longer connected")
+    expect(m.wooOrder).not.toHaveBeenCalled()
+  })
+
+  test("a void is hub-only and names the order to cancel on the site", async () => {
+    m.state.stored = storedInvoice("open", {
+      method: "woocommerce",
+      providerInvoiceId: "wc:88:3701",
+    })
+    const invoice = await invoiceService.void({ workspaceId: WS, id: "9" })
+    expect(invoice.status).toBe("void")
+    expect(invoice.lastError).toContain("WooCommerce order 3701")
+    expect(m.voidStripe).not.toHaveBeenCalled()
+  })
+
+  test("a named site joins the request hash, a missing one does not", () => {
+    const base = {
+      contactId: CONTACT,
+      currency: "USD",
+      dueDays: 14,
+      lines: [{ description: "A", quantity: 1, unitAmount: "1.00" }],
+      method: "woocommerce" as const,
+    }
+    expect(invoiceRequestHash({ ...base, integrationId: "88" })).not.toBe(
+      invoiceRequestHash(base),
+    )
+    expect(invoiceRequestHash({ ...base, integrationId: "88" })).not.toBe(
+      invoiceRequestHash({ ...base, integrationId: "89" }),
     )
   })
 })

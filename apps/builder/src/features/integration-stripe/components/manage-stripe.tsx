@@ -2,8 +2,8 @@
 
 import type { StripeConnectionSummary } from "@chatbotx.io/business/integration-stripe"
 import {
-  type InvoiceMethod,
-  invoiceMethods,
+  type StripeInvoiceMethod,
+  stripeInvoiceMethods,
 } from "@chatbotx.io/database/partials"
 import { Badge } from "@chatbotx.io/ui/components/ui/badge"
 import {
@@ -80,7 +80,7 @@ export function ManageStripe(props: {
     },
   )
   const { connection } = props
-  const methodOptions = invoiceMethods.options.map((value) => ({
+  const methodOptions = stripeInvoiceMethods.options.map((value) => ({
     value,
     label: t(`invoices.method.${value}`),
   }))
@@ -136,7 +136,8 @@ export function ManageStripe(props: {
             disabled={savingMethod}
             items={methodOptions}
             onValueChange={(value) =>
-              value && saveDefaultMethod({ method: value as InvoiceMethod })
+              value &&
+              saveDefaultMethod({ method: value as StripeInvoiceMethod })
             }
             value={connection.defaultMethod}
           >

@@ -56,6 +56,7 @@ const step = {
   dueInDays: 7,
   memo: "",
   method: "default",
+  integrationId: "",
   states: [],
 }
 const props = (overrides: Record<string, unknown> = {}) =>
@@ -181,5 +182,29 @@ describe("createInvoice step", () => {
     expect(m.create.mock.calls[0]?.[0]).toMatchObject({
       method: "stripeCheckout",
     })
+    expect(m.create.mock.calls[0]?.[0]).not.toHaveProperty("integrationId")
+  })
+
+  test("a woocommerce step passes its site; an empty site means the only one (s211b)", async () => {
+    await handleCreateInvoice(
+      props({ step: { ...step, method: "woocommerce", integrationId: "88" } }),
+    )
+    expect(m.create.mock.calls[0]?.[0]).toMatchObject({
+      method: "woocommerce",
+      integrationId: "88",
+    })
+    await handleCreateInvoice(
+      props({ step: { ...step, method: "woocommerce", integrationId: "" } }),
+    )
+    expect(m.create.mock.calls[1]?.[0]).not.toHaveProperty("integrationId")
+  })
+
+  test("a stale site id on a Stripe step never reaches the service", async () => {
+    await handleCreateInvoice(
+      props({
+        step: { ...step, method: "stripeInvoice", integrationId: "88" },
+      }),
+    )
+    expect(m.create.mock.calls[0]?.[0]).not.toHaveProperty("integrationId")
   })
 })

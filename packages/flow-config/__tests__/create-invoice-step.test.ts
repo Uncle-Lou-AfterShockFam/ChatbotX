@@ -23,6 +23,7 @@ describe("createInvoice step (s205b)", () => {
       dueInDays: 7,
       memo: "",
       method: "default",
+      integrationId: "",
     })
     expect(step.states).toHaveLength(2)
   })
@@ -34,11 +35,13 @@ describe("createInvoice step (s205b)", () => {
       dueInDays: _d,
       memo: _m,
       method: _method,
+      integrationId: _site,
       ...legacy
     } = createInvoiceStepDefaultFn()
     // A step saved before s207b has no method: it keeps the workspace default.
     expect(createInvoiceStepSchema.parse(legacy)).toMatchObject({
       method: "default",
+      integrationId: "",
       lines: [],
       currency: "USD",
       dueInDays: 7,
@@ -82,6 +85,7 @@ describe("createInvoice step (s205b)", () => {
     "default",
     "stripeInvoice",
     "stripeCheckout",
+    "woocommerce",
   ])("accepts method %s", (method) => {
     expect(
       createInvoiceStepSchema.parse({ ...createInvoiceStepDefaultFn(), method })

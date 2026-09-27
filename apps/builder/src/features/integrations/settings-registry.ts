@@ -4,6 +4,7 @@ import {
   CodeIcon,
   CreditCardIcon,
   MailIcon,
+  ShoppingCartIcon,
   TableIcon,
 } from "lucide-react"
 import type { ComponentType } from "react"
@@ -63,4 +64,9 @@ export const INTEGRATION_SETTINGS_REGISTRY: readonly IntegrationSettingsEntry[] 
     { slug: "sendgrid", titleKey: "sendGrid.title", icon: MailIcon },
     { slug: "klaviyo", titleKey: "klaviyo.title", icon: MailIcon },
     { slug: "stripe", titleKey: "stripe.title", icon: CreditCardIcon },
+    {
+      slug: "woocommerce",
+      titleKey: "woocommerce.title",
+      icon: ShoppingCartIcon,
+    },
   ]

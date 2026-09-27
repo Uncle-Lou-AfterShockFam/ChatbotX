@@ -69,7 +69,7 @@ export const invoicesPublicRouter = {
       path: "/v1/invoices",
       summary: "Create invoice",
       description:
-        'Invoices a contact through the workspace\'s connected Stripe account and returns it with its pay link (`hostedUrl`). Amounts are strings in major units (`"25.00"`). Send `idempotencyKey` to make a retry safe: the same key returns the first invoice.',
+        'Invoices a contact through the workspace\'s connected Stripe account or a linked WooCommerce site and returns it with its pay link (`hostedUrl`). Amounts are strings in major units (`"25.00"`). Send `idempotencyKey` to make a retry safe: the same key returns the first invoice.',
       tags: ["Invoices"],
     })
     .input(createInvoiceRequest)
@@ -86,6 +86,7 @@ export const invoicesPublicRouter = {
           memo: input.memo,
           dealId: input.dealId,
           method: input.method,
+          integrationId: input.integrationId,
           sourceKey: input.idempotencyKey
             ? `api:${input.idempotencyKey}`
             : undefined,

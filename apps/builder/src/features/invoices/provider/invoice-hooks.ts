@@ -2,9 +2,10 @@ import type { InvoiceStatus } from "@chatbotx.io/database/partials"
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
 } from "@tanstack/react-query"
-import { useCallback } from "react"
+import { useCallback, useMemo } from "react"
 import { orpc } from "@/lib/orpc/query"
 
 /** react-query hooks for hub invoices (s205b). */
@@ -31,6 +32,28 @@ const useInvalidateInvoices = () => {
   return useCallback(
     () => queryClient.invalidateQueries({ queryKey: orpc.invoicesAPI.key() }),
     [queryClient],
+  )
+}
+
+/** Linked WooCommerce sites as select options (label = slug + currency). */
+export const useWooCommerceSiteOptions = (
+  workspaceId: string,
+  enabled = true,
+): { label: string; value: string }[] => {
+  const { data } = useQuery(
+    orpc.invoicesAPI.privateListWooCommerceSitesAPI.queryOptions({
+      input: { workspaceId },
+      enabled: Boolean(workspaceId) && enabled,
+      select: (res) => res.data,
+    }),
+  )
+  return useMemo(
+    () =>
+      (data ?? []).map((site) => ({
+        label: `${site.siteSlug} (${site.currency})`,
+        value: site.integrationId,
+      })),
+    [data],
   )
 }
 

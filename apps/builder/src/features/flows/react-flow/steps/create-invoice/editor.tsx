@@ -2,6 +2,7 @@
 
 import { requestedInvoiceMethods } from "@chatbotx.io/database/partials"
 import { CREATE_INVOICE_MAX_LINES } from "@chatbotx.io/flow-config"
+import { ComboboxField } from "@chatbotx.io/ui/components/form/combobox-field"
 import { InputField } from "@chatbotx.io/ui/components/form/input-field"
 import { InputNumberField } from "@chatbotx.io/ui/components/form/input-number-field"
 import { SelectField } from "@chatbotx.io/ui/components/form/select-field"
@@ -10,8 +11,28 @@ import { Button } from "@chatbotx.io/ui/components/ui/button"
 import { ReceiptTextIcon, XIcon } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useMemo } from "react"
-import { useFieldArray, useFormContext } from "react-hook-form"
+import { useFieldArray, useFormContext, useWatch } from "react-hook-form"
+import { useWooCommerceSiteOptions } from "@/features/invoices/provider/invoice-hooks"
+import { useWorkspaceId } from "@/hooks/routing"
 import { BaseStepEditor } from "../base/editor"
+
+/** The linked site a `woocommerce` invoice goes to; cleared = the only site. */
+const WooCommerceSitePicker = ({ parentName }: { parentName: string }) => {
+  const t = useTranslations()
+  const options = useWooCommerceSiteOptions(useWorkspaceId() ?? "")
+  return (
+    <ComboboxField
+      allowClear
+      clearLabel={t("woocommerce.onlySite")}
+      emptyText={t("woocommerce.empty")}
+      label={t("woocommerce.fields.site")}
+      name={`${parentName}.integrationId`}
+      options={options}
+      placeholder={t("woocommerce.onlySite")}
+      popoverClassName="w-[var(--anchor-width)]"
+    />
+  )
+}
 
 const CreateInvoiceStepEditor = ({ parentName }: { parentName: string }) => {
   const t = useTranslations()
@@ -20,6 +41,7 @@ const CreateInvoiceStepEditor = ({ parentName }: { parentName: string }) => {
     control,
     name: `${parentName}.lines`,
   })
+  const method = useWatch({ control, name: `${parentName}.method` })
   const methodOptions = useMemo(
     () =>
       requestedInvoiceMethods.options.map((value) => ({
@@ -98,6 +120,9 @@ const CreateInvoiceStepEditor = ({ parentName }: { parentName: string }) => {
           name={`${parentName}.method`}
           options={methodOptions}
         />
+        {method === "woocommerce" && (
+          <WooCommerceSitePicker parentName={parentName} />
+        )}
         <InputField
           label={t("invoices.fields.currency")}
           name={`${parentName}.currency`}

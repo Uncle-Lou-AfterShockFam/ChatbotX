@@ -7388,6 +7388,32 @@
       "saved": "Default invoice method saved"
     }
   },
+  "woocommerce": {
+    "title": "WooCommerce",
+    "setting": {
+      "label": "WooCommerce sites",
+      "description": "Collect invoices as WooCommerce orders on your own WordPress sites: the site's payment gateway takes the money and the order-pay page is the pay link. Needs the hub-connector plugin 0.6.0 or later and an action token with the orders:write scope."
+    },
+    "addSite": "Link a site",
+    "addSiteHelp": "On the site, create a token with `wp hub-connector token create --scopes=orders:write`. After linking, add the two lines the hub shows to the site's wp-config.php so payments reach the hub.",
+    "empty": "No WooCommerce site is linked.",
+    "tokenEnding": "Token ending {last4}",
+    "onlySite": "The workspace's only site",
+    "fields": {
+      "siteUrl": "Site address",
+      "siteSlug": "Site slug (HUBC_SITE_SLUG)",
+      "actionToken": "Action token",
+      "currency": "Store currency",
+      "site": "WooCommerce site"
+    },
+    "wpConfig": {
+      "title": "Finish linking {site}",
+      "description": "Add these lines to the site's wp-config.php. The secret is shown only now (linking the same slug again keeps it).",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyFailed": "Could not copy"
+    }
+  },
   "invoices": {
     "title": "Invoices",
     "empty": "No invoices yet.",
@@ -7433,14 +7459,15 @@
       "memoPlaceholder": "Thanks for your order",
       "summary": "{count, plural, one {# line} other {# lines}}: {description} ({currency})",
       "noLines": "No line items",
-      "methodHint": "Stripe Checkout texts a hub pay link that works until the invoice is paid or voided, and saves no card. Stripe invoice uses Stripe's own invoice page."
+      "methodHint": "Stripe Checkout texts a hub pay link that works until the invoice is paid or voided, and saves no card. Stripe invoice uses Stripe's own invoice page. WooCommerce creates a pending order on a linked site and texts its order-pay page."
     },
     "retry": "Retry sending to Stripe",
     "retried": "Invoice sent to Stripe",
     "method": {
       "default": "Workspace default",
       "stripeInvoice": "Stripe invoice",
-      "stripeCheckout": "Stripe Checkout (pay link, no saved card)"
+      "stripeCheckout": "Stripe Checkout (pay link, no saved card)",
+      "woocommerce": "WooCommerce order (the site's order-pay page)"
     }
   }
 }

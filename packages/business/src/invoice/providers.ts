@@ -14,6 +14,7 @@ import {
   integrationStripeService,
   type StripeCredentials,
 } from "../integration-stripe/service"
+import { integrationWooCommerceService } from "../integration-woocommerce/service"
 import { logger } from "../logger"
 import {
   assertCheckoutNotPaid,
@@ -21,6 +22,10 @@ import {
   prepareCheckoutInvoice,
 } from "./checkout-provider"
 import { finalizeWithStripe, voidWithStripe } from "./stripe-provider"
+import {
+  createWooCommerceOrder,
+  wooCommerceProviderInvoiceId,
+} from "./woocommerce-provider"
 
 type InvoiceWithLines = InvoiceModel & { lineItems: InvoiceLineItemModel[] }
 
@@ -52,7 +57,7 @@ export type OpenedInvoice = {
  */
 export type InvoiceProvider = {
   /** The connection a NEW invoice of this method binds to; throws when none. */
-  bind(workspaceId: string): Promise<{ integrationId: string }>
+  bind(props: BindProps): Promise<{ integrationId: string }>
   /**
    * The connection an existing draft is opened through. Throws (and the
    * draft keeps no `lastError`) when it is gone or was replaced.
@@ -65,6 +70,14 @@ export type InvoiceProvider = {
   prepareVoid(
     invoice: InvoiceModel,
   ): Promise<{ afterVoid?: (voided: InvoiceModel) => Promise<void> }>
+}
+
+export type BindProps = {
+  workspaceId: string
+  /** The connection the caller named (a WooCommerce site), if any. */
+  integrationId?: string
+  /** The invoice currency, already normalised. */
+  currency: string
 }
 
 /** Stripe status after finalize -> hub status; anything else is an error. */
@@ -104,7 +117,13 @@ async function stripeCredentialsFor(
   return credentials
 }
 
-const bindStripe = async (workspaceId: string) => {
+const bindStripe = async ({ workspaceId, integrationId: named }: BindProps) => {
+  if (named) {
+    throw validationException(
+      "integrationId",
+      "integrationId names a WooCommerce site: use it with method woocommerce",
+    )
+  }
   const { integrationId } =
     await integrationStripeService.credentialsByWorkspaceIdOrFail(workspaceId)
   return { integrationId }
@@ -289,10 +308,78 @@ const stripeCheckoutProvider: InvoiceProvider = {
   },
 }
 
+/**
+ * woocommerce (s211b): the invoice's site (`Invoice.integrationId`) creates a
+ * pending order through hub-connector `order.invoice`; the order-pay page is
+ * the link and the site posts `order.paid` to the hub webhook. A void is
+ * hub-only (the plugin has no cancel action): `lastError` names the order to
+ * cancel on the site, and a later payment of it is flagged, never applied.
+ */
+const wooCommerceProvider: InvoiceProvider = {
+  async bind({ workspaceId, integrationId, currency }) {
+    const site = await integrationWooCommerceService.credentialsForNewInvoice(
+      workspaceId,
+      integrationId,
+    )
+    if (site.currency !== currency) {
+      throw validationException(
+        "currency",
+        `The WooCommerce site ${site.siteSlug} sells in ${site.currency}, not ${currency}`,
+      )
+    }
+    return { integrationId: site.integrationId }
+  },
+  async connect(invoice) {
+    const credentials = invoice.integrationId
+      ? await integrationWooCommerceService.credentialsByIntegrationId(
+          invoice.integrationId,
+        )
+      : null
+    if (!credentials || credentials.workspaceId !== invoice.workspaceId) {
+      throw validationException(
+        "invoice",
+        "This invoice's WooCommerce site is no longer connected",
+      )
+    }
+    return {
+      async open() {
+        const order = await createWooCommerceOrder({ credentials, invoice })
+        return {
+          set: {
+            status: "open",
+            providerInvoiceId: wooCommerceProviderInvoiceId(
+              credentials.integrationId,
+              order.orderId,
+            ),
+            // The site origin: a reconnect of the same site re-adopts the invoice.
+            providerAccountId: credentials.siteUrl,
+            integrationId: credentials.integrationId,
+            hostedUrl: order.payUrl,
+          },
+        }
+      },
+    }
+  },
+  prepareVoid() {
+    return Promise.resolve({
+      async afterVoid(voided) {
+        const orderId = voided.providerInvoiceId?.split(":")[2]
+        if (orderId) {
+          await recordLastError(
+            voided.id,
+            `Voided here: WooCommerce order ${orderId} stays pending on the site, cancel it there`,
+          )
+        }
+      },
+    })
+  },
+}
+
 /** Every method has a provider: a new enum value fails the typecheck here. */
 export const invoiceProviders = {
   stripeInvoice: stripeInvoiceProvider,
   stripeCheckout: stripeCheckoutProvider,
+  woocommerce: wooCommerceProvider,
 } satisfies Record<InvoiceMethod, InvoiceProvider>
 
 /**
@@ -300,10 +387,17 @@ export const invoiceProviders = {
  * workspace's Stripe default method, so it needs Stripe connected.
  */
 export async function bindNewInvoice(
-  workspaceId: string,
   requested: RequestedInvoiceMethod | undefined,
+  props: BindProps,
 ): Promise<{ method: InvoiceMethod; integrationId: string }> {
+  const { workspaceId } = props
   if (!requested || requested === "default") {
+    if (props.integrationId) {
+      throw validationException(
+        "integrationId",
+        "integrationId names a WooCommerce site: use it with method woocommerce",
+      )
+    }
     const credentials =
       await integrationStripeService.credentialsByWorkspaceIdOrFail(workspaceId)
     return {
@@ -311,6 +405,6 @@ export async function bindNewInvoice(
       integrationId: credentials.integrationId,
     }
   }
-  const { integrationId } = await invoiceProviders[requested].bind(workspaceId)
+  const { integrationId } = await invoiceProviders[requested].bind(props)
   return { method: requested, integrationId }
 }
