@@ -142,6 +142,9 @@ describe("webchatAncestorSources", () => {
     expect(webchatAncestorSources(["a.example", "A.EXAMPLE."])).toHaveLength(4)
     const many = Array.from({ length: 500 }, (_, i) => `h${i}.example`)
     expect(webchatAncestorSources(many)).toHaveLength(200)
+    // Junk ahead of real hosts does not use up the cap.
+    const junk = Array.from({ length: 60 }, () => "not a host")
+    expect(webchatAncestorSources([...junk, "a.example"])).toHaveLength(4)
   })
 })
 
@@ -165,5 +168,28 @@ describe("guest origin gate (s210 owner decision)", () => {
   test("isFirstPartyOrigin: an empty proxy host never matches", () => {
     expect(isFirstPartyOrigin("", "")).toBe(true)
     expect(isFirstPartyOrigin("app.chatbotx.io", "")).toBe(false)
+  })
+})
+
+describe("authorizedDomains cap in the settings schema", () => {
+  test("accepts MAX_AUTHORIZED_DOMAINS entries and refuses one more", async () => {
+    const { updateWebchatRequest } = await import(
+      "../src/features/integration-webchat/schema/mutation"
+    )
+    const { MAX_AUTHORIZED_DOMAINS } = await import(
+      "../src/features/integration-webchat/lib/authorized-domain"
+    )
+    const list = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({ value: `h${i}.example.com` }))
+    expect(
+      updateWebchatRequest.safeParse({
+        authorizedDomains: list(MAX_AUTHORIZED_DOMAINS),
+      }).success,
+    ).toBe(true)
+    expect(
+      updateWebchatRequest.safeParse({
+        authorizedDomains: list(MAX_AUTHORIZED_DOMAINS + 1),
+      }).success,
+    ).toBe(false)
   })
 })

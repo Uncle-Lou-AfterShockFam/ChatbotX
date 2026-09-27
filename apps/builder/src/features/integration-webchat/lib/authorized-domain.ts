@@ -1,3 +1,6 @@
+/** One cap for the settings form and the frame-ancestors header (s210). */
+export const MAX_AUTHORIZED_DOMAINS = 50
+
 const PARENT_ORIGIN_PARAM = "parentOrigin"
 const LEADING_DOTS_REGEX = /^\.+/
 const TRAILING_DOTS_REGEX = /\.+$/

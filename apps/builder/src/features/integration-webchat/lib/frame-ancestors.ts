@@ -2,7 +2,7 @@ import { integrationWebchatService } from "@chatbotx.io/business"
 import { distributedStore } from "@chatbotx.io/redis"
 import type { FrameAncestorsCache } from "@/lib/forms/frame-ancestors"
 import { logger } from "@/lib/log"
-import { getHostFromOrigin } from "./authorized-domain"
+import { getHostFromOrigin, MAX_AUTHORIZED_DOMAINS } from "./authorized-domain"
 
 /**
  * `frame-ancestors` for the `/webchat` iframe page (owner s210). The page gate
@@ -17,8 +17,8 @@ const WEBCHAT_PATH = /^\/webchat\/?$/
 const ID = /^\d{1,19}$/
 const HOST_LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
 const HOST = new RegExp(`^(?:${HOST_LABEL}\\.)*${HOST_LABEL}$`)
-// Bounds the header (4 sources each): upstream proxies 502 on huge headers.
-const MAX_DOMAINS = 50
+// Bounds the scan of a stored list full of junk entries.
+const MAX_SCANNED = 1000
 
 /**
  * The allowlist as CSP sources. It matches like `isOriginAuthorized`: the host
@@ -32,10 +32,15 @@ export const webchatAncestorSources = (domains: unknown): string[] => {
     return []
   }
   const hosts = new Set<string>()
-  for (const domain of domains.slice(0, MAX_DOMAINS)) {
+  for (const domain of domains.slice(0, MAX_SCANNED)) {
     const host = typeof domain === "string" ? getHostFromOrigin(domain) : null
     if (host && host.length <= 253 && HOST.test(host)) {
       hosts.add(host)
+    }
+    // The form caps the list too; this bounds the header (4 sources each) for
+    // legacy rows, since upstream proxies 502 on huge headers.
+    if (hosts.size === MAX_AUTHORIZED_DOMAINS) {
+      break
     }
   }
   return [...hosts].flatMap((host) => [

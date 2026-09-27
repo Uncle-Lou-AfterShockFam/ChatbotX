@@ -73,8 +73,10 @@ export function OPTIONS() {
 
 export async function GET(req: NextRequest) {
   try {
-    // A browser always sends Origin on a cross-origin call; only the hub's own
-    // (or none: a same-origin GET) may reach a guest conversation.
+    // A browser sends Origin on every cross-origin CORS-mode call and every
+    // POST, so a stranger's page is refused here. No Origin means a non-CORS
+    // caller (a same-origin GET, or a non-browser client that the token and
+    // allowlist below still gate): not proof of the hub.
     const appHost = await getDomainFromHeader()
     if (!isFirstPartyOrigin(req.headers.get("origin"), appHost)) {
       return await forbiddenResponse(guestHeaders())
@@ -160,8 +162,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    // A browser always sends Origin on a cross-origin call; only the hub's own
-    // (or none: a same-origin GET) may reach a guest conversation.
+    // A browser sends Origin on every cross-origin CORS-mode call and every
+    // POST, so a stranger's page is refused here. No Origin means a non-CORS
+    // caller (a same-origin GET, or a non-browser client that the token and
+    // allowlist below still gate): not proof of the hub.
     const appHost = await getDomainFromHeader()
     if (!isFirstPartyOrigin(req.headers.get("origin"), appHost)) {
       return await forbiddenResponse(guestHeaders())

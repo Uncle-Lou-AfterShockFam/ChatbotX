@@ -95,7 +95,7 @@ describe("guest messages route: hub origin only, no CORS (s210)", () => {
     expect(mocks.verify).not.toHaveBeenCalled()
   })
 
-  test("GET with no Origin (same-origin) or the hub's own Origin passes the gate", async () => {
+  test("GET with no Origin (a non-CORS caller) or the hub's own Origin passes this gate", async () => {
     for (const origin of [undefined, `https://${HUB}`]) {
       const res = await GET(get(origin))
       expect(res.status).toBe(200)

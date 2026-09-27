@@ -4,6 +4,7 @@ import {
 } from "@chatbotx.io/database/partials"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import { z } from "zod"
+import { MAX_AUTHORIZED_DOMAINS } from "../lib/authorized-domain"
 
 export const createWebchatRequest = z.object({
   name: z.string().min(1).max(40).describe("Webchat display name."),
@@ -19,6 +20,7 @@ export const createWebchatRequest = z.object({
         value: z.hostname(),
       }),
     )
+    .max(MAX_AUTHORIZED_DOMAINS)
     .describe("Domains allowed to embed this webchat widget."),
   conversationStarters: z
     .array(webchatConversationStarter)
