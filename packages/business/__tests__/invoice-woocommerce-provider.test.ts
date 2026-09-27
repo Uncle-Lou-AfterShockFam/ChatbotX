@@ -253,12 +253,7 @@ describe("createWooCommerceOrder", () => {
   })
 
   test("a redirect is never followed (an answer, refused)", async () => {
-    m.fetch.mockResolvedValue(
-      new Response(null, {
-        status: 302,
-        headers: { location: "http://169.254.169.254/" },
-      }),
-    )
+    m.fetch.mockResolvedValue(Response.redirect("http://169.254.169.254/", 302))
     const error = await createWooCommerceOrder({
       credentials,
       invoice: invoice(),

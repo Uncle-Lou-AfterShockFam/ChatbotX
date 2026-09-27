@@ -41,12 +41,8 @@ const m = vi.hoisted(() => {
   // 1st select of a delivery = the invoice lock, 2nd = the marked lookup.
   selectChain.limit = () => {
     state.selects += 1
-    const rows =
-      state.selects === 1
-        ? state.hubRow
-          ? [{ ...state.hubRow }]
-          : []
-        : state.markedRows
+    const locked = state.hubRow ? [{ ...state.hubRow }] : []
+    const rows = state.selects === 1 ? locked : state.markedRows
     const result = Promise.resolve(rows)
     return Object.assign(result, { for: () => result })
   }
@@ -280,7 +276,6 @@ describe("verifyStandardWebhook", () => {
     ["a v2 signature", { signature: "v2,abc" }],
     ["a truncated signature", { signature: "v1,AAAA" }],
     ["a tampered body", { rawBody: Buffer.from('{"a":2}') }],
-
   ])("refuses %s", (_label, over) => {
     expect(ok(over as never)).toBe(false)
   })
