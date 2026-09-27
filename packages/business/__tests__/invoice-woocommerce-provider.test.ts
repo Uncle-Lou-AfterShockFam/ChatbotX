@@ -31,6 +31,7 @@ vi.mock("../src/net/ssrf-guard", () => ({
 }))
 
 const {
+  cancelWooCommerceOrder,
   createWooCommerceOrder,
   orderInvoiceRequest,
   wooCommerceIdempotencyKey,
@@ -363,6 +364,81 @@ describe("createWooCommerceOrder: recovering an order the site already made", ()
     }).catch((e) => e)
     expect(error).toBeInstanceOf(InvoiceProviderError)
     expect(m.fetch).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe("cancelWooCommerceOrder (s213b, hub-connector 0.7.0)", () => {
+  const cancel = () =>
+    cancelWooCommerceOrder({
+      credentials,
+      invoice: { id: "501", number: 7 },
+      orderId: "3701",
+    })
+
+  test("posts order.cancel with the order subject, the hub id and a per-invoice key", async () => {
+    m.fetch.mockResolvedValue(
+      answer(200, { ok: true, status: "cancelled", order_id: 3701 }),
+    )
+    await expect(cancel()).resolves.toEqual({ kind: "cancelled" })
+    const [url, init] = m.fetch.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe(
+      "https://bakery.example.org/wp-json/hub-connector/v1/actions/order.cancel",
+    )
+    const headers = init.headers as Record<string, string>
+    expect(headers.authorization).toBe("Bearer btc_token")
+    expect(headers["idempotency-key"]).toBe("hub-invoice:501:cancel")
+    expect(JSON.parse(String(init.body))).toEqual({
+      subject: { type: "order", id: "3701" },
+      args: { hub_invoice_id: "501", reason: "Hub invoice #7 voided" },
+    })
+  })
+
+  test("already-cancelled is cancelled", async () => {
+    m.fetch.mockResolvedValue(
+      answer(200, { ok: true, status: "already-cancelled" }),
+    )
+    await expect(cancel()).resolves.toEqual({ kind: "cancelled" })
+  })
+
+  test("order-paid is paid, with the site's status", async () => {
+    m.fetch.mockResolvedValue(
+      answer(409, {
+        ok: false,
+        code: "order-paid",
+        message: "order 3701 is completed",
+        order_status: "completed",
+      }),
+    )
+    await expect(cancel()).resolves.toEqual({
+      kind: "paid",
+      orderStatus: "completed",
+    })
+  })
+
+  test.each([
+    ["a pre-0.7.0 plugin", 404, { code: "rest_no_route", message: "No route" }],
+    ["a revoked token", 401, { ok: false, code: "revoked-token" }],
+    ["another invoice's order", 409, { ok: false, code: "invoice-mismatch" }],
+    ["a bad status", 409, { ok: false, code: "bad-status" }],
+    ["a 200 that is not ok", 200, { ok: false }],
+    ["a server error", 500, "<html>"],
+  ])("%s is failed, never cancelled or paid", async (_l, status, body) => {
+    m.fetch.mockResolvedValue(answer(status, body))
+    const outcome = await cancel()
+    expect(outcome.kind).toBe("failed")
+    expect(outcome).toMatchObject({
+      reason: expect.stringContaining(`HTTP ${status}`),
+    })
+  })
+
+  test("an unreachable or SSRF-unsafe site is failed, never a throw", async () => {
+    m.fetch.mockRejectedValue(new TypeError("fetch failed"))
+    await expect(cancel()).resolves.toMatchObject({
+      kind: "failed",
+      reason: expect.stringContaining("did not answer"),
+    })
+    m.unsafe = true
+    await expect(cancel()).resolves.toMatchObject({ kind: "failed" })
   })
 })
 

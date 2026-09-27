@@ -99,6 +99,7 @@ const m = vi.hoisted(() => {
     credentials: vi.fn(),
     marks: vi.fn(),
     emitPaid: vi.fn(),
+    prerender: vi.fn(() => Promise.resolve()),
   }
 })
 
@@ -129,6 +130,9 @@ vi.mock("@chatbotx.io/events", () => ({
   emitInvoiceCreated: vi.fn(),
 }))
 vi.mock("../src/audit/dispatcher", () => ({ dispatchAuditRecord: vi.fn() }))
+vi.mock("../src/invoice/document", () => ({
+  prerenderInvoiceReceipt: (...a: unknown[]) => m.prerender(...a),
+}))
 vi.mock("../src/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
@@ -333,6 +337,14 @@ describe("handleWooCommerceWebhook", () => {
     )
     expect(m.emitPaid).toHaveBeenCalledTimes(1)
     expect(m.state.updates.at(-1)).toMatchObject({ outcome: "marked:paid" })
+    // s213b: the hub receipt is stored now, so invoice_pdf_link is instant.
+    expect(m.prerender).toHaveBeenCalledWith(HUB_ID)
+  })
+
+  test("a receipt pre-render that fails never fails the delivery", async () => {
+    m.prerender.mockRejectedValueOnce(new Error("gotenberg down"))
+    const result = await deliver(envelope())
+    expect(result.reason).toBe("applied")
   })
 
   test("an unknown site and a bad signature answer the same retryable no-token, and touch nothing", async () => {
@@ -417,6 +429,7 @@ describe("handleWooCommerceWebhook", () => {
     )
     expect(m.marks).not.toHaveBeenCalled()
     expect(m.emitPaid).not.toHaveBeenCalled()
+    expect(m.prerender).not.toHaveBeenCalled()
   })
 
   test("a refund moves a paid invoice to refunded and marks it, without a paid emit", async () => {
@@ -430,6 +443,7 @@ describe("handleWooCommerceWebhook", () => {
       expect.objectContaining({ status: "refunded" }),
     )
     expect(m.emitPaid).not.toHaveBeenCalled()
+    expect(m.prerender).not.toHaveBeenCalled()
   })
 
   test("order.completed pays an unpaid invoice (a manual-payment order)", async () => {

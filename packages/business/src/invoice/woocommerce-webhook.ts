@@ -8,6 +8,7 @@ import { isPgBigintId } from "../integration-woocommerce/client"
 import { integrationWooCommerceService } from "../integration-woocommerce/service"
 import { logger } from "../logger"
 import { markInvoiceOnContact } from "./contact-marks"
+import { prerenderInvoiceReceipt } from "./document"
 import { invoiceEventMetadata, invoiceService } from "./service"
 import { wooCommerceProviderInvoiceId } from "./woocommerce-provider"
 
@@ -424,6 +425,11 @@ export async function handleWooCommerceWebhook(props: {
       { err: error, eventId: envelope.id },
       "woocommerce webhook: marked outcome not recorded",
     )
+  }
+  if (target === "paid") {
+    // Not awaited: Gotenberg must not hold the site's delivery open. It
+    // never rejects (it logs its own failure); the catch is belt and braces.
+    prerenderInvoiceReceipt(invoice.id).catch(() => undefined)
   }
   return {
     reason: outcome.applied ? "applied" : "captured",

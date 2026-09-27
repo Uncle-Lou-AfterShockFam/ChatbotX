@@ -92,7 +92,10 @@ export const invoiceModel = pgTable(
     providerCustomerId: text(),
     hostedUrl: text(),
     pdfUrl: text(),
-    /** stripeCheckout: the secret of the stable `/pay/<token>` link (set on open). */
+    /**
+     * stripeCheckout: the secret of the stable `/pay/<token>` link (set on
+     * open); woocommerce (s213b): only its `/pay/<token>/pdf`.
+     */
     payToken: text(),
     /**
      * stripeCheckout: the ONE live Checkout Session. A new one is minted only

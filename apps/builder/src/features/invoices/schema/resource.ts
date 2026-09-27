@@ -34,7 +34,7 @@ export const invoiceResource = z.object({
   dealId: z.string().nullable(),
   /** The provider's pay page; null while draft. */
   hostedUrl: z.string().nullable(),
-  /** Stripe's PDF (stripeInvoice) or the hub's `/pay/<token>/pdf` (stripeCheckout, open or paid). */
+  /** Stripe's PDF (stripeInvoice) or the hub's `/pay/<token>/pdf` (stripeCheckout, woocommerce; open or paid). */
   pdfUrl: z.string().nullable(),
   dueAt: z.date().nullable(),
   paidAt: z.date().nullable(),

@@ -107,7 +107,7 @@ describe("markInvoiceCreated", () => {
     })
   })
 
-  test('woocommerce (no PDF) and a missing link write "", never "null"', async () => {
+  test('a woocommerce invoice with no stored PDF (opened before s213b) and a missing link write "", never "null"', async () => {
     await markInvoiceCreated({
       invoice: invoice({
         method: "woocommerce",

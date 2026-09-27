@@ -33,7 +33,12 @@ const m = vi.hoisted(() => {
     updates: [] as Record<string, unknown>[],
     /** false = the CAS update matches no row. */
     updateMatches: true,
+    /** Per-update overrides of updateMatches, consumed in order (s213b races). */
+    matchQueue: [] as boolean[],
+    /** Runs once after the next `get` read (a concurrent writer between reads). */
+    afterGet: null as (() => void) | null,
   }
+  const matches = () => state.matchQueue.shift() ?? state.updateMatches
   const selectChain: Record<string, unknown> = {}
   selectChain.from = () => selectChain
   selectChain.where = () => selectChain
@@ -70,7 +75,7 @@ const m = vi.hoisted(() => {
       },
       where: () => chain,
       returning: () => {
-        if (!(state.updateMatches && state.stored)) {
+        if (!(matches() && state.stored)) {
           return Promise.resolve([])
         }
         state.stored = { ...state.stored, ...pending }
@@ -80,7 +85,7 @@ const m = vi.hoisted(() => {
     // the lastError write is awaited without .returning()
     // biome-ignore lint/suspicious/noThenProperty: awaited query-builder stub
     chain.then = (resolve: (v: unknown) => unknown) => {
-      if (state.updateMatches && state.stored) {
+      if (matches() && state.stored) {
         state.stored = { ...state.stored, ...pending }
       }
       return resolve(undefined)
@@ -110,8 +115,13 @@ const m = vi.hoisted(() => {
     },
     query: {
       invoiceModel: {
-        findFirst: () =>
-          Promise.resolve(state.stored ? { ...state.stored } : undefined),
+        findFirst: () => {
+          const row = state.stored ? { ...state.stored } : undefined
+          const hook = state.afterGet
+          state.afterGet = null
+          hook?.()
+          return Promise.resolve(row)
+        },
       },
       integrationStripeModel: {
         findFirst: () => Promise.resolve(state.stripeRow ?? undefined),
@@ -130,6 +140,8 @@ const m = vi.hoisted(() => {
     wooForNew: vi.fn(),
     wooByIntegration: vi.fn(),
     wooOrder: vi.fn(),
+    wooCancel: vi.fn(),
+    appUrl: vi.fn(() => Promise.resolve("https://chat.example.org")),
     audit: vi.fn(),
     loggerWarn: vi.fn(),
     markCreated: vi.fn(),
@@ -162,6 +174,12 @@ vi.mock("../src/invoice/checkout-provider", () => ({
   prepareCheckoutInvoice: (...a: unknown[]) => m.prepareCheckout(...a),
   assertCheckoutNotPaid: (...a: unknown[]) => m.assertCheckoutNotPaid(...a),
   expireCheckoutAfterVoid: (...a: unknown[]) => m.expireAfterVoid(...a),
+  mintInvoicePayToken: () => "PayTok3n0000000000000000",
+  invoicePayUrl: (appUrl: string, token: string) =>
+    new URL(`/pay/${token}`, appUrl).toString(),
+}))
+vi.mock("../src/platform/settings", () => ({
+  resolveWorkspaceAppUrl: (...a: unknown[]) => m.appUrl(...a),
 }))
 vi.mock("../src/integration-woocommerce/service", () => ({
   integrationWooCommerceService: {
@@ -174,6 +192,7 @@ vi.mock("../src/invoice/woocommerce-provider", async (importOriginal) => ({
     typeof import("../src/invoice/woocommerce-provider")
   >()),
   createWooCommerceOrder: (...a: unknown[]) => m.wooOrder(...a),
+  cancelWooCommerceOrder: (...a: unknown[]) => m.wooCancel(...a),
 }))
 vi.mock("@chatbotx.io/events", () => ({
   emitInvoiceCreated: (...a: unknown[]) => {
@@ -302,6 +321,8 @@ beforeEach(() => {
     lineInserts: [],
     updates: [],
     updateMatches: true,
+    matchQueue: [],
+    afterGet: null,
   })
   credentialsSpy?.mockRestore()
   credentialsSpy = vi
@@ -1073,6 +1094,7 @@ describe("woocommerce (s211b PR3)", () => {
     m.wooForNew.mockResolvedValue(SITE)
     m.wooByIntegration.mockResolvedValue(SITE)
     m.wooOrder.mockResolvedValue(ORDER)
+    m.wooCancel.mockResolvedValue({ kind: "cancelled" })
   })
 
   test("create binds the site, opens with the order-pay link and emits once; Stripe is never asked", async () => {
@@ -1092,12 +1114,24 @@ describe("woocommerce (s211b PR3)", () => {
       providerAccountId: "https://bakery.example.org",
       integrationId: "88",
       hostedUrl: ORDER.payUrl,
+      // The hub's own PDF (s213b): its token serves only /pdf.
+      payToken: "PayTok3n0000000000000000",
+      pdfUrl: "https://chat.example.org/pay/PayTok3n0000000000000000/pdf",
       lastError: null,
     })
     expect(invoice.status).toBe("open")
     expect(m.emitCreated).toHaveBeenCalledTimes(1)
     expect(credentialsSpy).not.toHaveBeenCalled()
     expect(m.finalize).not.toHaveBeenCalled()
+  })
+
+  test("the hub PDF link is resolved BEFORE the site creates the order (a throw leaves no orphan order)", async () => {
+    m.appUrl.mockRejectedValueOnce(new Error("workspace lookup failed"))
+    await invoiceService
+      .create(validInput({ method: "woocommerce" }))
+      .catch(() => undefined)
+    expect(m.wooOrder).not.toHaveBeenCalled()
+    expect(m.state.stored?.status).toBe("draft")
   })
 
   test("a workspace without Stripe can still invoice through its site", async () => {
@@ -1188,30 +1222,155 @@ describe("woocommerce (s211b PR3)", () => {
     expect(m.wooOrder).not.toHaveBeenCalled()
   })
 
-  test("voided while the site created the order: the void row names the order", async () => {
-    // The finalize CAS (draft -> open) misses because the row went void.
+  /** The finalize CAS misses (the row went void meanwhile); `claim` = the void row names no order yet. */
+  const loseDraftToVoid = (claim: boolean) =>
     m.wooOrder.mockImplementation(() => {
-      m.state.updateMatches = false
+      m.state.matchQueue = [false, claim]
       return Promise.resolve(ORDER)
     })
+
+  test("voided while the site created the order: the void row names it, then the order is cancelled there", async () => {
+    loseDraftToVoid(true)
     await invoiceService
       .create(validInput({ method: "woocommerce" }))
       .catch(() => undefined)
     expect(m.state.updates.at(-1)).toMatchObject({
       providerInvoiceId: "wc:https://bakery.example.org:3701",
+    })
+    expect(m.state.updates.at(-1)).not.toHaveProperty("lastError")
+    expect(m.wooCancel).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: "3701" }),
+    )
+  })
+
+  test("voided while the site created the order and the cancel failed: lastError says to cancel it", async () => {
+    m.wooCancel.mockResolvedValue({ kind: "failed", reason: "HTTP 404" })
+    loseDraftToVoid(true)
+    await invoiceService
+      .create(validInput({ method: "woocommerce" }))
+      .catch(() => undefined)
+    expect(m.state.updates.at(-1)).toMatchObject({
       lastError: expect.stringContaining("created order 3701"),
     })
   })
 
-  test("a void is hub-only and names the order to cancel on the site", async () => {
-    m.state.stored = storedInvoice("open", {
+  test("a finalize that lost its CAS to ANOTHER finalize never cancels the live order (codex probe #2)", async () => {
+    loseDraftToVoid(false)
+    await invoiceService
+      .create(validInput({ method: "woocommerce" }))
+      .catch(() => undefined)
+    expect(m.wooCancel).not.toHaveBeenCalled()
+  })
+
+  const openWooInvoice = () =>
+    storedInvoice("open", {
       method: "woocommerce",
+      integrationId: "88",
+      providerAccountId: "https://bakery.example.org",
       providerInvoiceId: "wc:https://bakery.example.org:3701",
+    })
+
+  test("a void cancels the site order first and leaves no lastError", async () => {
+    m.state.stored = openWooInvoice()
+    const invoice = await invoiceService.void({ workspaceId: WS, id: "9" })
+    expect(invoice.status).toBe("void")
+    expect(invoice.lastError).toBeFalsy()
+    expect(m.wooCancel).toHaveBeenCalledWith({
+      credentials: SITE,
+      invoice: expect.objectContaining({ id: "9" }),
+      orderId: "3701",
+    })
+    expect(m.voidStripe).not.toHaveBeenCalled()
+  })
+
+  test("a void is refused when the site says the order is paid", async () => {
+    m.state.stored = openWooInvoice()
+    m.wooCancel.mockResolvedValue({ kind: "paid", orderStatus: "processing" })
+    await expect(
+      invoiceService.void({ workspaceId: WS, id: "9" }),
+    ).rejects.toThrow(
+      "WooCommerce order 3701 is already processing on bakery-test: refund it in WooCommerce",
+    )
+    expect(m.state.stored?.status).toBe("open")
+    expect(m.audit).not.toHaveBeenCalled()
+  })
+
+  test("a site that cannot cancel (down, older plugin) still voids here and names the order", async () => {
+    m.state.stored = openWooInvoice()
+    m.wooCancel.mockResolvedValue({
+      kind: "failed",
+      reason: "HTTP 404 rest_no_route",
     })
     const invoice = await invoiceService.void({ workspaceId: WS, id: "9" })
     expect(invoice.status).toBe("void")
     expect(invoice.lastError).toContain("WooCommerce order 3701")
-    expect(m.voidStripe).not.toHaveBeenCalled()
+    expect(invoice.lastError).toContain("HTTP 404 rest_no_route")
+  })
+
+  test.each([
+    ["disconnected", null],
+    ["another workspace's", { workspaceId: "999" }],
+    ["moved to another URL", { siteUrl: "https://new-shop.example.org" }],
+  ])("a %s site is never called: the void applies with lastError", async (_l, site) => {
+    m.state.stored = openWooInvoice()
+    m.wooByIntegration.mockResolvedValue(site && { ...SITE, ...site })
+    const invoice = await invoiceService.void({ workspaceId: WS, id: "9" })
+    expect(m.wooCancel).not.toHaveBeenCalled()
+    expect(invoice.status).toBe("void")
+    expect(invoice.lastError).toContain("no longer connected")
+  })
+
+  test("a void that read a draft while a finalize opened it cancels the order the voided row names (codex probe #1)", async () => {
+    m.state.stored = storedInvoice("draft", {
+      method: "woocommerce",
+      integrationId: "88",
+      providerAccountId: "https://bakery.example.org",
+    })
+    // The finalize lands between the void's read and its CAS.
+    m.state.afterGet = () => {
+      m.state.stored = {
+        ...m.state.stored,
+        status: "open",
+        providerInvoiceId: "wc:https://bakery.example.org:3701",
+      }
+    }
+    const invoice = await invoiceService.void({ workspaceId: WS, id: "9" })
+    expect(invoice.status).toBe("void")
+    expect(m.wooCancel).toHaveBeenCalledTimes(1)
+    expect(m.wooCancel).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: "3701" }),
+    )
+    expect(invoice.lastError).toBeFalsy()
+  })
+
+  test("that late cancel finding the order paid says to refund it (the void already stands)", async () => {
+    m.state.stored = storedInvoice("draft", {
+      method: "woocommerce",
+      integrationId: "88",
+      providerAccountId: "https://bakery.example.org",
+    })
+    m.state.afterGet = () => {
+      m.state.stored = {
+        ...m.state.stored,
+        status: "open",
+        providerInvoiceId: "wc:https://bakery.example.org:3701",
+      }
+    }
+    m.wooCancel.mockResolvedValue({ kind: "paid", orderStatus: "processing" })
+    const invoice = await invoiceService.void({ workspaceId: WS, id: "9" })
+    expect(invoice.status).toBe("void")
+    expect(invoice.lastError).toContain("refund it in WooCommerce")
+  })
+
+  test("a draft (no order yet) voids without calling the site", async () => {
+    m.state.stored = storedInvoice("draft", {
+      method: "woocommerce",
+      integrationId: "88",
+    })
+    const invoice = await invoiceService.void({ workspaceId: WS, id: "9" })
+    expect(invoice.status).toBe("void")
+    expect(m.wooCancel).not.toHaveBeenCalled()
+    expect(invoice.lastError).toBeFalsy()
   })
 
   test("a named site joins the request hash, a missing one does not", () => {
