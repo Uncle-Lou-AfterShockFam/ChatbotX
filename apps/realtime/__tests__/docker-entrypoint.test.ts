@@ -63,7 +63,7 @@ describe("realtime docker entrypoint (s214)", () => {
     expect(readFileSync(join(dir, ".env"), "utf8")).toBe(
       "REALTIME_BROADCAST_SECRET=s3cret=with=equals\n",
     )
-    expect(statSync(join(dir, ".env")).mode & 0o777).toBe(0o600)
+    expect(statSync(join(dir, ".env")).mode.toString(8).slice(-3)).toBe("600")
     expect(readFileSync(join(dir, "argv"), "utf8").trim()).toBe(
       "exec partykit dev",
     )
