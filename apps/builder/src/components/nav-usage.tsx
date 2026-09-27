@@ -4,6 +4,7 @@ import { useSidebar } from "@chatbotx.io/ui/components/ui/sidebar"
 import { cn } from "@chatbotx.io/ui/lib/utils"
 import { useTranslations } from "next-intl"
 import { UpgradePlanButton } from "@/enterprise/features/billing/upgrade-plan-dialog"
+import { useRenderNow } from "@/hooks/use-render-now"
 import {
   buildPlanNotice,
   buildUsageLabels,
@@ -42,13 +43,16 @@ export function NavUsage({
 }) {
   const t = useTranslations()
   const { state, isMobile } = useSidebar()
+  // The server render and hydration must count the trial days from the same
+  // instant, or a render that straddles a day boundary is a React #418 (s212).
+  const renderNow = useRenderNow()
 
   // The rail is too narrow to render the usage bar/CTA when collapsed to icons.
   if (state === "collapsed" && !isMobile) {
     return null
   }
 
-  const notice = buildPlanNotice(planStatus, trialEndsAt)
+  const notice = buildPlanNotice(planStatus, trialEndsAt, renderNow.getTime())
   const primary = selectPrimaryMetric(metrics)
 
   // Nothing to surface: no constrained metric and no trial/past-due state.
