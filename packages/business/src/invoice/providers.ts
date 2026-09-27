@@ -1,0 +1,316 @@
+import { db, eq } from "@chatbotx.io/database/client"
+import type {
+  InvoiceMethod,
+  InvoiceStatus,
+  RequestedInvoiceMethod,
+} from "@chatbotx.io/database/partials"
+import { invoiceModel } from "@chatbotx.io/database/schema"
+import type {
+  InvoiceLineItemModel,
+  InvoiceModel,
+} from "@chatbotx.io/database/types"
+import { ChatbotXException, validationException } from "../errors"
+import {
+  integrationStripeService,
+  type StripeCredentials,
+} from "../integration-stripe/service"
+import { logger } from "../logger"
+import {
+  assertCheckoutNotPaid,
+  expireCheckoutAfterVoid,
+  prepareCheckoutInvoice,
+} from "./checkout-provider"
+import { finalizeWithStripe, voidWithStripe } from "./stripe-provider"
+
+type InvoiceWithLines = InvoiceModel & { lineItems: InvoiceLineItemModel[] }
+
+/** A provider failure surfaced to callers: `retryable` = a job may retry. */
+export class InvoiceFinalizeError extends ChatbotXException {
+  readonly retryable: boolean
+  readonly invoice: InvoiceModel
+
+  constructor(message: string, retryable: boolean, invoice: InvoiceModel) {
+    super(message, "invoiceFinalizeFailed")
+    this.retryable = retryable
+    this.invoice = invoice
+  }
+}
+
+/** What the draft -> opened CAS writes, and what runs when that CAS loses. */
+export type OpenedInvoice = {
+  set: Partial<Omit<InvoiceModel, "id" | "workspaceId" | "number">> & {
+    status: InvoiceStatus
+  }
+  /** The draft left `draft` (a void) while the provider was opening it. */
+  onDraftLost?: () => Promise<void>
+}
+
+/**
+ * One collection method (s211b PR 1). The service owns the invoice row (the
+ * advisory lock, the draft CAS, audit, events); a provider owns only its
+ * connection and the calls to the outside system.
+ */
+export type InvoiceProvider = {
+  /** The connection a NEW invoice of this method binds to; throws when none. */
+  bind(workspaceId: string): Promise<{ integrationId: string }>
+  /**
+   * The connection an existing draft is opened through. Throws (and the
+   * draft keeps no `lastError`) when it is gone or was replaced.
+   */
+  connect(invoice: InvoiceWithLines): Promise<{
+    /** Any throw but InvoiceFinalizeError is recorded as the draft's lastError. */
+    open(): Promise<OpenedInvoice>
+  }>
+  /** Checks before the hub void; `afterVoid` runs once the void applied. */
+  prepareVoid(
+    invoice: InvoiceModel,
+  ): Promise<{ afterVoid?: (voided: InvoiceModel) => Promise<void> }>
+}
+
+/** Stripe status after finalize -> hub status; anything else is an error. */
+const FINALIZED_STATUS: Partial<Record<string, InvoiceStatus>> = {
+  open: "open",
+  paid: "paid",
+  void: "void",
+  uncollectible: "uncollectible",
+}
+
+async function recordLastError(invoiceId: string, message: string) {
+  await db
+    .update(invoiceModel)
+    .set({ lastError: message, updatedAt: new Date() })
+    .where(eq(invoiceModel.id, invoiceId))
+}
+
+/** The workspace's Stripe, refused when it is not the one the invoice names. */
+async function stripeCredentialsFor(
+  invoice: InvoiceModel,
+): Promise<StripeCredentials> {
+  const credentials =
+    await integrationStripeService.credentialsByWorkspaceIdOrFail(
+      invoice.workspaceId,
+    )
+  if (
+    (invoice.integrationId &&
+      invoice.integrationId !== credentials.integrationId) ||
+    (invoice.providerAccountId &&
+      invoice.providerAccountId !== credentials.accountId)
+  ) {
+    throw validationException(
+      "invoice",
+      "This invoice belongs to a Stripe connection that was replaced",
+    )
+  }
+  return credentials
+}
+
+const bindStripe = async (workspaceId: string) => {
+  const { integrationId } =
+    await integrationStripeService.credentialsByWorkspaceIdOrFail(workspaceId)
+  return { integrationId }
+}
+
+/**
+ * The draft was voided here while this finalize was talking to Stripe (a
+ * void of a draft without a Stripe id skips Stripe): the Stripe invoice
+ * this finalize just opened must not stay payable under a void hub row.
+ */
+async function voidAtStripeIfVoidedMeanwhile(
+  invoice: InvoiceModel,
+  stripe: { providerInvoiceId: string; status: string | null },
+): Promise<void> {
+  const [current] = await db
+    .select({ status: invoiceModel.status })
+    .from(invoiceModel)
+    .where(eq(invoiceModel.id, invoice.id))
+    .limit(1)
+  if (current?.status !== "void" || stripe.status !== "open") {
+    return
+  }
+  try {
+    const credentials =
+      await integrationStripeService.credentialsByWorkspaceIdOrFail(
+        invoice.workspaceId,
+      )
+    // The id Stripe just returned, never a re-read: the row may not carry it.
+    await voidWithStripe({
+      credentials,
+      invoice: { ...invoice, providerInvoiceId: stripe.providerInvoiceId },
+    })
+  } catch (error) {
+    logger.error(
+      { err: error, invoiceId: invoice.id, stripe: stripe.providerInvoiceId },
+      "invoice: voided during finalize, but the Stripe invoice could not be voided",
+    )
+    await db
+      .update(invoiceModel)
+      .set({
+        providerInvoiceId: stripe.providerInvoiceId,
+        lastError: `Voided here while Stripe opened ${stripe.providerInvoiceId}: void it in Stripe`,
+        updatedAt: new Date(),
+      })
+      .where(eq(invoiceModel.id, invoice.id))
+  }
+}
+
+const stripeInvoiceProvider: InvoiceProvider = {
+  bind: bindStripe,
+  async connect(invoice) {
+    const credentials = await stripeCredentialsFor(invoice)
+    return {
+      async open() {
+        const result = await finalizeWithStripe({
+          credentials,
+          invoice,
+          lines: invoice.lineItems,
+        })
+        const status = result.status
+          ? FINALIZED_STATUS[result.status]
+          : undefined
+        if (!status) {
+          throw new InvoiceFinalizeError(
+            `Stripe left the invoice in status ${result.status ?? "unknown"}`,
+            true,
+            invoice,
+          )
+        }
+        return {
+          set: {
+            status,
+            providerInvoiceId: result.providerInvoiceId,
+            providerAccountId: credentials.accountId,
+            providerCustomerId: result.providerCustomerId,
+            integrationId: credentials.integrationId,
+            hostedUrl: result.hostedUrl,
+            pdfUrl: result.pdfUrl,
+            dueAt: result.dueAt ?? invoice.dueAt,
+            paidAt: status === "paid" ? new Date() : null,
+            voidedAt: status === "void" ? new Date() : null,
+          },
+          onDraftLost: () => voidAtStripeIfVoidedMeanwhile(invoice, result),
+        }
+      },
+    }
+  },
+  async prepareVoid(invoice) {
+    if (invoice.providerInvoiceId) {
+      const credentials =
+        await integrationStripeService.credentialsByWorkspaceIdOrFail(
+          invoice.workspaceId,
+        )
+      try {
+        await voidWithStripe({ credentials, invoice })
+      } catch (error) {
+        throw validationException(
+          "invoice",
+          error instanceof Error ? error.message : "Could not void at Stripe",
+        )
+      }
+    }
+    return {}
+  },
+}
+
+/**
+ * stripeCheckout: opening creates no Stripe object yet, only the customer
+ * and the stable pay link; the first `/pay` visit mints a session.
+ *
+ * A checkout invoice is voided HERE first (a `/pay` visit then cannot record
+ * a new session), then the session the void row names is expired. Refused
+ * when the recorded session already holds a payment. Without the Stripe
+ * connection that minted the session (disconnected, or another account now),
+ * the void still happens and `lastError` says which session to expire by
+ * hand: refusing forever would help no one.
+ */
+const stripeCheckoutProvider: InvoiceProvider = {
+  bind: bindStripe,
+  async connect(invoice) {
+    const credentials = await stripeCredentialsFor(invoice)
+    return {
+      async open() {
+        const prepared = await prepareCheckoutInvoice({ credentials, invoice })
+        return {
+          set: {
+            status: "open",
+            providerAccountId: credentials.accountId,
+            providerCustomerId: prepared.providerCustomerId,
+            integrationId: credentials.integrationId,
+            payToken: prepared.payToken,
+            hostedUrl: prepared.hostedUrl,
+          },
+        }
+      },
+    }
+  },
+  async prepareVoid(invoice) {
+    const current =
+      invoice.status === "draft"
+        ? null
+        : await integrationStripeService.credentialsByWorkspaceId(
+            invoice.workspaceId,
+          )
+    const credentials =
+      current &&
+      current.integrationId === invoice.integrationId &&
+      current.accountId === invoice.providerAccountId
+        ? current
+        : null
+    if (credentials) {
+      try {
+        await assertCheckoutNotPaid({ credentials, invoice })
+      } catch (error) {
+        throw validationException(
+          "invoice",
+          error instanceof Error ? error.message : "Could not reach Stripe",
+        )
+      }
+    }
+    return {
+      async afterVoid(voided) {
+        if (!voided.checkoutSessionId) {
+          return
+        }
+        const expireByHand = `Voided here, but checkout session ${voided.checkoutSessionId} (Stripe account ${voided.providerAccountId ?? "unknown"}) could not be expired: expire it in Stripe`
+        if (!credentials) {
+          await recordLastError(voided.id, expireByHand)
+          return
+        }
+        await expireCheckoutAfterVoid({ credentials, invoice: voided }).catch(
+          async (error: unknown) => {
+            logger.error(
+              { err: error, invoiceId: voided.id },
+              "invoice: voided, but its checkout session could not be expired",
+            )
+            await recordLastError(voided.id, expireByHand)
+          },
+        )
+      },
+    }
+  },
+}
+
+/** Every method has a provider: a new enum value fails the typecheck here. */
+export const invoiceProviders = {
+  stripeInvoice: stripeInvoiceProvider,
+  stripeCheckout: stripeCheckoutProvider,
+} satisfies Record<InvoiceMethod, InvoiceProvider>
+
+/**
+ * The method and connection a new invoice gets. `default` (or none) is the
+ * workspace's Stripe default method, so it needs Stripe connected.
+ */
+export async function bindNewInvoice(
+  workspaceId: string,
+  requested: RequestedInvoiceMethod | undefined,
+): Promise<{ method: InvoiceMethod; integrationId: string }> {
+  if (!requested || requested === "default") {
+    const credentials =
+      await integrationStripeService.credentialsByWorkspaceIdOrFail(workspaceId)
+    return {
+      method: credentials.defaultMethod,
+      integrationId: credentials.integrationId,
+    }
+  }
+  const { integrationId } = await invoiceProviders[requested].bind(workspaceId)
+  return { method: requested, integrationId }
+}

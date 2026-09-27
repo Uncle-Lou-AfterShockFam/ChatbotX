@@ -16,7 +16,6 @@ import {
 } from "@chatbotx.io/database/client"
 import {
   INVOICE_STATUS_TRANSITIONS,
-  type InvoiceMethod,
   type InvoiceStatus,
   minorToDecimalString,
   normalizeInvoiceCurrency,
@@ -44,16 +43,12 @@ import {
   notFoundException,
   validationException,
 } from "../errors"
-import {
-  integrationStripeService,
-  type StripeCredentials,
-} from "../integration-stripe/service"
 import { logger } from "../logger"
 import {
-  assertCheckoutNotPaid,
-  expireCheckoutAfterVoid,
-  prepareCheckoutInvoice,
-} from "./checkout-provider"
+  bindNewInvoice,
+  InvoiceFinalizeError,
+  invoiceProviders,
+} from "./providers"
 import {
   type CreateInvoiceInput,
   createInvoiceInputSchema,
@@ -63,11 +58,11 @@ import {
   listInvoicesInputSchema,
 } from "./schema"
 import {
-  finalizeWithStripe,
   InvoiceProviderError,
   STRIPE_MAX_AMOUNT_MINOR,
-  voidWithStripe,
 } from "./stripe-provider"
+
+export { InvoiceFinalizeError } from "./providers"
 
 export type InvoiceWithLines = InvoiceModel & {
   lineItems: InvoiceLineItemModel[]
@@ -125,32 +120,6 @@ export const invoiceRequestHash = (request: {
       ]),
     )
     .digest("hex")
-
-const resolveMethod = (
-  requested: RequestedInvoiceMethod | undefined,
-  credentials: StripeCredentials,
-): InvoiceMethod =>
-  !requested || requested === "default" ? credentials.defaultMethod : requested
-
-/** Stripe status after finalize -> hub status; anything else is an error. */
-const FINALIZED_STATUS: Partial<Record<string, InvoiceStatus>> = {
-  open: "open",
-  paid: "paid",
-  void: "void",
-  uncollectible: "uncollectible",
-}
-
-/** A provider failure surfaced to callers: `retryable` = a job may retry. */
-export class InvoiceFinalizeError extends ChatbotXException {
-  readonly retryable: boolean
-  readonly invoice: InvoiceModel
-
-  constructor(message: string, retryable: boolean, invoice: InvoiceModel) {
-    super(message, "invoiceFinalizeFailed")
-    this.retryable = retryable
-    this.invoice = invoice
-  }
-}
 
 const DAY_MS = 86_400_000
 const LIST_CURSOR_SEPARATOR = "_"
@@ -273,7 +242,7 @@ class InvoiceService extends BaseService {
   }
 
   /**
-   * Create a hub invoice and collect it through the workspace's Stripe.
+   * Create a hub invoice and collect it through its method's provider.
    * Idempotent on `sourceKey`: a replay returns the first invoice (resuming
    * its finalize when it is still a draft) and never creates a second one.
    */
@@ -307,10 +276,7 @@ class InvoiceService extends BaseService {
         "The invoice total is larger than Stripe allows",
       )
     }
-    const credentials =
-      await integrationStripeService.credentialsByWorkspaceIdOrFail(
-        props.workspaceId,
-      )
+    const binding = await bindNewInvoice(props.workspaceId, props.method)
     const requestHash = invoiceRequestHash({ ...props, currency, lines })
 
     const { invoice, created } = await db.transaction(async (tx) => {
@@ -397,7 +363,7 @@ class InvoiceService extends BaseService {
           workspaceId: props.workspaceId,
           number: next,
           status: "draft",
-          method: resolveMethod(props.method, credentials),
+          method: binding.method,
           currency,
           total: minorToDecimalString(totalMinor, currency),
           memo: props.memo || null,
@@ -407,7 +373,7 @@ class InvoiceService extends BaseService {
           contactId: contact.id,
           companyId: contact.companyId,
           dealId: props.dealId ?? null,
-          integrationId: credentials.integrationId,
+          integrationId: binding.integrationId,
           createdAt: now,
           updatedAt: now,
         })
@@ -449,105 +415,30 @@ class InvoiceService extends BaseService {
     if (invoice.status !== "draft") {
       return invoice
     }
-    const credentials =
-      await integrationStripeService.credentialsByWorkspaceIdOrFail(
-        invoice.workspaceId,
-      )
-    if (
-      (invoice.integrationId &&
-        invoice.integrationId !== credentials.integrationId) ||
-      (invoice.providerAccountId &&
-        invoice.providerAccountId !== credentials.accountId)
-    ) {
-      throw validationException(
-        "invoice",
-        "This invoice belongs to a Stripe connection that was replaced",
-      )
-    }
-    if (invoice.method === "stripeCheckout") {
-      return await this.finalizeCheckout(invoice, credentials)
-    }
-    let result: Awaited<ReturnType<typeof finalizeWithStripe>>
+    const connection = await invoiceProviders[invoice.method].connect(invoice)
+    let result: Awaited<ReturnType<typeof connection.open>>
     try {
-      result = await finalizeWithStripe({
-        credentials,
-        invoice,
-        lines: invoice.lineItems,
-      })
+      result = await connection.open()
     } catch (error) {
+      if (error instanceof InvoiceFinalizeError) {
+        throw error
+      }
       throw await this.recordFinalizeFailure(invoice, error)
-    }
-    const status = result.status ? FINALIZED_STATUS[result.status] : undefined
-    if (!status) {
-      throw new InvoiceFinalizeError(
-        `Stripe left the invoice in status ${result.status ?? "unknown"}`,
-        true,
-        invoice,
-      )
     }
     const [opened] = await db
       .update(invoiceModel)
-      .set({
-        status,
-        providerInvoiceId: result.providerInvoiceId,
-        providerAccountId: credentials.accountId,
-        providerCustomerId: result.providerCustomerId,
-        integrationId: credentials.integrationId,
-        hostedUrl: result.hostedUrl,
-        pdfUrl: result.pdfUrl,
-        dueAt: result.dueAt ?? invoice.dueAt,
-        paidAt: status === "paid" ? new Date() : null,
-        voidedAt: status === "void" ? new Date() : null,
-        lastError: null,
-        updatedAt: new Date(),
-      })
+      .set({ ...result.set, lastError: null, updatedAt: new Date() })
       .where(
         and(eq(invoiceModel.id, invoice.id), eq(invoiceModel.status, "draft")),
       )
       .returning()
     if (!opened) {
-      await this.voidAtStripeIfVoidedMeanwhile(invoice, result)
+      await result.onDraftLost?.()
     }
     if (opened?.status === "open") {
       await this.emitCreated(opened)
     }
     return await this.get(ref)
-  }
-
-  /**
-   * Open a stripeCheckout draft: no Stripe object is created yet, only the
-   * customer and the stable pay link; the first `/pay` visit mints a session.
-   */
-  private async finalizeCheckout(
-    invoice: InvoiceWithLines,
-    credentials: StripeCredentials,
-  ): Promise<InvoiceWithLines> {
-    let prepared: Awaited<ReturnType<typeof prepareCheckoutInvoice>>
-    try {
-      prepared = await prepareCheckoutInvoice({ credentials, invoice })
-    } catch (error) {
-      throw await this.recordFinalizeFailure(invoice, error)
-    }
-    const [opened] = await db
-      .update(invoiceModel)
-      .set({
-        status: "open",
-        providerAccountId: credentials.accountId,
-        providerCustomerId: prepared.providerCustomerId,
-        integrationId: credentials.integrationId,
-        payToken: prepared.payToken,
-        hostedUrl: prepared.hostedUrl,
-        lastError: null,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(eq(invoiceModel.id, invoice.id), eq(invoiceModel.status, "draft")),
-      )
-      .returning()
-    if (opened) {
-      await this.emitCreated(opened)
-    }
-    return await this.get({ workspaceId: invoice.workspaceId, id: invoice.id })
   }
 
   private async emitCreated(opened: InvoiceModel): Promise<void> {
@@ -594,49 +485,6 @@ class InvoiceService extends BaseService {
     )
   }
 
-  /**
-   * The draft was voided here while this finalize was talking to Stripe (a
-   * void of a draft without a Stripe id skips Stripe): the Stripe invoice
-   * this finalize just opened must not stay payable under a void hub row.
-   */
-  private async voidAtStripeIfVoidedMeanwhile(
-    invoice: InvoiceModel,
-    stripe: { providerInvoiceId: string; status: string | null },
-  ): Promise<void> {
-    const [current] = await db
-      .select({ status: invoiceModel.status })
-      .from(invoiceModel)
-      .where(eq(invoiceModel.id, invoice.id))
-      .limit(1)
-    if (current?.status !== "void" || stripe.status !== "open") {
-      return
-    }
-    try {
-      const credentials =
-        await integrationStripeService.credentialsByWorkspaceIdOrFail(
-          invoice.workspaceId,
-        )
-      // The id Stripe just returned, never a re-read: the row may not carry it.
-      await voidWithStripe({
-        credentials,
-        invoice: { ...invoice, providerInvoiceId: stripe.providerInvoiceId },
-      })
-    } catch (error) {
-      logger.error(
-        { err: error, invoiceId: invoice.id, stripe: stripe.providerInvoiceId },
-        "invoice: voided during finalize, but the Stripe invoice could not be voided",
-      )
-      await db
-        .update(invoiceModel)
-        .set({
-          providerInvoiceId: stripe.providerInvoiceId,
-          lastError: `Voided here while Stripe opened ${stripe.providerInvoiceId}: void it in Stripe`,
-          updatedAt: new Date(),
-        })
-        .where(eq(invoiceModel.id, invoice.id))
-    }
-  }
-
   /** Void an unpaid invoice here and at the provider. */
   async void(ref: InvoiceRef): Promise<InvoiceWithLines> {
     const invoice = await this.get(ref)
@@ -646,23 +494,8 @@ class InvoiceService extends BaseService {
         `A ${invoice.status} invoice cannot be voided`,
       )
     }
-    if (invoice.method === "stripeCheckout") {
-      return await this.voidCheckout(ref, invoice)
-    }
-    if (invoice.providerInvoiceId) {
-      const credentials =
-        await integrationStripeService.credentialsByWorkspaceIdOrFail(
-          invoice.workspaceId,
-        )
-      try {
-        await voidWithStripe({ credentials, invoice })
-      } catch (error) {
-        throw validationException(
-          "invoice",
-          error instanceof Error ? error.message : "Could not void at Stripe",
-        )
-      }
-    }
+    const { afterVoid } =
+      await invoiceProviders[invoice.method].prepareVoid(invoice)
     const voided = await this.transition({
       invoiceId: invoice.id,
       to: "void",
@@ -670,78 +503,9 @@ class InvoiceService extends BaseService {
     })
     if (voided) {
       await this.audit("void", `voided invoice #${invoice.number}`)
+      await afterVoid?.(voided)
     }
     return await this.get(ref)
-  }
-
-  /**
-   * A checkout invoice is voided HERE first (a `/pay` visit then cannot
-   * record a new session), then the session the void row names is expired.
-   * Refused when the recorded session already holds a payment. Without the
-   * Stripe connection that minted the session (disconnected, or another
-   * account now), the void still happens and `lastError` says which session
-   * to expire by hand: refusing forever would help no one.
-   */
-  private async voidCheckout(
-    ref: InvoiceRef,
-    invoice: InvoiceModel,
-  ): Promise<InvoiceWithLines> {
-    const current =
-      invoice.status === "draft"
-        ? null
-        : await integrationStripeService.credentialsByWorkspaceId(
-            invoice.workspaceId,
-          )
-    const credentials =
-      current &&
-      current.integrationId === invoice.integrationId &&
-      current.accountId === invoice.providerAccountId
-        ? current
-        : null
-    if (credentials) {
-      try {
-        await assertCheckoutNotPaid({ credentials, invoice })
-      } catch (error) {
-        throw validationException(
-          "invoice",
-          error instanceof Error ? error.message : "Could not reach Stripe",
-        )
-      }
-    }
-    const voided = await this.transition({
-      invoiceId: invoice.id,
-      to: "void",
-      set: { voidedAt: new Date() },
-    })
-    if (!voided) {
-      return await this.get(ref)
-    }
-    await this.audit("void", `voided invoice #${invoice.number}`)
-    if (!voided.checkoutSessionId) {
-      return await this.get(ref)
-    }
-    const expireByHand = `Voided here, but checkout session ${voided.checkoutSessionId} (Stripe account ${voided.providerAccountId ?? "unknown"}) could not be expired: expire it in Stripe`
-    if (credentials) {
-      await expireCheckoutAfterVoid({ credentials, invoice: voided }).catch(
-        async (error: unknown) => {
-          logger.error(
-            { err: error, invoiceId: voided.id },
-            "invoice: voided, but its checkout session could not be expired",
-          )
-          await this.recordLastError(voided.id, expireByHand)
-        },
-      )
-    } else {
-      await this.recordLastError(voided.id, expireByHand)
-    }
-    return await this.get(ref)
-  }
-
-  private async recordLastError(invoiceId: string, message: string) {
-    await db
-      .update(invoiceModel)
-      .set({ lastError: message, updatedAt: new Date() })
-      .where(eq(invoiceModel.id, invoiceId))
   }
 
   /**
