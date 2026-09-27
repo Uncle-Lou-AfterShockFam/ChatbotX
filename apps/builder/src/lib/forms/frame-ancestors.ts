@@ -63,10 +63,13 @@ export async function formFrameAncestors(
   try {
     origins = await load(workspaceId, slug)
   } catch (error) {
+    // Fail closed: 'self' only, and nothing cached, so the next request
+    // retries (s212: caching the failure refused every embed for 60 s).
     logger.warn(
       { err: error, workspaceId, slug },
       "form frame-ancestors load failed",
     )
+    return buildFrameAncestors([])
   }
   // Unknown form: still deny framing by strangers (the page 404s anyway).
   const list = sanitizeOrigins(origins)

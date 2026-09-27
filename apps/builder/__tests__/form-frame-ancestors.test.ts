@@ -100,13 +100,21 @@ describe("public form frame-ancestors (s200)", () => {
     ).toBe("frame-ancestors 'self' https://a.example")
   })
 
-  test("a load failure fails closed to 'self'", async () => {
+  test("a load failure fails closed to 'self' and is not cached: the next request retries (s212)", async () => {
+    const store = cache()
     expect(
       await formFrameAncestors("/forms/11701868563365888/demo", {
         load: () => Promise.reject(new Error("db down")),
-        cache: cache(),
+        cache: store,
       }),
     ).toBe("frame-ancestors 'self'")
+    expect(store.puts).toHaveLength(0)
+    expect(
+      await formFrameAncestors("/forms/11701868563365888/demo", {
+        load: () => Promise.resolve(["https://a.example"]),
+        cache: store,
+      }),
+    ).toBe("frame-ancestors 'self' https://a.example")
   })
 })
 
