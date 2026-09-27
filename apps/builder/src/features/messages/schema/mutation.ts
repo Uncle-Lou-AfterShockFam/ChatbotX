@@ -1,7 +1,10 @@
 import { channelTypes } from "@chatbotx.io/database/partials"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import { z } from "zod"
-import { zodGuestConversationId } from "@/features/integration-webchat/lib/guest-conversation-id"
+import {
+  refineGuestIdWorkspace,
+  zodGuestConversationId,
+} from "@/features/integration-webchat/lib/guest-conversation-id"
 
 const MAX_FILE_SIZE = 5 * 1000 * 1000
 
@@ -154,18 +157,20 @@ export const createWebchatMessageRequest = z
     }),
   ])
   .and(
-    z.object({
-      clientId: z.string().optional(),
-      workspaceId: zodBigintAsString(),
-      webchatId: zodBigintAsString(),
-      guestConversationId: zodGuestConversationId(),
-      ref: z.string().optional(),
-      parentUrl: z.url().max(2048).optional(),
-      locale: z.string().max(35).optional(),
-      timezone: z.string().max(64).optional(),
-      accessToken: z.string().optional(),
-      parentOrigin: z.string().optional(),
-    }),
+    z
+      .object({
+        clientId: z.string().optional(),
+        workspaceId: zodBigintAsString(),
+        webchatId: zodBigintAsString(),
+        guestConversationId: zodGuestConversationId(),
+        ref: z.string().optional(),
+        parentUrl: z.url().max(2048).optional(),
+        locale: z.string().max(35).optional(),
+        timezone: z.string().max(64).optional(),
+        accessToken: z.string().optional(),
+        parentOrigin: z.string().optional(),
+      })
+      .superRefine(refineGuestIdWorkspace),
   )
 export type CreateWebchatMessageRequest = z.infer<
   typeof createWebchatMessageRequest

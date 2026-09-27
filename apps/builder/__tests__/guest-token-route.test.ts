@@ -47,7 +47,7 @@ const { POST } = await import("../src/app/api/guest/token/route")
 const body = {
   workspaceId: "11701868563365888",
   webchatId: "42",
-  guestConversationId: "123:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+  guestConversationId: "11701868563365888:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
   accessToken: "ours.old-sig",
   parentOrigin: "shop.example",
 }
@@ -96,6 +96,17 @@ describe("POST /api/guest/token (s210)", () => {
     ["a missing token", { ...body, accessToken: undefined }],
     ["an oversized token", { ...body, accessToken: "x".repeat(3000) }],
     ["a bad guest id", { ...body, guestConversationId: "guest" }],
+    [
+      "a legacy digits-only guest id (s213)",
+      { ...body, guestConversationId: "11616773281153025" },
+    ],
+    [
+      "another workspace's guest id (s213)",
+      {
+        ...body,
+        guestConversationId: "9:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+      },
+    ],
   ])("%s is a 400", async (_, payload) => {
     const res = await POST(post(payload))
     expect(res.status).toBe(400)
@@ -122,7 +133,14 @@ describe("POST /api/guest/token (s210)", () => {
     for (const payload of [
       { ...body, accessToken: "forged.sig" },
       { ...body, webchatId: "43" },
-      { ...body, workspaceId: "11701868563365889" },
+      // The guest id moves with the workspace, so the parse passes and the
+      // token (signed for the other workspace) is what refuses it.
+      {
+        ...body,
+        workspaceId: "11701868563365889",
+        guestConversationId:
+          "11701868563365889:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+      },
     ]) {
       const res = await POST(post(payload))
       expect(res.status).toBe(403)
@@ -135,7 +153,8 @@ describe("POST /api/guest/token (s210)", () => {
     await POST(
       post({
         ...body,
-        guestConversationId: "9:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+        guestConversationId:
+          "11701868563365888:9f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
       }),
     )
     expect(mocks.rateLimit).toHaveBeenLastCalledWith(

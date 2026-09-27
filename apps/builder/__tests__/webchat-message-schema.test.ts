@@ -22,12 +22,20 @@ describe("createWebchatMessageRequest — guestConversationId", () => {
     expect(result.success).toBe(true)
   })
 
-  test("still accepts a legacy digits-only Snowflake id, which returning visitors carry in localStorage", () => {
+  test("refuses a legacy digits-only Snowflake id: it is sequential, guessable, and the conversation's only credential (s213)", () => {
     const result = createWebchatMessageRequest.safeParse(
       baseInput("11616773281153025"),
     )
 
-    expect(result.success).toBe(true)
+    expect(result.success).toBe(false)
+  })
+
+  test("refuses a minted id from another workspace (s213)", () => {
+    const result = createWebchatMessageRequest.safeParse(
+      baseInput(createGuestConversationId("99")),
+    )
+
+    expect(result.success).toBe(false)
   })
 
   test("rejects an arbitrary string — the id is the only proof a caller owns the guest session, so the format stays tight", () => {
@@ -56,5 +64,19 @@ describe("listGuestMessagesRequest — guestConversationId", () => {
     })
 
     expect(result.success).toBe(true)
+  })
+
+  test("refuses a legacy digits-only id and another workspace's id (s213)", () => {
+    for (const guestConversationId of [
+      "11616773281153025",
+      createGuestConversationId("99"),
+    ]) {
+      const result = listGuestMessagesRequest.safeParse({
+        workspaceId: WORKSPACE_ID,
+        webchatId: WEBCHAT_ID,
+        guestConversationId,
+      })
+      expect(result.success).toBe(false)
+    }
   })
 })

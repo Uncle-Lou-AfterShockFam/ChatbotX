@@ -49,7 +49,7 @@ vi.mock("@/lib/errors/server-handler", () => ({
 const { GET, POST, OPTIONS } = await import(
   "../src/app/api/guest/messages/route"
 )
-const GUEST = "123:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f"
+const GUEST = "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f"
 
 const query = new URLSearchParams({
   workspaceId: "1",
@@ -120,6 +120,43 @@ describe("guest messages route: hub origin only, no CORS (s210)", () => {
   test("POST from the iframe for an off-allowlist parent is still 403", async () => {
     const res = await POST(post(`https://${HUB}`, "evil.example"))
     expect(res.status).toBe(403)
+  })
+
+  test.each([
+    ["a legacy digits-only id", "11616773281153025"],
+    ["another workspace's minted id", "9:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f"],
+  ])("GET with %s is refused before any token check or lookup (s213)", async (_, id) => {
+    const params = new URLSearchParams(query)
+    params.set("guestConversationId", id)
+    const res = await GET(
+      new NextRequest(`https://${HUB}/api/guest/messages?${params}`),
+    )
+    expect(res.status).not.toBe(200)
+    expect(mocks.verify).not.toHaveBeenCalled()
+    expect(mocks.findLatestBySource).not.toHaveBeenCalled()
+  })
+
+  test("POST with a legacy digits-only id creates nothing (s213)", async () => {
+    const res = await POST(
+      new NextRequest(`https://${HUB}/api/guest/messages`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: `https://${HUB}`,
+        },
+        body: JSON.stringify({
+          workspaceId: "1",
+          webchatId: "2",
+          guestConversationId: "11616773281153025",
+          accessToken: "token",
+          parentOrigin: "shop.example",
+          text: "hello",
+        }),
+      }),
+    )
+    expect(res.status).not.toBe(200)
+    expect(mocks.verify).not.toHaveBeenCalled()
+    expect(mocks.handleCreate).not.toHaveBeenCalled()
   })
 
   test("OPTIONS grants no cross-origin access", () => {

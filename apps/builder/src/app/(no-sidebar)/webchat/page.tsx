@@ -45,7 +45,6 @@ export default async function WebchatPage(props: WebchatPageProps) {
       ref: z.string().optional(),
       domain: z.string().optional(),
       parentOrigin: z.string().optional(),
-      guestConversationId: z.string().optional(),
       accessToken: z.string().optional(),
     })
     .safeParse(searchParams)
@@ -102,13 +101,12 @@ export default async function WebchatPage(props: WebchatPageProps) {
     )
   }
 
-  // The access token is session-scoped (workspace/webchat/origin/exp) and
-  // not bound to a guestConversationId — see webchat-access-token.ts. So a
-  // returning visitor's persisted id is trusted as-is whenever the client
-  // presents one; only a brand-new visitor gets a freshly minted id.
-  const guestConversationId =
-    data.guestConversationId ??
-    createGuestConversationId(targetWebchat.workspaceId)
+  // Always minted here, never taken from the URL (s213): a `?guestConversationId=`
+  // would let a crafted link plant an id its author knows. A returning
+  // visitor's own id comes from the iframe's storage (initGuestSession).
+  const guestConversationId = createGuestConversationId(
+    targetWebchat.workspaceId,
+  )
 
   const accessToken = await createWebchatAccessToken({
     origin: embeddingOrigin,

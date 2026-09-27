@@ -15,8 +15,7 @@ import {
 import { createGuestSessionStore } from "@/features/integration-webchat/providers/store/guest-sesssion-store"
 import {
   buildGuestStorageKey,
-  GUEST_CONVERSATION_ID_KEY,
-  readLegacyGuestId,
+  LEGACY_GLOBAL_KEY,
   safeStorageGet,
   safeStorageSet,
 } from "@/features/integration-webchat/providers/store/lib/guest-session"
@@ -39,6 +38,9 @@ const createLocalStorageMock = (initial: Record<string, string> = {}) => {
     getItem: vi.fn((key: string) => items.get(key) ?? null),
     setItem: vi.fn((key: string, value: string) => {
       items.set(key, value)
+    }),
+    removeItem: vi.fn((key: string) => {
+      items.delete(key)
     }),
     items,
   }
@@ -96,15 +98,6 @@ describe("webchat guest session helpers", () => {
 
     expect(safeStorageGet("blocked-storage-key")).toBe("guest-1")
   })
-
-  test("reads the legacy global guest conversation id", () => {
-    vi.stubGlobal(
-      "localStorage",
-      createLocalStorageMock({ [GUEST_CONVERSATION_ID_KEY]: "legacy-guest" }),
-    )
-
-    expect(readLegacyGuestId()).toBe("legacy-guest")
-  })
 })
 
 describe("webchat guest session store", () => {
@@ -130,39 +123,64 @@ describe("webchat guest session store", () => {
     )
   })
 
-  test("reuses an existing scoped session without marking it new", () => {
-    const scopedKey = buildGuestStorageKey("workspace-1", "webchat-1")
+  // s213: only the minted `<workspaceId>:<uuid>` form for THIS workspace is
+  // kept; the legacy digits-only global id is deleted and never adopted.
+  const WS = "7"
+  const MINTED = `${WS}:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f`
+  const SERVER = `${WS}:1f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f`
+
+  test("reuses an existing minted scoped session without marking it new", () => {
+    const scopedKey = buildGuestStorageKey(WS, "webchat-1")
     vi.stubGlobal(
       "localStorage",
-      createLocalStorageMock({ [scopedKey]: "workspace-1:existing-guest" }),
+      createLocalStorageMock({ [scopedKey]: MINTED }),
     )
 
-    const store = createGuestSessionStore(createWebchatConfig())
-
-    store.getState().initGuestSession("workspace-1:server-guest")
+    const store = createGuestSessionStore(
+      createWebchatConfig({ workspaceId: WS }),
+    )
+    store.getState().initGuestSession(SERVER)
 
     const state = store.getState()
-    expect(state.guestConversationId).toBe("workspace-1:existing-guest")
+    expect(state.guestConversationId).toBe(MINTED)
     expect(state.isNewGuestSession).toBe(false)
   })
 
-  test("migrates a legacy global session without marking it new", () => {
+  test.each([
+    ["a legacy digits-only id", "11616773281153025"],
+    ["another workspace's minted id", "9:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f"],
+    ["a non-uuid suffix", `${WS}:existing-guest`],
+    ["an empty string", ""],
+  ])("replaces a stored %s with the server-minted id", (_, stored) => {
+    const scopedKey = buildGuestStorageKey(WS, "webchat-1")
+    const localStorageMock = createLocalStorageMock({ [scopedKey]: stored })
+    vi.stubGlobal("localStorage", localStorageMock)
+
+    const store = createGuestSessionStore(
+      createWebchatConfig({ workspaceId: WS }),
+    )
+    store.getState().initGuestSession(SERVER)
+
+    const state = store.getState()
+    expect(state.guestConversationId).toBe(SERVER)
+    expect(state.isNewGuestSession).toBe(true)
+    expect(localStorageMock.items.get(scopedKey)).toBe(SERVER)
+  })
+
+  test("deletes the legacy global key and never adopts its id", () => {
     const localStorageMock = createLocalStorageMock({
-      [GUEST_CONVERSATION_ID_KEY]: "workspace-1:legacy-guest",
+      [LEGACY_GLOBAL_KEY]: "11616773281153025",
     })
     vi.stubGlobal("localStorage", localStorageMock)
 
-    const store = createGuestSessionStore(createWebchatConfig())
-
-    store.getState().initGuestSession("workspace-1:server-guest")
-
-    const scopedKey = buildGuestStorageKey("workspace-1", "webchat-1")
-    const state = store.getState()
-    expect(state.guestConversationId).toBe("workspace-1:legacy-guest")
-    expect(state.isNewGuestSession).toBe(false)
-    expect(localStorageMock.items.get(scopedKey)).toBe(
-      "workspace-1:legacy-guest",
+    const store = createGuestSessionStore(
+      createWebchatConfig({ workspaceId: WS }),
     )
+    store.getState().initGuestSession(SERVER)
+
+    expect(store.getState().guestConversationId).toBe(SERVER)
+    expect(store.getState().isNewGuestSession).toBe(true)
+    expect(localStorageMock.items.has(LEGACY_GLOBAL_KEY)).toBe(false)
   })
 
   test("keeps guest sessions isolated across webchat ids", () => {

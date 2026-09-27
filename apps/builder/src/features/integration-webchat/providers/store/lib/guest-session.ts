@@ -24,4 +24,11 @@ export const safeStorageSet = (key: string, value: string) => {
   }
 }
 
-export const readLegacyGuestId = () => safeStorageGet(LEGACY_GLOBAL_KEY)
+export const safeStorageRemove = (key: string) => {
+  memoryStorage.delete(key)
+  try {
+    globalThis.localStorage?.removeItem(key)
+  } catch {
+    // Storage blocked: the in-memory copy above is all there was.
+  }
+}

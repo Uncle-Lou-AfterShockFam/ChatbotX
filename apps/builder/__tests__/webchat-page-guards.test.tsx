@@ -140,6 +140,22 @@ describe("WebchatPage", () => {
     )
   })
 
+  test("ignores a ?guestConversationId= in the URL and mints a fresh id (fixation, s213)", async () => {
+    setReferer(null)
+
+    const element = await WebchatPage({
+      searchParams: Promise.resolve({
+        ...searchParams,
+        guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+      }),
+    })
+
+    expect(
+      (element as { props: { serverGuestConversationId: string } }).props
+        .serverGuestConversationId,
+    ).toBe("workspace-1:guest-1")
+  })
+
   test("renders the chat for a first-party referer matching the app host", async () => {
     setReferer("https://app.chatbotx.io/some/path")
 

@@ -2,7 +2,10 @@ import { zodBigintAsString } from "@chatbotx.io/utils"
 import { z } from "zod"
 import { attachmentResource } from "@/features/attachments/schema/resource"
 import { contactResource } from "@/features/contacts/schema/resource"
-import { zodGuestConversationId } from "@/features/integration-webchat/lib/guest-conversation-id"
+import {
+  refineGuestIdWorkspace,
+  zodGuestConversationId,
+} from "@/features/integration-webchat/lib/guest-conversation-id"
 import { userResource } from "@/features/users/schema/resource"
 import { messageResource } from "./resource"
 
@@ -38,13 +41,15 @@ export const findMessageRequest = z.object({
 })
 export type FindMessageRequest = z.infer<typeof findMessageRequest>
 
-export const listGuestMessagesRequest = z.object({
-  workspaceId: zodBigintAsString(),
-  webchatId: zodBigintAsString(),
-  perPage: z.coerce.number().optional().default(20),
-  cursor: z.string().optional(),
-  guestConversationId: zodGuestConversationId(),
-  accessToken: z.string().optional(),
-  parentOrigin: z.string().optional(),
-})
+export const listGuestMessagesRequest = z
+  .object({
+    workspaceId: zodBigintAsString(),
+    webchatId: zodBigintAsString(),
+    perPage: z.coerce.number().optional().default(20),
+    cursor: z.string().optional(),
+    guestConversationId: zodGuestConversationId(),
+    accessToken: z.string().optional(),
+    parentOrigin: z.string().optional(),
+  })
+  .superRefine(refineGuestIdWorkspace)
 export type ListGuestMessagesRequest = z.infer<typeof listGuestMessagesRequest>
