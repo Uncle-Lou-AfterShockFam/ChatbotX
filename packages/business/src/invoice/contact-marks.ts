@@ -1,3 +1,6 @@
+import { db, eq } from "@chatbotx.io/database/client"
+import { invoicePdfUrl } from "@chatbotx.io/database/partials"
+import { invoiceModel } from "@chatbotx.io/database/schema"
 import type { InvoiceModel } from "@chatbotx.io/database/types"
 import { customFieldResolutionKey } from "@chatbotx.io/utils/custom-field"
 import { contactCustomFieldService } from "../contact-custom-field/service"
@@ -6,7 +9,11 @@ import { tagService } from "../tag/service"
 
 /**
  * What an invoice writes onto its contact so a flow can branch or WAIT on it:
- * - `invoice_link` / `invoice_last_id`: the latest invoice (written at create)
+ * - `invoice_link` / `invoice_last_id`: the latest invoice (written when it
+ *   opens, whichever path created it: flow step, Invoices page or /v1)
+ * - `invoice_pdf_link`: its PDF (hub `/pay/<t>/pdf` for stripeCheckout, which
+ *   serves the receipt once paid; Stripe's PDF for stripeInvoice; "" when the
+ *   method has none, e.g. woocommerce)
  * - `invoice_last_status`: its latest status (`open`, `paid`, `payment_failed`, ...)
  * - `invoice_paid_id`: the id of the invoice that was just PAID. A flow waits
  *   per invoice with `customFieldChanged` on it and matchValue
@@ -15,6 +22,7 @@ import { tagService } from "../tag/service"
  *   must still wake a tagApplied wait).
  */
 export const INVOICE_LINK_FIELD = "invoice_link"
+export const INVOICE_PDF_LINK_FIELD = "invoice_pdf_link"
 export const INVOICE_LAST_ID_FIELD = "invoice_last_id"
 export const INVOICE_LAST_STATUS_FIELD = "invoice_last_status"
 export const INVOICE_PAID_ID_FIELD = "invoice_paid_id"
@@ -25,7 +33,7 @@ async function setFields(props: {
   contactId: string
   contactInboxId?: string
   values: Record<string, string>
-}): Promise<void> {
+}): Promise<Map<string, string>> {
   const fields = Object.keys(props.values).map((name) => ({
     name,
     type: "shortText" as const,
@@ -34,33 +42,75 @@ async function setFields(props: {
     workspaceId: props.workspaceId,
     fields,
   })
+  /** field name -> custom field id, for a read-back. */
+  const ids = new Map<string, string>()
   for (const field of fields) {
+    const id = idMap.get(customFieldResolutionKey(field))
+    if (id) {
+      ids.set(field.name, id)
+    }
     await contactCustomFieldService.setValueByKey({
       workspaceId: props.workspaceId,
       contactId: props.contactId,
-      keyword: idMap.get(customFieldResolutionKey(field)) ?? field.name,
+      keyword: id ?? field.name,
       value: props.values[field.name] as string,
       contactInboxId: props.contactInboxId,
     })
   }
+  return ids
 }
 
-/** The create-time write: which invoice is the contact's latest, and its link. */
+/**
+ * The create-time write: which invoice is the contact's latest, and its link.
+ * A webhook may move the row (open -> paid) and mark the contact while this
+ * write is in flight with the older status (s212b review), so the row is
+ * re-read AFTER the write and a moved status is written again: the webhook
+ * marks only after its status CAS, so the re-read sees any status it wrote.
+ * Only while the contact still names THIS invoice: a newer invoice's marks
+ * must never carry an older invoice's status. Known gap: `payment_failed` is
+ * not a row status, so a later mark of the same invoice writes `open` over it
+ * (as the flow step's re-mark of a reused invoice always did).
+ */
 export async function markInvoiceCreated(props: {
   invoice: InvoiceModel
   contactInboxId?: string
 }): Promise<void> {
   const { invoice } = props
-  await setFields({
+  const base = {
     workspaceId: invoice.workspaceId,
     contactId: invoice.contactId,
     contactInboxId: props.contactInboxId,
+  }
+  const ids = await setFields({
+    ...base,
     values: {
       [INVOICE_LINK_FIELD]: invoice.hostedUrl ?? "",
+      [INVOICE_PDF_LINK_FIELD]: invoicePdfUrl(invoice) ?? "",
       [INVOICE_LAST_ID_FIELD]: invoice.id,
       [INVOICE_LAST_STATUS_FIELD]: invoice.status,
     },
   })
+  const [current] = await db
+    .select({ status: invoiceModel.status })
+    .from(invoiceModel)
+    .where(eq(invoiceModel.id, invoice.id))
+    .limit(1)
+  if (!current || current.status === invoice.status) {
+    return
+  }
+  const lastIdField = ids.get(INVOICE_LAST_ID_FIELD)
+  const lastId = lastIdField
+    ? await contactCustomFieldService.findValue({
+        contactId: invoice.contactId,
+        customFieldId: lastIdField,
+      })
+    : null
+  if (lastId === invoice.id) {
+    await setFields({
+      ...base,
+      values: { [INVOICE_LAST_STATUS_FIELD]: current.status },
+    })
+  }
 }
 
 /** A provider status change (webhook): status field, and on paid the id + tag. */

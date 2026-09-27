@@ -38,6 +38,7 @@ const m = vi.hoisted(() => ({
   finalize: vi.fn(),
   retrieve: vi.fn(),
   marks: vi.fn(),
+  markCreated: vi.fn(),
   emitPaid: vi.fn(),
 }))
 
@@ -100,7 +101,7 @@ vi.mock("../../src/integration-stripe/client", async (importOriginal) => {
 })
 vi.mock("../../src/invoice/contact-marks", () => ({
   markInvoiceOnContact: (...a: unknown[]) => m.marks(...a),
-  markInvoiceCreated: vi.fn(),
+  markInvoiceCreated: (...a: unknown[]) => m.markCreated(...a),
 }))
 vi.mock("@chatbotx.io/events", () => ({
   emitInvoiceCreated: vi.fn(async () => undefined),
@@ -200,6 +201,7 @@ beforeEach(() => {
     status: "open",
   }))
   m.marks.mockResolvedValue(undefined)
+  m.markCreated.mockResolvedValue(undefined)
   m.emitPaid.mockResolvedValue(undefined)
 })
 
@@ -365,6 +367,32 @@ describe.skipIf(!databaseUrl)("invoiceService.create under concurrency", () => {
     )
     expect(again.id).not.toBe(first.id)
     expect(await countRows("Invoice", workspaceId)).toBe(3)
+  })
+
+  test("s212b: a UI/API create (no inbox) marks the contact ONCE with the opened row; 5 concurrent same-key creates still mark once", async () => {
+    const { workspaceId, contactId } = await seedWorkspace()
+    const invoice = await invoiceService.create(
+      createInput(workspaceId, contactId, { sourceKey: "ui:rdb-marks" }),
+    )
+    expect(m.markCreated).toHaveBeenCalledTimes(1)
+    expect(m.markCreated).toHaveBeenCalledWith({
+      invoice: expect.objectContaining({
+        id: invoice.id,
+        status: "open",
+        hostedUrl: `https://invoice.stripe.com/i/${invoice.id}`,
+      }),
+      contactInboxId: undefined,
+    })
+    m.markCreated.mockClear()
+    await Promise.all(
+      Array.from({ length: 5 }, () =>
+        invoiceService.create(
+          createInput(workspaceId, contactId, { sourceKey: "ui:rdb-race" }),
+        ),
+      ),
+    )
+    expect(await countRows("Invoice", workspaceId)).toBe(2)
+    expect(m.markCreated).toHaveBeenCalledTimes(1)
   })
 
   test("a reused sourceKey with different content is refused and writes nothing", async () => {

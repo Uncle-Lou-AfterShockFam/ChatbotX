@@ -108,18 +108,21 @@ describe("createInvoice step", () => {
       stepId: "s1",
       contactId: "22",
     })
-    expect(m.create).toHaveBeenCalledWith({
-      workspaceId: "11",
-      contactId: "22",
-      currency: "USD",
-      lines: [
-        { description: "Order for Lou", quantity: 2, unitAmount: "12.50" },
-      ],
-      dueDays: 7,
-      method: "default",
-      sourceKey: invoiceSourceKey(prefix, "run-1"),
-      reuseRecent: { sourcePrefix: prefix, withinMs: FLOW_INVOICE_REUSE_MS },
-    })
+    expect(m.create).toHaveBeenCalledWith(
+      {
+        workspaceId: "11",
+        contactId: "22",
+        currency: "USD",
+        lines: [
+          { description: "Order for Lou", quantity: 2, unitAmount: "12.50" },
+        ],
+        dueDays: 7,
+        method: "default",
+        sourceKey: invoiceSourceKey(prefix, "run-1"),
+        reuseRecent: { sourcePrefix: prefix, withinMs: FLOW_INVOICE_REUSE_MS },
+      },
+      { contactInboxId: "ci-1" },
+    )
     expect(m.markCreated).toHaveBeenCalledWith({
       invoice,
       contactInboxId: "ci-1",
@@ -197,6 +200,33 @@ describe("createInvoice step", () => {
       props({ step: { ...step, method: "woocommerce", integrationId: "" } }),
     )
     expect(m.create.mock.calls[1]?.[0]).not.toHaveProperty("integrationId")
+  })
+
+  test("the result carries the PDF link: the hub /pay/<t>/pdf for stripeCheckout, null for woocommerce (s212b)", async () => {
+    m.create.mockResolvedValueOnce({
+      ...invoice,
+      method: "stripeCheckout",
+      hostedUrl: "https://hub.example/pay/tok",
+      pdfUrl: null,
+    })
+    const checkout = await handleCreateInvoice(props())
+    expect(checkout).toMatchObject({
+      status: "success",
+      result: { pdfUrl: "https://hub.example/pay/tok/pdf" },
+    })
+    m.create.mockResolvedValueOnce({
+      ...invoice,
+      method: "woocommerce",
+      pdfUrl: null,
+    })
+    const woo = await handleCreateInvoice(props())
+    expect(woo).toMatchObject({ status: "success", result: { pdfUrl: null } })
+  })
+
+  test("a failed strict re-mark takes the error branch: a later wait must never read a stale invoice_last_id (s212b)", async () => {
+    m.markCreated.mockRejectedValueOnce(new Error("db down"))
+    const result = await handleCreateInvoice(props())
+    expect(result.status).toBe("error")
   })
 
   test("a stale site id on a Stripe step never reaches the service", async () => {

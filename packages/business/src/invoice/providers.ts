@@ -208,7 +208,12 @@ const stripeInvoiceProvider: InvoiceProvider = {
             integrationId: credentials.integrationId,
             hostedUrl: result.hostedUrl,
             pdfUrl: result.pdfUrl,
-            dueAt: result.dueAt ?? invoice.dueAt,
+            // Auto-charge (no-email customer): Stripe has no due date and
+            // enforces none, so the hub shows none either (owner s212b).
+            dueAt:
+              result.collectionMethod === "charge_automatically"
+                ? null
+                : (result.dueAt ?? invoice.dueAt),
             paidAt: status === "paid" ? new Date() : null,
             voidedAt: status === "void" ? new Date() : null,
           },

@@ -111,6 +111,7 @@ const openInvoice = {
   hosted_invoice_url: "https://invoice.stripe.com/i/x",
   invoice_pdf: null,
   due_date: null,
+  collection_method: "send_invoice",
 }
 
 const RETRIEVE_CUSTOMER_ERROR = /^Stripe retrieve customer:/
@@ -163,6 +164,10 @@ describe("finalizeWithStripe collection choice", () => {
 
   test("a customer WITHOUT an email: charge_automatically, no days_until_due, its own key, never auto-advanced", async () => {
     m.stripe.customers.retrieve.mockResolvedValue({ id: CUSTOMER, email: null })
+    m.stripe.invoices.finalizeInvoice.mockResolvedValue({
+      ...openInvoice,
+      collection_method: "charge_automatically",
+    })
     const result = await finalizeWithStripe({
       credentials: CREDENTIALS,
       invoice: invoice(),
@@ -184,7 +189,22 @@ describe("finalizeWithStripe collection choice", () => {
       status: "open",
       hostedUrl: openInvoice.hosted_invoice_url,
       dueAt: null,
+      collectionMethod: "charge_automatically",
     })
+  })
+
+  test("the collection method is read back from Stripe's invoice, also on a resume (s212b: auto-charge stores no due date)", async () => {
+    m.stripe.invoices.retrieve.mockResolvedValue({
+      ...openInvoice,
+      collection_method: "charge_automatically",
+    })
+    const resumed = await finalizeWithStripe({
+      credentials: CREDENTIALS,
+      invoice: invoice({ providerInvoiceId: "in_1" }),
+      lines: LINES,
+    })
+    expect(m.stripe.invoices.create).not.toHaveBeenCalled()
+    expect(resumed.collectionMethod).toBe("charge_automatically")
   })
 
   test("an empty-string email counts as no email", async () => {

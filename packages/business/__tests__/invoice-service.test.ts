@@ -132,6 +132,9 @@ const m = vi.hoisted(() => {
     wooOrder: vi.fn(),
     audit: vi.fn(),
     loggerWarn: vi.fn(),
+    markCreated: vi.fn(),
+    /** The order marks vs invoiceCreated ran in. */
+    order: [] as string[],
   }
 })
 
@@ -173,9 +176,18 @@ vi.mock("../src/invoice/woocommerce-provider", async (importOriginal) => ({
   createWooCommerceOrder: (...a: unknown[]) => m.wooOrder(...a),
 }))
 vi.mock("@chatbotx.io/events", () => ({
-  emitInvoiceCreated: (...a: unknown[]) => m.emitCreated(...a),
+  emitInvoiceCreated: (...a: unknown[]) => {
+    m.order.push("emit")
+    return m.emitCreated(...a)
+  },
   emitInvoicePaid: vi.fn(),
   emitInvoicePaymentFailed: vi.fn(),
+}))
+vi.mock("../src/invoice/contact-marks", () => ({
+  markInvoiceCreated: (...a: unknown[]) => {
+    m.order.push("marks")
+    return m.markCreated(...a)
+  },
 }))
 vi.mock("../src/audit/dispatcher", () => ({
   dispatchAuditRecord: (...a: unknown[]) => m.audit(...a),
@@ -214,6 +226,7 @@ const FINALIZED = {
   pdfUrl: "https://pay.stripe.com/invoice/x/pdf",
   dueAt: new Date("2026-10-10T00:00:00Z"),
   status: "open" as const,
+  collectionMethod: "send_invoice" as const,
 }
 
 const PREPARED = {
@@ -297,6 +310,8 @@ beforeEach(() => {
   m.finalize.mockResolvedValue(FINALIZED)
   m.voidStripe.mockResolvedValue(undefined)
   m.emitCreated.mockResolvedValue(undefined)
+  m.markCreated.mockResolvedValue(undefined)
+  m.order.length = 0
   m.prepareCheckout.mockResolvedValue(PREPARED)
   m.assertCheckoutNotPaid.mockResolvedValue(undefined)
   m.expireAfterVoid.mockResolvedValue(undefined)
@@ -594,6 +609,106 @@ describe("invoiceService.create: the write", () => {
     const invoice = await invoiceService.create(validInput())
     expect(invoice.status).toBe("open")
     expect(m.loggerWarn).toHaveBeenCalled()
+  })
+})
+
+describe("contact marks at open, every create path (s212b)", () => {
+  test("create writes the marks once on draft->open, BEFORE invoiceCreated, with the caller's inbox", async () => {
+    await invoiceService.create(validInput(), { contactInboxId: "ci-7" })
+    expect(m.markCreated).toHaveBeenCalledTimes(1)
+    expect(m.markCreated).toHaveBeenCalledWith({
+      invoice: expect.objectContaining({ id: "1001", status: "open" }),
+      contactInboxId: "ci-7",
+    })
+    expect(m.order).toEqual(["marks", "emit"])
+  })
+
+  test("a UI/API create (no inbox) still writes the marks", async () => {
+    await invoiceService.create(validInput())
+    expect(m.markCreated).toHaveBeenCalledWith({
+      invoice: expect.objectContaining({ id: "1001" }),
+      contactInboxId: undefined,
+    })
+  })
+
+  test("a finalize retry of a draft writes the marks", async () => {
+    m.state.stored = storedInvoice("draft")
+    await invoiceService.finalize({ workspaceId: WS, id: "9" })
+    expect(m.markCreated).toHaveBeenCalledTimes(1)
+    expect(m.markCreated.mock.calls[0]?.[0]).toMatchObject({
+      invoice: { id: "9", status: "open" },
+    })
+  })
+
+  test("a marks failure is logged; the open invoice still returns and invoiceCreated still fires", async () => {
+    m.markCreated.mockRejectedValue(new Error("db down"))
+    const invoice = await invoiceService.create(validInput())
+    expect(invoice.status).toBe("open")
+    expect(m.emitCreated).toHaveBeenCalledTimes(1)
+    expect(m.loggerWarn).toHaveBeenCalledWith(
+      expect.objectContaining({ invoiceId: "1001" }),
+      "invoice: contact marks at open failed",
+    )
+  })
+
+  test("paid at open is marked (status paid) but emits no invoiceCreated", async () => {
+    m.finalize.mockResolvedValue({ ...FINALIZED, status: "paid" })
+    await invoiceService.create(validInput())
+    expect(m.markCreated.mock.calls[0]?.[0]).toMatchObject({
+      invoice: { status: "paid" },
+    })
+    expect(m.emitCreated).not.toHaveBeenCalled()
+  })
+
+  test("no marks: a lost CAS, a non-draft finalize, an open sourceKey replay, void at open", async () => {
+    m.state.stored = storedInvoice("draft")
+    m.state.updateMatches = false
+    await invoiceService.finalize({ workspaceId: WS, id: "9" })
+    m.state.updateMatches = true
+    m.state.stored = storedInvoice("open")
+    await invoiceService.finalize({ workspaceId: WS, id: "9" })
+    m.state.bySourceKey = storedInvoice("open", {
+      sourceKey: "api:k1",
+      requestHash: VALID_INPUT_HASH(),
+    })
+    await invoiceService.create(validInput({ sourceKey: "api:k1" }))
+    m.state.bySourceKey = null
+    m.state.stored = storedInvoice("draft")
+    m.finalize.mockResolvedValue({ ...FINALIZED, status: "void" })
+    await invoiceService.finalize({ workspaceId: WS, id: "9" })
+    expect(m.markCreated).not.toHaveBeenCalled()
+  })
+})
+
+describe("auto-charge dueAt (owner s212b)", () => {
+  test("a charge_automatically invoice stores no due date: Stripe has none and enforces none", async () => {
+    m.finalize.mockResolvedValue({
+      ...FINALIZED,
+      dueAt: null,
+      collectionMethod: "charge_automatically",
+    })
+    const invoice = await invoiceService.create(validInput())
+    expect(invoice.dueAt).toBeNull()
+    expect(m.state.updates.at(-1)).toHaveProperty("dueAt", null)
+  })
+
+  test("charge_automatically wins even if Stripe returned a date", async () => {
+    m.finalize.mockResolvedValue({
+      ...FINALIZED,
+      collectionMethod: "charge_automatically",
+    })
+    const invoice = await invoiceService.create(validInput())
+    expect(invoice.dueAt).toBeNull()
+  })
+
+  test("send_invoice keeps Stripe's due date, or the hub's when Stripe gave none", async () => {
+    const stripeDated = await invoiceService.create(validInput())
+    expect(stripeDated.dueAt).toEqual(FINALIZED.dueAt)
+    m.finalize.mockResolvedValue({ ...FINALIZED, dueAt: null })
+    m.state.limitResults = [[{ id: CONTACT, companyId: "31" }]]
+    const hubDated = await invoiceService.create(validInput())
+    expect(hubDated.dueAt).toBeInstanceOf(Date)
+    expect(hubDated.dueAt).toEqual(m.state.inserts.at(-1)?.dueAt)
   })
 })
 

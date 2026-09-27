@@ -7451,7 +7451,7 @@
       "refunded": "Refunded"
     },
     "step": {
-      "hint": "Bills the contact through the workspace's Stripe. On success the pay link is saved in the contact field invoice_link and the invoice id in invoice_last_id. To wait for payment, add a Wait step on the event Custom field changed for invoice_paid_id, with the value set to the raw invoice_last_id variable.",
+      "hint": "Bills the contact through the workspace's Stripe. On success the pay link is saved in the contact field invoice_link, its PDF (the receipt once paid) in invoice_pdf_link, and the invoice id in invoice_last_id. To wait for payment, add a Wait step on the event Custom field changed for invoice_paid_id, with the value set to the raw invoice_last_id variable.",
       "dueInDaysHint": "Days until the invoice is due (Stripe shows at least 1).",
       "memoPlaceholder": "Thanks for your order",
       "summary": "{count, plural, one {# line} other {# lines}}: {description} ({currency})",
