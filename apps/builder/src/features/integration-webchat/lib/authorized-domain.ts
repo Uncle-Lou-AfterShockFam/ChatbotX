@@ -73,10 +73,11 @@ export const isFirstPartyOrigin = (
 }
 
 /**
- * The embed gate for guest calls, layered on the token check. It mirrors the
- * `/webchat` page (owner s210): a first-party origin always passes, an empty
- * allowlist adds no restriction (the token binds the origin), and otherwise
- * the presented origin must match the allowlist.
+ * The embed gate for guest calls, layered on the token check (owner s210): a
+ * first-party origin always passes, and otherwise a non-empty allowlist must
+ * match. An empty allowlist adds nothing here because the token binds the
+ * origin and the `/webchat` page only mints one for a first-party open when
+ * the list is empty.
  */
 export const isGuestOriginAllowed = (
   origin: string | null | undefined,

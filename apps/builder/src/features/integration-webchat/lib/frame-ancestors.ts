@@ -17,13 +17,15 @@ const WEBCHAT_PATH = /^\/webchat\/?$/
 const ID = /^\d{1,19}$/
 const HOST_LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
 const HOST = new RegExp(`^(?:${HOST_LABEL}\\.)*${HOST_LABEL}$`)
-const MAX_DOMAINS = 100
+// Bounds the header (4 sources each): upstream proxies 502 on huge headers.
+const MAX_DOMAINS = 50
 
 /**
  * The allowlist as CSP sources. It matches like `isOriginAuthorized`: the host
- * and its subdomains, on http or https. Anything that is not a plain host
- * (spaces, `;`, quotes, `*`) is dropped, so a stored value can never inject a
- * directive.
+ * and its subdomains, on http or https, on any port (a source without a port
+ * matches only the scheme's default one; the Referer gate ignores ports).
+ * Anything that is not a plain host (spaces, `;`, quotes, `*`) is dropped, so
+ * a stored value can never inject a directive.
  */
 export const webchatAncestorSources = (domains: unknown): string[] => {
   if (!Array.isArray(domains)) {
@@ -37,10 +39,10 @@ export const webchatAncestorSources = (domains: unknown): string[] => {
     }
   }
   return [...hosts].flatMap((host) => [
-    `https://${host}`,
-    `https://*.${host}`,
-    `http://${host}`,
-    `http://*.${host}`,
+    `https://${host}:*`,
+    `https://*.${host}:*`,
+    `http://${host}:*`,
+    `http://*.${host}:*`,
   ])
 }
 

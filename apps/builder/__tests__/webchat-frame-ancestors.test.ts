@@ -47,14 +47,14 @@ describe("webchatFrameAncestors", () => {
     expect(load).not.toHaveBeenCalled()
   })
 
-  test("an allowlist becomes host + subdomain sources on both schemes", async () => {
+  test("an allowlist becomes host + subdomain sources on both schemes and any port", async () => {
     const { store, puts } = cache()
     const csp = await webchatFrameAncestors("/webchat", params(), {
       cache: store,
       load: async () => ["Shop.Example.com", "https://blog.example.org:8443/x"],
     })
     expect(csp).toBe(
-      `${SELF_ONLY} https://shop.example.com https://*.shop.example.com http://shop.example.com http://*.shop.example.com https://blog.example.org https://*.blog.example.org http://blog.example.org http://*.blog.example.org`,
+      `${SELF_ONLY} https://shop.example.com:* https://*.shop.example.com:* http://shop.example.com:* http://*.shop.example.com:* https://blog.example.org:* https://*.blog.example.org:* http://blog.example.org:* http://*.blog.example.org:*`,
     )
     expect(puts).toHaveLength(1)
     expect(puts[0]?.[2]).toBe(60)
@@ -97,7 +97,7 @@ describe("webchatFrameAncestors", () => {
     const load = vi.fn(async () => ["b.example"])
     expect(
       await webchatFrameAncestors("/webchat", params(), { cache: store, load }),
-    ).toContain("https://a.example ")
+    ).toContain("https://a.example:* ")
     expect(load).not.toHaveBeenCalled()
 
     const broken: FrameAncestorsCache = {
@@ -109,7 +109,7 @@ describe("webchatFrameAncestors", () => {
         cache: broken,
         load,
       }),
-    ).toContain("https://b.example ")
+    ).toContain("https://b.example:* ")
   })
 
   test("a poisoned cache or stored value can never inject a directive", async () => {
@@ -141,7 +141,7 @@ describe("webchatAncestorSources", () => {
     expect(webchatAncestorSources("a.example")).toEqual([])
     expect(webchatAncestorSources(["a.example", "A.EXAMPLE."])).toHaveLength(4)
     const many = Array.from({ length: 500 }, (_, i) => `h${i}.example`)
-    expect(webchatAncestorSources(many)).toHaveLength(400)
+    expect(webchatAncestorSources(many)).toHaveLength(200)
   })
 })
 
