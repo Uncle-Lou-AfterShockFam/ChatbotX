@@ -177,6 +177,15 @@ vi.mock("@chatbotx.io/encryption", () => ({
   signAppointmentWebviewToken: mockSignAppointmentWebviewToken,
 }))
 
+const mockSignDynamicImageToken = vi.hoisted(() =>
+  vi.fn((claims: { dynamicImageId: string }) =>
+    Promise.resolve(`signed-${claims.dynamicImageId}`),
+  ),
+)
+vi.mock("@chatbotx.io/encryption/dynamic-image-token", () => ({
+  signDynamicImageToken: mockSignDynamicImageToken,
+}))
+
 vi.mock("@chatbotx.io/business/utils", () => ({
   getPublicFileUrl: vi.fn((path: string, base: string) => `${base}/${path}`),
 }))
@@ -966,6 +975,38 @@ describe("sendFlowStep", () => {
     )
     expect(mockRepositoryCreateWithAttachments).toHaveBeenCalledTimes(1)
     expect(mockRepositoryCreate).not.toHaveBeenCalled()
+  })
+
+  test("signs a Dynamic Image link before the worker and the channel fetch it (s214)", async () => {
+    await sendFlowStep({
+      ...baseParams,
+      step: {
+        ...sendImageStep,
+        url: "https://app.example.test/dynamic-images?dynamicImageId=img-9&userId=contact-1",
+      } as unknown as SendFlowStepData["step"],
+    })
+
+    expect(mockSignDynamicImageToken).toHaveBeenCalledWith({
+      workspaceId: fakeConversation.workspaceId,
+      dynamicImageId: "img-9",
+      contactId: fakeConversation.contactId,
+      contactInboxId: fakeContactInbox.id,
+    })
+    const fetched = new URL(mockUploadFileFromUrl.mock.calls[0]?.[0] as string)
+    expect(fetched.searchParams.get("t")).toBe("signed-img-9")
+    expect(fetched.searchParams.get("userId")).toBeNull()
+  })
+
+  test("leaves a Dynamic Image lookalike on another host unsigned (s214)", async () => {
+    const url =
+      "https://evil.example.com/dynamic-images?dynamicImageId=img-9&userId=contact-1"
+    await sendFlowStep({
+      ...baseParams,
+      step: { ...sendImageStep, url } as unknown as SendFlowStepData["step"],
+    })
+
+    expect(mockSignDynamicImageToken).not.toHaveBeenCalled()
+    expect(mockUploadFileFromUrl.mock.calls[0]?.[0]).toBe(url)
   })
 
   test("does NOT call db.insert directly for message creation — goes through the message repository", async () => {

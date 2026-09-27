@@ -2,7 +2,7 @@ import { dynamicImageService } from "@chatbotx.io/business/dynamic-image"
 import type { DynamicImageModel } from "@chatbotx.io/database/types"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import { z } from "zod"
-import { getBrokerOrigin } from "@/lib/oauth-broker"
+import { buildDynamicImageTriggerUrl } from "@/features/dynamic-images/lib/dynamic-image-url"
 import {
   possibleErrorsOnCreatingResource,
   possibleErrorsOnDeletingResource,
@@ -25,10 +25,9 @@ const workspaceTokenAuthAPI = workspaceTokenAuthAPIForScope("media")
 const tags = ["Dynamic Images"]
 
 // Resolves each row's `backgroundUrl` storage key into a public URL (in one
-// batched settings lookup) and stamps the `{{user_id}}` trigger URL every
-// route on this router publishes. Same template the edit page shows the
-// user (`app/space/[workspaceId]/dynamic-images/[id]/edit/page.tsx`) and
-// that `extractDynamicImageId` accepts, so the API and the UI can't drift.
+// batched settings lookup) and stamps the trigger URL every route on this
+// router publishes: `buildDynamicImageTriggerUrl`, the same builder the edit
+// page uses, so the API and the UI can't drift.
 const toPublicResources = async (
   workspaceId: string,
   rows: DynamicImageModel[],
@@ -39,7 +38,7 @@ const toPublicResources = async (
   })
   return resolved.map(({ workspaceId: _workspaceId, ...row }) => ({
     ...row,
-    imageUrl: `${getBrokerOrigin()}/dynamic-images?dynamicImageId=${row.id}&userId={{user_id}}`,
+    imageUrl: buildDynamicImageTriggerUrl(row.id),
   }))
 }
 
@@ -101,7 +100,7 @@ export const dynamicImagesPublicRouter = {
       path: "/v1/dynamic-images",
       summary: "Create dynamic image",
       description:
-        "Adds a dynamically-rendered image template that fills in per-contact data via a `{{user_id}}` URL. Use `dynamicImages.list` first to avoid duplicating an existing one.",
+        "Adds a dynamically-rendered image template that fills in per-contact data when sent in a flow (the send signs the link for each contact). Use `dynamicImages.list` first to avoid duplicating an existing one.",
       successStatus: 201,
       tags,
     })

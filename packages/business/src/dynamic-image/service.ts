@@ -10,6 +10,7 @@ import {
   likeContains,
   parseOrderBy,
 } from "@chatbotx.io/database/utils"
+import { dynamicImageContactFileTag } from "@chatbotx.io/encryption/dynamic-image-token"
 import { uploader } from "@chatbotx.io/filesystem"
 import { createId } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
@@ -20,8 +21,6 @@ import { resolveTenantSettings } from "../platform/settings"
 import { purgeStoragePrefix } from "../storage/purge-prefix"
 import { toPublicStorageUrl } from "../utils"
 import { renderDynamicLayer, renderStaticLayer } from "./render"
-
-const HTTP_URL_RE = /^https?:\/\//i
 
 // Every save gets its own timestamped background file — never overwrite the
 // same key — so the URL itself changes whenever the content does. A CDN (or
@@ -37,11 +36,17 @@ const BACKGROUND_PATH = (workspaceId: string, id: string, version: number) =>
 const CONTACT_IMAGES_FOLDER = (workspaceId: string, id: string) =>
   `public/space/${workspaceId}/dynamic-images/${id}/contacts/`
 
+// The file is public-read, so its name carries a keyed tag: a bare
+// `<contactId>.png` let anyone who knew a contact id read that contact's
+// render (s214).
 const CONTACT_IMAGE_PATH = (
   workspaceId: string,
   id: string,
   contactId: string,
-) => `${CONTACT_IMAGES_FOLDER(workspaceId, id)}${contactId}.png`
+) =>
+  `${CONTACT_IMAGES_FOLDER(workspaceId, id)}${contactId}-${dynamicImageContactFileTag(
+    { workspaceId, dynamicImageId: id, contactId },
+  )}.png`
 
 const BACKGROUND_VERSION_RE = /background_(\d+)\.png$/
 
@@ -338,17 +343,37 @@ class DynamicImageService extends BaseService {
    * onto a custom field and that field already holds a valid URL.
    */
   async findCachedUrlForContact(input: {
-    dynamicImage: Pick<DynamicImageModel, "customFieldId">
+    dynamicImage: Pick<
+      DynamicImageModel,
+      "id" | "workspaceId" | "customFieldId"
+    >
     contactId: string
   }): Promise<string | null> {
-    if (!input.dynamicImage.customFieldId) {
+    const { dynamicImage, contactId } = input
+    if (!dynamicImage.customFieldId) {
       return null
     }
     const value = await contactCustomFieldService.findValue({
-      contactId: input.contactId,
-      customFieldId: input.dynamicImage.customFieldId,
+      contactId,
+      customFieldId: dynamicImage.customFieldId,
     })
-    return value && HTTP_URL_RE.test(value) ? value : null
+    if (!value) {
+      return null
+    }
+    // The field is operator-editable, and the route redirects to whatever it
+    // holds: accept only this contact's own render at its current path (plus
+    // the `?timestamp=` tag), never an arbitrary URL (s214).
+    const settings = await resolveTenantSettings({
+      workspaceId: dynamicImage.workspaceId,
+    })
+    const expected = toPublicStorageUrl(
+      CONTACT_IMAGE_PATH(dynamicImage.workspaceId, dynamicImage.id, contactId),
+      settings.storageUrl,
+    )
+    if (!expected) {
+      return null
+    }
+    return value === expected || value.startsWith(`${expected}?`) ? value : null
   }
 
   /**

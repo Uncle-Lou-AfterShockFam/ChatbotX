@@ -29,6 +29,7 @@
     "./coexist/history": "./src/coexist/history-window.ts",
     "./coupon": "./src/coupon/index.ts",
     "./dynamic-image": "./src/dynamic-image/index.ts",
+    "./dynamic-image/signed-link": "./src/dynamic-image/signed-link.ts",
     "./error-log": "./src/error-log/index.ts",
     "./error-log-columns": "./src/error-log/columns.ts",
     "./get-user-data": "./src/get-user-data/index.ts",

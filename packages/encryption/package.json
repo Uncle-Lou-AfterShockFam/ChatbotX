@@ -23,6 +23,7 @@
     "./appointment-cancel-token": "./src/appointment-cancel-token.ts",
     "./appointment-schedule-token": "./src/appointment-schedule-token.ts",
     "./appointment-webview-token": "./src/appointment-webview-token.ts",
+    "./dynamic-image-token": "./src/dynamic-image-token.ts",
     "./keys": "./src/keys.ts",
     "./minigame-play-token": "./src/minigame-play-token.ts",
     "./link-signature": "./src/link-signature.ts",

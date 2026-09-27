@@ -101,7 +101,7 @@ const dynamicImage = {
 const resolvedBackgroundUrl =
   "https://cdn.example.test/dynamic-images/background.png"
 const expectedImageUrl =
-  "https://broker.example.test/dynamic-images?dynamicImageId=image-1&userId={{user_id}}"
+  "https://broker.example.test/dynamic-images?dynamicImageId=image-1"
 
 const {
   workspaceId: _dynamicImageWorkspaceId,
