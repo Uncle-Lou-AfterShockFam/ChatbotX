@@ -45,12 +45,14 @@ export async function parseAdsAnalyticsSearchParams(
   options: { requestTimeZone?: string; now?: Date } = {},
 ) {
   const search = adsAnalyticsSearchParamsCache.parse(await searchParams)
-  const fallback = getDefaultAdsAnalyticsRange(
-    options.now,
-    search.tz || options.requestTimeZone,
-  )
+  // The zone the default days are computed in is also the zone the query
+  // window is read in: returning the raw (empty) `tz` would label New York
+  // days while querying UTC ones.
+  const tz = search.tz || options.requestTimeZone || ""
+  const fallback = getDefaultAdsAnalyticsRange(options.now, tz)
   return {
     ...search,
+    tz,
     from: search.from ?? fallback.from,
     to: search.to ?? fallback.to,
   }

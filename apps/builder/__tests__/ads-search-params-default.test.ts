@@ -1,3 +1,4 @@
+import { parseAnalyticsDateRange } from "@chatbotx.io/business/ads-analytics/date-range"
 import { describe, expect, test } from "vitest"
 import { parseAdsAnalyticsSearchParams } from "@/features/ads/schema/analytics"
 
@@ -20,7 +21,30 @@ describe("parseAdsAnalyticsSearchParams (s214)", () => {
       {},
       { now: NOW, requestTimeZone: "America/New_York" },
     )
-    expect(search).toMatchObject({ from: "2026-09-21", to: "2026-09-27" })
+    expect(search).toMatchObject({
+      from: "2026-09-21",
+      to: "2026-09-27",
+      tz: "America/New_York",
+    })
+  })
+
+  test("the query window is read in the same zone as the default days", async () => {
+    const search = await parseAdsAnalyticsSearchParams(
+      {},
+      { now: NOW, requestTimeZone: "America/New_York" },
+    )
+    const window = parseAnalyticsDateRange(search)
+    // Sep 21 00:00 and Sep 27 23:59:59.999 New York time (EDT, UTC-4).
+    expect(window.since.toISOString()).toBe("2026-09-21T04:00:00.000Z")
+    expect(window.until.toISOString()).toBe("2026-09-28T03:59:59.999Z")
+  })
+
+  test("no tz param and no zone cookie stays UTC", async () => {
+    const search = await parseAdsAnalyticsSearchParams({}, { now: NOW })
+    expect(search.tz).toBe("")
+    expect(parseAnalyticsDateRange(search).since.toISOString()).toBe(
+      "2026-09-22T00:00:00.000Z",
+    )
   })
 
   test("the tz param wins over the zone cookie", async () => {
