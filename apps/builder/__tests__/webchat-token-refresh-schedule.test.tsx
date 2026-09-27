@@ -1,13 +1,19 @@
-import { act } from "react"
+import { act, useContext } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
-import { WEBCHAT_TOKEN_REFRESH_LEAD_MS } from "@/features/integration-webchat/lib/webchat-token-expiry"
+import {
+  TOKEN_TTL_SECONDS,
+  WEBCHAT_TOKEN_REFRESH_LEAD_MS,
+} from "@/features/integration-webchat/lib/webchat-token-expiry"
+import type { TokenRefreshOutcome } from "@/features/integration-webchat/providers/store/guest-sesssion-store"
 
 vi.mock("@/features/messages/actions/create-webchat-message.action", () => ({
   createWebchatMessageAction: {},
 }))
 
-const refresh = vi.hoisted(() => vi.fn(async () => true))
+const refresh = vi.hoisted(() =>
+  vi.fn<() => Promise<TokenRefreshOutcome>>(async () => "refreshed"),
+)
 vi.mock(
   "@/features/integration-webchat/providers/store/guest-sesssion-store",
   async (importOriginal) => {
@@ -31,32 +37,35 @@ vi.mock(
 const { GuestSessionStoreProvider, GuestSessionStoreContext } = await import(
   "@/features/integration-webchat/providers/store/guest-session-provider"
 )
-const { useContext } = await import("react")
 
+// s210: the refresh is timed from when the token arrived (client clock), so
+// the token content is irrelevant here.
+const DUE_MS = TOKEN_TTL_SECONDS * 1000 - WEBCHAT_TOKEN_REFRESH_LEAD_MS
 const NOW = new Date("2026-09-27T12:00:00Z").getTime()
-const tokenExpiringIn = (ms: number) =>
-  `${btoa(JSON.stringify({ exp: (Date.now() + ms) / 1000 }))
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replaceAll("=", "")}.sig`
 
+type StoreApi = {
+  setState: (s: {
+    accessToken?: string
+    accessTokenReceivedAt?: number
+  }) => void
+}
 let root: Root | undefined
 let container: HTMLDivElement | undefined
-let storeApi: ReturnType<typeof useContext<unknown>> | undefined
+let storeApi: StoreApi | undefined
 
 function Capture() {
-  storeApi = useContext(GuestSessionStoreContext)
+  storeApi = useContext(GuestSessionStoreContext) as unknown as StoreApi
   return null
 }
 
-const mount = (token: string | null) => {
+const mount = () => {
   container = document.createElement("div")
   document.body.appendChild(container)
   act(() => {
     root = createRoot(container as HTMLDivElement)
     root.render(
       <GuestSessionStoreProvider
-        accessToken={token}
+        accessToken="token"
         config={{ id: "42", workspaceId: "1", persistentMenus: [] } as never}
         serverGuestConversationId="123:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f"
       >
@@ -65,52 +74,80 @@ const mount = (token: string | null) => {
     )
   })
 }
+const unmount = () => {
+  act(() => root?.unmount())
+  root = undefined
+}
+const newToken = () =>
+  act(() =>
+    storeApi?.setState({
+      accessToken: "fresh",
+      accessTokenReceivedAt: Date.now(),
+    }),
+  )
 
 beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(NOW)
-  refresh.mockReset().mockResolvedValue(true)
+  refresh.mockReset().mockResolvedValue("refreshed")
 })
 afterEach(() => {
-  act(() => root?.unmount())
+  unmount()
   container?.remove()
   vi.useRealTimers()
 })
 
 describe("guest token refresh schedule (s210)", () => {
-  test("refreshes the lead time before expiry, then reschedules from the new token", async () => {
-    mount(tokenExpiringIn(30 * 60 * 1000))
-    await act(() =>
-      vi.advanceTimersByTimeAsync(
-        30 * 60 * 1000 - WEBCHAT_TOKEN_REFRESH_LEAD_MS - 1,
-      ),
-    )
+  test("refreshes the lead time before the TTL, then reschedules from the new token", async () => {
+    mount()
+    await act(() => vi.advanceTimersByTimeAsync(DUE_MS - 1))
     expect(refresh).not.toHaveBeenCalled()
     await act(() => vi.advanceTimersByTimeAsync(1))
     expect(refresh).toHaveBeenCalledTimes(1)
 
-    // A new token arrives: the next refresh follows it, not the old one.
-    const store = storeApi as {
-      setState: (s: { accessToken: string }) => void
-    }
-    act(() => store.setState({ accessToken: tokenExpiringIn(60 * 60 * 1000) }))
-    await act(() => vi.advanceTimersByTimeAsync(40 * 60 * 1000))
+    newToken()
+    await act(() => vi.advanceTimersByTimeAsync(DUE_MS - 1))
     expect(refresh).toHaveBeenCalledTimes(1)
-    await act(() => vi.advanceTimersByTimeAsync(20 * 60 * 1000))
+    await act(() => vi.advanceTimersByTimeAsync(1))
     expect(refresh).toHaveBeenCalledTimes(2)
   })
 
-  test("a failed refresh retries a bounded number of times", async () => {
-    refresh.mockResolvedValue(false)
-    mount(tokenExpiringIn(WEBCHAT_TOKEN_REFRESH_LEAD_MS))
-    await act(() => vi.advanceTimersByTimeAsync(0))
-    await act(() => vi.advanceTimersByTimeAsync(10 * 60 * 1000))
-    expect(refresh).toHaveBeenCalledTimes(4) // first try + 3 retries
+  test("a new token that arrives every time never loops faster than the TTL", async () => {
+    refresh.mockImplementation(() => {
+      storeApi?.setState({ accessTokenReceivedAt: Date.now() })
+      return Promise.resolve("refreshed")
+    })
+    mount()
+    await act(() => vi.advanceTimersByTimeAsync(3 * DUE_MS + 10))
+    expect(refresh).toHaveBeenCalledTimes(3)
   })
 
-  test("a tab waking up inside the lead window refreshes at once", async () => {
-    mount(tokenExpiringIn(60 * 60 * 1000))
-    vi.setSystemTime(NOW + 59 * 60 * 1000) // slept; the timer has not fired
+  test("failures retry a bounded number of times; refusals do not retry", async () => {
+    refresh.mockResolvedValue("failed")
+    mount()
+    await act(() => vi.advanceTimersByTimeAsync(DUE_MS + 10 * 60 * 1000))
+    expect(refresh).toHaveBeenCalledTimes(4) // first try + 3 retries
+
+    unmount()
+    refresh.mockReset().mockResolvedValue("refused")
+    mount()
+    await act(() => vi.advanceTimersByTimeAsync(DUE_MS + 10 * 60 * 1000))
+    expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  test("a token renewed elsewhere resets the retry budget", async () => {
+    refresh.mockResolvedValue("failed")
+    mount()
+    await act(() => vi.advanceTimersByTimeAsync(DUE_MS + 10 * 60 * 1000))
+    expect(refresh).toHaveBeenCalledTimes(4)
+    newToken() // e.g. the 403 retry path refreshed it
+    await act(() => vi.advanceTimersByTimeAsync(DUE_MS + 10 * 60 * 1000))
+    expect(refresh).toHaveBeenCalledTimes(8)
+  })
+
+  test("a tab waking up past due refreshes at once", async () => {
+    mount()
+    vi.setSystemTime(NOW + DUE_MS + 1) // slept; the timer has not fired
     act(() => {
       document.dispatchEvent(new Event("visibilitychange"))
     })
@@ -118,16 +155,44 @@ describe("guest token refresh schedule (s210)", () => {
     expect(refresh).toHaveBeenCalledTimes(1)
   })
 
-  test("no readable token: nothing is scheduled; unmount clears the timer", async () => {
-    mount("not-a-token")
-    await act(() => vi.advanceTimersByTimeAsync(24 * 60 * 60 * 1000))
-    expect(refresh).not.toHaveBeenCalled()
-    act(() => root?.unmount())
-    root = undefined
-    mount(tokenExpiringIn(10 * 60 * 1000))
-    act(() => root?.unmount())
-    root = undefined
+  test("unmount stops everything, even a refresh that fails after it", async () => {
+    let fail: (outcome: TokenRefreshOutcome) => void = () => undefined
+    refresh.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          fail = resolve
+        }),
+    )
+    mount()
+    await act(() => vi.advanceTimersByTimeAsync(DUE_MS))
+    expect(refresh).toHaveBeenCalledTimes(1)
+    unmount()
+    fail("failed")
     await act(() => vi.advanceTimersByTimeAsync(60 * 60 * 1000))
-    expect(refresh).not.toHaveBeenCalled()
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  test("the timer and a wake-up firing together make one run and one retry", async () => {
+    let settle: (outcome: TokenRefreshOutcome) => void = () => undefined
+    refresh.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          settle = resolve
+        }),
+    )
+    refresh.mockResolvedValue("refreshed")
+    mount()
+    await act(() => vi.advanceTimersByTimeAsync(DUE_MS)) // timer fires, pending
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange")) // wake, same moment
+    })
+    expect(refresh).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      settle("failed")
+      await Promise.resolve()
+    })
+    await act(() => vi.advanceTimersByTimeAsync(60 * 1000))
+    expect(refresh).toHaveBeenCalledTimes(2) // exactly one retry
   })
 })

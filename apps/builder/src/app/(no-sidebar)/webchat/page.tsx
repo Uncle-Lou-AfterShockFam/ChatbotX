@@ -17,8 +17,7 @@ import {
 } from "@/features/integration-webchat/lib"
 import {
   getHostFromOrigin,
-  isFirstPartyOrigin,
-  isOriginAuthorized,
+  isEmbedOriginAllowed,
 } from "@/features/integration-webchat/lib/authorized-domain"
 import { createGuestConversationId } from "@/features/integration-webchat/lib/guest-conversation-id"
 import { createWebchatAccessToken } from "@/features/integration-webchat/lib/webchat-access-token"
@@ -84,11 +83,11 @@ export default async function WebchatPage(props: WebchatPageProps) {
   const requestHeaders = await headers()
   const embeddingOrigin = requestHeaders.get("referer")
   const appHost = await getDomainFromHeader()
-  const isDirectOpen = isFirstPartyOrigin(embeddingOrigin, appHost)
   if (
-    !(
-      isDirectOpen ||
-      isOriginAuthorized(embeddingOrigin, targetWebchat.authorizedDomains)
+    !isEmbedOriginAllowed(
+      embeddingOrigin,
+      targetWebchat.authorizedDomains,
+      appHost,
     )
   ) {
     const t = await getTranslations("webchat.unauthorizedDomain")

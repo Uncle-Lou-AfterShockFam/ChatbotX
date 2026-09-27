@@ -36,8 +36,11 @@ const denied = (status: 400 | 403 | 429) =>
  */
 export async function POST(req: NextRequest) {
   try {
+    // Browsers send Origin on every POST, same-origin included, so a
+    // missing one is not the widget: only the hub's own Origin passes.
     const appHost = await getDomainFromHeader()
-    if (!isFirstPartyOrigin(req.headers.get("origin"), appHost)) {
+    const origin = req.headers.get("origin")
+    if (!(origin && isFirstPartyOrigin(origin, appHost))) {
       return denied(403)
     }
     const parsed = refreshRequest.safeParse(await req.json().catch(() => null))
@@ -50,6 +53,7 @@ export async function POST(req: NextRequest) {
       clientIp: getGuestClientIp(req.headers),
       guestConversationId: data.guestConversationId,
       webchatId: data.webchatId,
+      scope: "token-refresh",
     })
     if (rateLimit.limited) {
       const res = denied(429)

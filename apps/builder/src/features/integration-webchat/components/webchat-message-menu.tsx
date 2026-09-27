@@ -41,9 +41,8 @@ export default function WebchatMessageMenu({
     setMenus(getMenus())
   }, [getMenus])
 
-  const { appendMessage, guestConversationId } = useGuestSessionStore(
-    (state) => state,
-  )
+  const { appendMessage, guestConversationId, freshAccessToken } =
+    useGuestSessionStore((state) => state)
 
   const { execute } = useAction(createWebchatMessageAction, {
     onExecute: ({ input }) => {
@@ -84,7 +83,9 @@ export default function WebchatMessageMenu({
           <Fragment key={index}>
             {menu.type === webchatPersistentMenuType.enum.flow && (
               <DropdownMenuItem
-                onClick={() =>
+                onClick={async () => {
+                  // A due token is refreshed first (s210).
+                  const token = (await freshAccessToken()) ?? accessToken
                   execute({
                     flowId: menu.flowId,
                     clientId: createId(),
@@ -92,10 +93,10 @@ export default function WebchatMessageMenu({
                     webchatId,
                     guestConversationId: guestConversationId ?? "",
                     ...getWebchatProfileFields(),
-                    accessToken: accessToken ?? undefined,
+                    accessToken: token ?? undefined,
                     parentOrigin: parentOrigin ?? undefined,
                   })
-                }
+                }}
               >
                 {menu.label}
               </DropdownMenuItem>

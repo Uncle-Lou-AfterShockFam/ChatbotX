@@ -17,6 +17,12 @@ type GuestRateLimitInput = {
   webchatId: string
   clientIp: string
   guestConversationId?: string | null
+  /**
+   * A separate budget for a separate endpoint (s210: the guest-token refresh
+   * must neither starve nor be starved by message sends). Omitted = the
+   * message budget, keys unchanged.
+   */
+  scope?: "token-refresh"
   store?: RateLimitStore
   now?: number
   /** Test seam; app code keeps the default `STORE_TIMEOUT_MS`. */
@@ -78,6 +84,7 @@ export const checkGuestRateLimit = async ({
   webchatId,
   clientIp,
   guestConversationId,
+  scope,
   store = distributedStore,
   now = Date.now(),
   storeTimeoutMs = STORE_TIMEOUT_MS,
@@ -86,9 +93,22 @@ export const checkGuestRateLimit = async ({
   assertTimeoutMs(storeTimeoutMs)
   const windowSuffix = buildWindowSuffix(now, WINDOW_SECONDS)
   const retryAfter = secondsUntilNextWindow(now, WINDOW_SECONDS)
-  const ipKey = buildRateLimitKey("ip", webchatId, clientIp, windowSuffix)
+  const scoped = scope ? [scope] : []
+  const ipKey = buildRateLimitKey(
+    ...scoped,
+    "ip",
+    webchatId,
+    clientIp,
+    windowSuffix,
+  )
   const sessionKey = guestConversationId
-    ? buildRateLimitKey("session", webchatId, guestConversationId, windowSuffix)
+    ? buildRateLimitKey(
+        ...scoped,
+        "session",
+        webchatId,
+        guestConversationId,
+        windowSuffix,
+      )
     : null
 
   // Up to four sequential round trips (set-if-absent + increment, per IP and

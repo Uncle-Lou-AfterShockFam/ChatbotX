@@ -8,6 +8,7 @@ import type { ListMessagesResponse } from "@/features/messages/schema/query"
 import type { MessageResource } from "@/features/messages/schema/resource"
 import type { UserResource } from "@/features/users/schema/resource"
 import { getWebchatProfileFields } from "../../browser-profile-fields"
+import { isWebchatTokenDue } from "../../lib/webchat-token-expiry"
 import {
   buildGuestStorageKey,
   readLegacyGuestId,
@@ -23,6 +24,8 @@ export type GuestSessionState = {
   guestConversationId: string | null
   isNewGuestSession: boolean
   accessToken: string | null
+  /** Client clock (ms) when `accessToken` arrived; refreshes are timed from it. */
+  accessTokenReceivedAt: number
   /**
    * The embedding page's origin as the server saw it (the Referer the access
    * token was minted from, null when none was sent). Every guest request
@@ -66,12 +69,20 @@ export type GuestSessionActions = {
   getMenus: () => WebchatPersistentMenu[]
 
   /**
-   * Trades the guest token for a fresh one (s210). One request at a time;
-   * resolves false when the server refuses (the gate no longer passes) or the
-   * call fails, and the current token stays.
+   * Trades the guest token for a fresh one (s210). One request at a time.
+   * "refused": the server said no (the gate no longer passes, or the token is
+   * too old): retrying is pointless. "failed": network/5xx/429, worth a later
+   * retry. Either way the current token stays.
    */
-  refreshAccessToken: () => Promise<boolean>
+  refreshAccessToken: () => Promise<TokenRefreshOutcome>
+  /**
+   * The token to send now: refreshed first when it is due (never more than
+   * once a minute), so a send after a long idle does not 403.
+   */
+  freshAccessToken: () => Promise<string | null>
 }
+
+export type TokenRefreshOutcome = "refreshed" | "refused" | "failed"
 
 export type GuestSessionStore = GuestSessionState & GuestSessionActions
 
@@ -81,7 +92,7 @@ export const createGuestSessionStore = (
   workspaceLogoUrl?: string,
   parentOrigin: string | null = null,
 ) => {
-  let refreshInFlight: Promise<boolean> | null = null
+  let refreshInFlight: Promise<TokenRefreshOutcome> | null = null
 
   return createStore<GuestSessionStore>((set, get) => {
     /** One guest call, retried once with a refreshed token after a 403. */
@@ -93,7 +104,10 @@ export const createGuestSessionStore = (
       } catch (error) {
         const status = (error as { response?: { status?: number } } | null)
           ?.response?.status
-        if (status !== 403 || !(await get().refreshAccessToken())) {
+        if (
+          status !== 403 ||
+          (await get().refreshAccessToken()) !== "refreshed"
+        ) {
           throw error
         }
         return await call(get().accessToken)
@@ -105,6 +119,7 @@ export const createGuestSessionStore = (
       guestConversationId: null,
       isNewGuestSession: false,
       accessToken,
+      accessTokenReceivedAt: Date.now(),
       parentOrigin,
       workspaceLogoUrl,
       user: null,
@@ -320,7 +335,7 @@ export const createGuestSessionStore = (
         }
         const { accessToken, config, guestConversationId, parentOrigin } = get()
         if (!(accessToken && guestConversationId)) {
-          return Promise.resolve(false)
+          return Promise.resolve<TokenRefreshOutcome>("refused")
         }
         refreshInFlight = ky
           .post("/api/guest/token", {
@@ -334,18 +349,29 @@ export const createGuestSessionStore = (
             retry: 0,
           })
           .json<{ accessToken: string | null }>()
-          .then(({ accessToken: fresh }) => {
+          .then(({ accessToken: fresh }): TokenRefreshOutcome => {
             if (typeof fresh !== "string" || !fresh) {
-              return false
+              return "refused"
             }
-            set({ accessToken: fresh })
-            return true
+            set({ accessToken: fresh, accessTokenReceivedAt: Date.now() })
+            return "refreshed"
           })
-          .catch(() => false)
+          .catch((error: unknown): TokenRefreshOutcome => {
+            const status = (error as { response?: { status?: number } } | null)
+              ?.response?.status
+            return status === 400 || status === 403 ? "refused" : "failed"
+          })
           .finally(() => {
             refreshInFlight = null
           })
         return refreshInFlight
+      },
+
+      freshAccessToken: async () => {
+        if (isWebchatTokenDue(get().accessTokenReceivedAt, Date.now())) {
+          await get().refreshAccessToken()
+        }
+        return get().accessToken
       },
     }
   })

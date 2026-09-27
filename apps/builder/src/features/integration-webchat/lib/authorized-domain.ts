@@ -91,6 +91,20 @@ export const isGuestOriginAllowed = (
   isFirstPartyOrigin(origin, appHost) ||
   isOriginAuthorized(origin, authorizedDomains)
 
+/**
+ * The `/webchat` page's embed gate, the one place a guest token is minted (or
+ * refreshed, s210): a first-party open, or an origin on a NON-empty allowlist.
+ * Stricter than isGuestOriginAllowed on purpose: an empty allowlist means no
+ * cross-site embed, so no token for a foreign host.
+ */
+export const isEmbedOriginAllowed = (
+  origin: string | null | undefined,
+  authorizedDomains: string[],
+  appHost: string,
+) =>
+  isFirstPartyOrigin(origin, appHost) ||
+  isOriginAuthorized(origin, authorizedDomains)
+
 export const getParentOriginFromUrl = (url: string | null | undefined) => {
   if (!url) {
     return null

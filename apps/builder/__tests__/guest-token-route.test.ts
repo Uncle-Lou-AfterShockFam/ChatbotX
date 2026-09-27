@@ -33,7 +33,7 @@ const body = {
   accessToken: "old-token",
   parentOrigin: "shop.example",
 }
-const post = (payload: unknown, origin?: string) =>
+const post = (payload: unknown, origin: string | null = `https://${HUB}`) =>
   new NextRequest(`https://${HUB}/api/guest/token`, {
     method: "POST",
     headers: {
@@ -62,8 +62,12 @@ describe("POST /api/guest/token (s210)", () => {
     )
   })
 
-  test("a stranger's page is refused before parsing", async () => {
-    const res = await POST(post(body, "https://evil.example"))
+  test.each([
+    ["a stranger's page", "https://evil.example"],
+    ["no Origin (browsers always send one on POST)", null],
+    ["an opaque origin", "null"],
+  ])("%s is refused before parsing", async (_, origin) => {
+    const res = await POST(post(body, origin))
     expect(res.status).toBe(403)
     expect(mocks.refresh).not.toHaveBeenCalled()
   })

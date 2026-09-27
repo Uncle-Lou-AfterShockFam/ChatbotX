@@ -1,51 +1,37 @@
 /**
- * Client-side reading of the guest token's `exp` (s210), only to schedule a
- * refresh: the server still verifies every token, so an unreadable one just
- * means "no schedule" (the 403-then-refresh retry still applies).
+ * When the widget refreshes its guest token (s210). Timed from when the token
+ * ARRIVED, on the client's own clock: the TTL is a duration, so a client clock
+ * that is minutes or hours off the server's changes nothing (reading `exp`
+ * would, and a clock ahead by more than the TTL looped refreshes).
  */
 
-/** Refresh this long before expiry. */
+/** The guest token's lifetime; the server mints with the same value. */
+export const TOKEN_TTL_SECONDS = 30 * 60
+/** Refresh this long before the token would expire. */
 export const WEBCHAT_TOKEN_REFRESH_LEAD_MS = 2 * 60 * 1000
-// setTimeout clamps anything above 2^31 - 1 ms to 1 ms.
-const MAX_TIMEOUT_MS = 2 ** 31 - 1
-const MAX_TOKEN_LENGTH = 2048
-const BASE64URL_DASH = /-/g
-const BASE64URL_UNDERSCORE = /_/g
+/** Never refresh twice within this long, whatever the caller. */
+export const WEBCHAT_TOKEN_MIN_REFRESH_INTERVAL_MS = 60 * 1000
 
-export function webchatTokenExpiresAtMs(
-  token: string | null | undefined,
-): number | null {
-  if (typeof token !== "string" || token.length > MAX_TOKEN_LENGTH) {
-    return null
-  }
-  const [encoded] = token.split(".")
-  if (!encoded) {
-    return null
-  }
-  try {
-    const base64 = encoded
-      .replace(BASE64URL_DASH, "+")
-      .replace(BASE64URL_UNDERSCORE, "/")
-    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=")
-    const payload = JSON.parse(atob(padded)) as { exp?: unknown } | null
-    const exp = payload?.exp
-    return typeof exp === "number" && Number.isFinite(exp) ? exp * 1000 : null
-  } catch {
-    return null
-  }
-}
+const REFRESH_AFTER_MS =
+  TOKEN_TTL_SECONDS * 1000 - WEBCHAT_TOKEN_REFRESH_LEAD_MS
 
-/** Milliseconds until the refresh should run (0 = now), or null for none. */
+/** Milliseconds until a token received at `receivedAtMs` is due (0 = now). */
 export function webchatTokenRefreshDelayMs(
-  token: string | null | undefined,
+  receivedAtMs: number,
   nowMs: number,
-): number | null {
-  const expiresAt = webchatTokenExpiresAtMs(token)
-  if (expiresAt === null) {
-    return null
+): number {
+  const elapsed = nowMs - receivedAtMs
+  // A clock that jumped backwards (elapsed < 0): count from now.
+  if (!Number.isFinite(elapsed) || elapsed < 0) {
+    return REFRESH_AFTER_MS
   }
-  return Math.min(
-    Math.max(0, expiresAt - WEBCHAT_TOKEN_REFRESH_LEAD_MS - nowMs),
-    MAX_TIMEOUT_MS,
+  return Math.max(
+    WEBCHAT_TOKEN_MIN_REFRESH_INTERVAL_MS - elapsed,
+    REFRESH_AFTER_MS - elapsed,
+    0,
   )
 }
+
+/** Whether a token received at `receivedAtMs` should be refreshed now. */
+export const isWebchatTokenDue = (receivedAtMs: number, nowMs: number) =>
+  webchatTokenRefreshDelayMs(receivedAtMs, nowMs) === 0

@@ -33,7 +33,7 @@ export const WebchatMessageInput = (props: WebchatMessageInputProps) => {
     parentOrigin,
     accessToken,
   } = props
-  const { sendMessage, guestConversationId, appendMessage } =
+  const { sendMessage, guestConversationId, appendMessage, freshAccessToken } =
     useGuestSessionStore((state) => state)
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -106,6 +106,21 @@ export const WebchatMessageInput = (props: WebchatMessageInputProps) => {
     }
   }, [guestConversationId, setValue])
 
+  // The form caches its defaults at mount: a refreshed token (s210) must be
+  // pushed in, and a due one refreshed before the send, or a send after a
+  // long idle 403s and the optimistic bubble is lost.
+  useEffect(() => {
+    setValue("accessToken", accessToken ?? undefined)
+  }, [accessToken, setValue])
+
+  const submitWithFreshToken = async (event?: {
+    preventDefault: () => void
+  }) => {
+    event?.preventDefault()
+    setValue("accessToken", (await freshAccessToken()) ?? undefined)
+    await handleSubmitWithAction()
+  }
+
   const files = useWatch({ control, name: "files" })
   const content = useWatch({ control, name: "text" })
 
@@ -149,17 +164,14 @@ export const WebchatMessageInput = (props: WebchatMessageInputProps) => {
     if (e.key === "Enter" && e.shiftKey === false) {
       e.preventDefault()
 
-      await handleSubmitWithAction()
+      await submitWithFreshToken()
     }
   }
 
   return (
     <div className="m-3 rounded-xl border pt-2">
       <Form {...form}>
-        <form
-          className="flex w-full flex-col"
-          onSubmit={handleSubmitWithAction}
-        >
+        <form className="flex w-full flex-col" onSubmit={submitWithFreshToken}>
           {files.length === 0 && (
             <div className="mb-1 w-full px-2.5 py-1">
               <Controller

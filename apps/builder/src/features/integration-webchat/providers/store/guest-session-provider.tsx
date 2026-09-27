@@ -9,8 +9,7 @@ import {
 } from "react"
 import { useStore } from "zustand"
 import {
-  WEBCHAT_TOKEN_REFRESH_LEAD_MS,
-  webchatTokenExpiresAtMs,
+  isWebchatTokenDue,
   webchatTokenRefreshDelayMs,
 } from "../../lib/webchat-token-expiry"
 import {
@@ -63,54 +62,69 @@ export const GuestSessionStoreProvider = ({
   }, [serverGuestConversationId])
 
   // Keep the 30-minute guest token fresh while the widget stays open (s210):
-  // refresh shortly before expiry, again when a sleeping tab wakes up late,
-  // and reschedule from each new token.
+  // refresh shortly before it lapses (timed from when it arrived, so client
+  // clock skew is irrelevant), again when a tab wakes up late, and reschedule
+  // from each new token. Only failures are retried, a bounded number of times.
   useEffect(() => {
     const store = storeRef.current
     if (!store) {
       return
     }
+    let disposed = false
     let timer: ReturnType<typeof setTimeout> | undefined
     let retries = 0
-    const refresh = async () => {
-      if (await store.getState().refreshAccessToken()) {
-        retries = 0
-        return // the token change reschedules
-      }
-      if (retries < MAX_REFRESH_RETRIES) {
-        retries += 1
-        clearTimeout(timer)
-        timer = setTimeout(refresh, REFRESH_RETRY_MS)
-      }
-    }
-    const schedule = () => {
+    const arm = (delay: number) => {
       clearTimeout(timer)
-      const delay = webchatTokenRefreshDelayMs(
-        store.getState().accessToken,
-        Date.now(),
-      )
-      if (delay !== null) {
-        timer = setTimeout(refresh, delay)
+      timer = disposed ? undefined : setTimeout(refresh, delay)
+    }
+    // The timer and a wake-up can fire together: one run at a time, so one
+    // failure costs one retry.
+    let running = false
+    const refresh = async () => {
+      if (running) {
+        return
+      }
+      running = true
+      try {
+        const outcome = await store.getState().refreshAccessToken()
+        // "refreshed" reschedules through the subscription below.
+        if (
+          !disposed &&
+          outcome === "failed" &&
+          retries < MAX_REFRESH_RETRIES
+        ) {
+          retries += 1
+          arm(REFRESH_RETRY_MS)
+        }
+      } finally {
+        running = false
       }
     }
+    const schedule = () =>
+      arm(
+        webchatTokenRefreshDelayMs(
+          store.getState().accessTokenReceivedAt,
+          Date.now(),
+        ),
+      )
     const onVisible = () => {
-      const expiresAt = webchatTokenExpiresAtMs(store.getState().accessToken)
       if (
         document.visibilityState === "visible" &&
-        expiresAt !== null &&
-        expiresAt - Date.now() <= WEBCHAT_TOKEN_REFRESH_LEAD_MS
+        isWebchatTokenDue(store.getState().accessTokenReceivedAt, Date.now())
       ) {
         refresh().catch(() => undefined)
       }
     }
     schedule()
     const unsubscribe = store.subscribe((state, previous) => {
-      if (state.accessToken !== previous.accessToken) {
+      if (state.accessTokenReceivedAt !== previous.accessTokenReceivedAt) {
+        retries = 0
         schedule()
       }
     })
     document.addEventListener("visibilitychange", onVisible)
     return () => {
+      disposed = true
       clearTimeout(timer)
       unsubscribe()
       document.removeEventListener("visibilitychange", onVisible)

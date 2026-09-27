@@ -1,8 +1,10 @@
 import { Buffer } from "node:buffer"
 import { hmacSha256Hex, timingSafeStringEqual } from "@chatbotx.io/utils/crypto"
 import { getHostFromOrigin } from "./authorized-domain"
+import { TOKEN_TTL_SECONDS } from "./webchat-token-expiry"
 
-export const TOKEN_TTL_SECONDS = 30 * 60
+export { TOKEN_TTL_SECONDS } from "./webchat-token-expiry"
+
 // A real token is ~200 chars; anything far longer is refused unparsed.
 const MAX_TOKEN_LENGTH = 2048
 

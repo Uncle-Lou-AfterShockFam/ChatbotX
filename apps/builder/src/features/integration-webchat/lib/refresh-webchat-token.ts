@@ -1,8 +1,4 @@
-import {
-  getHostFromOrigin,
-  isFirstPartyOrigin,
-  isOriginAuthorized,
-} from "./authorized-domain"
+import { getHostFromOrigin, isEmbedOriginAllowed } from "./authorized-domain"
 import {
   createWebchatAccessToken,
   readWebchatAccessToken,
@@ -70,12 +66,12 @@ export async function refreshWebchatAccessToken(
   if (!(domains && workspaceActive)) {
     return null
   }
-  // The page's gate, on the host the token is bound to.
+  // The page's gate, on the host the token is bound to. A bound host of ""
+  // cannot be minted (the page refuses every Referer that normalizes to it)
+  // and would read as first party here, so it is refused outright.
   if (
-    !(
-      isFirstPartyOrigin(payload.originHost, input.appHost) ||
-      isOriginAuthorized(payload.originHost, domains)
-    )
+    payload.originHost === "" ||
+    !isEmbedOriginAllowed(payload.originHost, domains, input.appHost)
   ) {
     return null
   }

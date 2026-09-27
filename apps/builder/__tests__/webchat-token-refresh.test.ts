@@ -20,8 +20,9 @@ import {
   verifyWebchatAccessToken,
 } from "@/features/integration-webchat/lib/webchat-access-token"
 import {
+  isWebchatTokenDue,
+  WEBCHAT_TOKEN_MIN_REFRESH_INTERVAL_MS,
   WEBCHAT_TOKEN_REFRESH_LEAD_MS,
-  webchatTokenExpiresAtMs,
   webchatTokenRefreshDelayMs,
 } from "@/features/integration-webchat/lib/webchat-token-expiry"
 import { createGuestSessionStore } from "@/features/integration-webchat/providers/store/guest-sesssion-store"
@@ -210,37 +211,40 @@ describe("readWebchatAccessToken", () => {
   })
 })
 
-describe("webchat token expiry (client)", () => {
-  test("reads exp from a real token and schedules the lead", async () => {
+describe("webchat token refresh timing (client)", () => {
+  const TTL_MS = TOKEN_TTL_SECONDS * 1000
+  test("due the lead time before the TTL runs out, counted from arrival", () => {
+    expect(webchatTokenRefreshDelayMs(1000, 1000)).toBe(
+      TTL_MS - WEBCHAT_TOKEN_REFRESH_LEAD_MS,
+    )
+    expect(
+      isWebchatTokenDue(0, TTL_MS - WEBCHAT_TOKEN_REFRESH_LEAD_MS - 1),
+    ).toBe(false)
+    expect(isWebchatTokenDue(0, TTL_MS - WEBCHAT_TOKEN_REFRESH_LEAD_MS)).toBe(
+      true,
+    )
+    expect(isWebchatTokenDue(0, 10 * TTL_MS)).toBe(true)
+  })
+
+  test("never due within a minute of arrival; a clock jump back restarts the count", () => {
+    expect(webchatTokenRefreshDelayMs(0, 0)).toBeGreaterThanOrEqual(
+      WEBCHAT_TOKEN_MIN_REFRESH_INTERVAL_MS,
+    )
+    expect(
+      isWebchatTokenDue(0, WEBCHAT_TOKEN_MIN_REFRESH_INTERVAL_MS - 1),
+    ).toBe(false)
+    expect(webchatTokenRefreshDelayMs(10_000, 0)).toBe(
+      TTL_MS - WEBCHAT_TOKEN_REFRESH_LEAD_MS,
+    )
+    expect(webchatTokenRefreshDelayMs(Number.NaN, 0)).toBe(
+      TTL_MS - WEBCHAT_TOKEN_REFRESH_LEAD_MS,
+    )
+  })
+
+  test("the server mints with the same TTL the client times against", async () => {
     const token = await mint("shop.example")
-    const expMs = T0.getTime() + TOKEN_TTL_SECONDS * 1000
-    expect(webchatTokenExpiresAtMs(token)).toBe(expMs)
-    expect(webchatTokenRefreshDelayMs(token, T0.getTime())).toBe(
-      TOKEN_TTL_SECONDS * 1000 - WEBCHAT_TOKEN_REFRESH_LEAD_MS,
-    )
-    // Already inside the lead window, or past expiry: refresh now.
-    expect(webchatTokenRefreshDelayMs(token, expMs)).toBe(0)
-    expect(webchatTokenRefreshDelayMs(token, expMs + 1e9)).toBe(0)
-  })
-
-  test("unreadable tokens schedule nothing", () => {
-    for (const token of [
-      null,
-      undefined,
-      "",
-      "!!!.x",
-      "e30.x",
-      "x".repeat(5000),
-    ]) {
-      expect(webchatTokenRefreshDelayMs(token, 0)).toBeNull()
-    }
-  })
-
-  test("a far-future exp is clamped to a valid setTimeout delay", () => {
-    const payload = Buffer.from(JSON.stringify({ exp: 4e12 })).toString(
-      "base64url",
-    )
-    expect(webchatTokenRefreshDelayMs(`${payload}.sig`, 0)).toBe(2 ** 31 - 1)
+    const payload = await readWebchatAccessToken(token)
+    expect((payload?.exp ?? 0) * 1000 - T0.getTime()).toBe(TTL_MS)
   })
 })
 
@@ -279,30 +283,63 @@ describe("guest session store refresh", () => {
     expect(post).toHaveBeenCalledTimes(1)
     expect(post.mock.calls[0]?.[0]).toBe("/api/guest/token")
     resolve({ accessToken: "new-token" })
-    expect(await a).toBe(true)
-    expect(await b).toBe(true)
+    expect(await a).toBe("refreshed")
+    expect(await b).toBe("refreshed")
     expect(store.getState().accessToken).toBe("new-token")
   })
 
-  test("a refusal or a network error keeps the current token", async () => {
+  test("refusals and failures are told apart; both keep the current token", async () => {
     const store = storeWith()
-    vi.spyOn(ky, "post").mockReturnValueOnce({
-      json: async () => ({ accessToken: null }),
-    } as never)
-    expect(await store.getState().refreshAccessToken()).toBe(false)
-    vi.spyOn(ky, "post").mockReturnValueOnce({
-      json: () => Promise.reject(forbidden()),
-    } as never)
-    expect(await store.getState().refreshAccessToken()).toBe(false)
+    const post = vi.spyOn(ky, "post")
+    const answers: [unknown, string][] = [
+      [Promise.resolve({ accessToken: null }), "refused"],
+      [Promise.reject(forbidden()), "refused"],
+      [
+        Promise.reject(
+          Object.assign(new Error("Bad"), { response: { status: 400 } }),
+        ),
+        "refused",
+      ],
+      [
+        Promise.reject(
+          Object.assign(new Error("Busy"), { response: { status: 429 } }),
+        ),
+        "failed",
+      ],
+      [Promise.reject(new TypeError("network")), "failed"],
+    ]
+    for (const [answer, outcome] of answers) {
+      post.mockReturnValueOnce({ json: () => answer } as never)
+      expect(await store.getState().refreshAccessToken()).toBe(outcome)
+    }
     expect(store.getState().accessToken).toBe("old-token")
+  })
+
+  test("freshAccessToken refreshes only a due token", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(T0)
+    const post = vi.spyOn(ky, "post").mockReturnValue({
+      json: async () => ({ accessToken: "new-token" }),
+    } as never)
+    const store = storeWith()
+    expect(await store.getState().freshAccessToken()).toBe("old-token")
+    expect(post).not.toHaveBeenCalled()
+    vi.setSystemTime(T0.getTime() + TOKEN_TTL_SECONDS * 1000)
+    expect(await store.getState().freshAccessToken()).toBe("new-token")
+    expect(post).toHaveBeenCalledTimes(1)
+    // Just refreshed: not due again.
+    expect(await store.getState().freshAccessToken()).toBe("new-token")
+    expect(post).toHaveBeenCalledTimes(1)
   })
 
   test("no token or no guest id: nothing is sent", async () => {
     const post = vi.spyOn(ky, "post")
-    expect(await storeWith(null).getState().refreshAccessToken()).toBe(false)
+    expect(await storeWith(null).getState().refreshAccessToken()).toBe(
+      "refused",
+    )
     const store = storeWith()
     store.setState({ guestConversationId: null })
-    expect(await store.getState().refreshAccessToken()).toBe(false)
+    expect(await store.getState().refreshAccessToken()).toBe("refused")
     expect(post).not.toHaveBeenCalled()
   })
 
