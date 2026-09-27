@@ -692,6 +692,9 @@ describe("invoiceService.finalize: Stripe status mapping and the void race (s205
     const error = await invoiceService.create(validInput()).catch((e) => e)
     expect(error).toBeInstanceOf(InvoiceFinalizeError)
     expect(error.retryable).toBe(true)
+    // Thrown past the failure recorder: no lastError write, no CAS (s211b).
+    expect(m.state.updates).toEqual([])
+    expect(m.state.stored?.lastError).toBeUndefined()
   })
 
   test("voided here while Stripe opened it: the Stripe invoice is voided too", async () => {
@@ -911,5 +914,15 @@ describe("stripeCheckout (s207b): finalize and void", () => {
     expect(m.expireAfterVoid).not.toHaveBeenCalled()
     expect(invoice.lastError).toContain("cs_test_1")
     expect(invoice.lastError).toContain("acct_test_1")
+  })
+})
+
+describe("invoice providers registry (s211b PR 1)", () => {
+  test("every invoice method has a provider, and nothing else does", async () => {
+    const { invoiceProviders } = await import("../src/invoice/providers")
+    const { invoiceMethods } = await import("@chatbotx.io/database/partials")
+    expect(Object.keys(invoiceProviders).sort()).toEqual(
+      [...invoiceMethods.options].sort(),
+    )
   })
 })
