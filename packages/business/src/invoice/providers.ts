@@ -399,7 +399,10 @@ async function cancelOnSite(
  * an open whose answer was lost leaves an order the hub never recorded (its
  * payment is still matched by hub_invoice_id and flagged paid-after-void);
  * two concurrent voids can leave a stale "cancel it there" on an order the
- * other one cancelled.
+ * other one cancelled; a payment that lands after the site cancelled but
+ * before the hub void wins the CAS (the invoice shows paid, the void is a
+ * no-op; WooCommerce moves the paid order out of cancelled itself unless it
+ * hit the plugin's few-ms window).
  */
 const wooCommerceProvider: InvoiceProvider = {
   async bind({ workspaceId, integrationId, currency }) {
@@ -430,15 +433,17 @@ const wooCommerceProvider: InvoiceProvider = {
     }
     return {
       async open() {
+        // Everything that can fail runs BEFORE the site creates the order: a
+        // throw after it would leave an order the hub never recorded.
+        const payToken = mintInvoicePayToken()
+        const appUrl = await resolveWorkspaceAppUrl({
+          workspaceId: invoice.workspaceId,
+        })
         const order = await createWooCommerceOrder({ credentials, invoice })
         const providerInvoiceId = wooCommerceProviderInvoiceId(
           credentials.siteUrl,
           order.orderId,
         )
-        const payToken = mintInvoicePayToken()
-        const appUrl = await resolveWorkspaceAppUrl({
-          workspaceId: invoice.workspaceId,
-        })
         return {
           set: {
             status: "open",

@@ -141,6 +141,7 @@ const m = vi.hoisted(() => {
     wooByIntegration: vi.fn(),
     wooOrder: vi.fn(),
     wooCancel: vi.fn(),
+    appUrl: vi.fn(() => Promise.resolve("https://chat.example.org")),
     audit: vi.fn(),
     loggerWarn: vi.fn(),
     markCreated: vi.fn(),
@@ -178,7 +179,7 @@ vi.mock("../src/invoice/checkout-provider", () => ({
     new URL(`/pay/${token}`, appUrl).toString(),
 }))
 vi.mock("../src/platform/settings", () => ({
-  resolveWorkspaceAppUrl: () => Promise.resolve("https://chat.example.org"),
+  resolveWorkspaceAppUrl: (...a: unknown[]) => m.appUrl(...a),
 }))
 vi.mock("../src/integration-woocommerce/service", () => ({
   integrationWooCommerceService: {
@@ -1122,6 +1123,15 @@ describe("woocommerce (s211b PR3)", () => {
     expect(m.emitCreated).toHaveBeenCalledTimes(1)
     expect(credentialsSpy).not.toHaveBeenCalled()
     expect(m.finalize).not.toHaveBeenCalled()
+  })
+
+  test("the hub PDF link is resolved BEFORE the site creates the order (a throw leaves no orphan order)", async () => {
+    m.appUrl.mockRejectedValueOnce(new Error("workspace lookup failed"))
+    await invoiceService
+      .create(validInput({ method: "woocommerce" }))
+      .catch(() => undefined)
+    expect(m.wooOrder).not.toHaveBeenCalled()
+    expect(m.state.stored?.status).toBe("draft")
   })
 
   test("a workspace without Stripe can still invoice through its site", async () => {
