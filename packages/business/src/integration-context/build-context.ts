@@ -6,7 +6,9 @@ import {
   REALTIME_TOKEN_PURPOSE,
   signRealtimeToken,
 } from "@chatbotx.io/partysocket-config/auth"
+import { isMintedGuestConversationId } from "@chatbotx.io/partysocket-config/guest-id"
 import type { AuthStore, AuthValue, Context } from "@chatbotx.io/sdk"
+import { ChatbotXException } from "../errors"
 import {
   resolveBroadcastSecret,
   resolveTenantSettings,
@@ -16,9 +18,30 @@ import { type AuthStoreIntegrationRow, makeAuthStore } from "./auth-store"
 type GetRealtimeAuthHeaders =
   Context<AuthValue>["platform"]["getRealtimeAuthHeaders"]
 
-const buildGetRealtimeAuthHeaders =
-  (secret: string): GetRealtimeAuthHeaders =>
+// The broadcast secret is global, so the realtime server cannot tell which
+// workspace signed a token: the audience must be bound HERE, to the workspace
+// this context was built for (s213). A guest room is a minted guest id of this
+// workspace; a workspace room is this workspace. Anything else (a CSV-imported
+// foreign sourceId, an API-created non-minted one) is refused, never signed.
+export const isRealtimeTargetOfWorkspace = (
+  target: { kind: string; id: string },
+  workspaceId: string,
+) =>
+  workspaceId !== "" &&
+  (target.kind === "guest"
+    ? isMintedGuestConversationId(target.id, workspaceId)
+    : target.kind === "workspace" && target.id === workspaceId)
+
+export const buildGetRealtimeAuthHeaders =
+  (secret: string, workspaceId: string): GetRealtimeAuthHeaders =>
   async (target) => {
+    if (!isRealtimeTargetOfWorkspace(target, workspaceId)) {
+      throw new ChatbotXException(
+        "Realtime target is not a room of this workspace",
+        "realtimeTargetRefused",
+        403,
+      )
+    }
     const token = await signRealtimeToken(
       target,
       REALTIME_TOKEN_PURPOSE.broadcast,
@@ -44,7 +67,10 @@ const resolvePlatformData = async (
 
   return {
     ...tenantSettings,
-    getRealtimeAuthHeaders: buildGetRealtimeAuthHeaders(realtimeSecret),
+    getRealtimeAuthHeaders: buildGetRealtimeAuthHeaders(
+      realtimeSecret,
+      workspaceId,
+    ),
   }
 }
 
