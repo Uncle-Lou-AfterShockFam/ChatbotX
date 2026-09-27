@@ -134,3 +134,31 @@ describe("checkGuestRateLimit with a hung store (s201c)", () => {
     ).rejects.toThrow(RangeError)
   })
 })
+
+describe("checkGuestRateLimit scope (s210)", () => {
+  test("the token-refresh scope has its own keys; the message keys are unchanged", async () => {
+    const keys: string[] = []
+    const store = {
+      setNumberIfNotExists: vi.fn((key: string) => {
+        keys.push(key)
+        return Promise.resolve(true)
+      }),
+      incrementCounter: vi.fn(() => Promise.resolve(1)),
+    }
+    const input = {
+      webchatId: "42",
+      clientIp: "203.0.113.7",
+      guestConversationId: "123:guest",
+      store,
+      now: 0,
+    }
+    await checkGuestRateLimit(input)
+    await checkGuestRateLimit({ ...input, scope: "token-refresh" })
+    expect(keys).toEqual([
+      "guest-rate-limit:ip:42:203.0.113.7:0",
+      "guest-rate-limit:session:42:123:guest:0",
+      "guest-rate-limit:token-refresh:ip:42:203.0.113.7:0",
+      "guest-rate-limit:token-refresh:session:42:123:guest:0",
+    ])
+  })
+})

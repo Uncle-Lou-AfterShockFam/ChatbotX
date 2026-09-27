@@ -16,7 +16,7 @@ import { createId } from "@chatbotx.io/utils"
 import { MenuIcon } from "lucide-react"
 import Link from "next/link"
 import { useAction } from "next-safe-action/hooks"
-import { Fragment, useEffect, useState } from "react"
+import { Fragment, useEffect, useRef, useState } from "react"
 import { createWebchatMessageAction } from "@/features/messages/actions/create-webchat-message.action"
 import { getWebchatProfileFields } from "../browser-profile-fields"
 import { useGuestSessionStore } from "../providers/store/guest-session-provider"
@@ -41,11 +41,15 @@ export default function WebchatMessageMenu({
     setMenus(getMenus())
   }, [getMenus])
 
-  const { appendMessage, guestConversationId } = useGuestSessionStore(
-    (state) => state,
-  )
+  const {
+    appendMessage,
+    guestConversationId,
+    freshAccessToken,
+    markSendFailed,
+  } = useGuestSessionStore((state) => state)
+  const sendingRef = useRef(false)
 
-  const { execute } = useAction(createWebchatMessageAction, {
+  const { executeAsync } = useAction(createWebchatMessageAction, {
     onExecute: ({ input }) => {
       // try to push raw message to store
       if ("text" in input && input.text) {
@@ -67,6 +71,15 @@ export default function WebchatMessageMenu({
         })
       }
     },
+    onError: ({ error, input }) => {
+      if (input.clientId) {
+        markSendFailed(
+          input.clientId,
+          (typeof error.serverError === "string" && error.serverError) ||
+            "Network error",
+        )
+      }
+    },
   })
 
   return menus.length > 0 ? (
@@ -84,18 +97,30 @@ export default function WebchatMessageMenu({
           <Fragment key={index}>
             {menu.type === webchatPersistentMenuType.enum.flow && (
               <DropdownMenuItem
-                onClick={() =>
-                  execute({
-                    flowId: menu.flowId,
-                    clientId: createId(),
-                    workspaceId,
-                    webchatId,
-                    guestConversationId: guestConversationId ?? "",
-                    ...getWebchatProfileFields(),
-                    accessToken: accessToken ?? undefined,
-                    parentOrigin: parentOrigin ?? undefined,
-                  })
-                }
+                onClick={async () => {
+                  // A due token is refreshed first (s210); one click at a time.
+                  if (sendingRef.current) {
+                    return
+                  }
+                  sendingRef.current = true
+                  // The guard covers the send itself, not just the token
+                  // await, or a double click runs the flow twice (s212).
+                  try {
+                    const token = await freshAccessToken().catch(() => null)
+                    await executeAsync({
+                      flowId: menu.flowId,
+                      clientId: createId(),
+                      workspaceId,
+                      webchatId,
+                      guestConversationId: guestConversationId ?? "",
+                      ...getWebchatProfileFields(),
+                      accessToken: token ?? accessToken ?? undefined,
+                      parentOrigin: parentOrigin ?? undefined,
+                    })
+                  } finally {
+                    sendingRef.current = false
+                  }
+                }}
               >
                 {menu.label}
               </DropdownMenuItem>

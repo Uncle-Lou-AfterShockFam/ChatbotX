@@ -7,7 +7,7 @@ import { createId } from "@chatbotx.io/utils"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useHookFormAction } from "@next-safe-action/adapter-react-hook-form/hooks"
 import { PaperclipIcon, SendHorizonalIcon } from "lucide-react"
-import { type KeyboardEvent, useEffect, useMemo, useRef } from "react"
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react"
 import { Controller, useWatch } from "react-hook-form"
 import { createWebchatMessageAction } from "../messages/actions/create-webchat-message.action"
 import EmojiPicker from "../messages/components/emoji-picker"
@@ -33,8 +33,13 @@ export const WebchatMessageInput = (props: WebchatMessageInputProps) => {
     parentOrigin,
     accessToken,
   } = props
-  const { sendMessage, guestConversationId, appendMessage } =
-    useGuestSessionStore((state) => state)
+  const {
+    sendMessage,
+    guestConversationId,
+    appendMessage,
+    freshAccessToken,
+    markSendFailed,
+  } = useGuestSessionStore((state) => state)
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const defaultValues = useMemo(
@@ -72,7 +77,7 @@ export const WebchatMessageInput = (props: WebchatMessageInputProps) => {
         onExecute: ({ input }) => {
           // try to push raw message to store
           if ("text" in input && input.text) {
-            sendMessage(input.text)
+            sendMessage(input.text, input.clientId)
           }
 
           setValue("text", "")
@@ -87,6 +92,23 @@ export const WebchatMessageInput = (props: WebchatMessageInputProps) => {
           resetFormAndAction()
 
           reset(defaultValues)
+          setValue("clientId", createId())
+        },
+        // A send that did not land (an expired token the refresh could not
+        // replace, a 429, a network error): flag the bubble, give the text
+        // back unless the visitor already typed more, and take a new clientId
+        // so the next send is not merged into this bubble (s212 probe).
+        onError: ({ error, input }) => {
+          if (input.clientId) {
+            markSendFailed(
+              input.clientId,
+              (typeof error.serverError === "string" && error.serverError) ||
+                "Network error",
+            )
+          }
+          if ("text" in input && input.text && !form.getValues("text")) {
+            setValue("text", input.text)
+          }
           setValue("clientId", createId())
         },
       },
@@ -105,6 +127,36 @@ export const WebchatMessageInput = (props: WebchatMessageInputProps) => {
       setValue("guestConversationId", guestConversationId)
     }
   }, [guestConversationId, setValue])
+
+  // The form caches its defaults at mount: a refreshed token (s210) must be
+  // pushed in, and a due one refreshed before the send, or a send after a
+  // long idle 403s and the optimistic bubble is lost.
+  useEffect(() => {
+    setValue("accessToken", accessToken ?? undefined)
+  }, [accessToken, setValue])
+
+  // One send at a time from the first keypress/click: the token await sits
+  // before react-hook-form's own isSubmitting, so Enter + click could send
+  // the same text twice (s210 skeptic).
+  const sendingRef = useRef(false)
+  const [isPreparingSend, setIsPreparingSend] = useState(false)
+  const submitWithFreshToken = async (event?: {
+    preventDefault: () => void
+  }) => {
+    event?.preventDefault()
+    if (sendingRef.current) {
+      return
+    }
+    sendingRef.current = true
+    setIsPreparingSend(true)
+    try {
+      setValue("accessToken", (await freshAccessToken()) ?? undefined)
+      await handleSubmitWithAction()
+    } finally {
+      sendingRef.current = false
+      setIsPreparingSend(false)
+    }
+  }
 
   const files = useWatch({ control, name: "files" })
   const content = useWatch({ control, name: "text" })
@@ -149,17 +201,14 @@ export const WebchatMessageInput = (props: WebchatMessageInputProps) => {
     if (e.key === "Enter" && e.shiftKey === false) {
       e.preventDefault()
 
-      await handleSubmitWithAction()
+      await submitWithFreshToken()
     }
   }
 
   return (
     <div className="m-3 rounded-xl border pt-2">
       <Form {...form}>
-        <form
-          className="flex w-full flex-col"
-          onSubmit={handleSubmitWithAction}
-        >
+        <form className="flex w-full flex-col" onSubmit={submitWithFreshToken}>
           {files.length === 0 && (
             <div className="mb-1 w-full px-2.5 py-1">
               <Controller
@@ -211,7 +260,8 @@ export const WebchatMessageInput = (props: WebchatMessageInputProps) => {
                 className="px-2 py-1.5 [&_svg]:size-5"
                 disabled={
                   !(workspaceId && form.formState.isValid) ||
-                  form.formState.isSubmitting
+                  form.formState.isSubmitting ||
+                  isPreparingSend
                 }
                 type="submit"
                 variant="ghost"
