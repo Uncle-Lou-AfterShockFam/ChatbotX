@@ -465,7 +465,9 @@ async function getConversationFromInput(
         .values({
           id: createId(),
           workspaceId: parsedInput.workspaceId,
-          email: parsedInput.guestConversationId,
+          // Never the guest id (s213): it is the conversation's only
+          // credential, and email reaches exports, flow tokens and sends.
+          email: null,
           gender: "unknown",
           firstName: "Guest",
           lastName: randomString(10),

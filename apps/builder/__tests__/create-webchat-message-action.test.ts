@@ -832,6 +832,22 @@ describe("handleCreateWebchatMessage — MAC quota", () => {
     )
   })
 
+  test("never copies the guest id into the new contact's email (s213)", async () => {
+    mockContactInboxFindLatest.mockResolvedValue(undefined)
+    seedNewContactInserts()
+
+    await handleCreateWebchatMessage({ parsedInput: input })
+
+    expect(insertBuilder.values).toHaveBeenCalledWith(
+      expect.objectContaining({ firstName: "Guest", email: null }),
+    )
+    for (const [values] of insertBuilder.values.mock.calls) {
+      expect(JSON.stringify(values ?? {})).not.toContain(
+        `"email":"${input.guestConversationId}"`,
+      )
+    }
+  })
+
   test("does not create a contact for existing webchat inbox even with payload locale and timezone", async () => {
     mockContactInboxFindLatest.mockResolvedValue(contactInbox)
 
