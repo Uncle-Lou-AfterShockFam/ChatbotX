@@ -46,8 +46,9 @@ import {
 import { headers } from "next/headers"
 import { getTranslations } from "next-intl/server"
 import { randomString } from "remeda"
-import { isOriginAuthorized } from "@/features/integration-webchat/lib/authorized-domain"
+import { isGuestOriginAllowed } from "@/features/integration-webchat/lib/authorized-domain"
 import { verifyWebchatAccessToken } from "@/features/integration-webchat/lib/webchat-access-token"
+import { getDomainFromHeader } from "@/lib/domain"
 import { logger } from "@/lib/log"
 import {
   checkGuestRateLimit,
@@ -117,10 +118,10 @@ export async function handleCreateWebchatMessage({
   }
 
   if (
-    integrationWebchat.authorizedDomains.length > 0 &&
-    !isOriginAuthorized(
+    !isGuestOriginAllowed(
       parsedInput.parentOrigin,
       integrationWebchat.authorizedDomains,
+      await getDomainFromHeader(),
     )
   ) {
     const t = await getTranslations("webchat.unauthorizedDomain")

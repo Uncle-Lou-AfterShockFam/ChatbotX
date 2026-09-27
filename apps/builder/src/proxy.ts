@@ -6,6 +6,7 @@ import {
 import { getSessionCookie } from "better-auth/cookies"
 import { headers } from "next/headers"
 import { type NextRequest, NextResponse } from "next/server"
+import { webchatFrameAncestors } from "@/features/integration-webchat/lib/frame-ancestors"
 import { auth } from "@/lib/auth/auth"
 import { formFrameAncestors } from "@/lib/forms/frame-ancestors"
 import { isPublicRoute } from "@/lib/public-routes"
@@ -43,8 +44,11 @@ export async function proxy(request: NextRequest) {
 
   if (isPublicRoute(pathname)) {
     const response = attachProxyUrl(request)
-    // Public forms may be framed only by the origins the form allows (s200).
-    const csp = await formFrameAncestors(pathname)
+    // Public forms may be framed only by the origins the form allows (s200),
+    // the webchat iframe only by its authorizedDomains (s210).
+    const csp =
+      (await formFrameAncestors(pathname)) ??
+      (await webchatFrameAncestors(pathname, request.nextUrl.searchParams))
     if (csp) {
       response.headers.set("Content-Security-Policy", csp)
     }

@@ -6,32 +6,27 @@ import {
 } from "@chatbotx.io/business"
 import { type NextRequest, NextResponse } from "next/server"
 import { getTranslations } from "next-intl/server"
-import { isOriginAuthorized } from "@/features/integration-webchat/lib/authorized-domain"
+import {
+  isFirstPartyOrigin,
+  isGuestOriginAllowed,
+} from "@/features/integration-webchat/lib/authorized-domain"
 import { verifyWebchatAccessToken } from "@/features/integration-webchat/lib/webchat-access-token"
 import { findIntegrationWebchat } from "@/features/integration-webchat/queries"
 import { handleCreateWebchatMessage } from "@/features/messages/actions/create-webchat-message.action"
 import { listMessages } from "@/features/messages/queries"
 import { createWebchatMessageRequest } from "@/features/messages/schema/mutation"
 import { listGuestMessagesRequest } from "@/features/messages/schema/query"
+import { getDomainFromHeader } from "@/lib/domain"
 import { serverErrorHandler } from "@/lib/errors/server-handler"
 import {
   checkGuestRateLimit,
   getGuestClientIp,
 } from "@/lib/rate-limit/guest-rate-limit"
 
-const corsHeaders = (origin: string | null, authorized: boolean) => {
-  const headers = new Headers({
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    Vary: "Origin",
-  })
-  // Bearer-token auth (not cookie-based), so no Access-Control-Allow-Credentials.
-  // Reflect the request origin only once the request is authorized.
-  if (authorized && origin) {
-    headers.set("Access-Control-Allow-Origin", origin)
-  }
-  return headers
-}
+// Only the widget iframe (the hub's own origin, relative URLs) calls this
+// route, so it answers no CORS at all (s210): a stranger's page that relays a
+// server-minted token can no longer read or write a chat from the browser.
+const guestHeaders = () => new Headers({ Vary: "Origin" })
 
 const BEARER_TOKEN_SEPARATOR = /\s+/
 
@@ -71,18 +66,21 @@ const emptyMessagesResponse = (headers: Headers) =>
     { headers },
   )
 
-export function OPTIONS(req: NextRequest) {
-  // Preflight cannot resolve the target webchat (no body/webchatId), so reflect
-  // the request Origin permissively here; real enforcement happens on GET/POST.
-  return new NextResponse(null, {
-    headers: corsHeaders(req.headers.get("origin"), true),
-    status: 204,
-  })
+export function OPTIONS() {
+  // No Access-Control-Allow-* headers: a cross-origin preflight fails.
+  return new NextResponse(null, { headers: guestHeaders(), status: 204 })
 }
 
 export async function GET(req: NextRequest) {
-  const requestOrigin = req.headers.get("origin")
   try {
+    // A browser sends Origin on every cross-origin CORS-mode call and every
+    // POST, so a stranger's page is refused here. No Origin means a non-CORS
+    // caller (a same-origin GET, or a non-browser client that the token and
+    // allowlist below still gate): not proof of the hub.
+    const appHost = await getDomainFromHeader()
+    if (!isFirstPartyOrigin(req.headers.get("origin"), appHost)) {
+      return await forbiddenResponse(guestHeaders())
+    }
     const searchParams = Object.fromEntries(req.nextUrl.searchParams)
     const data = listGuestMessagesRequest.parse(searchParams)
 
@@ -90,7 +88,7 @@ export async function GET(req: NextRequest) {
       where: { id: data.workspaceId },
     })
     if (workspace && isWorkspaceScheduledForDeletion(workspace)) {
-      return await forbiddenResponse(corsHeaders(requestOrigin, false))
+      return await forbiddenResponse(guestHeaders())
     }
 
     const rateLimit = await checkGuestRateLimit({
@@ -99,10 +97,7 @@ export async function GET(req: NextRequest) {
       webchatId: data.webchatId,
     })
     if (rateLimit.limited) {
-      return await rateLimitResponse(
-        corsHeaders(requestOrigin, false),
-        rateLimit.retryAfter,
-      )
+      return await rateLimitResponse(guestHeaders(), rateLimit.retryAfter)
     }
 
     const webchat = await findIntegrationWebchat({
@@ -121,9 +116,12 @@ export async function GET(req: NextRequest) {
     })
     const authorized =
       tokenAuthorized &&
-      (webchat.authorizedDomains.length === 0 ||
-        isOriginAuthorized(data.parentOrigin, webchat.authorizedDomains))
-    const headers = corsHeaders(requestOrigin, authorized)
+      isGuestOriginAllowed(
+        data.parentOrigin,
+        webchat.authorizedDomains,
+        appHost,
+      )
+    const headers = guestHeaders()
     if (!authorized) {
       return await forbiddenResponse(headers)
     }
@@ -158,13 +156,20 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(result, { headers })
   } catch (e) {
-    return serverErrorHandler(e, corsHeaders(requestOrigin, false))
+    return serverErrorHandler(e, guestHeaders())
   }
 }
 
 export async function POST(req: NextRequest) {
-  const requestOrigin = req.headers.get("origin")
   try {
+    // A browser sends Origin on every cross-origin CORS-mode call and every
+    // POST, so a stranger's page is refused here. No Origin means a non-CORS
+    // caller (a same-origin GET, or a non-browser client that the token and
+    // allowlist below still gate): not proof of the hub.
+    const appHost = await getDomainFromHeader()
+    if (!isFirstPartyOrigin(req.headers.get("origin"), appHost)) {
+      return await forbiddenResponse(guestHeaders())
+    }
     const data = await req.json()
     const parsedInput = createWebchatMessageRequest.parse(data)
 
@@ -183,9 +188,12 @@ export async function POST(req: NextRequest) {
     })
     const authorized =
       tokenAuthorized &&
-      (webchat.authorizedDomains.length === 0 ||
-        isOriginAuthorized(parsedInput.parentOrigin, webchat.authorizedDomains))
-    const headers = corsHeaders(requestOrigin, authorized)
+      isGuestOriginAllowed(
+        parsedInput.parentOrigin,
+        webchat.authorizedDomains,
+        appHost,
+      )
+    const headers = guestHeaders()
     if (!authorized) {
       return await forbiddenResponse(headers)
     }
@@ -204,6 +212,6 @@ export async function POST(req: NextRequest) {
       { headers },
     )
   } catch (e) {
-    return serverErrorHandler(e, corsHeaders(requestOrigin, false))
+    return serverErrorHandler(e, guestHeaders())
   }
 }
