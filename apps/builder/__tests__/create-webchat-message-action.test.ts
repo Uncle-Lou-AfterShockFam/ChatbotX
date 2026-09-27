@@ -270,7 +270,7 @@ const { handleCreateWebchatMessage } = await import(
 
 const conversation = {
   id: "conv-1",
-  workspaceId: "ws-1",
+  workspaceId: "1",
   contactId: "contact-1",
   additionalAttributes: null,
 }
@@ -340,9 +340,9 @@ describe("handleCreateWebchatMessage", () => {
     await handleCreateWebchatMessage({
       parsedInput: {
         text: "hello",
-        workspaceId: "ws-1",
+        workspaceId: "1",
         webchatId: "webchat-1",
-        guestConversationId: "guest-1",
+        guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
       },
     })
 
@@ -358,7 +358,7 @@ describe("handleCreateWebchatMessage", () => {
 
   test("rejects messages when the workspace is scheduled for deletion", async () => {
     mockWorkspaceFind.mockResolvedValue({
-      id: "ws-1",
+      id: "1",
       ownerId: "owner-1",
       scheduledDeletionAt: new Date(),
     })
@@ -367,9 +367,9 @@ describe("handleCreateWebchatMessage", () => {
       handleCreateWebchatMessage({
         parsedInput: {
           text: "hello",
-          workspaceId: "ws-1",
+          workspaceId: "1",
           webchatId: "webchat-1",
-          guestConversationId: "guest-1",
+          guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
         },
       }),
     ).rejects.toMatchObject({
@@ -383,9 +383,9 @@ describe("handleCreateWebchatMessage", () => {
     await handleCreateWebchatMessage({
       parsedInput: {
         text: "hello",
-        workspaceId: "ws-1",
+        workspaceId: "1",
         webchatId: "webchat-1",
-        guestConversationId: "guest-1",
+        guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
       },
     })
 
@@ -395,7 +395,7 @@ describe("handleCreateWebchatMessage", () => {
     expect(mockContactInboxUpdateTracking).toHaveBeenCalledWith({
       contactInboxId: "ci-1",
       contactId: "contact-1",
-      workspaceId: "ws-1",
+      workspaceId: "1",
       data: {
         firstInteractionAt: messageInput.createdAt,
         contactLastReadAt: messageInput.createdAt,
@@ -411,14 +411,14 @@ describe("handleCreateWebchatMessage", () => {
     await handleCreateWebchatMessage({
       parsedInput: {
         text: "hello",
-        workspaceId: "ws-1",
+        workspaceId: "1",
         webchatId: "webchat-1",
-        guestConversationId: "guest-1",
+        guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
       },
     })
 
     expect(mockContactUnblockIfBlocked).toHaveBeenCalledWith(
-      { workspaceId: "ws-1", id: "contact-1" },
+      { workspaceId: "1", id: "contact-1" },
       contact,
     )
   })
@@ -429,9 +429,9 @@ describe("handleCreateWebchatMessage", () => {
     await handleCreateWebchatMessage({
       parsedInput: {
         text: "hello",
-        workspaceId: "ws-1",
+        workspaceId: "1",
         webchatId: "webchat-1",
-        guestConversationId: "guest-1",
+        guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
       },
     })
 
@@ -440,7 +440,7 @@ describe("handleCreateWebchatMessage", () => {
       contactInboxId: "ci-1",
       messageId: "msg-1",
       messageText: "hello",
-      workspaceId: "ws-1",
+      workspaceId: "1",
     })
   })
 
@@ -449,9 +449,9 @@ describe("handleCreateWebchatMessage", () => {
       parsedInput: {
         text: "clicked",
         postback: "button-a",
-        workspaceId: "ws-1",
+        workspaceId: "1",
         webchatId: "webchat-1",
-        guestConversationId: "guest-1",
+        guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
       },
     })
 
@@ -476,9 +476,9 @@ describe("handleCreateWebchatMessage", () => {
       handleCreateWebchatMessage({
         parsedInput: {
           text: "hello",
-          workspaceId: "ws-1",
+          workspaceId: "1",
           webchatId: "webchat-1",
-          guestConversationId: "guest-1",
+          guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
           parentOrigin: "https://attacker.test",
         },
       }),
@@ -500,9 +500,9 @@ describe("handleCreateWebchatMessage", () => {
     await handleCreateWebchatMessage({
       parsedInput: {
         text: "hello",
-        workspaceId: "ws-1",
+        workspaceId: "1",
         webchatId: "webchat-1",
-        guestConversationId: "guest-1",
+        guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
         parentOrigin: "app.chatbotx.io",
       },
     }).catch((error: { httpStatusCode?: number }) => {
@@ -523,9 +523,9 @@ describe("handleCreateWebchatMessage", () => {
       handleCreateWebchatMessage({
         parsedInput: {
           text: "hello",
-          workspaceId: "ws-1",
+          workspaceId: "1",
           webchatId: "webchat-1",
-          guestConversationId: "guest-1",
+          guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
           parentOrigin: "app.chatbotx.io",
         },
       }),
@@ -544,9 +544,9 @@ describe("handleCreateWebchatMessage", () => {
       handleCreateWebchatMessage({
         parsedInput: {
           text: "hello",
-          workspaceId: "ws-1",
+          workspaceId: "1",
           webchatId: "webchat-1",
-          guestConversationId: "guest-1",
+          guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
         },
       }),
     ).rejects.toMatchObject({
@@ -577,9 +577,9 @@ describe("handleCreateWebchatMessage — flowId", () => {
       handleCreateWebchatMessage({
         parsedInput: {
           flowId: "flow-attacker",
-          workspaceId: "ws-1",
+          workspaceId: "1",
           webchatId: "webchat-1",
-          guestConversationId: "guest-1",
+          guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
         },
       }),
     ).rejects.toMatchObject({
@@ -602,9 +602,9 @@ describe("handleCreateWebchatMessage — flowId", () => {
     await handleCreateWebchatMessage({
       parsedInput: {
         flowId: "flow-allowed",
-        workspaceId: "ws-1",
+        workspaceId: "1",
         webchatId: "webchat-1",
-        guestConversationId: "guest-1",
+        guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
       },
     })
 
@@ -630,9 +630,9 @@ describe("handleCreateWebchatMessage — MAC quota", () => {
 
   const input = {
     text: "hello",
-    workspaceId: "ws-1",
+    workspaceId: "1",
     webchatId: "webchat-1",
-    guestConversationId: "guest-1",
+    guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
   }
 
   const seedNewContactInserts = () => {
@@ -640,7 +640,7 @@ describe("handleCreateWebchatMessage — MAC quota", () => {
       .mockResolvedValueOnce([
         {
           id: "contact-new",
-          workspaceId: "ws-1",
+          workspaceId: "1",
           createdAt: new Date("2026-06-21T00:00:00Z"),
         },
       ])
@@ -657,7 +657,7 @@ describe("handleCreateWebchatMessage — MAC quota", () => {
       .mockResolvedValueOnce([
         {
           id: "conv-new",
-          workspaceId: "ws-1",
+          workspaceId: "1",
           contactId: "contact-new",
           additionalAttributes: null,
         },
@@ -693,13 +693,13 @@ describe("handleCreateWebchatMessage — MAC quota", () => {
 
     await handleCreateWebchatMessage({ parsedInput: input })
 
-    expect(mockWorkspaceFind).toHaveBeenCalledWith({ where: { id: "ws-1" } })
+    expect(mockWorkspaceFind).toHaveBeenCalledWith({ where: { id: "1" } })
     // MAC is gated + consumed atomically with the insert (owner-derived). The
     // info-only `contacts` counter is recorded inside this chokepoint too, so
     // the action no longer increments it separately (that would double-count).
     expect(mockCreateNewContactWithMac).toHaveBeenCalledTimes(1)
     expect(mockCreateNewContactWithMac).toHaveBeenCalledWith(
-      expect.objectContaining({ ownerId: "owner-1", workspaceId: "ws-1" }),
+      expect.objectContaining({ ownerId: "owner-1", workspaceId: "1" }),
     )
     expect(insertBuilder.values).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -727,7 +727,7 @@ describe("handleCreateWebchatMessage — MAC quota", () => {
     })
 
     expect(mockEmitContactCreated).toHaveBeenCalledWith(
-      "ws-1",
+      "1",
       "contact-new",
       undefined,
       undefined,
@@ -830,6 +830,36 @@ describe("handleCreateWebchatMessage — MAC quota", () => {
         language: undefined,
       }),
     )
+  })
+
+  test.each([
+    ["a legacy digits-only id", "11616773281153025"],
+    ["another workspace's minted id", "9:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f"],
+  ])("the raw handler refuses %s before any lookup (s213)", async (_, id) => {
+    await expect(
+      handleCreateWebchatMessage({
+        parsedInput: { ...input, guestConversationId: id },
+      }),
+    ).rejects.toThrow()
+    expect(mockWorkspaceFind).not.toHaveBeenCalled()
+    expect(mockContactInboxFindLatest).not.toHaveBeenCalled()
+    expect(tx.insert).not.toHaveBeenCalled()
+  })
+
+  test("never copies the guest id into the new contact's email (s213)", async () => {
+    mockContactInboxFindLatest.mockResolvedValue(undefined)
+    seedNewContactInserts()
+
+    await handleCreateWebchatMessage({ parsedInput: input })
+
+    expect(insertBuilder.values).toHaveBeenCalledWith(
+      expect.objectContaining({ firstName: "Guest", email: null }),
+    )
+    for (const [values] of insertBuilder.values.mock.calls) {
+      expect(JSON.stringify(values ?? {})).not.toContain(
+        `"email":"${input.guestConversationId}"`,
+      )
+    }
   })
 
   test("does not create a contact for existing webchat inbox even with payload locale and timezone", async () => {

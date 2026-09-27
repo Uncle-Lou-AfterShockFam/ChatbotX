@@ -7,7 +7,10 @@ import { zodBigintAsString } from "@chatbotx.io/utils"
 import { type NextRequest, NextResponse } from "next/server"
 import z from "zod"
 import { isFirstPartyOrigin } from "@/features/integration-webchat/lib/authorized-domain"
-import { zodGuestConversationId } from "@/features/integration-webchat/lib/guest-conversation-id"
+import {
+  refineGuestIdWorkspace,
+  zodGuestConversationId,
+} from "@/features/integration-webchat/lib/guest-conversation-id"
 import { refreshWebchatAccessToken } from "@/features/integration-webchat/lib/refresh-webchat-token"
 import { readWebchatAccessToken } from "@/features/integration-webchat/lib/webchat-access-token"
 import { getDomainFromHeader } from "@/lib/domain"
@@ -17,13 +20,15 @@ import {
   getGuestClientIp,
 } from "@/lib/rate-limit/guest-rate-limit"
 
-const refreshRequest = z.strictObject({
-  workspaceId: zodBigintAsString(),
-  webchatId: zodBigintAsString(),
-  guestConversationId: zodGuestConversationId(),
-  accessToken: z.string().min(1).max(2048),
-  parentOrigin: z.string().max(2048).nullish(),
-})
+const refreshRequest = z
+  .strictObject({
+    workspaceId: zodBigintAsString(),
+    webchatId: zodBigintAsString(),
+    guestConversationId: zodGuestConversationId(),
+    accessToken: z.string().min(1).max(2048),
+    parentOrigin: z.string().max(2048).nullish(),
+  })
+  .superRefine(refineGuestIdWorkspace)
 
 const headers = () =>
   new Headers({ "Cache-Control": "no-store", Vary: "Origin" })

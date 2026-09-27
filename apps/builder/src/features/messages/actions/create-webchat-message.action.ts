@@ -36,6 +36,7 @@ import { setWebhookExecutionContext } from "@chatbotx.io/events/context"
 import { type UploadedFile, uploadMultipleFiles } from "@chatbotx.io/filesystem"
 import { messageEventTypeSchema } from "@chatbotx.io/flow-config"
 import { RealtimeEventType } from "@chatbotx.io/partysocket-config"
+import { isMintedGuestConversationId } from "@chatbotx.io/partysocket-config/guest-id"
 import { createId } from "@chatbotx.io/utils"
 import {
   ChatJobAction,
@@ -77,6 +78,21 @@ export async function handleCreateWebchatMessage({
 }: {
   parsedInput: CreateWebchatMessageRequest
 }) {
+  // Re-checked here, not only by the schemas (s213): this export sits in a
+  // "use server" module, so it must not trust a caller that skipped parsing.
+  if (
+    !isMintedGuestConversationId(
+      parsedInput.guestConversationId,
+      parsedInput.workspaceId,
+    )
+  ) {
+    throw new ChatbotXException(
+      "Invalid guest conversation id",
+      "invalidGuestConversationId",
+      400,
+    )
+  }
+
   setWebhookExecutionContext({ source: "webhook" })
 
   const workspace = await workspaceService.find({
@@ -465,7 +481,9 @@ async function getConversationFromInput(
         .values({
           id: createId(),
           workspaceId: parsedInput.workspaceId,
-          email: parsedInput.guestConversationId,
+          // Never the guest id (s213): it is the conversation's only
+          // credential, and email reaches exports, flow tokens and sends.
+          email: null,
           gender: "unknown",
           firstName: "Guest",
           lastName: randomString(10),

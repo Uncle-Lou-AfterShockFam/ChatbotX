@@ -6,6 +6,8 @@ import {
   revokeWorkspaceMemberConnections as revokeWorkspaceMemberConnectionsLow,
   sendToWorkspaceMember as sendToWorkspaceMemberLow,
 } from "@chatbotx.io/partysocket-config"
+import { isMintedGuestConversationId } from "@chatbotx.io/partysocket-config/guest-id"
+import { logger } from "../logger"
 import { resolveBroadcastSecret, resolveTenantSettings } from "./settings"
 
 const resolveTargetByWorkspace = async (
@@ -60,6 +62,19 @@ export const broadcastToGuestParty = async (
   args: { workspaceId: string; guestConversationId: string },
   json: RealtimeEventData,
 ) => {
+  // Only a minted `<workspaceId>:<uuid>` id of THIS workspace is a guest room
+  // (s213): the realtime party refuses every other name on connect, so a
+  // non-minted sourceId (an API/import-created webchat contact) has no
+  // listener, and another workspace's id must never receive our messages.
+  if (
+    !isMintedGuestConversationId(args.guestConversationId, args.workspaceId)
+  ) {
+    logger.warn(
+      { workspaceId: args.workspaceId },
+      "guest broadcast skipped: sourceId is not a minted guest id of this workspace",
+    )
+    return
+  }
   const target = await resolveTargetByWorkspace(args.workspaceId)
   return broadcastToGuestPartyLow(target, args.guestConversationId, json)
 }

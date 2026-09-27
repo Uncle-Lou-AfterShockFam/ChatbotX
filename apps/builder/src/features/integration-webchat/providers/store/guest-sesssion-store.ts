@@ -1,4 +1,5 @@
 import type { WebchatPersistentMenu } from "@chatbotx.io/database/partials"
+import { isMintedGuestConversationId } from "@chatbotx.io/partysocket-config/guest-id"
 import type { MessageButtonTemplate } from "@chatbotx.io/sdk"
 import { createId } from "@chatbotx.io/utils"
 import ky from "ky"
@@ -11,8 +12,9 @@ import { getWebchatProfileFields } from "../../browser-profile-fields"
 import { isWebchatTokenDue } from "../../lib/webchat-token-expiry"
 import {
   buildGuestStorageKey,
-  readLegacyGuestId,
+  LEGACY_GLOBAL_KEY,
   safeStorageGet,
+  safeStorageRemove,
   safeStorageSet,
 } from "./lib/guest-session"
 import type { WebchatClientConfig } from "./lib/webchat-client-config"
@@ -168,17 +170,17 @@ export const createGuestSessionStore = (
           return
         }
 
+        // The pre-s213 global key held a digits-only id that was copied into
+        // every webchat on the hub origin; it is never read again.
+        safeStorageRemove(LEGACY_GLOBAL_KEY)
+
+        // A stored id is kept only in the minted form for THIS workspace; a
+        // legacy digits-only or foreign id would be refused by every guest
+        // route, so it is replaced by the server-minted one.
         const scopedKey = buildGuestStorageKey(config.workspaceId, config.id)
         const scopedGuestId = safeStorageGet(scopedKey)
-        if (scopedGuestId) {
+        if (isMintedGuestConversationId(scopedGuestId, config.workspaceId)) {
           set({ guestConversationId: scopedGuestId, isNewGuestSession: false })
-          return
-        }
-
-        const legacyGuestId = readLegacyGuestId()
-        if (legacyGuestId) {
-          safeStorageSet(scopedKey, legacyGuestId)
-          set({ guestConversationId: legacyGuestId, isNewGuestSession: false })
           return
         }
 
