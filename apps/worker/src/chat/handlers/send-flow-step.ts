@@ -12,6 +12,10 @@ import {
   conversationService,
   resolveTenantSettings,
 } from "@chatbotx.io/business"
+import {
+  dynamicImageLinkOrigins,
+  signDynamicImageLinksInStep,
+} from "@chatbotx.io/business/dynamic-image/signed-link"
 import { getPublicFileUrl } from "@chatbotx.io/business/utils"
 import {
   channelTypes,
@@ -30,6 +34,7 @@ import type {
   MessageModel,
 } from "@chatbotx.io/database/types"
 import { signAppointmentWebviewToken } from "@chatbotx.io/encryption"
+import { signDynamicImageToken } from "@chatbotx.io/encryption/dynamic-image-token"
 import { emit } from "@chatbotx.io/event-bus"
 import { uploadFileFromUrl } from "@chatbotx.io/filesystem"
 import type { MetadataPayload, StepType } from "@chatbotx.io/flow-config"
@@ -559,7 +564,22 @@ export async function sendFlowStep({
         flowVersionId,
         executedFlowVersionId,
         appUrl,
-        step: resolvedStep as SendFlowStepData,
+        // s214: a Dynamic Image link gets a signed per-contact token in
+        // place of its forgeable `userId`, before the worker and the channel
+        // fetch it.
+        step: await signDynamicImageLinksInStep(
+          resolvedStep as SendFlowStepData,
+          {
+            origins: dynamicImageLinkOrigins(appUrl),
+            sign: (dynamicImageId) =>
+              signDynamicImageToken({
+                workspaceId: conversation.workspaceId,
+                dynamicImageId,
+                contactId: conversation.contactId,
+                contactInboxId: targetContactInbox.id,
+              }),
+          },
+        ),
       }),
       workspaceId: conversation.workspaceId,
       contactId: conversation.contactId,

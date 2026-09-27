@@ -3,13 +3,17 @@ import {
   dynamicImageService,
   getDynamicElementIds,
 } from "@chatbotx.io/business/dynamic-image"
+import { verifyDynamicImageToken } from "@chatbotx.io/encryption/dynamic-image-token"
 import { resolveContactVariablesDeep } from "@chatbotx.io/variables"
 import { type NextRequest, NextResponse } from "next/server"
 import { loadServableWorkspace } from "@/lib/workspace/load-servable-workspace"
 
 export const GET = async (request: NextRequest) => {
   const dynamicImageId = request.nextUrl.searchParams.get("dynamicImageId")
-  const userId = request.nextUrl.searchParams.get("userId")
+  // `t` is the signed contact token the worker appends at send time (s214).
+  // A bare `userId` is ignored: it was forgeable (a phone number on SMS
+  // lines), so an unsigned link only ever gets the static background.
+  const token = request.nextUrl.searchParams.get("t")
 
   if (!dynamicImageId) {
     return NextResponse.json(
@@ -41,9 +45,8 @@ export const GET = async (request: NextRequest) => {
     )
   }
 
-  // With no `userId` — or one that resolves to no contact below — there is
-  // no contact to personalize for, so fall back to the config's static
-  // background rather than erroring out.
+  // With no valid token there is no contact to personalize for, so fall back
+  // to the config's static background rather than erroring out.
   const redirectToBackground = async () => {
     const backgroundUrl =
       await dynamicImageService.resolveBackgroundUrl(dynamicImage)
@@ -56,19 +59,24 @@ export const GET = async (request: NextRequest) => {
     return NextResponse.redirect(backgroundUrl, 302)
   }
 
-  if (!userId) {
+  // A malformed, tampered or expired token is ordinary public input here,
+  // not a fault: it degrades to the background like no token at all.
+  const claims = token
+    ? await verifyDynamicImageToken(token).catch(() => null)
+    : null
+  // The token must be for THIS image in ITS workspace: a token minted for
+  // another image (or a foreign workspace) never renders this one.
+  if (
+    !claims ||
+    claims.dynamicImageId !== dynamicImage.id ||
+    claims.workspaceId !== dynamicImage.workspaceId
+  ) {
     return await redirectToBackground()
   }
 
-  // `userId` is `{{user_id}}` as resolved by the sending channel — the
-  // system field for `ContactInbox.sourceId` (the platform's own id for this
-  // contact), not `Contact.id`. `sourceId` is only unique per
-  // `(inboxId, sourceId)`; this URL carries no inbox/channel to disambiguate
-  // with, so the same external id under a different inbox in this workspace
-  // could in theory match the wrong contact — accepted as a known
-  // limitation of this trigger surface.
-  const contactInbox = await contactInboxService.findLatestBySourceId({
-    sourceId: userId,
+  const contactInbox = await contactInboxService.findInWorkspace({
+    id: claims.contactInboxId,
+    contactId: claims.contactId,
     workspaceId: dynamicImage.workspaceId,
   })
   if (!contactInbox) {

@@ -8,6 +8,9 @@ export const keys = () =>
         .enum(["community", "enterprise", "cloud"])
         .default("community"),
       NEXT_PUBLIC_BUILDER_URL: z.url().default("http://localhost:3123"),
+      // The OAuth broker host, when it is not the builder. Dynamic Image
+      // trigger URLs are built on it (`getBrokerOrigin`).
+      NEXT_PUBLIC_BROKER_URL: z.url().optional(),
       PLATFORM_ADMIN_EMAIL: z.email().optional(),
       LICENSE_KEY: z.string().optional(),
     },
