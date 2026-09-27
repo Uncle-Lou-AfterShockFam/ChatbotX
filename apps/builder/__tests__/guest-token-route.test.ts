@@ -19,9 +19,18 @@ vi.mock("@/features/integration-webchat/lib/refresh-webchat-token", () => ({
   refreshWebchatAccessToken: mocks.refresh,
 }))
 vi.mock("@/features/integration-webchat/lib/webchat-access-token", () => ({
-  // "ours.<sig>" stands for a token this hub signed; anything else is junk.
-  readWebchatAccessToken: async (token: string) =>
-    token.startsWith("ours.") ? { exp: 0 } : null,
+  // "ours.<sig>" stands for a token this hub signed (session "sid-1"),
+  // "legacy.<sig>" for one signed before the sid claim; anything else is junk.
+  readWebchatAccessToken: (token: string) => {
+    const signed = { exp: 0, webchatId: "42", workspaceId: "11701868563365888" }
+    if (token.startsWith("ours.")) {
+      return Promise.resolve({ ...signed, sid: "sid-1" })
+    }
+    if (token.startsWith("legacy.")) {
+      return Promise.resolve({ ...signed, sid: null })
+    }
+    return Promise.resolve(null)
+  },
 }))
 vi.mock("@/lib/domain", () => ({ getDomainFromHeader: async () => HUB }))
 vi.mock("@/lib/log", () => ({ logger: { warn: vi.fn() } }))
@@ -39,7 +48,7 @@ const body = {
   workspaceId: "11701868563365888",
   webchatId: "42",
   guestConversationId: "123:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
-  accessToken: "old-token",
+  accessToken: "ours.old-sig",
   parentOrigin: "shop.example",
 }
 const post = (payload: unknown, origin: string | null = `https://${HUB}`) =>
@@ -109,13 +118,33 @@ describe("POST /api/guest/token (s210)", () => {
     expect(await res.json()).toEqual({ accessToken: null })
   })
 
-  test("the session bucket is the signed token, never the body's guest id (s212)", async () => {
-    // Junk tokens naming a victim's guest id must not touch its bucket.
-    await POST(post(body))
-    expect(mocks.rateLimit).toHaveBeenLastCalledWith(
-      expect.objectContaining({ guestConversationId: undefined }),
+  test("junk, or a token for another webchat, is refused before any rate-limit key or lookup (s212)", async () => {
+    for (const payload of [
+      { ...body, accessToken: "forged.sig" },
+      { ...body, webchatId: "43" },
+      { ...body, workspaceId: "11701868563365889" },
+    ]) {
+      const res = await POST(post(payload))
+      expect(res.status).toBe(403)
+    }
+    expect(mocks.rateLimit).not.toHaveBeenCalled()
+    expect(mocks.refresh).not.toHaveBeenCalled()
+  })
+
+  test("both buckets key on signed fields: the session survives refreshes, never the body's guest id (s212)", async () => {
+    await POST(
+      post({
+        ...body,
+        guestConversationId: "9:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+      }),
     )
-    await POST(post({ ...body, accessToken: "ours.sig-abc" }))
+    expect(mocks.rateLimit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        guestConversationId: "sid-1",
+        webchatId: "42",
+      }),
+    )
+    await POST(post({ ...body, accessToken: "legacy.sig-abc" }))
     expect(mocks.rateLimit).toHaveBeenLastCalledWith(
       expect.objectContaining({ guestConversationId: "sig-abc" }),
     )

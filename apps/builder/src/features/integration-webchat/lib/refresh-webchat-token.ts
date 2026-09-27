@@ -80,5 +80,6 @@ export async function refreshWebchatAccessToken(
     origin: payload.originHost,
     webchatId: payload.webchatId,
     workspaceId: payload.workspaceId,
+    sid: payload.sid,
   })
 }

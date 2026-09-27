@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer"
+import { createId } from "@chatbotx.io/utils"
 import { hmacSha256Hex, timingSafeStringEqual } from "@chatbotx.io/utils/crypto"
 import { getHostFromOrigin } from "./authorized-domain"
 import { TOKEN_TTL_SECONDS } from "./webchat-token-expiry"
@@ -13,6 +14,7 @@ type WebchatAccessTokenPayloadShape = {
   originHost: unknown
   webchatId: unknown
   workspaceId: unknown
+  sid?: unknown
 }
 
 export type WebchatAccessTokenPayload = {
@@ -23,13 +25,23 @@ export type WebchatAccessTokenPayload = {
   originHost: string | null
   webchatId: string
   workspaceId: string
+  /**
+   * The widget session: minted with the page's token and carried by every
+   * refresh, so the refresh rate limit has a key the caller cannot rotate
+   * (s212). Null on a token minted before the claim existed.
+   */
+  sid: string | null
 }
 
 type WebchatAccessTokenInput = {
   origin?: string | null
   webchatId: string
   workspaceId: string
+  /** A refresh passes the old token's session; a page load starts one. */
+  sid?: string | null
 }
+
+const MAX_SID_LENGTH = 64
 
 type WebchatAccessTokenVerification = {
   authorized: boolean
@@ -53,12 +65,14 @@ export const createWebchatAccessToken = async ({
   workspaceId,
   webchatId,
   origin,
+  sid,
 }: WebchatAccessTokenInput) => {
   const payload: WebchatAccessTokenPayload = {
     exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS,
     originHost: getHostFromOrigin(origin),
     webchatId,
     workspaceId,
+    sid: sid || createId(),
   }
   const encodedPayload = base64UrlEncode(JSON.stringify(payload))
   const signature = await signPayload(encodedPayload)
@@ -153,7 +167,13 @@ export const readWebchatAccessToken = async (
         payload.originHost === null || typeof payload.originHost === "string"
       ) ||
       typeof payload.webchatId !== "string" ||
-      typeof payload.workspaceId !== "string"
+      typeof payload.workspaceId !== "string" ||
+      !(
+        payload.sid === undefined ||
+        (typeof payload.sid === "string" &&
+          payload.sid.length > 0 &&
+          payload.sid.length <= MAX_SID_LENGTH)
+      )
     ) {
       return null
     }
@@ -162,6 +182,7 @@ export const readWebchatAccessToken = async (
       originHost: payload.originHost,
       webchatId: payload.webchatId,
       workspaceId: payload.workspaceId,
+      sid: payload.sid ?? null,
     }
   } catch {
     return null

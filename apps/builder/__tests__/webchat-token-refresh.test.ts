@@ -77,6 +77,26 @@ const input = (token: string | null, parentOrigin: string | null) => ({
 })
 
 describe("refreshWebchatAccessToken", () => {
+  test("the widget session (sid) is minted once and carried by every refresh (s212)", async () => {
+    const first = await mint("shop.example")
+    const firstSid = (await readWebchatAccessToken(first))?.sid
+    expect(firstSid).toEqual(expect.any(String))
+    const fresh = await refreshWebchatAccessToken(
+      {
+        token: first,
+        workspaceId: WS,
+        webchatId: CHAT,
+        parentOrigin: "shop.example",
+        appHost: HUB,
+      },
+      deps(),
+    )
+    expect((await readWebchatAccessToken(fresh))?.sid).toBe(firstSid)
+    expect(
+      (await readWebchatAccessToken(await mint("shop.example")))?.sid,
+    ).not.toBe(firstSid)
+  })
+
   test("an allowlisted embed gets a fresh token bound to the same host", async () => {
     const old = await mint("https://www.shop.example/page")
     const fresh = await refreshWebchatAccessToken(
@@ -229,6 +249,23 @@ describe("readWebchatAccessToken", () => {
     ).toString("base64url")
     const signature = await hmacSha256Hex("test-better-auth-secret", bad)
     expect(await readWebchatAccessToken(`${bad}.${signature}`)).toBeNull()
+  })
+
+  test("a signed sid must be a short non-empty string; a token without one reads as sid null (s212)", async () => {
+    const { hmacSha256Hex } = await import("@chatbotx.io/utils/crypto")
+    const sign = async (payload: object) => {
+      const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url")
+      return `${encoded}.${await hmacSha256Hex("test-better-auth-secret", encoded)}`
+    }
+    const base = { exp: 1, originHost: null, webchatId: CHAT, workspaceId: WS }
+    for (const sid of [7, "", "x".repeat(65), null]) {
+      expect(
+        await readWebchatAccessToken(await sign({ ...base, sid })),
+      ).toBeNull()
+    }
+    expect(await readWebchatAccessToken(await sign(base))).toMatchObject({
+      sid: null,
+    })
   })
 })
 

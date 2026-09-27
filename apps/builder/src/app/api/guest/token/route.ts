@@ -50,17 +50,26 @@ export async function POST(req: NextRequest) {
     }
     const data = parsed.data
 
-    // The per-session bucket is keyed on the token we signed, never on the
-    // body's guestConversationId: anyone who knew a guest's id could burn
-    // that guest's refresh budget with junk tokens (s212 probe). A token
-    // that is not ours meets the per-IP bucket only.
-    const ownToken = await readWebchatAccessToken(data.accessToken)
+    // Only a token this hub signed, for the webchat it names, goes further:
+    // junk is refused here with no rate-limit key or DB read, and both
+    // buckets key on SIGNED fields. Body-keyed buckets let anyone burn a
+    // guest's budget (its guestConversationId) or rotate past every limit
+    // (webchatId) (s212 probes). `sid` survives refreshes; a pre-s212 token
+    // falls back to its signature until its first refresh.
+    const own = await readWebchatAccessToken(data.accessToken)
+    if (
+      !own ||
+      own.webchatId !== data.webchatId ||
+      own.workspaceId !== data.workspaceId
+    ) {
+      return denied(403)
+    }
     const rateLimit = await checkGuestRateLimit({
       clientIp: getGuestClientIp(req.headers),
-      guestConversationId: ownToken
-        ? data.accessToken.slice(data.accessToken.lastIndexOf(".") + 1)
-        : undefined,
-      webchatId: data.webchatId,
+      guestConversationId:
+        own.sid ??
+        data.accessToken.slice(data.accessToken.lastIndexOf(".") + 1),
+      webchatId: own.webchatId,
       scope: "token-refresh",
     })
     if (rateLimit.limited) {
