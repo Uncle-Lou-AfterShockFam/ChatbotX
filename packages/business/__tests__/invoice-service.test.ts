@@ -33,7 +33,12 @@ const m = vi.hoisted(() => {
     updates: [] as Record<string, unknown>[],
     /** false = the CAS update matches no row. */
     updateMatches: true,
+    /** Per-update overrides of updateMatches, consumed in order (s213b races). */
+    matchQueue: [] as boolean[],
+    /** Runs once after the next `get` read (a concurrent writer between reads). */
+    afterGet: null as (() => void) | null,
   }
+  const matches = () => state.matchQueue.shift() ?? state.updateMatches
   const selectChain: Record<string, unknown> = {}
   selectChain.from = () => selectChain
   selectChain.where = () => selectChain
@@ -70,7 +75,7 @@ const m = vi.hoisted(() => {
       },
       where: () => chain,
       returning: () => {
-        if (!(state.updateMatches && state.stored)) {
+        if (!(matches() && state.stored)) {
           return Promise.resolve([])
         }
         state.stored = { ...state.stored, ...pending }
@@ -80,7 +85,7 @@ const m = vi.hoisted(() => {
     // the lastError write is awaited without .returning()
     // biome-ignore lint/suspicious/noThenProperty: awaited query-builder stub
     chain.then = (resolve: (v: unknown) => unknown) => {
-      if (state.updateMatches && state.stored) {
+      if (matches() && state.stored) {
         state.stored = { ...state.stored, ...pending }
       }
       return resolve(undefined)
@@ -110,8 +115,13 @@ const m = vi.hoisted(() => {
     },
     query: {
       invoiceModel: {
-        findFirst: () =>
-          Promise.resolve(state.stored ? { ...state.stored } : undefined),
+        findFirst: () => {
+          const row = state.stored ? { ...state.stored } : undefined
+          const hook = state.afterGet
+          state.afterGet = null
+          hook?.()
+          return Promise.resolve(row)
+        },
       },
       integrationStripeModel: {
         findFirst: () => Promise.resolve(state.stripeRow ?? undefined),
@@ -310,6 +320,8 @@ beforeEach(() => {
     lineInserts: [],
     updates: [],
     updateMatches: true,
+    matchQueue: [],
+    afterGet: null,
   })
   credentialsSpy?.mockRestore()
   credentialsSpy = vi
@@ -1200,38 +1212,44 @@ describe("woocommerce (s211b PR3)", () => {
     expect(m.wooOrder).not.toHaveBeenCalled()
   })
 
-  test("voided while the site created the order: the order is cancelled there, the void row names it", async () => {
-    // The finalize CAS (draft -> open) misses because the row went void.
+  /** The finalize CAS misses (the row went void meanwhile); `claim` = the void row names no order yet. */
+  const loseDraftToVoid = (claim: boolean) =>
     m.wooOrder.mockImplementation(() => {
-      m.state.updateMatches = false
+      m.state.matchQueue = [false, claim]
       return Promise.resolve(ORDER)
     })
-    await invoiceService
-      .create(validInput({ method: "woocommerce" }))
-      .catch(() => undefined)
-    expect(m.wooCancel).toHaveBeenCalledWith(
-      expect.objectContaining({ orderId: "3701" }),
-    )
-    const last = m.state.updates.at(-1)
-    expect(last).toMatchObject({
-      providerInvoiceId: "wc:https://bakery.example.org:3701",
-    })
-    expect(last).not.toHaveProperty("lastError")
-  })
 
-  test("voided while the site created the order and the cancel failed: lastError says to cancel it", async () => {
-    m.wooCancel.mockResolvedValue({ kind: "failed", reason: "HTTP 404" })
-    m.wooOrder.mockImplementation(() => {
-      m.state.updateMatches = false
-      return Promise.resolve(ORDER)
-    })
+  test("voided while the site created the order: the void row names it, then the order is cancelled there", async () => {
+    loseDraftToVoid(true)
     await invoiceService
       .create(validInput({ method: "woocommerce" }))
       .catch(() => undefined)
     expect(m.state.updates.at(-1)).toMatchObject({
       providerInvoiceId: "wc:https://bakery.example.org:3701",
+    })
+    expect(m.state.updates.at(-1)).not.toHaveProperty("lastError")
+    expect(m.wooCancel).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: "3701" }),
+    )
+  })
+
+  test("voided while the site created the order and the cancel failed: lastError says to cancel it", async () => {
+    m.wooCancel.mockResolvedValue({ kind: "failed", reason: "HTTP 404" })
+    loseDraftToVoid(true)
+    await invoiceService
+      .create(validInput({ method: "woocommerce" }))
+      .catch(() => undefined)
+    expect(m.state.updates.at(-1)).toMatchObject({
       lastError: expect.stringContaining("created order 3701"),
     })
+  })
+
+  test("a finalize that lost its CAS to ANOTHER finalize never cancels the live order (codex probe #2)", async () => {
+    loseDraftToVoid(false)
+    await invoiceService
+      .create(validInput({ method: "woocommerce" }))
+      .catch(() => undefined)
+    expect(m.wooCancel).not.toHaveBeenCalled()
   })
 
   const openWooInvoice = () =>
@@ -1290,6 +1308,48 @@ describe("woocommerce (s211b PR3)", () => {
     expect(m.wooCancel).not.toHaveBeenCalled()
     expect(invoice.status).toBe("void")
     expect(invoice.lastError).toContain("no longer connected")
+  })
+
+  test("a void that read a draft while a finalize opened it cancels the order the voided row names (codex probe #1)", async () => {
+    m.state.stored = storedInvoice("draft", {
+      method: "woocommerce",
+      integrationId: "88",
+      providerAccountId: "https://bakery.example.org",
+    })
+    // The finalize lands between the void's read and its CAS.
+    m.state.afterGet = () => {
+      m.state.stored = {
+        ...m.state.stored,
+        status: "open",
+        providerInvoiceId: "wc:https://bakery.example.org:3701",
+      }
+    }
+    const invoice = await invoiceService.void({ workspaceId: WS, id: "9" })
+    expect(invoice.status).toBe("void")
+    expect(m.wooCancel).toHaveBeenCalledTimes(1)
+    expect(m.wooCancel).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: "3701" }),
+    )
+    expect(invoice.lastError).toBeFalsy()
+  })
+
+  test("that late cancel finding the order paid says to refund it (the void already stands)", async () => {
+    m.state.stored = storedInvoice("draft", {
+      method: "woocommerce",
+      integrationId: "88",
+      providerAccountId: "https://bakery.example.org",
+    })
+    m.state.afterGet = () => {
+      m.state.stored = {
+        ...m.state.stored,
+        status: "open",
+        providerInvoiceId: "wc:https://bakery.example.org:3701",
+      }
+    }
+    m.wooCancel.mockResolvedValue({ kind: "paid", orderStatus: "processing" })
+    const invoice = await invoiceService.void({ workspaceId: WS, id: "9" })
+    expect(invoice.status).toBe("void")
+    expect(invoice.lastError).toContain("refund it in WooCommerce")
   })
 
   test("a draft (no order yet) voids without calling the site", async () => {
