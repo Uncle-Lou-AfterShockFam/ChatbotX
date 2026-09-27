@@ -3,9 +3,9 @@ import { notFound } from "next/navigation"
 import { getTranslations } from "next-intl/server"
 import { AppBreadcrumb } from "@/components/app-breadcrumb"
 import { CustomFieldStoreProvider } from "@/features/custom-fields/provider/custom-field-store-context"
+import { buildDynamicImageTriggerUrl } from "@/features/dynamic-images/lib/dynamic-image-url"
 import { findDynamicImage } from "@/features/dynamic-images/queries"
 import { UpdateDynamicImageForm } from "@/features/dynamic-images/update-dynamic-image-form"
-import { getBrokerOrigin } from "@/lib/oauth-broker"
 
 export default async function EditDynamicImagePage({
   params,
@@ -27,7 +27,7 @@ export default async function EditDynamicImagePage({
 
   const t = await getTranslations()
 
-  const publicUrl = `${getBrokerOrigin()}/dynamic-images?dynamicImageId=${dynamicImage.id}&userId={{user_id}}`
+  const publicUrl = buildDynamicImageTriggerUrl(dynamicImage.id)
 
   return (
     <div className="flex flex-col gap-4">

@@ -14,7 +14,7 @@ export const publicDynamicImageResource = dynamicImageResource
     imageUrl: z
       .string()
       .describe(
-        "Trigger URL to embed. Replace `{{user_id}}` with the contact's channel-side id to get a personalized render; without it the static background is served.",
+        "Trigger URL to embed in a flow image step. Each send signs it for the recipient, who gets a personalized render; opened as is, it serves the static background.",
       ),
   })
 
