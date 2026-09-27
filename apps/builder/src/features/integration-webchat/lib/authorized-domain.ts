@@ -56,6 +56,37 @@ export const isOriginAuthorized = (
   )
 }
 
+/**
+ * A first-party open of the webchat: no embedding origin at all, or the hub's
+ * own host (the builder's "Open webchat" preview). `appHost` is the proxy's
+ * `x-domain`; an empty one never matches.
+ */
+export const isFirstPartyOrigin = (
+  origin: string | null | undefined,
+  appHost: string,
+) => {
+  if (!origin) {
+    return true
+  }
+  const host = getHostFromOrigin(origin)
+  return !!host && !!appHost && host === appHost.toLowerCase()
+}
+
+/**
+ * The embed gate for guest calls, layered on the token check. It mirrors the
+ * `/webchat` page (owner s210): a first-party origin always passes, an empty
+ * allowlist adds no restriction (the token binds the origin), and otherwise
+ * the presented origin must match the allowlist.
+ */
+export const isGuestOriginAllowed = (
+  origin: string | null | undefined,
+  authorizedDomains: string[],
+  appHost: string,
+) =>
+  authorizedDomains.length === 0 ||
+  isFirstPartyOrigin(origin, appHost) ||
+  isOriginAuthorized(origin, authorizedDomains)
+
 export const getParentOriginFromUrl = (url: string | null | undefined) => {
   if (!url) {
     return null

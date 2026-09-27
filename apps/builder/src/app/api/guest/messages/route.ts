@@ -6,13 +6,14 @@ import {
 } from "@chatbotx.io/business"
 import { type NextRequest, NextResponse } from "next/server"
 import { getTranslations } from "next-intl/server"
-import { isOriginAuthorized } from "@/features/integration-webchat/lib/authorized-domain"
+import { isGuestOriginAllowed } from "@/features/integration-webchat/lib/authorized-domain"
 import { verifyWebchatAccessToken } from "@/features/integration-webchat/lib/webchat-access-token"
 import { findIntegrationWebchat } from "@/features/integration-webchat/queries"
 import { handleCreateWebchatMessage } from "@/features/messages/actions/create-webchat-message.action"
 import { listMessages } from "@/features/messages/queries"
 import { createWebchatMessageRequest } from "@/features/messages/schema/mutation"
 import { listGuestMessagesRequest } from "@/features/messages/schema/query"
+import { getDomainFromHeader } from "@/lib/domain"
 import { serverErrorHandler } from "@/lib/errors/server-handler"
 import {
   checkGuestRateLimit,
@@ -121,8 +122,11 @@ export async function GET(req: NextRequest) {
     })
     const authorized =
       tokenAuthorized &&
-      (webchat.authorizedDomains.length === 0 ||
-        isOriginAuthorized(data.parentOrigin, webchat.authorizedDomains))
+      isGuestOriginAllowed(
+        data.parentOrigin,
+        webchat.authorizedDomains,
+        await getDomainFromHeader(),
+      )
     const headers = corsHeaders(requestOrigin, authorized)
     if (!authorized) {
       return await forbiddenResponse(headers)
@@ -183,8 +187,11 @@ export async function POST(req: NextRequest) {
     })
     const authorized =
       tokenAuthorized &&
-      (webchat.authorizedDomains.length === 0 ||
-        isOriginAuthorized(parsedInput.parentOrigin, webchat.authorizedDomains))
+      isGuestOriginAllowed(
+        parsedInput.parentOrigin,
+        webchat.authorizedDomains,
+        await getDomainFromHeader(),
+      )
     const headers = corsHeaders(requestOrigin, authorized)
     if (!authorized) {
       return await forbiddenResponse(headers)

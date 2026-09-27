@@ -157,27 +157,10 @@ vi.mock("@/features/integration-webchat/lib/webchat-access-token", () => ({
   verifyWebchatAccessToken: mockVerifyWebchatAccessToken,
 }))
 
-const PROTOCOL_PREFIX_REGEX = /^https?:\/\//
-const HOST_DELIMITER_REGEX = /[/:?#]/
-
-vi.mock("@/features/integration-webchat/lib/authorized-domain", () => ({
-  isOriginAuthorized: (
-    origin: string | null | undefined,
-    authorizedDomains: string[],
-  ) => {
-    if (!origin) {
-      return true
-    }
-    if (authorizedDomains.length === 0) {
-      return false
-    }
-    const host = origin
-      .replace(PROTOCOL_PREFIX_REGEX, "")
-      .split(HOST_DELIMITER_REGEX)[0]
-    return authorizedDomains.some(
-      (domain) => host === domain || host?.endsWith(`.${domain}`),
-    )
-  },
+// The real (pure) allowlist module; the hub host comes from the proxy header.
+const appHost = vi.hoisted(() => ({ current: "app.chatbotx.io" }))
+vi.mock("@/lib/domain", () => ({
+  getDomainFromHeader: vi.fn(async () => appHost.current),
 }))
 
 vi.mock("next-intl/server", () => ({
@@ -505,6 +488,49 @@ describe("handleCreateWebchatMessage", () => {
     })
 
     expect(mockContactInboxFindLatest).not.toHaveBeenCalled()
+  })
+
+  test("accepts the hub's own origin (the builder preview) under an allowlist (s210)", async () => {
+    appHost.current = "app.chatbotx.io"
+    mockFindOrFail.mockResolvedValue({
+      inboxId: "inbox-1",
+      authorizedDomains: ["example.com"],
+    })
+
+    await handleCreateWebchatMessage({
+      parsedInput: {
+        text: "hello",
+        workspaceId: "ws-1",
+        webchatId: "webchat-1",
+        guestConversationId: "guest-1",
+        parentOrigin: "app.chatbotx.io",
+      },
+    }).catch((error: { httpStatusCode?: number }) => {
+      expect(error?.httpStatusCode).not.toBe(403)
+    })
+
+    expect(mockContactInboxFindLatest).toHaveBeenCalled()
+  })
+
+  test("never treats the hub origin as first party when the proxy host is missing", async () => {
+    appHost.current = ""
+    mockFindOrFail.mockResolvedValue({
+      inboxId: "inbox-1",
+      authorizedDomains: ["example.com"],
+    })
+
+    await expect(
+      handleCreateWebchatMessage({
+        parsedInput: {
+          text: "hello",
+          workspaceId: "ws-1",
+          webchatId: "webchat-1",
+          guestConversationId: "guest-1",
+          parentOrigin: "app.chatbotx.io",
+        },
+      }),
+    ).rejects.toMatchObject({ code: "forbidden", httpStatusCode: 403 })
+    appHost.current = "app.chatbotx.io"
   })
 
   test("rejects an invalid access token even when no authorizedDomains are configured", async () => {

@@ -17,6 +17,7 @@ import {
 } from "@/features/integration-webchat/lib"
 import {
   getHostFromOrigin,
+  isFirstPartyOrigin,
   isOriginAuthorized,
 } from "@/features/integration-webchat/lib/authorized-domain"
 import { createGuestConversationId } from "@/features/integration-webchat/lib/guest-conversation-id"
@@ -34,18 +35,6 @@ type WebchatPageProps = {
 }
 
 export const dynamic = "force-dynamic"
-
-function isFirstPartyRequest(
-  refererOrigin: string | null,
-  appHost: string,
-): boolean {
-  if (!refererOrigin) {
-    return true
-  }
-
-  const refererHost = getHostFromOrigin(refererOrigin)
-  return !!refererHost && !!appHost && refererHost === appHost.toLowerCase()
-}
 
 export default async function WebchatPage(props: WebchatPageProps) {
   const searchParams = await props.searchParams
@@ -95,7 +84,7 @@ export default async function WebchatPage(props: WebchatPageProps) {
   const requestHeaders = await headers()
   const embeddingOrigin = requestHeaders.get("referer")
   const appHost = await getDomainFromHeader()
-  const isDirectOpen = isFirstPartyRequest(embeddingOrigin, appHost)
+  const isDirectOpen = isFirstPartyOrigin(embeddingOrigin, appHost)
   if (
     !(
       isDirectOpen ||
