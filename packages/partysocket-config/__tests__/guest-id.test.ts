@@ -6,7 +6,7 @@ import {
 
 // An independent oracle for the property test (not the module's own regex).
 const ORACLE =
-  /^\d{1,20}:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  /^\d{1,20}:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const WS = "11701868563365888"
 const UUID = "0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f"
 const MINTED = `${WS}:${UUID}`
@@ -38,6 +38,9 @@ describe("isMintedGuestConversationId (s213)", () => {
     ["a legacy digits-only Snowflake", "11616773281153025"],
     ["a non-uuid suffix", `${WS}:guest-1`],
     ["a uuid with no prefix", UUID],
+    ["an all-zero (non-v4) uuid", `${WS}:00000000-0000-0000-0000-000000000000`],
+    ["a v1 uuid", `${WS}:0f1e2d3c-4b5a-1c6d-8e9f-0a1b2c3d4e5f`],
+    ["a bad variant nibble", `${WS}:0f1e2d3c-4b5a-4c6d-ce9f-0a1b2c3d4e5f`],
     ["a non-digit prefix", `workspace-1:${UUID}`],
     ["an empty prefix", `:${UUID}`],
     ["a trailing newline", `${MINTED}\n`],

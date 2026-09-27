@@ -5,7 +5,7 @@
 // Snowflake (sequential, guessable) is refused; production held none when the
 // legacy form was retired (s213: 9 webchat ContactInbox rows, 0 digits-only).
 export const GUEST_CONVERSATION_ID_REGEX =
-  /^\d{1,20}:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  /^\d{1,20}:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 // Longest possible minted id: 20 digits + ":" + 36-char uuid.
 const MAX_GUEST_CONVERSATION_ID_LENGTH = 57
