@@ -62,8 +62,15 @@ export type GuestSessionActions = {
     perPage: number,
   ) => Promise<void>
   handleNewMessage: (message: MessageResource) => void
-  sendMessage: (content: string) => void
+  /** The optimistic bubble of a text send, keyed by the send's clientId. */
+  sendMessage: (content: string, clientId?: string) => void
+  /**
+   * Never rejects: a postback that does not land marks its bubble failed
+   * (the button's onClick has no catch).
+   */
   sendPostback: (button: MessageButtonTemplate) => Promise<void>
+  /** Flags the visitor's optimistic bubble whose send did not land. */
+  markSendFailed: (clientId: string, error: string) => void
   setIsTyping: (isTyping: boolean) => void
 
   getMenus: () => WebchatPersistentMenu[]
@@ -85,6 +92,28 @@ export type GuestSessionActions = {
 export type TokenRefreshOutcome = "refreshed" | "refused" | "failed"
 
 export type GuestSessionStore = GuestSessionState & GuestSessionActions
+
+/**
+ * The tooltip detail of a failed guest send: the guest route's translated
+ * `message` when it answered, else the error's own text. Never empty (an empty
+ * `sendError` hides the badge).
+ */
+export const sendErrorDetail = async (error: unknown): Promise<string> => {
+  const response = (error as { response?: Response } | null)?.response
+  if (response) {
+    const body = (await response
+      .clone()
+      .json()
+      .catch(() => null)) as { message?: unknown } | null
+    if (typeof body?.message === "string" && body.message) {
+      return body.message
+    }
+    return `HTTP ${response.status}`
+  }
+  return error instanceof Error && error.message
+    ? error.message
+    : "Network error"
+}
 
 export const createGuestSessionStore = (
   props: WebchatClientConfig,
@@ -245,10 +274,18 @@ export const createGuestSessionStore = (
         appendMessage(message)
       },
 
-      sendMessage: (text: string) => {
+      sendMessage: (text: string, clientId?: string) => {
         const { appendMessage } = get()
 
-        appendMessage({ text })
+        appendMessage(clientId ? { text, clientId } : { text })
+      },
+
+      markSendFailed: (clientId: string, error: string) => {
+        set((state) => ({
+          messages: state.messages.map((m) =>
+            m.clientId === clientId ? { ...m, sendError: error } : m,
+          ),
+        }))
       },
 
       sendPostback: async (button: MessageButtonTemplate) => {
@@ -283,8 +320,12 @@ export const createGuestSessionStore = (
             )
           }
         } catch (error) {
+          // A refused/failed refresh or send: the bubble must not look sent.
           console.error("Failed to send postback:", error)
-          throw error
+          get().markSendFailed(
+            newMessage.clientId as string,
+            await sendErrorDetail(error),
+          )
         }
       },
 

@@ -33,8 +33,13 @@ export const WebchatMessageInput = (props: WebchatMessageInputProps) => {
     parentOrigin,
     accessToken,
   } = props
-  const { sendMessage, guestConversationId, appendMessage, freshAccessToken } =
-    useGuestSessionStore((state) => state)
+  const {
+    sendMessage,
+    guestConversationId,
+    appendMessage,
+    freshAccessToken,
+    markSendFailed,
+  } = useGuestSessionStore((state) => state)
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const defaultValues = useMemo(
@@ -72,7 +77,7 @@ export const WebchatMessageInput = (props: WebchatMessageInputProps) => {
         onExecute: ({ input }) => {
           // try to push raw message to store
           if ("text" in input && input.text) {
-            sendMessage(input.text)
+            sendMessage(input.text, input.clientId)
           }
 
           setValue("text", "")
@@ -87,6 +92,23 @@ export const WebchatMessageInput = (props: WebchatMessageInputProps) => {
           resetFormAndAction()
 
           reset(defaultValues)
+          setValue("clientId", createId())
+        },
+        // A send that did not land (an expired token the refresh could not
+        // replace, a 429, a network error): flag the bubble, give the text
+        // back unless the visitor already typed more, and take a new clientId
+        // so the next send is not merged into this bubble (s212 probe).
+        onError: ({ error, input }) => {
+          if (input.clientId) {
+            markSendFailed(
+              input.clientId,
+              (typeof error.serverError === "string" && error.serverError) ||
+                "Network error",
+            )
+          }
+          if ("text" in input && input.text && !form.getValues("text")) {
+            setValue("text", input.text)
+          }
           setValue("clientId", createId())
         },
       },

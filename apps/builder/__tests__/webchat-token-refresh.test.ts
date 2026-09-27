@@ -382,6 +382,41 @@ describe("guest session store refresh", () => {
     })
   })
 
+  test("a postback that cannot land flags its bubble and never rejects (s212)", async () => {
+    vi.spyOn(ky, "post").mockImplementation(((url: string) =>
+      url === "/api/guest/token"
+        ? { json: async () => ({ accessToken: null }) }
+        : Promise.reject(
+            Object.assign(new Error("Forbidden"), {
+              response: new Response(
+                JSON.stringify({ message: "Not authorized" }),
+                { status: 403 },
+              ),
+            }),
+          )) as never)
+    const store = storeWith()
+    await expect(
+      store.getState().sendPostback({
+        buttonType: "postback",
+        label: "Yes",
+        postback: "YES",
+      } as never),
+    ).resolves.toBeUndefined()
+    const bubble = store.getState().messages.at(-1)
+    expect(bubble?.text).toBe("Yes")
+    expect(bubble?.sendError).toBe("Not authorized")
+  })
+
+  test("a text bubble carries the send's clientId so a failure can flag it (s212)", () => {
+    const store = storeWith()
+    store.getState().sendMessage("hi", "client-1")
+    store.getState().markSendFailed("client-1", "HTTP 429")
+    expect(store.getState().messages.at(-1)).toMatchObject({
+      clientId: "client-1",
+      sendError: "HTTP 429",
+    })
+  })
+
   test("a second 403 is thrown, not looped; a refused refresh throws the first", async () => {
     const get = vi
       .spyOn(ky, "get")

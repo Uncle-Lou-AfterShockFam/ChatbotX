@@ -7,6 +7,7 @@ const HUB = "app.chatbotx.io"
 const mocks = vi.hoisted(() => ({
   refresh: vi.fn(async () => "fresh-token" as string | null),
   limited: { limited: false, retryAfter: 0 },
+  rateLimit: vi.fn(),
 }))
 
 vi.mock("@chatbotx.io/business", () => ({
@@ -17,10 +18,18 @@ vi.mock("@chatbotx.io/business", () => ({
 vi.mock("@/features/integration-webchat/lib/refresh-webchat-token", () => ({
   refreshWebchatAccessToken: mocks.refresh,
 }))
+vi.mock("@/features/integration-webchat/lib/webchat-access-token", () => ({
+  // "ours.<sig>" stands for a token this hub signed; anything else is junk.
+  readWebchatAccessToken: async (token: string) =>
+    token.startsWith("ours.") ? { exp: 0 } : null,
+}))
 vi.mock("@/lib/domain", () => ({ getDomainFromHeader: async () => HUB }))
 vi.mock("@/lib/log", () => ({ logger: { warn: vi.fn() } }))
 vi.mock("@/lib/rate-limit/guest-rate-limit", () => ({
-  checkGuestRateLimit: async () => mocks.limited,
+  checkGuestRateLimit: (input: unknown) => {
+    mocks.rateLimit(input)
+    return Promise.resolve(mocks.limited)
+  },
   getGuestClientIp: () => "192.0.2.1",
 }))
 
@@ -98,6 +107,18 @@ describe("POST /api/guest/token (s210)", () => {
     const res = await POST(post(body))
     expect(res.status).toBe(500)
     expect(await res.json()).toEqual({ accessToken: null })
+  })
+
+  test("the session bucket is the signed token, never the body's guest id (s212)", async () => {
+    // Junk tokens naming a victim's guest id must not touch its bucket.
+    await POST(post(body))
+    expect(mocks.rateLimit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ guestConversationId: undefined }),
+    )
+    await POST(post({ ...body, accessToken: "ours.sig-abc" }))
+    expect(mocks.rateLimit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ guestConversationId: "sig-abc" }),
+    )
   })
 
   test("no Origin is tolerated like /api/guest/messages (the token still gates)", async () => {

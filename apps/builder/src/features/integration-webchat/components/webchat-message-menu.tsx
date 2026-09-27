@@ -41,11 +41,15 @@ export default function WebchatMessageMenu({
     setMenus(getMenus())
   }, [getMenus])
 
-  const { appendMessage, guestConversationId, freshAccessToken } =
-    useGuestSessionStore((state) => state)
+  const {
+    appendMessage,
+    guestConversationId,
+    freshAccessToken,
+    markSendFailed,
+  } = useGuestSessionStore((state) => state)
   const sendingRef = useRef(false)
 
-  const { execute } = useAction(createWebchatMessageAction, {
+  const { executeAsync } = useAction(createWebchatMessageAction, {
     onExecute: ({ input }) => {
       // try to push raw message to store
       if ("text" in input && input.text) {
@@ -65,6 +69,15 @@ export default function WebchatMessageMenu({
           senderId: "",
           clientId: input.clientId,
         })
+      }
+    },
+    onError: ({ error, input }) => {
+      if (input.clientId) {
+        markSendFailed(
+          input.clientId,
+          (typeof error.serverError === "string" && error.serverError) ||
+            "Network error",
+        )
       }
     },
   })
@@ -90,21 +103,23 @@ export default function WebchatMessageMenu({
                     return
                   }
                   sendingRef.current = true
-                  const token = await freshAccessToken()
-                    .catch(() => null)
-                    .finally(() => {
-                      sendingRef.current = false
+                  // The guard covers the send itself, not just the token
+                  // await, or a double click runs the flow twice (s212).
+                  try {
+                    const token = await freshAccessToken().catch(() => null)
+                    await executeAsync({
+                      flowId: menu.flowId,
+                      clientId: createId(),
+                      workspaceId,
+                      webchatId,
+                      guestConversationId: guestConversationId ?? "",
+                      ...getWebchatProfileFields(),
+                      accessToken: token ?? accessToken ?? undefined,
+                      parentOrigin: parentOrigin ?? undefined,
                     })
-                  execute({
-                    flowId: menu.flowId,
-                    clientId: createId(),
-                    workspaceId,
-                    webchatId,
-                    guestConversationId: guestConversationId ?? "",
-                    ...getWebchatProfileFields(),
-                    accessToken: token ?? accessToken ?? undefined,
-                    parentOrigin: parentOrigin ?? undefined,
-                  })
+                  } finally {
+                    sendingRef.current = false
+                  }
                 }}
               >
                 {menu.label}

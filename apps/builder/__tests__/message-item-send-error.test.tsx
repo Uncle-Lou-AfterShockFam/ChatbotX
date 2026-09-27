@@ -92,6 +92,29 @@ describe("MessageItem outgoing send-error affordance", () => {
     expect(el.querySelector(".text-destructive")).toBeNull()
   })
 
+  test("in the webchat widget the visitor's own (incoming) bubble shows its failed send; the bot's never does (s212)", () => {
+    const own = renderComponent(
+      <MessageItem
+        guestDisplay={true}
+        message={makeMessage({
+          messageType: "incoming",
+          sendError: "HTTP 429",
+        })}
+      />,
+    )
+    expect(own.querySelector(".text-destructive")).not.toBeNull()
+    act(() => root?.unmount())
+    container?.remove()
+    root = null
+    const bot = renderComponent(
+      <MessageItem
+        guestDisplay={true}
+        message={makeMessage({ sendError: "Timed out" })}
+      />,
+    )
+    expect(bot.querySelector(".text-destructive")).toBeNull()
+  })
+
   test("an incoming message is never treated as a send failure even if sendError were set", () => {
     const el = renderComponent(
       <MessageItem

@@ -9,6 +9,7 @@ import z from "zod"
 import { isFirstPartyOrigin } from "@/features/integration-webchat/lib/authorized-domain"
 import { zodGuestConversationId } from "@/features/integration-webchat/lib/guest-conversation-id"
 import { refreshWebchatAccessToken } from "@/features/integration-webchat/lib/refresh-webchat-token"
+import { readWebchatAccessToken } from "@/features/integration-webchat/lib/webchat-access-token"
 import { getDomainFromHeader } from "@/lib/domain"
 import { logger } from "@/lib/log"
 import {
@@ -49,9 +50,16 @@ export async function POST(req: NextRequest) {
     }
     const data = parsed.data
 
+    // The per-session bucket is keyed on the token we signed, never on the
+    // body's guestConversationId: anyone who knew a guest's id could burn
+    // that guest's refresh budget with junk tokens (s212 probe). A token
+    // that is not ours meets the per-IP bucket only.
+    const ownToken = await readWebchatAccessToken(data.accessToken)
     const rateLimit = await checkGuestRateLimit({
       clientIp: getGuestClientIp(req.headers),
-      guestConversationId: data.guestConversationId,
+      guestConversationId: ownToken
+        ? data.accessToken.slice(data.accessToken.lastIndexOf(".") + 1)
+        : undefined,
       webchatId: data.webchatId,
       scope: "token-refresh",
     })
