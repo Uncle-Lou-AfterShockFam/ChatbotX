@@ -7,7 +7,10 @@
  * event row, one set of marks); two sites whose order ids collide never touch
  * each other's invoices; a draft whose finalize never recorded the order is
  * adopted by its payment; a payment of an invoice voided here is flagged on
- * the event and the invoice, and the invoice stays void. The site
+ * the event and the invoice, and the invoice stays void; a refund before
+ * its payment records nothing (retried); order.completed after order.paid
+ * never marks twice; a draft voided before its order was recorded still gets
+ * its late payment flagged. The site
  * credentials lookup (encryption) and the contact marks are mocked.
  *
  *     DATABASE_URL=postgres://... pnpm --filter @chatbotx.io/business test:db
@@ -19,7 +22,10 @@ import { requireRealDatabaseUrl } from "@chatbotx.io/vitest-config/real-db"
 import { afterAll, afterEach, describe, expect, test, vi } from "vitest"
 
 const m = vi.hoisted(() => ({
-  sites: new Map<string, { workspaceId: string; webhookSecret: string }>(),
+  sites: new Map<
+    string,
+    { workspaceId: string; webhookSecret: string; siteUrl: string }
+  >(),
   marks: vi.fn(async () => undefined),
   emitPaid: vi.fn(async () => undefined),
 }))
@@ -34,7 +40,7 @@ vi.mock("../../src/integration-woocommerce/service", () => ({
               integrationId,
               workspaceId: site.workspaceId,
               siteSlug: `site-${integrationId}`,
-              siteUrl: "https://shop.example.org",
+              siteUrl: site.siteUrl,
               currency: "USD",
               auth: { actionToken: "btc_x", webhookSecret: site.webhookSecret },
             }
@@ -62,6 +68,8 @@ const databaseUrl = requireRealDatabaseUrl()
 const { handleWooCommerceWebhook } = await import(
   "../../src/invoice/woocommerce-webhook"
 )
+
+const ref = (siteUrl: string, orderId: string) => `wc:${siteUrl}:${orderId}`
 
 let nextId = 9_211_000_000_000_000n
 function mintId(): string {
@@ -102,8 +110,9 @@ async function seedSite(workspaceId: string) {
     VALUES (${integrationId}, ${workspaceId}, 'woocommerce')`)
   seeded.Integration?.push(integrationId)
   const webhookSecret = `whsec_${randomBytes(32).toString("base64")}`
-  m.sites.set(integrationId, { workspaceId, webhookSecret })
-  return { integrationId, webhookSecret }
+  const siteUrl = `https://shop-${integrationId}.example.org`
+  m.sites.set(integrationId, { workspaceId, webhookSecret, siteUrl })
+  return { integrationId, webhookSecret, siteUrl }
 }
 
 async function seedInvoice(props: {
@@ -117,10 +126,12 @@ async function seedInvoice(props: {
   const invoiceId = mintId()
   await asReplica(sql`
     INSERT INTO "Invoice" (id, "workspaceId", number, status, method, currency,
-      total, "contactId", "integrationId", "providerInvoiceId", "hostedUrl")
+      total, "contactId", "integrationId", "providerAccountId",
+      "providerInvoiceId", "hostedUrl")
     VALUES (${invoiceId}, ${props.workspaceId}, ${props.number},
       ${props.status ?? "open"}, 'woocommerce', 'USD', '42.50',
-      ${props.contactId}, ${props.integrationId}, ${props.providerInvoiceId},
+      ${props.contactId}, ${props.integrationId}, ${m.sites.get(props.integrationId)?.siteUrl ?? ""},
+      ${props.providerInvoiceId},
       'https://shop.example.org/checkout/order-pay/3701/')`)
   return invoiceId
 }
@@ -219,7 +230,7 @@ describe.skipIf(!databaseUrl)("WooCommerce payment webhook (s211b)", () => {
       contactId,
       integrationId: site.integrationId,
       number: 1,
-      providerInvoiceId: `wc:${site.integrationId}:3701`,
+      providerInvoiceId: ref(site.siteUrl, "3701"),
     })
     const results = await Promise.all(
       Array.from({ length: 8 }, () =>
@@ -249,14 +260,14 @@ describe.skipIf(!databaseUrl)("WooCommerce payment webhook (s211b)", () => {
       contactId,
       integrationId: a.integrationId,
       number: 1,
-      providerInvoiceId: `wc:${a.integrationId}:3701`,
+      providerInvoiceId: ref(a.siteUrl, "3701"),
     })
     const invoiceB = await seedInvoice({
       workspaceId,
       contactId,
       integrationId: b.integrationId,
       number: 2,
-      providerInvoiceId: `wc:${b.integrationId}:3701`,
+      providerInvoiceId: ref(b.siteUrl, "3701"),
     })
     // Site B, correctly signed, names site A's invoice: not its order.
     const forged = await deliver({
@@ -265,7 +276,7 @@ describe.skipIf(!databaseUrl)("WooCommerce payment webhook (s211b)", () => {
       orderId: "3701",
       hubInvoiceId: invoiceA,
     })
-    expect(forged.reason).toBe("captured")
+    expect(forged.reason).toBe("hub-error")
     expect((await invoiceRow(invoiceA))?.status).toBe("open")
     // Site A's own payment of the same order id moves only A's invoice.
     const paid = await deliver({
@@ -310,7 +321,7 @@ describe.skipIf(!databaseUrl)("WooCommerce payment webhook (s211b)", () => {
     expect(result.reason).toBe("applied")
     expect(await invoiceRow(invoiceId)).toMatchObject({
       status: "paid",
-      providerInvoiceId: `wc:${site.integrationId}:3702`,
+      providerInvoiceId: ref(site.siteUrl, "3702"),
     })
   })
 
@@ -323,7 +334,7 @@ describe.skipIf(!databaseUrl)("WooCommerce payment webhook (s211b)", () => {
       integrationId: site.integrationId,
       number: 1,
       status: "void",
-      providerInvoiceId: `wc:${site.integrationId}:3703`,
+      providerInvoiceId: ref(site.siteUrl, "3703"),
     })
     const result = await deliver({
       integrationId: site.integrationId,
@@ -339,5 +350,79 @@ describe.skipIf(!databaseUrl)("WooCommerce payment webhook (s211b)", () => {
       { outcome: "paid-after-void", invoiceId },
     ])
     expect(m.marks).not.toHaveBeenCalled()
+  })
+
+  test("a refund that overtakes its payment is retried, then applies after it", async () => {
+    const { workspaceId, contactId } = await seedWorkspace()
+    const site = await seedSite(workspaceId)
+    const invoiceId = await seedInvoice({
+      workspaceId,
+      contactId,
+      integrationId: site.integrationId,
+      number: 1,
+      providerInvoiceId: ref(site.siteUrl, "3704"),
+    })
+    const args = {
+      integrationId: site.integrationId,
+      secret: site.webhookSecret,
+      orderId: "3704",
+      hubInvoiceId: invoiceId,
+    }
+    const early = await deliver({ ...args, event: "order.refunded" })
+    expect(early.reason).toBe("hub-error")
+    expect(await eventRows(site.integrationId)).toEqual([])
+    expect((await deliver(args)).reason).toBe("applied")
+    const late = await deliver({ ...args, event: "order.refunded" })
+    expect(late.reason).toBe("applied")
+    expect((await invoiceRow(invoiceId))?.status).toBe("refunded")
+  })
+
+  test("order.completed after order.paid never marks twice", async () => {
+    const { workspaceId, contactId } = await seedWorkspace()
+    const site = await seedSite(workspaceId)
+    const invoiceId = await seedInvoice({
+      workspaceId,
+      contactId,
+      integrationId: site.integrationId,
+      number: 1,
+      providerInvoiceId: ref(site.siteUrl, "3705"),
+    })
+    const args = {
+      integrationId: site.integrationId,
+      secret: site.webhookSecret,
+      orderId: "3705",
+      hubInvoiceId: invoiceId,
+    }
+    expect((await deliver(args)).reason).toBe("applied")
+    expect((await deliver({ ...args, event: "order.completed" })).reason).toBe(
+      "captured",
+    )
+    expect(m.marks).toHaveBeenCalledTimes(1)
+    expect(m.emitPaid).toHaveBeenCalledTimes(1)
+  })
+
+  test("a draft voided before its order was recorded still gets its late payment flagged", async () => {
+    const { workspaceId, contactId } = await seedWorkspace()
+    const site = await seedSite(workspaceId)
+    const invoiceId = await seedInvoice({
+      workspaceId,
+      contactId,
+      integrationId: site.integrationId,
+      number: 1,
+      status: "void",
+      providerInvoiceId: null,
+    })
+    const result = await deliver({
+      integrationId: site.integrationId,
+      secret: site.webhookSecret,
+      orderId: "3706",
+      hubInvoiceId: invoiceId,
+    })
+    expect(result.reason).toBe("captured")
+    expect(await invoiceRow(invoiceId)).toMatchObject({
+      status: "void",
+      providerInvoiceId: ref(site.siteUrl, "3706"),
+      lastError: expect.stringContaining("refund it in WooCommerce"),
+    })
   })
 })

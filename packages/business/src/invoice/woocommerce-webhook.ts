@@ -4,6 +4,7 @@ import type { InvoiceStatus } from "@chatbotx.io/database/partials"
 import { invoiceEventModel, invoiceModel } from "@chatbotx.io/database/schema"
 import type { InvoiceModel } from "@chatbotx.io/database/types"
 import { emitInvoicePaid } from "@chatbotx.io/events"
+import { isPgBigintId } from "../integration-woocommerce/client"
 import { integrationWooCommerceService } from "../integration-woocommerce/service"
 import { logger } from "../logger"
 import { markInvoiceOnContact } from "./contact-marks"
@@ -15,15 +16,18 @@ export const WOOCOMMERCE_WEBHOOK_TOLERANCE_SECONDS = 300
 
 /**
  * The answer, in hub-connector's `reason` vocabulary (Worker::classify):
- * `applied` / `duplicate` / `captured` end the outbox row, `hub-error` makes
- * the site retry the SAME event id, `unverified` / `invalid:*` dead-letter it.
+ * `applied` / `duplicate` / `captured` end the outbox row; `hub-error` and
+ * `no-token` make the site retry the SAME event id with backoff (12 attempts
+ * over ~4 days); `invalid:*` dead-letters it. An unknown site or a bad
+ * signature is `no-token`, never a dead letter: a reconnect not yet in the
+ * site's wp-config, or a skewed clock, must not lose a payment (s211b review).
  */
 export type WooCommerceWebhookReason =
   | "applied"
   | "duplicate"
   | "captured"
   | "hub-error"
-  | "unverified"
+  | "no-token"
   | "invalid:envelope"
 
 export type WooCommerceWebhookResult = {
@@ -31,12 +35,26 @@ export type WooCommerceWebhookResult = {
   detail: string
 }
 
-const TARGET: Record<string, InvoiceStatus> = {
-  "order.paid": "paid",
-  "order.refunded": "refunded",
-}
+/**
+ * Envelope event -> invoice status. `order.completed` is a payment too: a
+ * manual-payment order (BACS, cheque) never fires `order.paid`. A Map, not an
+ * object literal: `constructor` / `__proto__` must not resolve (s211b probe).
+ */
+const TARGET = new Map<string, InvoiceStatus>([
+  ["order.paid", "paid"],
+  ["order.completed", "paid"],
+  ["order.refunded", "refunded"],
+])
 
-const ID = /^[1-9]\d{0,19}$/
+/** Statuses a refund may arrive in before its payment did (retry, not settle). */
+const PAYMENT_PENDING: readonly InvoiceStatus[] = [
+  "draft",
+  "open",
+  "uncollectible",
+]
+
+/** The event outcome that says this invoice's contact marks for a status ran. */
+const markedOutcome = (status: InvoiceStatus) => `marked:${status}`
 const EVENT_ID = /^[A-Za-z0-9_-]{1,120}$/
 const TIMESTAMP = /^\d{1,12}$/
 
@@ -53,7 +71,16 @@ export function verifyStandardWebhook(props: {
   nowSeconds: number
 }): boolean {
   const { id, timestamp, signature } = props
-  if (!(id && timestamp && signature && TIMESTAMP.test(timestamp))) {
+  if (
+    !(
+      id &&
+      timestamp &&
+      signature &&
+      TIMESTAMP.test(timestamp) &&
+      props.secret.startsWith("whsec_") &&
+      props.secret.length > "whsec_".length
+    )
+  ) {
     return false
   }
   if (
@@ -119,38 +146,40 @@ export function parseOrderEnvelope(rawBody: Buffer): OrderEnvelope | null {
 }
 
 /**
- * The invoice this order collects: named by the envelope AND bound to this
- * site's order (or still a draft of this site whose finalize never recorded
- * the order id: a crash between the site's answer and the draft CAS).
+ * The invoice this site's order collects, LOCKED for the transaction: named by
+ * the envelope, bound to this site (integration AND origin), and either
+ * already bound to this order or bound to none yet (a finalize whose answer
+ * was lost, or a draft voided while the site was opening it). Any status: the
+ * caller decides from the fresh, locked one.
  */
-async function findInvoice(props: {
-  workspaceId: string
-  integrationId: string
-  hubInvoiceId: string
-  orderId: string
-}): Promise<InvoiceModel | null> {
-  const [row] = await db
+async function lockInvoice(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  props: {
+    workspaceId: string
+    integrationId: string
+    siteUrl: string
+    hubInvoiceId: string
+    orderRef: string
+  },
+): Promise<InvoiceModel | null> {
+  const [row] = await tx
     .select()
     .from(invoiceModel)
     .where(
       and(
         eq(invoiceModel.id, props.hubInvoiceId),
         eq(invoiceModel.workspaceId, props.workspaceId),
-        eq(invoiceModel.integrationId, props.integrationId),
         eq(invoiceModel.method, "woocommerce"),
+        eq(invoiceModel.integrationId, props.integrationId),
+        eq(invoiceModel.providerAccountId, props.siteUrl),
         or(
-          eq(
-            invoiceModel.providerInvoiceId,
-            wooCommerceProviderInvoiceId(props.integrationId, props.orderId),
-          ),
-          and(
-            isNull(invoiceModel.providerInvoiceId),
-            eq(invoiceModel.status, "draft"),
-          ),
+          eq(invoiceModel.providerInvoiceId, props.orderRef),
+          isNull(invoiceModel.providerInvoiceId),
         ),
       ),
     )
     .limit(1)
+    .for("update")
   return row ?? null
 }
 
@@ -172,12 +201,24 @@ async function dropDedupRow(integrationId: string, eventId: string) {
   }
 }
 
+type Decision =
+  | { kind: "unmatched" | "refund-before-payment" | "duplicate" | "settled" }
+  | {
+      kind: "mark"
+      invoice: InvoiceModel
+      eventRowId: string
+      applied: boolean
+    }
+
 /**
- * A linked site's `order.paid` / `order.refunded` (hub-connector >= 0.6.0,
+ * A linked site's order payment / completion / refund (hub-connector >= 0.6.0,
  * HUBC_HUB_URL). Verified with THAT site's hub-generated secret before
- * anything is parsed; one InvoiceEvent per (site, envelope id) is the dedup,
- * written in the transaction that moves the invoice. A payment of an invoice
- * voided here is recorded and flagged, never applied.
+ * anything is parsed. One transaction locks the invoice, inserts the
+ * per-site InvoiceEvent (the dedup) and moves the status by CAS, deciding
+ * from the locked row: a refund before its payment is retried (nothing
+ * recorded), a payment of an invoice voided here is flagged and never
+ * applied, and the contact marks run once per status (`marked:<status>`),
+ * however many events report it.
  */
 export async function handleWooCommerceWebhook(props: {
   integrationId: string
@@ -205,7 +246,7 @@ export async function handleWooCommerceWebhook(props: {
       })
     )
   ) {
-    return { reason: "unverified", detail: "signature" }
+    return { reason: "no-token", detail: "unverified" }
   }
   const envelope = parseOrderEnvelope(props.rawBody)
   if (!envelope || envelope.id !== props.headers.id) {
@@ -214,37 +255,40 @@ export async function handleWooCommerceWebhook(props: {
       detail: "not a hub-connector/1 envelope",
     }
   }
-  const target = TARGET[envelope.event]
+  const target = TARGET.get(envelope.event)
   if (!target) {
     return { reason: "captured", detail: `ignored ${envelope.event}` }
   }
-  if (!(ID.test(envelope.orderId) && ID.test(envelope.hubInvoiceId))) {
+  if (
+    !(isPgBigintId(envelope.orderId) && isPgBigintId(envelope.hubInvoiceId))
+  ) {
     return { reason: "captured", detail: "not a hub invoice's order" }
   }
+  const orderRef = wooCommerceProviderInvoiceId(
+    credentials.siteUrl,
+    envelope.orderId,
+  )
 
-  const invoice = await findInvoice({
-    workspaceId: credentials.workspaceId,
-    integrationId: credentials.integrationId,
-    hubInvoiceId: envelope.hubInvoiceId,
-    orderId: envelope.orderId,
-  })
-  if (!invoice) {
-    // No dedup row: this site's event id must stay usable for a delivery
-    // that CAN match (the dedup is per site, and the id is per order).
-    logger.warn(
-      {
-        integrationId: credentials.integrationId,
-        eventId: envelope.id,
-        hubInvoiceId: envelope.hubInvoiceId,
-      },
-      "woocommerce webhook: no invoice of this site collects this order",
-    )
-    return { reason: "captured", detail: "no matching invoice" }
-  }
-  let applied: InvoiceModel | null = null
-  let inserted = false
+  let decision: Decision = { kind: "unmatched" }
   try {
     await db.transaction(async (tx) => {
+      const invoice = await lockInvoice(tx, {
+        workspaceId: credentials.workspaceId,
+        integrationId: credentials.integrationId,
+        siteUrl: credentials.siteUrl,
+        hubInvoiceId: envelope.hubInvoiceId,
+        orderRef,
+      })
+      if (!invoice) {
+        decision = { kind: "unmatched" }
+        return
+      }
+      if (target === "refunded" && PAYMENT_PENDING.includes(invoice.status)) {
+        // Its payment is still on the way (the site retries rows out of
+        // order): record nothing, so this refund is retried after it.
+        decision = { kind: "refund-before-payment" }
+        return
+      }
       const [row] = await tx
         .insert(invoiceEventModel)
         .values({
@@ -257,15 +301,11 @@ export async function handleWooCommerceWebhook(props: {
         })
         .onConflictDoNothing()
         .returning({ id: invoiceEventModel.id })
-      inserted = !!row
       if (!row) {
+        decision = { kind: "duplicate" }
         return
       }
-      const orderRef = wooCommerceProviderInvoiceId(
-        credentials.integrationId,
-        envelope.orderId,
-      )
-      applied = await invoiceService.transition({
+      const applied = await invoiceService.transition({
         invoiceId: invoice.id,
         to: target,
         set:
@@ -274,19 +314,54 @@ export async function handleWooCommerceWebhook(props: {
             : {},
         tx,
       })
-      if (!applied && target === "paid" && invoice.status === "void") {
-        await tx
-          .update(invoiceEventModel)
-          .set({ outcome: "paid-after-void", updatedAt: new Date() })
-          .where(eq(invoiceEventModel.id, row.id))
+      if (applied) {
+        decision = {
+          kind: "mark",
+          invoice: applied,
+          eventRowId: row.id,
+          applied: true,
+        }
+        return
+      }
+      if (invoice.status === target) {
+        const [marked] = await tx
+          .select({ id: invoiceEventModel.id })
+          .from(invoiceEventModel)
+          .where(
+            and(
+              eq(invoiceEventModel.invoiceId, invoice.id),
+              eq(invoiceEventModel.outcome, markedOutcome(target)),
+            ),
+          )
+          .limit(1)
+        // Marks that never completed (a redelivery after a failed mark)
+        // run now; a second report of the same status never re-runs them.
+        decision = marked
+          ? { kind: "settled" }
+          : { kind: "mark", invoice, eventRowId: row.id, applied: false }
+        return
+      }
+      const paidAfterVoid = target === "paid" && invoice.status === "void"
+      await tx
+        .update(invoiceEventModel)
+        .set({
+          outcome: paidAfterVoid
+            ? "paid-after-void"
+            : `ignored:${invoice.status}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(invoiceEventModel.id, row.id))
+      if (paidAfterVoid) {
         await tx
           .update(invoiceModel)
           .set({
+            providerInvoiceId: invoice.providerInvoiceId ?? orderRef,
             lastError: `Paid on ${credentials.siteSlug} (order ${envelope.orderId}) after it was voided here: refund it in WooCommerce`,
             updatedAt: new Date(),
           })
           .where(eq(invoiceModel.id, invoice.id))
       }
+      decision = { kind: "settled" }
     })
   } catch (error) {
     logger.error(
@@ -295,34 +370,63 @@ export async function handleWooCommerceWebhook(props: {
     )
     return { reason: "hub-error", detail: "database" }
   }
-  if (!inserted) {
-    return { reason: "duplicate", detail: envelope.id }
-  }
 
-  // A fresh event whose target the invoice already holds re-runs the marks:
-  // the only way there is a redelivery after a failed mark attempt.
-  const current: InvoiceModel = applied ?? invoice
-  if (applied || invoice.status === target) {
-    try {
-      await markInvoiceOnContact({ invoice: current, status: target })
-      if (target === "paid") {
-        await emitInvoicePaid(
-          current.workspaceId,
-          current.contactId,
-          invoiceEventMetadata(current),
-        )
-      }
-    } catch (error) {
-      await dropDedupRow(credentials.integrationId, envelope.id)
+  // TS narrows `decision` to its initial value across the callback.
+  const outcome = decision as Decision
+  switch (outcome.kind) {
+    case "unmatched":
+      // A valid hub invoice id this site cannot match yet (a reconnect not
+      // yet re-adopted, a site URL being moved): retried, never settled.
       logger.warn(
-        { err: error, eventId: envelope.id, invoiceId: invoice.id },
-        "woocommerce webhook: contact marks failed, asking the site to redeliver",
+        {
+          integrationId: credentials.integrationId,
+          eventId: envelope.id,
+          hubInvoiceId: envelope.hubInvoiceId,
+        },
+        "woocommerce webhook: no invoice of this site collects this order",
       )
-      return { reason: "hub-error", detail: "contact marks" }
+      return { reason: "hub-error", detail: "no matching invoice" }
+    case "refund-before-payment":
+      return { reason: "hub-error", detail: "refund before its payment" }
+    case "duplicate":
+      return { reason: "duplicate", detail: envelope.id }
+    case "settled":
+      return { reason: "captured", detail: `${envelope.event} settled` }
+    default:
+      break
+  }
+  const { invoice } = outcome
+  try {
+    await markInvoiceOnContact({ invoice, status: target })
+    if (target === "paid") {
+      await emitInvoicePaid(
+        invoice.workspaceId,
+        invoice.contactId,
+        invoiceEventMetadata(invoice),
+      )
     }
+  } catch (error) {
+    await dropDedupRow(credentials.integrationId, envelope.id)
+    logger.warn(
+      { err: error, eventId: envelope.id, invoiceId: invoice.id },
+      "woocommerce webhook: contact marks failed, asking the site to redeliver",
+    )
+    return { reason: "hub-error", detail: "contact marks" }
+  }
+  try {
+    await db
+      .update(invoiceEventModel)
+      .set({ outcome: markedOutcome(target), updatedAt: new Date() })
+      .where(eq(invoiceEventModel.id, outcome.eventRowId))
+  } catch (error) {
+    // The marks ran; a later report of this status may re-run them once.
+    logger.warn(
+      { err: error, eventId: envelope.id },
+      "woocommerce webhook: marked outcome not recorded",
+    )
   }
   return {
-    reason: applied ? "applied" : "captured",
+    reason: outcome.applied ? "applied" : "captured",
     detail: `${envelope.event} invoice ${invoice.id}`,
   }
 }

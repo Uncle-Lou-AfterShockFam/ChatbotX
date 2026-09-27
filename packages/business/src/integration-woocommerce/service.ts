@@ -17,6 +17,7 @@ import { z } from "zod"
 import { BaseService } from "../base.service"
 import { credentialMissingException, validationException } from "../errors"
 import {
+  isPgBigintId,
   normalizeSiteUrl,
   postSiteAction,
   SiteUnreachableError,
@@ -34,7 +35,7 @@ export const wooCommerceAuthSchema = z
   .strict()
 export type WooCommerceAuth = z.infer<typeof wooCommerceAuthSchema>
 
-const idSchema = z.string().regex(/^\d{1,20}$/)
+const idSchema = z.string().refine(isPgBigintId, "must be an id")
 
 export const connectWooCommerceInputSchema = z
   .object({
@@ -46,7 +47,6 @@ export const connectWooCommerceInputSchema = z
     actionToken: z.string().trim().regex(WOOCOMMERCE_ACTION_TOKEN_PATTERN, {
       message: "Paste a hub-connector action token (btc_...)",
     }),
-    currency: z.string().trim().min(3).max(3),
     /** Builds the hub webhook URL the site posts to, for the integration id. */
     webhookUrlFor: z.function({ input: [z.string()], output: z.string() }),
   })
@@ -108,22 +108,18 @@ export const generateWooCommerceWebhookSecret = (): string =>
   `whsec_${randomBytes(32).toString("base64")}`
 
 /**
- * The probe a connect sends: `order.invoice` with a `lines` list and NO
- * Idempotency-Key. hub-connector >= 0.6.0 authorizes the token (401/403),
- * parses the list, then refuses the missing key (400 `idempotency-required`)
- * before any provider runs, so nothing is created; 0.5.x refuses the list
- * itself (400 `bad-body`).
+ * The connect check: hub-connector >= 0.6.0 `store.info`, read-only (it
+ * creates nothing on any plugin build), scope `orders:write` like
+ * `order.invoice`; it answers the store currency the invoices must use.
  */
-const PROBE_BODY = { args: { lines: [{ type: "fee" }] } }
-
-async function verifySite(siteUrl: string, token: string): Promise<void> {
+async function verifySite(siteUrl: string, token: string): Promise<string> {
   let answer: Awaited<ReturnType<typeof postSiteAction>>
   try {
     answer = await postSiteAction({
       siteUrl,
       token,
-      action: "order.invoice",
-      body: PROBE_BODY,
+      action: "store.info",
+      body: {},
     })
   } catch (error) {
     throw validationException(
@@ -134,8 +130,15 @@ async function verifySite(siteUrl: string, token: string): Promise<void> {
     )
   }
   const code = siteErrorCode(answer)
-  if (answer.status === 400 && code === "idempotency-required") {
-    return
+  if (answer.status === 200 && answer.body?.ok === true) {
+    const currency = normalizeInvoiceCurrency(answer.body.currency)
+    if (!currency) {
+      throw validationException(
+        "siteUrl",
+        `The store currency ${String(answer.body.currency)} is not supported`,
+      )
+    }
+    return currency
   }
   if (answer.status === 401) {
     throw validationException("actionToken", "The site rejected this token")
@@ -146,10 +149,16 @@ async function verifySite(siteUrl: string, token: string): Promise<void> {
       "This token lacks the orders:write scope (create one with `wp hub-connector token create --scopes=orders:write`)",
     )
   }
-  if (answer.status === 400 && code === "bad-body") {
+  if (answer.status === 404 && code === "unknown-action") {
     throw validationException(
       "siteUrl",
       "The site runs a hub-connector older than 0.6.0: update the plugin first",
+    )
+  }
+  if (answer.status === 422 && code === "no-provider") {
+    throw validationException(
+      "siteUrl",
+      "WooCommerce is not active on this site",
     )
   }
   if (answer.status === 404) {
@@ -166,9 +175,10 @@ async function verifySite(siteUrl: string, token: string): Promise<void> {
 
 /**
  * WooCommerce sites linked to a workspace (s211b): the `woocommerce` invoice
- * method. A connect verifies the site and token with a harmless probe, keeps
- * the webhook secret of an existing site (a token rotation must not break the
- * site's wp-config), and re-binds invoices a disconnect left behind.
+ * method. A connect verifies the site and token with `store.info` (and takes
+ * the store currency from it), keeps the webhook secret of the same site at
+ * the same URL (a token rotation must not break the site's wp-config), and
+ * re-binds invoices a disconnect left behind.
  */
 class IntegrationWooCommerceService extends BaseService {
   async listByWorkspaceId(
@@ -235,11 +245,7 @@ class IntegrationWooCommerceService extends BaseService {
         "Use the site's https:// address with no path (https://example.org)",
       )
     }
-    const currency = normalizeInvoiceCurrency(props.currency)
-    if (!currency) {
-      throw validationException("currency", "Unsupported currency")
-    }
-    await verifySite(siteUrl, props.actionToken)
+    const currency = await verifySite(siteUrl, props.actionToken)
 
     const result = await db.transaction(async (tx) => {
       await tx.execute(
@@ -249,9 +255,13 @@ class IntegrationWooCommerceService extends BaseService {
         where: { workspaceId: props.workspaceId, siteSlug: props.siteSlug },
       })
       const integrationId = existing?.integrationId ?? createId()
-      const webhookSecret = existing
-        ? (await this.decrypt(existing)).auth.webhookSecret
-        : generateWooCommerceWebhookSecret()
+      // The secret is kept only for the SAME site (a token rotation): a slug
+      // re-pointed at another URL gets a new one, so the old install's
+      // wp-config can no longer sign payments (s211b review).
+      const webhookSecret =
+        existing && existing.siteUrl === siteUrl
+          ? (await this.decrypt(existing)).auth.webhookSecret
+          : generateWooCommerceWebhookSecret()
       const auth = await encryptUtils.encryptObject(
         wooCommerceAuthSchema.parse({
           actionToken: props.actionToken,

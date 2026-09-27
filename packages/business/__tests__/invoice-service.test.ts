@@ -968,10 +968,12 @@ describe("woocommerce (s211b PR3)", () => {
     expect(m.state.inserts[0]).toMatchObject({
       method: "woocommerce",
       integrationId: "88",
+      // The site identity is stored at create: drafts are re-adopted by it.
+      providerAccountId: "https://bakery.example.org",
     })
     expect(m.state.updates.at(-1)).toMatchObject({
       status: "open",
-      providerInvoiceId: "wc:88:3701",
+      providerInvoiceId: "wc:https://bakery.example.org:3701",
       providerAccountId: "https://bakery.example.org",
       integrationId: "88",
       hostedUrl: ORDER.payUrl,
@@ -1054,10 +1056,42 @@ describe("woocommerce (s211b PR3)", () => {
     expect(m.wooOrder).not.toHaveBeenCalled()
   })
 
+  test("a Stripe invoice stores no provider account at create", async () => {
+    await invoiceService.create(validInput())
+    expect(m.state.inserts[0]).toMatchObject({ providerAccountId: null })
+  })
+
+  test("a draft moved to another site URL is refused (its orders live on the old one)", async () => {
+    m.state.stored = storedInvoice("draft", {
+      method: "woocommerce",
+      integrationId: "88",
+      providerAccountId: "https://old-shop.example.org",
+    })
+    await expect(
+      invoiceService.finalize({ workspaceId: WS, id: "9" }),
+    ).rejects.toThrow("no longer connected")
+    expect(m.wooOrder).not.toHaveBeenCalled()
+  })
+
+  test("voided while the site created the order: the void row names the order", async () => {
+    // The finalize CAS (draft -> open) misses because the row went void.
+    m.wooOrder.mockImplementation(() => {
+      m.state.updateMatches = false
+      return Promise.resolve(ORDER)
+    })
+    await invoiceService
+      .create(validInput({ method: "woocommerce" }))
+      .catch(() => undefined)
+    expect(m.state.updates.at(-1)).toMatchObject({
+      providerInvoiceId: "wc:https://bakery.example.org:3701",
+      lastError: expect.stringContaining("created order 3701"),
+    })
+  })
+
   test("a void is hub-only and names the order to cancel on the site", async () => {
     m.state.stored = storedInvoice("open", {
       method: "woocommerce",
-      providerInvoiceId: "wc:88:3701",
+      providerInvoiceId: "wc:https://bakery.example.org:3701",
     })
     const invoice = await invoiceService.void({ workspaceId: WS, id: "9" })
     expect(invoice.status).toBe("void")

@@ -100,6 +100,16 @@ const answer = (status: number, code: string) =>
   new Response(JSON.stringify({ ok: false, status: "error", code }), {
     status,
   })
+const storeInfo = (currency = "usd") =>
+  new Response(
+    JSON.stringify({
+      ok: true,
+      status: "info",
+      plugin_version: "0.6.0",
+      currency,
+    }),
+    { status: 200 },
+  )
 
 const connect = (over: Record<string, unknown> = {}) =>
   integrationWooCommerceService.connect({
@@ -107,7 +117,6 @@ const connect = (over: Record<string, unknown> = {}) =>
     siteSlug: "bakery-test",
     siteUrl: "https://bakery.example.org/",
     actionToken: TOKEN,
-    currency: "usd",
     webhookUrlFor: (id: string) =>
       `https://chat.example.org/integrations/woocommerce/webhook/${id}`,
     ...over,
@@ -124,19 +133,15 @@ beforeEach(() => {
 })
 
 describe("connect", () => {
-  test("a 0.6.0 site with a valid orders:write token links, and the wp-config lines come back once", async () => {
-    m.fetch.mockResolvedValue(answer(400, "idempotency-required"))
+  test("a 0.6.0 site links through the read-only store.info, takes its currency, and the wp-config lines come back once", async () => {
+    m.fetch.mockResolvedValue(storeInfo())
     const result = await connect()
     const [url, init] = m.fetch.mock.calls[0] as [string, RequestInit]
     expect(url).toBe(
-      "https://bakery.example.org/wp-json/hub-connector/v1/actions/order.invoice",
+      "https://bakery.example.org/wp-json/hub-connector/v1/actions/store.info",
     )
-    expect(
-      (init.headers as Record<string, string>)["idempotency-key"],
-    ).toBeUndefined()
-    expect(JSON.parse(String(init.body))).toEqual({
-      args: { lines: [{ type: "fee" }] },
-    })
+    expect(m.fetch).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(init.body))).toEqual({})
     expect(result.hubUrl).toBe(
       "https://chat.example.org/integrations/woocommerce/webhook/901",
     )
@@ -158,26 +163,53 @@ describe("connect", () => {
     expect(JSON.stringify(columns)).not.toContain(TOKEN)
   })
 
-  test("re-linking the same slug keeps its webhook secret (the site's wp-config stays valid)", async () => {
+  test("re-linking the same slug AT THE SAME URL keeps its webhook secret (a token rotation)", async () => {
     const kept = `whsec_${"b".repeat(43)}=`
     m.existing = {
       id: "900",
       integrationId: "777",
       workspaceId: WORKSPACE_ID,
       siteSlug: "bakery-test",
+      siteUrl: "https://bakery.example.org",
       auth: { sealed: { actionToken: TOKEN, webhookSecret: kept } },
     }
-    m.fetch.mockResolvedValue(answer(400, "idempotency-required"))
+    m.fetch.mockResolvedValue(storeInfo())
     const result = await connect()
     expect(result.hubSecret).toBe(kept)
     expect(result.hubUrl).toContain("/webhook/777")
     expect(m.inserts).toEqual([])
   })
 
+  test("re-pointing a slug at another URL mints a NEW secret (the old install can no longer sign)", async () => {
+    const old = `whsec_${"b".repeat(43)}=`
+    m.existing = {
+      id: "900",
+      integrationId: "777",
+      workspaceId: WORKSPACE_ID,
+      siteSlug: "bakery-test",
+      siteUrl: "https://old-shop.example.org",
+      auth: { sealed: { actionToken: TOKEN, webhookSecret: old } },
+    }
+    m.fetch.mockResolvedValue(storeInfo())
+    const result = await connect()
+    expect(result.hubSecret).toMatch(SECRET_RE)
+    expect(result.hubSecret).not.toBe(old)
+    expect(m.updates[0]).toMatchObject({
+      siteUrl: "https://bakery.example.org",
+    })
+  })
+
+  test("the store currency comes from the site (an unsupported one is refused)", async () => {
+    m.fetch.mockResolvedValue(storeInfo("xyz1"))
+    await expect(connect()).rejects.toThrow("not supported")
+    expect(m.inserts).toEqual([])
+  })
+
   test.each([
     [401, "unknown-token", "rejected this token"],
     [403, "scope", "orders:write"],
-    [400, "bad-body", "older than 0.6.0"],
+    [404, "unknown-action", "older than 0.6.0"],
+    [422, "no-provider", "WooCommerce is not active"],
     [404, "rest_no_route", "No hub-connector"],
     [200, "", "Unexpected answer"],
     [500, "error", "Unexpected answer"],
@@ -190,7 +222,6 @@ describe("connect", () => {
   test.each([
     ["http", { siteUrl: "http://bakery.example.org" }],
     ["a path", { siteUrl: "https://bakery.example.org/shop" }],
-    ["an unknown currency", { currency: "XYZ1" }],
     ["a bad slug", { siteSlug: "Bakery Test" }],
     ["a bad token", { actionToken: "sk_test_x" }],
   ])("%s is refused before any call", async (_label, over) => {

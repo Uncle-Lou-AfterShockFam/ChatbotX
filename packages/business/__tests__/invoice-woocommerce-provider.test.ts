@@ -34,6 +34,8 @@ const {
   createWooCommerceOrder,
   orderInvoiceRequest,
   wooCommerceIdempotencyKey,
+  wooCommerceOrderIdOf,
+  wooCommerceProviderInvoiceId,
 } = await import("../src/invoice/woocommerce-provider")
 const { InvoiceProviderError } = await import("../src/invoice/stripe-provider")
 const { normalizeSiteUrl } = await import(
@@ -296,6 +298,90 @@ describe("createWooCommerceOrder", () => {
       invoice: invoice(),
     }).catch((e) => e)
     expect(error).toBeInstanceOf(InvoiceProviderError)
+  })
+})
+
+describe("createWooCommerceOrder: recovering an order the site already made", () => {
+  const exists = (over: Record<string, unknown> = {}) =>
+    answer(409, {
+      ok: false,
+      status: "error",
+      code: "hub-invoice-exists",
+      message: "order 3701 (pending) already collects hub invoice 501",
+      order_id: 3701,
+      order_status: "pending",
+      pay_url:
+        "https://bakery.example.org/checkout/order-pay/3701/?pay_for_order=true&key=wc_order_x",
+      total: "17.50",
+      currency: "USD",
+      hub_invoice_id: "501",
+      ...over,
+    })
+
+  test("hub-invoice-exists (the first answer lost, or its key expired) adopts the live order", async () => {
+    m.fetch.mockResolvedValue(exists())
+    const order = await createWooCommerceOrder({
+      credentials,
+      invoice: invoice(),
+    })
+    expect(order.orderId).toBe("3701")
+    expect(m.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  test("an adopted order that does not match the invoice is refused like a fresh one", async () => {
+    m.fetch.mockResolvedValue(exists({ total: "99.00" }))
+    const error = await createWooCommerceOrder({
+      credentials,
+      invoice: invoice(),
+    }).catch((e) => e)
+    expect(error).toBeInstanceOf(InvoiceProviderError)
+    expect(error.retryable).toBe(false)
+  })
+
+  test("idempotency-mismatch (the contact changed) retries ONCE under a fresh key, then adopts", async () => {
+    m.fetch
+      .mockResolvedValueOnce(
+        answer(409, { ok: false, code: "idempotency-mismatch", message: "x" }),
+      )
+      .mockResolvedValueOnce(exists())
+    const order = await createWooCommerceOrder({
+      credentials,
+      invoice: invoice(),
+    })
+    expect(order.orderId).toBe("3701")
+    const keys = m.fetch.mock.calls.map(
+      ([, init]) =>
+        (init as RequestInit & { headers: Record<string, string> }).headers[
+          "idempotency-key"
+        ],
+    )
+    expect(keys).toEqual(["hub-invoice:501", "hub-invoice:501:2"])
+  })
+
+  test("a second mismatch is not retried again", async () => {
+    m.fetch.mockResolvedValue(
+      answer(409, { ok: false, code: "idempotency-mismatch", message: "x" }),
+    )
+    const error = await createWooCommerceOrder({
+      credentials,
+      invoice: invoice(),
+    }).catch((e) => e)
+    expect(error).toBeInstanceOf(InvoiceProviderError)
+    expect(m.fetch).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe("provider ids", () => {
+  test("wc:<origin>:<order> round-trips, and junk yields no order id", () => {
+    const ref = wooCommerceProviderInvoiceId(
+      "https://shop.example.org:8443",
+      42,
+    )
+    expect(ref).toBe("wc:https://shop.example.org:8443:42")
+    expect(wooCommerceOrderIdOf(ref)).toBe("42")
+    expect(wooCommerceOrderIdOf("in_stripe_1")).toBeNull()
+    expect(wooCommerceOrderIdOf("wc:https://x.org:abc")).toBeNull()
+    expect(wooCommerceOrderIdOf(null)).toBeNull()
   })
 })
 

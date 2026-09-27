@@ -5,10 +5,12 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
  * handleWooCommerceWebhook (s211b) with the REAL Standard Webhooks check:
  * every delivery is signed here exactly as hub-connector's Signer signs it.
  * Mocked: the site credentials lookup, the contact marks, the emitters and
- * the database at the query-builder seam. Pinned: verify -> parse -> dedup ->
- * CAS -> marks order, that an unknown site answers like a bad signature, that
- * a duplicate never marks, that a failed mark drops the dedup row, and that a
- * payment of an invoice voided here is flagged, never applied.
+ * the database at the query-builder seam. Pinned: verify -> parse -> lock ->
+ * dedup -> CAS -> marks order, that an unknown site answers like a bad
+ * signature (and is retried, never dead-lettered), that a duplicate never
+ * marks, that marks run once per status however many events report it, that
+ * a refund before its payment is retried with nothing recorded, and that a
+ * payment of an invoice voided here is flagged, never applied (s211b review).
  */
 
 const SECRET = `whsec_${randomBytes(32).toString("base64")}`
@@ -17,10 +19,15 @@ const INTEGRATION_ID = "88"
 const WORKSPACE_ID = "11"
 const HUB_ID = "501"
 const ORDER_ID = "3701"
+const SITE_URL = "https://bakery.example.org"
+const ORDER_REF = `wc:${SITE_URL}:${ORDER_ID}`
 
 const m = vi.hoisted(() => {
   const state = {
     hubRow: null as Record<string, unknown> | null,
+    /** Rows of the `marked:<status>` lookup (after the lock select). */
+    markedRows: [] as { id: string }[],
+    selects: 0,
     insertResult: [{ id: "ev-row" }] as { id: string }[],
     transitionMatches: true,
     inserted: [] as Record<string, unknown>[],
@@ -31,8 +38,18 @@ const m = vi.hoisted(() => {
   const selectChain: Record<string, unknown> = {}
   selectChain.from = () => selectChain
   selectChain.where = () => selectChain
-  selectChain.limit = () =>
-    Promise.resolve(state.hubRow ? [{ ...state.hubRow }] : [])
+  // 1st select of a delivery = the invoice lock, 2nd = the marked lookup.
+  selectChain.limit = () => {
+    state.selects += 1
+    const rows =
+      state.selects === 1
+        ? state.hubRow
+          ? [{ ...state.hubRow }]
+          : []
+        : state.markedRows
+    const result = Promise.resolve(rows)
+    return Object.assign(result, { for: () => result })
+  }
   const updateChain = {
     pending: {} as Record<string, unknown>,
     set(v: Record<string, unknown>) {
@@ -62,6 +79,7 @@ const m = vi.hoisted(() => {
       },
     }),
     update: () => updateChain,
+    select: () => selectChain,
   }
   const db = {
     select: () => selectChain,
@@ -190,7 +208,8 @@ const openInvoice = (over: Record<string, unknown> = {}) => ({
   total: "42.50",
   currency: "USD",
   hostedUrl: "https://bakery.example.org/checkout/order-pay/3701/",
-  providerInvoiceId: `wc:${INTEGRATION_ID}:${ORDER_ID}`,
+  providerInvoiceId: ORDER_REF,
+  providerAccountId: SITE_URL,
   dealId: null,
   ...over,
 })
@@ -204,11 +223,13 @@ beforeEach(() => {
   m.state.updates = []
   m.state.deletes = 0
   m.state.transactionError = null
+  m.state.markedRows = []
+  m.state.selects = 0
   m.credentials.mockResolvedValue({
     integrationId: INTEGRATION_ID,
     workspaceId: WORKSPACE_ID,
     siteSlug: "bakery-test",
-    siteUrl: "https://bakery.example.org",
+    siteUrl: SITE_URL,
     currency: "USD",
     auth: { actionToken: "btc_x", webhookSecret: SECRET },
   })
@@ -232,6 +253,15 @@ describe("verifyStandardWebhook", () => {
   test("accepts the plugin's own signature", () => {
     expect(ok({})).toBe(true)
   })
+  test.each([
+    ["an empty secret", ""],
+    ["a secret without whsec_", SECRET.slice("whsec_".length)],
+    ["a bare prefix", "whsec_"],
+  ])("refuses %s even with a signature made from it", (_label, secret) => {
+    expect(ok({ secret, signature: sign(secret, "e1", NOW, '{"a":1}') })).toBe(
+      false,
+    )
+  })
   test("accepts one valid signature among several (rotation)", () => {
     expect(
       ok({
@@ -250,6 +280,7 @@ describe("verifyStandardWebhook", () => {
     ["a v2 signature", { signature: "v2,abc" }],
     ["a truncated signature", { signature: "v1,AAAA" }],
     ["a tampered body", { rawBody: Buffer.from('{"a":2}') }],
+
   ])("refuses %s", (_label, over) => {
     expect(ok(over as never)).toBe(false)
   })
@@ -283,7 +314,12 @@ describe("parseOrderEnvelope", () => {
 })
 
 describe("handleWooCommerceWebhook", () => {
-  test("a paid order moves the invoice to paid, marks the contact and emits once", async () => {
+  const deliverAgain = (body: string) => {
+    m.state.selects = 0
+    return deliver(body)
+  }
+
+  test("a paid order moves the invoice to paid, marks the contact once and records the marks", async () => {
     const result = await deliver(envelope())
     expect(result.reason).toBe("applied")
     expect(m.state.inserted[0]).toMatchObject({
@@ -295,20 +331,22 @@ describe("handleWooCommerceWebhook", () => {
     })
     expect(m.state.updates[0]).toMatchObject({
       status: "paid",
-      providerInvoiceId: `wc:${INTEGRATION_ID}:${ORDER_ID}`,
+      providerInvoiceId: ORDER_REF,
     })
     expect(m.marks).toHaveBeenCalledWith(
       expect.objectContaining({ status: "paid" }),
     )
     expect(m.emitPaid).toHaveBeenCalledTimes(1)
+    expect(m.state.updates.at(-1)).toMatchObject({ outcome: "marked:paid" })
   })
 
-  test("an unknown site and a bad signature answer the same, and touch nothing", async () => {
+  test("an unknown site and a bad signature answer the same retryable no-token, and touch nothing", async () => {
     const bad = await deliver(envelope(), { secret: OTHER_SECRET })
     m.credentials.mockResolvedValueOnce(null)
-    const unknown = await deliver(envelope())
-    expect([bad.reason, unknown.reason]).toEqual(["unverified", "unverified"])
+    const unknown = await deliverAgain(envelope())
+    expect([bad.reason, unknown.reason]).toEqual(["no-token", "no-token"])
     expect(m.state.inserted).toEqual([])
+    expect(m.state.selects).toBe(0)
     expect(m.marks).not.toHaveBeenCalled()
   })
 
@@ -326,31 +364,50 @@ describe("handleWooCommerceWebhook", () => {
     expect(m.emitPaid).not.toHaveBeenCalled()
   })
 
-  test("events other than paid/refunded, and orders of no hub invoice, are captured untouched", async () => {
-    const completed = await deliver(
-      envelope({ event: "order.completed", id: "hc-order-3701-completed" }),
-    )
-    const legacy = await deliver(envelope({ hubInvoiceId: null }))
-    const junk = await deliver(envelope({ hubInvoiceId: "12 OR 1" }))
-    expect([completed.reason, legacy.reason, junk.reason]).toEqual([
-      "captured",
-      "captured",
-      "captured",
-    ])
+  test.each([
+    "constructor",
+    "__proto__",
+    "toString",
+    "hasOwnProperty",
+  ])("the event name %s is captured, never looked up on a prototype", async (event) => {
+    const result = await deliver(envelope({ event, id: "hc-order-3701-x" }))
+    expect(result.reason).toBe("captured")
     expect(m.state.inserted).toEqual([])
   })
 
-  test("no matching invoice (another site's order, a forged id) applies nothing and burns no event id", async () => {
+  test.each([
+    ["no hub invoice", { hubInvoiceId: null }],
+    ["a junk hub invoice id", { hubInvoiceId: "12 OR 1" }],
+    ["a hub invoice id over bigint", { hubInvoiceId: "99999999999999999999" }],
+    ["an order id over bigint", { orderId: "9223372036854775808" }],
+  ])("%s is captured untouched (no query)", async (_label, over) => {
+    const result = await deliver(envelope(over as never))
+    expect(result.reason).toBe("captured")
+    expect(m.state.selects).toBe(0)
+  })
+
+  test("an order this site cannot match yet is retried and burns no event id", async () => {
     m.state.hubRow = null
     const result = await deliver(envelope())
-    expect(result.reason).toBe("captured")
+    expect(result.reason).toBe("hub-error")
     expect(m.state.inserted).toEqual([])
     expect(m.state.updates).toEqual([])
+  })
+
+  test("a refund before its payment is retried, with nothing recorded", async () => {
+    for (const status of ["open", "draft", "uncollectible"]) {
+      m.state.hubRow = openInvoice({ status })
+      const result = await deliverAgain(
+        envelope({ event: "order.refunded", id: "hc-order-3701-refunded" }),
+      )
+      expect(result.reason).toBe("hub-error")
+    }
+    expect(m.state.inserted).toEqual([])
     expect(m.marks).not.toHaveBeenCalled()
   })
 
   test("paid after a void here: flagged on the event and the invoice, never applied", async () => {
-    m.state.hubRow = openInvoice({ status: "void" })
+    m.state.hubRow = openInvoice({ status: "void", providerInvoiceId: null })
     m.state.transitionMatches = false
     const result = await deliver(envelope())
     expect(result.reason).toBe("captured")
@@ -358,6 +415,7 @@ describe("handleWooCommerceWebhook", () => {
       expect.arrayContaining([
         expect.objectContaining({ outcome: "paid-after-void" }),
         expect.objectContaining({
+          providerInvoiceId: ORDER_REF,
           lastError: expect.stringContaining("refund it in WooCommerce"),
         }),
       ]),
@@ -379,14 +437,38 @@ describe("handleWooCommerceWebhook", () => {
     expect(m.emitPaid).not.toHaveBeenCalled()
   })
 
+  test("order.completed pays an unpaid invoice (a manual-payment order)", async () => {
+    const result = await deliver(
+      envelope({ event: "order.completed", id: "hc-order-3701-completed" }),
+    )
+    expect(result.reason).toBe("applied")
+    expect(m.state.updates[0]).toMatchObject({ status: "paid" })
+    expect(m.emitPaid).toHaveBeenCalledTimes(1)
+  })
+
+  test("a second report of a marked status (order.completed after order.paid) never re-marks", async () => {
+    m.state.hubRow = openInvoice({ status: "paid" })
+    m.state.transitionMatches = false
+    m.state.markedRows = [{ id: "ev-marked" }]
+    const result = await deliver(
+      envelope({ event: "order.completed", id: "hc-order-3701-completed" }),
+    )
+    expect(result.reason).toBe("captured")
+    expect(m.marks).not.toHaveBeenCalled()
+    expect(m.emitPaid).not.toHaveBeenCalled()
+  })
+
   test("a failed mark drops the dedup row and asks the site to retry the same id", async () => {
     m.marks.mockRejectedValueOnce(new Error("hub down"))
     const result = await deliver(envelope())
     expect(result.reason).toBe("hub-error")
     expect(m.state.deletes).toBe(1)
+    expect(m.state.updates).not.toContainEqual(
+      expect.objectContaining({ outcome: "marked:paid" }),
+    )
   })
 
-  test("the retry after a failed mark re-runs the marks on the already-paid invoice", async () => {
+  test("the retry after a failed mark (status reached, no marks recorded) runs the marks", async () => {
     m.state.hubRow = openInvoice({ status: "paid" })
     m.state.transitionMatches = false
     const result = await deliver(envelope())
@@ -395,6 +477,7 @@ describe("handleWooCommerceWebhook", () => {
       expect.objectContaining({ status: "paid" }),
     )
     expect(m.emitPaid).toHaveBeenCalledTimes(1)
+    expect(m.state.updates.at(-1)).toMatchObject({ outcome: "marked:paid" })
   })
 
   test("a database failure answers hub-error (the site retries)", async () => {

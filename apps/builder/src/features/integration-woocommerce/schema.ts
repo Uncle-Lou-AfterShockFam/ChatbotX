@@ -14,10 +14,6 @@ export const connectWooCommerceSchema = z
     actionToken: z.string().trim().regex(WOOCOMMERCE_ACTION_TOKEN_PATTERN, {
       message: "A hub-connector action token (btc_...)",
     }),
-    currency: z
-      .string()
-      .trim()
-      .regex(/^[A-Za-z]{3}$/, { message: "The store currency, e.g. USD" }),
   })
   .strict()
 export type ConnectWooCommerceValues = z.infer<typeof connectWooCommerceSchema>

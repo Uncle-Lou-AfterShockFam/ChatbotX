@@ -1,3 +1,4 @@
+import { readCapped } from "../documents/gotenberg"
 import { isSsrfUnsafeUrl } from "../net/ssrf-guard"
 
 /** One call to a site; a slow WordPress must not hold a flow step for long. */
@@ -43,35 +44,25 @@ export function normalizeSiteUrl(value: string): string | null {
   return url.origin
 }
 
+const PG_BIGINT_MAX = 9_223_372_036_854_775_807n
+const DIGITS = /^[1-9]\d{0,18}$/
+
+/** A positive id that fits a Postgres bigint (a longer one would 22003 the query). */
+export const isPgBigintId = (value: unknown): value is string =>
+  typeof value === "string" &&
+  DIGITS.test(value) &&
+  BigInt(value) <= PG_BIGINT_MAX
+
 export const siteActionUrl = (siteUrl: string, action: string): string =>
   `${siteUrl}/wp-json/hub-connector/v1/actions/${action}`
-
-async function readCappedText(response: Response): Promise<string | null> {
-  const reader = response.body?.getReader()
-  if (!reader) {
-    return ""
-  }
-  const chunks: Uint8Array[] = []
-  let size = 0
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) {
-      break
-    }
-    size += value.byteLength
-    if (size > SITE_RESPONSE_MAX_BYTES) {
-      await reader.cancel().catch(() => undefined)
-      return null
-    }
-    chunks.push(value)
-  }
-  return Buffer.concat(chunks).toString("utf8")
-}
 
 /**
  * POST one hub-connector action to a linked site. The URL is re-checked
  * against the SSRF guard on every call (a site's DNS can change after
  * connect) and redirects are never followed: a 3xx is returned as the answer.
+ * Known limit, shared with `external-request`: the guard and fetch resolve
+ * DNS separately, so a rebinding window between them remains (no portable way
+ * to pin the checked address in fetch); the URL is a workspace admin's input.
  */
 export async function postSiteAction(props: {
   siteUrl: string
@@ -110,7 +101,8 @@ export async function postSiteAction(props: {
   }
   let text: string | null
   try {
-    text = await readCappedText(response)
+    const bytes = await readCapped(response, SITE_RESPONSE_MAX_BYTES)
+    text = bytes === null ? null : Buffer.from(bytes).toString("utf8")
   } catch (error) {
     throw new SiteUnreachableError(
       `${props.siteUrl} answer could not be read: ${error instanceof Error ? error.message : "read failed"}`,

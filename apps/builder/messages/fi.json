@@ -7392,7 +7392,7 @@
     "title": "WooCommerce",
     "setting": {
       "label": "WooCommerce sites",
-      "description": "Collect invoices as WooCommerce orders on your own WordPress sites: the site's payment gateway takes the money and the order-pay page is the pay link. Needs the hub-connector plugin 0.6.0 or later and an action token with the orders:write scope."
+      "description": "Collect invoices as WooCommerce orders on your own WordPress sites: the site's payment gateway takes the money and the order-pay page is the pay link. Needs the hub-connector plugin 0.6.0 or later and an action token with the orders:write scope; the store currency is read from the site."
     },
     "addSite": "Link a site",
     "addSiteHelp": "On the site, create a token with `wp hub-connector token create --scopes=orders:write`. After linking, add the two lines the hub shows to the site's wp-config.php so payments reach the hub.",
@@ -7403,15 +7403,12 @@
       "siteUrl": "Site address",
       "siteSlug": "Site slug (HUBC_SITE_SLUG)",
       "actionToken": "Action token",
-      "currency": "Store currency",
       "site": "WooCommerce site"
     },
     "wpConfig": {
       "title": "Finish linking {site}",
       "description": "Add these lines to the site's wp-config.php. The secret is shown only now (linking the same slug again keeps it).",
-      "copy": "Copy",
-      "copied": "Copied",
-      "copyFailed": "Could not copy"
+      "copy": "Copy"
     }
   },
   "invoices": {

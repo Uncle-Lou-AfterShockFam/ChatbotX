@@ -21,11 +21,26 @@ const ORDER_ID = /^[1-9]\d{0,19}$/
 export const WOOCOMMERCE_MAX_LINE_AMOUNT = 10_000
 export const WOOCOMMERCE_MAX_DESCRIPTION = 200
 
-/** `Invoice.providerInvoiceId` of a WooCommerce order: unique across sites. */
+/**
+ * `Invoice.providerInvoiceId` of a WooCommerce order: `wc:<site origin>:<id>`,
+ * unique across sites and stable across a disconnect + reconnect (the
+ * integration id is not).
+ */
 export const wooCommerceProviderInvoiceId = (
-  integrationId: string,
+  siteUrl: string,
   orderId: string | number,
-): string => `wc:${integrationId}:${orderId}`
+): string => `wc:${siteUrl}:${orderId}`
+
+/** The order id of a `wc:` provider id (the origin itself holds colons). */
+export const wooCommerceOrderIdOf = (
+  providerInvoiceId: string | null,
+): string | null => {
+  if (!providerInvoiceId?.startsWith("wc:")) {
+    return null
+  }
+  const id = providerInvoiceId.slice(providerInvoiceId.lastIndexOf(":") + 1)
+  return ORDER_ID.test(id) ? id : null
+}
 
 /** The site-side Idempotency-Key: a finalize retry replays the same order. */
 export const wooCommerceIdempotencyKey = (invoiceId: string): string =>
@@ -110,6 +125,19 @@ export type OpenedWooCommerceOrder = {
   payUrl: string
 }
 
+/**
+ * The site's order in an answer: a fresh `invoiced` one, or the live order a
+ * `hub-invoice-exists` refusal names (the first answer was lost or its key
+ * expired). Null when the answer names none.
+ */
+function orderOf(data: Record<string, unknown> | null) {
+  const orderId = String(data?.order_id ?? "")
+  const payUrl = typeof data?.pay_url === "string" ? data.pay_url : ""
+  return ORDER_ID.test(orderId) && payUrl.startsWith("https://")
+    ? { orderId, payUrl }
+    : null
+}
+
 /** Refusals a retry of the SAME request can cure. */
 const RETRYABLE_CODES = new Set(["in-progress", "rate-limited", "error"])
 
@@ -147,33 +175,47 @@ export async function createWooCommerceOrder(props: {
     lines: invoice.lineItems,
     contact: contact ?? { phoneNumber: null, email: null },
   })
-  let answer: SiteAnswer
-  try {
-    answer = await postSiteAction({
-      siteUrl: credentials.siteUrl,
-      token: credentials.auth.actionToken,
-      action: "order.invoice",
-      body,
-      idempotencyKey: wooCommerceIdempotencyKey(invoice.id),
-    })
-  } catch (error) {
-    if (error instanceof SiteUnreachableError) {
-      throw new InvoiceProviderError(error.message, true)
+  const post = async (idempotencyKey: string) => {
+    try {
+      return await postSiteAction({
+        siteUrl: credentials.siteUrl,
+        token: credentials.auth.actionToken,
+        action: "order.invoice",
+        body,
+        idempotencyKey,
+      })
+    } catch (error) {
+      if (error instanceof SiteUnreachableError) {
+        throw new InvoiceProviderError(error.message, true)
+      }
+      throw error
     }
-    throw error
+  }
+  const key = wooCommerceIdempotencyKey(invoice.id)
+  let answer = await post(key)
+  if (
+    answer.status === 409 &&
+    siteErrorCode(answer) === "idempotency-mismatch"
+  ) {
+    // The body changed since the first attempt (the contact's phone or
+    // email): a fresh key reaches the order check, which names the live
+    // order of this invoice if the first attempt created one.
+    answer = await post(`${key}:2`)
   }
   const data = answer.body
-  if (answer.status !== 200 || data?.ok !== true) {
+  const adopted =
+    answer.status === 409 && siteErrorCode(answer) === "hub-invoice-exists"
+  if (!(adopted || (answer.status === 200 && data?.ok === true))) {
     throw refusal(answer)
   }
-  const orderId = String(data.order_id ?? "")
-  const payUrl = typeof data.pay_url === "string" ? data.pay_url : ""
-  if (!(ORDER_ID.test(orderId) && payUrl.startsWith("https://"))) {
+  const order = orderOf(data)
+  if (!(order && data)) {
     throw new InvoiceProviderError(
       `WooCommerce answered without an order id or an https pay link (${siteErrorMessage(answer)})`,
       false,
     )
   }
+  const { orderId, payUrl } = order
   const currency = String(data.currency ?? "").toUpperCase()
   const total = parseMoneyToMinor(String(data.total ?? ""), invoice.currency)
   if (

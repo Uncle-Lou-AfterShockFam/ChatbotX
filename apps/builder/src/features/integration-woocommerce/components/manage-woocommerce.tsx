@@ -22,6 +22,7 @@ import { useAction } from "next-safe-action/hooks"
 import { useState } from "react"
 import { toast } from "sonner"
 import { SettingRow } from "@/components/setting-row"
+import { useClipboard } from "@/hooks/use-clipboard"
 import { DisconnectIntegrationDialog } from "@/features/common/components/disconnect-integration-dialog"
 import { connectWooCommerceAction } from "../actions/connect.action"
 import { disconnectWooCommerceAction } from "../actions/disconnect.action"
@@ -155,7 +156,6 @@ function ConnectSiteDialog(props: {
           siteSlug: "",
           siteUrl: "",
           actionToken: "",
-          currency: "USD",
         },
       },
     },
@@ -195,11 +195,6 @@ function ConnectSiteDialog(props: {
               required
               type="password"
             />
-            <InputField
-              label={t("woocommerce.fields.currency")}
-              name="currency"
-              required
-            />
             <DialogFooter>
               <DialogClose
                 render={
@@ -233,17 +228,8 @@ function WpConfigDialog(props: {
 }) {
   const t = useTranslations()
   const { config } = props
-  const copy = async () => {
-    if (!config) {
-      return
-    }
-    try {
-      await navigator.clipboard.writeText(wpConfigLines(config))
-      toast.success(t("woocommerce.wpConfig.copied"))
-    } catch {
-      toast.error(t("woocommerce.wpConfig.copyFailed"))
-    }
-  }
+  const { handleCopy } = useClipboard()
+  const copy = () => config && handleCopy(wpConfigLines(config))
   return (
     <Dialog
       onOpenChange={(next) => !next && props.onClose()}

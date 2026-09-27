@@ -12,8 +12,8 @@ import { checkApiRateLimit } from "@/lib/rate-limit/api-rate-limit"
  * site's hub-generated `whsec_` (Standard Webhooks, 300 s tolerance) before
  * anything is parsed. The answer is 200 with hub-connector's `reason`
  * (`applied` / `duplicate` / `captured` settle the site's outbox row,
- * `hub-error` retries the same event id, `unverified` / `invalid:*`
- * dead-letter it); 503 = retry.
+ * `hub-error` / `no-token` retry the same event id, `invalid:*` dead-letters
+ * it); 503 = retry.
  */
 export const MAX_WOOCOMMERCE_WEBHOOK_BYTES = 64 * 1024
 
@@ -59,11 +59,11 @@ export async function POST(
     logger.error(error, "woocommerce webhook failed; the site will redeliver")
     return NextResponse.json({ code: "retry" }, { status: 503 })
   }
-  if (result.reason === "hub-error") {
+  if (result.reason === "hub-error" || result.reason === "no-token") {
     logger.warn(`woocommerce webhook will be retried: ${result.detail}`)
   }
   return NextResponse.json(
-    { ok: result.reason !== "unverified", reason: result.reason },
+    { ok: result.reason !== "no-token", reason: result.reason },
     { status: 200 },
   )
 }

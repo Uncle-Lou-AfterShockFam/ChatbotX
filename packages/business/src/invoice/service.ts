@@ -381,6 +381,7 @@ class InvoiceService extends BaseService {
           companyId: contact.companyId,
           dealId: props.dealId ?? null,
           integrationId: binding.integrationId,
+          providerAccountId: binding.providerAccountId ?? null,
           createdAt: now,
           updatedAt: now,
         })

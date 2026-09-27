@@ -1,4 +1,4 @@
-import { db, eq } from "@chatbotx.io/database/client"
+import { and, db, eq, isNull } from "@chatbotx.io/database/client"
 import type {
   InvoiceMethod,
   InvoiceStatus,
@@ -24,6 +24,7 @@ import {
 import { finalizeWithStripe, voidWithStripe } from "./stripe-provider"
 import {
   createWooCommerceOrder,
+  wooCommerceOrderIdOf,
   wooCommerceProviderInvoiceId,
 } from "./woocommerce-provider"
 
@@ -56,8 +57,13 @@ export type OpenedInvoice = {
  * connection and the calls to the outside system.
  */
 export type InvoiceProvider = {
-  /** The connection a NEW invoice of this method binds to; throws when none. */
-  bind(props: BindProps): Promise<{ integrationId: string }>
+  /**
+   * The connection a NEW invoice of this method binds to; throws when none.
+   * `providerAccountId` (WooCommerce: the site origin) is stored at create.
+   */
+  bind(
+    props: BindProps,
+  ): Promise<{ integrationId: string; providerAccountId?: string }>
   /**
    * The connection an existing draft is opened through. Throws (and the
    * draft keeps no `lastError`) when it is gone or was replaced.
@@ -327,7 +333,12 @@ const wooCommerceProvider: InvoiceProvider = {
         `The WooCommerce site ${site.siteSlug} sells in ${site.currency}, not ${currency}`,
       )
     }
-    return { integrationId: site.integrationId }
+    // The origin is the invoice's site identity from the start: a disconnect
+    // + reconnect re-adopts drafts too, and payments match by it (s211b).
+    return {
+      integrationId: site.integrationId,
+      providerAccountId: site.siteUrl,
+    }
   },
   async connect(invoice) {
     const credentials = invoice.integrationId
@@ -335,7 +346,12 @@ const wooCommerceProvider: InvoiceProvider = {
           invoice.integrationId,
         )
       : null
-    if (!credentials || credentials.workspaceId !== invoice.workspaceId) {
+    if (
+      !credentials ||
+      credentials.workspaceId !== invoice.workspaceId ||
+      (invoice.providerAccountId &&
+        invoice.providerAccountId !== credentials.siteUrl)
+    ) {
       throw validationException(
         "invoice",
         "This invoice's WooCommerce site is no longer connected",
@@ -344,17 +360,35 @@ const wooCommerceProvider: InvoiceProvider = {
     return {
       async open() {
         const order = await createWooCommerceOrder({ credentials, invoice })
+        const providerInvoiceId = wooCommerceProviderInvoiceId(
+          credentials.siteUrl,
+          order.orderId,
+        )
         return {
           set: {
             status: "open",
-            providerInvoiceId: wooCommerceProviderInvoiceId(
-              credentials.integrationId,
-              order.orderId,
-            ),
-            // The site origin: a reconnect of the same site re-adopts the invoice.
+            providerInvoiceId,
             providerAccountId: credentials.siteUrl,
             integrationId: credentials.integrationId,
             hostedUrl: order.payUrl,
+          },
+          // Voided here while the site created the order: the void row names
+          // it (to cancel there) and a later payment of it is flagged.
+          onDraftLost: async () => {
+            await db
+              .update(invoiceModel)
+              .set({
+                providerInvoiceId,
+                lastError: `Voided here while WooCommerce created order ${order.orderId}: cancel it on ${credentials.siteSlug}`,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(invoiceModel.id, invoice.id),
+                  eq(invoiceModel.status, "void"),
+                  isNull(invoiceModel.providerInvoiceId),
+                ),
+              )
           },
         }
       },
@@ -363,7 +397,7 @@ const wooCommerceProvider: InvoiceProvider = {
   prepareVoid() {
     return Promise.resolve({
       async afterVoid(voided) {
-        const orderId = voided.providerInvoiceId?.split(":")[2]
+        const orderId = wooCommerceOrderIdOf(voided.providerInvoiceId)
         if (orderId) {
           await recordLastError(
             voided.id,
@@ -389,7 +423,11 @@ export const invoiceProviders = {
 export async function bindNewInvoice(
   requested: RequestedInvoiceMethod | undefined,
   props: BindProps,
-): Promise<{ method: InvoiceMethod; integrationId: string }> {
+): Promise<{
+  method: InvoiceMethod
+  integrationId: string
+  providerAccountId?: string
+}> {
   const { workspaceId } = props
   if (!requested || requested === "default") {
     if (props.integrationId) {
@@ -405,6 +443,8 @@ export async function bindNewInvoice(
       integrationId: credentials.integrationId,
     }
   }
-  const { integrationId } = await invoiceProviders[requested].bind(props)
-  return { method: requested, integrationId }
+  return {
+    method: requested,
+    ...(await invoiceProviders[requested].bind(props)),
+  }
 }
