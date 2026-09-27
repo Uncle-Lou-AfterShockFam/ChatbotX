@@ -1,4 +1,4 @@
-import { fromZonedTime } from "date-fns-tz"
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz"
 
 // Exported so the shared `DateRangePresetFilter` bridge (Ads is URL-driven,
 // not store-driven) formats its `?from=&to=` params identically to this
@@ -35,16 +35,24 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000
 // dashboard's first load lines up with the preset the filter shows as active.
 const DEFAULT_RANGE_DAYS_BACK = 6
 
-export function getDefaultAdsAnalyticsRange(now = new Date()) {
-  const until = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  )
+/**
+ * The default window: today back six days, as calendar days in `timeZone`
+ * (UTC by default). Callers pass the viewer's zone so "today" is their day,
+ * not the server process's, and call it per request: a module-level default
+ * freezes "today" at server start (s214).
+ */
+export function getDefaultAdsAnalyticsRange(
+  now = new Date(),
+  timeZone = "UTC",
+) {
+  const toKey = formatInTimeZone(now, resolveTimezone(timeZone), "yyyy-MM-dd")
+  const until = new Date(`${toKey}T00:00:00.000Z`)
   const since = new Date(until)
   since.setUTCDate(since.getUTCDate() - DEFAULT_RANGE_DAYS_BACK)
 
   return {
     from: toDateKey(since),
-    to: toDateKey(until),
+    to: toKey,
   }
 }
 

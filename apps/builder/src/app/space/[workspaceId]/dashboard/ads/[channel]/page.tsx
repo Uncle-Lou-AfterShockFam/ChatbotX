@@ -8,12 +8,13 @@ import {
   adsEligibleChannelTypes,
 } from "@chatbotx.io/utils/channel"
 import { notFound } from "next/navigation"
+import { getTimeZone } from "next-intl/server"
 import type { SearchParams } from "nuqs/server"
 import { Suspense } from "react"
 import { AdsAnalyticsView } from "@/features/ads/components/ads-analytics-view"
 import { resolveChannelIntegrations } from "@/features/ads/lib/resolve-channel-integrations"
 import { getAdsSwitcherData } from "@/features/ads/queries/switcher"
-import { adsAnalyticsSearchParamsCache } from "@/features/ads/schema/analytics"
+import { parseAdsAnalyticsSearchParams } from "@/features/ads/schema/analytics"
 import { AnalyticsNav } from "@/features/analytics/components/analytics-nav"
 import { resolveAdsDashboardChannels } from "@/features/analytics/lib/ads-dashboard-channels"
 import { resolveGuardedWorkspaceId } from "@/lib/auth/require-workspace-permission"
@@ -40,7 +41,9 @@ export default async function AdsChannelAnalyticsPage(props: {
   const { channel: channelParam } = await props.params
   const channel = parseChannelParam(channelParam)
 
-  const search = adsAnalyticsSearchParamsCache.parse(await props.searchParams)
+  const search = await parseAdsAnalyticsSearchParams(props.searchParams, {
+    requestTimeZone: await getTimeZone(),
+  })
   const range = { ...search, channel }
   // Guarded by `resolveGuardedWorkspaceId(..., "superAdmin")` above, so
   // isSuperAdmin is always true here.

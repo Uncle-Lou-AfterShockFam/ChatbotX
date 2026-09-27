@@ -1,9 +1,6 @@
 "use client"
 
-import {
-  DateRangePresetFilter,
-  resolvePresetOption,
-} from "@chatbotx.io/analytics-nextjs/components/date-range-preset-filter"
+import { DateRangePresetFilter } from "@chatbotx.io/analytics-nextjs/components/date-range-preset-filter"
 import type {
   AdsAnalyticsData,
   AdsAnalyticsTimeseriesRow,
@@ -73,6 +70,7 @@ import { use, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { orpc } from "@/lib/orpc/query"
 import { retargetAdAction } from "../actions/retarget"
+import { useAdsFilterPreset } from "../hooks/use-ads-filter-preset"
 import { useAdsRangeUrl } from "../hooks/use-ads-range-url"
 import { parseLocalDateKey } from "../lib/ads-date-key"
 import { buildWhatsappRetargetHref } from "../lib/build-whatsapp-retarget-href"
@@ -621,7 +619,10 @@ export function AdsAnalyticsView({
     from: parseLocalDateKey(range.from),
     to: parseLocalDateKey(range.to),
   }
-  const filterPreset = resolvePresetOption(filterRange, workspaceCreatedAt)
+  const { hydrated, preset: filterPreset } = useAdsFilterPreset(
+    filterRange,
+    workspaceCreatedAt,
+  )
   const [retargetDialog, setRetargetDialog] =
     useState<RetargetDialogState>(null)
   const hasData =
@@ -745,7 +746,7 @@ export function AdsAnalyticsView({
           defaultPreset={filterPreset}
           initialFrom={filterRange.from.getTime()}
           initialTo={filterRange.to.getTime()}
-          key={`${range.from}_${range.to}`}
+          key={`${range.from}_${range.to}_${hydrated}`}
           onChange={pushAdsRange}
           workspaceCreatedAt={workspaceCreatedAt}
         />

@@ -25,6 +25,33 @@ describe("getDefaultAdsAnalyticsRange", () => {
   })
 })
 
+describe("getDefaultAdsAnalyticsRange in a zone (s214)", () => {
+  const now = new Date("2026-09-28T02:00:00.000Z")
+
+  test("uses the zone's calendar day for today", () => {
+    expect(getDefaultAdsAnalyticsRange(now, "America/New_York")).toEqual({
+      from: "2026-09-21",
+      to: "2026-09-27",
+    })
+    expect(getDefaultAdsAnalyticsRange(now, "Asia/Tokyo")).toEqual({
+      from: "2026-09-22",
+      to: "2026-09-28",
+    })
+  })
+
+  test("an invalid or empty zone falls back to UTC", () => {
+    const utc = getDefaultAdsAnalyticsRange(now)
+    expect(getDefaultAdsAnalyticsRange(now, "Not/AZone")).toEqual(utc)
+    expect(getDefaultAdsAnalyticsRange(now, "")).toEqual(utc)
+  })
+
+  test("crosses a month boundary", () => {
+    expect(
+      getDefaultAdsAnalyticsRange(new Date("2026-10-03T12:00:00.000Z")),
+    ).toEqual({ from: "2026-09-27", to: "2026-10-03" })
+  })
+})
+
 describe("parseAnalyticsDateRange", () => {
   test("keeps a normal 30-day range unchanged", () => {
     const result = parseAnalyticsDateRange({
