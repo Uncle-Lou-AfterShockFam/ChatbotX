@@ -64,7 +64,6 @@ describe("POST /api/guest/token (s210)", () => {
 
   test.each([
     ["a stranger's page", "https://evil.example"],
-    ["no Origin (browsers always send one on POST)", null],
     ["an opaque origin", "null"],
   ])("%s is refused before parsing", async (_, origin) => {
     const res = await POST(post(body, origin))
@@ -99,5 +98,10 @@ describe("POST /api/guest/token (s210)", () => {
     const res = await POST(post(body))
     expect(res.status).toBe(500)
     expect(await res.json()).toEqual({ accessToken: null })
+  })
+
+  test("no Origin is tolerated like /api/guest/messages (the token still gates)", async () => {
+    const res = await POST(post(body, null))
+    expect(res.status).toBe(200)
   })
 })

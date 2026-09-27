@@ -199,6 +199,27 @@ describe("refreshWebchatAccessToken", () => {
   })
 })
 
+describe("a token bound to an empty host", () => {
+  test("is refused even though '' would read as first party", async () => {
+    const { hmacSha256Hex } = await import("@chatbotx.io/utils/crypto")
+    const payload = Buffer.from(
+      JSON.stringify({
+        exp: Math.floor(T0.getTime() / 1000) + TOKEN_TTL_SECONDS,
+        originHost: "",
+        webchatId: CHAT,
+        workspaceId: WS,
+      }),
+    ).toString("base64url")
+    const signature = await hmacSha256Hex("test-better-auth-secret", payload)
+    expect(
+      await refreshWebchatAccessToken(
+        input(`${payload}.${signature}`, "a:b"),
+        deps([]),
+      ),
+    ).toBeNull()
+  })
+})
+
 describe("readWebchatAccessToken", () => {
   test("rejects a correctly signed payload with wrong field types", async () => {
     // Sign a bad payload the same way the module does.

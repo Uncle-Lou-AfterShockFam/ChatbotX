@@ -16,7 +16,7 @@ import { createId } from "@chatbotx.io/utils"
 import { MenuIcon } from "lucide-react"
 import Link from "next/link"
 import { useAction } from "next-safe-action/hooks"
-import { Fragment, useEffect, useState } from "react"
+import { Fragment, useEffect, useRef, useState } from "react"
 import { createWebchatMessageAction } from "@/features/messages/actions/create-webchat-message.action"
 import { getWebchatProfileFields } from "../browser-profile-fields"
 import { useGuestSessionStore } from "../providers/store/guest-session-provider"
@@ -43,6 +43,7 @@ export default function WebchatMessageMenu({
 
   const { appendMessage, guestConversationId, freshAccessToken } =
     useGuestSessionStore((state) => state)
+  const sendingRef = useRef(false)
 
   const { execute } = useAction(createWebchatMessageAction, {
     onExecute: ({ input }) => {
@@ -84,8 +85,16 @@ export default function WebchatMessageMenu({
             {menu.type === webchatPersistentMenuType.enum.flow && (
               <DropdownMenuItem
                 onClick={async () => {
-                  // A due token is refreshed first (s210).
-                  const token = (await freshAccessToken()) ?? accessToken
+                  // A due token is refreshed first (s210); one click at a time.
+                  if (sendingRef.current) {
+                    return
+                  }
+                  sendingRef.current = true
+                  const token = await freshAccessToken()
+                    .catch(() => null)
+                    .finally(() => {
+                      sendingRef.current = false
+                    })
                   execute({
                     flowId: menu.flowId,
                     clientId: createId(),
@@ -93,7 +102,7 @@ export default function WebchatMessageMenu({
                     webchatId,
                     guestConversationId: guestConversationId ?? "",
                     ...getWebchatProfileFields(),
-                    accessToken: token ?? undefined,
+                    accessToken: token ?? accessToken ?? undefined,
                     parentOrigin: parentOrigin ?? undefined,
                   })
                 }}

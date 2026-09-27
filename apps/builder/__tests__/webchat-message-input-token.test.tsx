@@ -117,4 +117,34 @@ describe("webchat text send uses the current guest token (s210)", () => {
     expect(freshAccessToken).toHaveBeenCalledTimes(1)
     expect(submitted.at(-1)?.accessToken).toBe("FRESH")
   })
+
+  test("Enter + click while the token is refreshing sends once", async () => {
+    container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+    let release: (token: string) => void = () => undefined
+    freshAccessToken.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve
+        }),
+    )
+    render("OLD")
+    const form = container.querySelector("form")
+    await act(async () => {
+      form?.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      )
+      form?.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      )
+      await Promise.resolve()
+    })
+    await act(async () => {
+      release("FRESH")
+      await Promise.resolve()
+    })
+    expect(freshAccessToken).toHaveBeenCalledTimes(1)
+    expect(submitted).toHaveLength(1)
+  })
 })

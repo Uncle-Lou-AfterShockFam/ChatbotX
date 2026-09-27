@@ -7,7 +7,7 @@ import { createId } from "@chatbotx.io/utils"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useHookFormAction } from "@next-safe-action/adapter-react-hook-form/hooks"
 import { PaperclipIcon, SendHorizonalIcon } from "lucide-react"
-import { type KeyboardEvent, useEffect, useMemo, useRef } from "react"
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react"
 import { Controller, useWatch } from "react-hook-form"
 import { createWebchatMessageAction } from "../messages/actions/create-webchat-message.action"
 import EmojiPicker from "../messages/components/emoji-picker"
@@ -113,12 +113,27 @@ export const WebchatMessageInput = (props: WebchatMessageInputProps) => {
     setValue("accessToken", accessToken ?? undefined)
   }, [accessToken, setValue])
 
+  // One send at a time from the first keypress/click: the token await sits
+  // before react-hook-form's own isSubmitting, so Enter + click could send
+  // the same text twice (s210 skeptic).
+  const sendingRef = useRef(false)
+  const [isPreparingSend, setIsPreparingSend] = useState(false)
   const submitWithFreshToken = async (event?: {
     preventDefault: () => void
   }) => {
     event?.preventDefault()
-    setValue("accessToken", (await freshAccessToken()) ?? undefined)
-    await handleSubmitWithAction()
+    if (sendingRef.current) {
+      return
+    }
+    sendingRef.current = true
+    setIsPreparingSend(true)
+    try {
+      setValue("accessToken", (await freshAccessToken()) ?? undefined)
+      await handleSubmitWithAction()
+    } finally {
+      sendingRef.current = false
+      setIsPreparingSend(false)
+    }
   }
 
   const files = useWatch({ control, name: "files" })
@@ -223,7 +238,8 @@ export const WebchatMessageInput = (props: WebchatMessageInputProps) => {
                 className="px-2 py-1.5 [&_svg]:size-5"
                 disabled={
                   !(workspaceId && form.formState.isValid) ||
-                  form.formState.isSubmitting
+                  form.formState.isSubmitting ||
+                  isPreparingSend
                 }
                 type="submit"
                 variant="ghost"

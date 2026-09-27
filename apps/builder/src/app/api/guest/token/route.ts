@@ -36,11 +36,11 @@ const denied = (status: 400 | 403 | 429) =>
  */
 export async function POST(req: NextRequest) {
   try {
-    // Browsers send Origin on every POST, same-origin included, so a
-    // missing one is not the widget: only the hub's own Origin passes.
+    // Same rule as /api/guest/messages: a foreign browser Origin is refused;
+    // a missing one is tolerated (some WebViews omit it), since refusing it
+    // here alone would strand a widget whose sends still work (s210 skeptic).
     const appHost = await getDomainFromHeader()
-    const origin = req.headers.get("origin")
-    if (!(origin && isFirstPartyOrigin(origin, appHost))) {
+    if (!isFirstPartyOrigin(req.headers.get("origin"), appHost)) {
       return denied(403)
     }
     const parsed = refreshRequest.safeParse(await req.json().catch(() => null))
