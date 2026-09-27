@@ -1,7 +1,7 @@
 import { and, db, eq, isNull, lt, sql } from "@chatbotx.io/database/client"
 import {
   type InvoiceMethod,
-  invoiceMethods,
+  stripeInvoiceMethods,
 } from "@chatbotx.io/database/partials"
 import {
   integrationModel,
@@ -113,7 +113,8 @@ export type StripeCredentials = {
 export const setDefaultMethodInputSchema = z
   .object({
     workspaceId: z.string().regex(/^\d{1,20}$/),
-    method: invoiceMethods,
+    // A Stripe default never names a method that needs a site (s211b).
+    method: stripeInvoiceMethods,
   })
   .strict()
 

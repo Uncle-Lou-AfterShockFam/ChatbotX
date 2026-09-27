@@ -2,7 +2,7 @@ import { z } from "zod"
 
 /**
  * Hub invoicing (s205b). An Invoice is the hub's ledger row; a provider
- * (Stripe Invoices today, Stripe Checkout and WooCommerce later) collects it.
+ * (Stripe Invoices, Stripe Checkout or a WooCommerce site) collects it.
  * `draft` = hub row exists, provider not finalized yet (a failed finalize
  * stays here with `lastError` and can be retried). Terminal states never
  * regress: see `INVOICE_STATUS_TRANSITIONS`.
@@ -21,10 +21,33 @@ export type InvoiceStatus = z.infer<typeof invoiceStatuses>
  * How an invoice is collected. `stripeInvoice`: a real Stripe Invoice (Stripe
  * hosts the page and the PDF). `stripeCheckout` (s207b): a one-off Checkout
  * Session minted on each visit to the hub's stable `/pay/<token>` link; no
- * card is saved. A request may also say `default`: the workspace's choice.
+ * card is saved. `woocommerce`: see WOOCOMMERCE_SITE_SLUG_PATTERN below. A
+ * request may also say `default`: the workspace's Stripe choice.
  */
-export const invoiceMethods = z.enum(["stripeInvoice", "stripeCheckout"])
+export const invoiceMethods = z.enum([
+  "stripeInvoice",
+  "stripeCheckout",
+  "woocommerce",
+])
 export type InvoiceMethod = z.infer<typeof invoiceMethods>
+
+/**
+ * The methods a Stripe connection collects, and so the only ones its
+ * workspace default (`IntegrationStripe.defaultMethod`) may name: `default`
+ * never resolves to a method that needs a site picked (s211b).
+ */
+export const stripeInvoiceMethods = z.enum(["stripeInvoice", "stripeCheckout"])
+export type StripeInvoiceMethod = z.infer<typeof stripeInvoiceMethods>
+
+/**
+ * `woocommerce` (s211b): the workspace's WordPress site creates a pending
+ * WooCommerce order (hub-connector >= 0.6.0 `order.invoice`) and the site's
+ * own gateway takes the money; the order-pay page is the pay link and the
+ * site posts `order.paid` straight to the hub.
+ */
+export const WOOCOMMERCE_SITE_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/
+/** A hub-connector action token (`btc_` + base64url). */
+export const WOOCOMMERCE_ACTION_TOKEN_PATTERN = /^btc_[A-Za-z0-9_-]{20,120}$/
 export const requestedInvoiceMethods = z.enum([
   "default",
   ...invoiceMethods.options,

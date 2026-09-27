@@ -284,6 +284,8 @@ export type DealTaskTemplateDependencyModel =
 export type IntegrationStripeModel =
   typeof schema.integrationStripeModel.$inferSelect
 export type StripeCustomerModel = typeof schema.stripeCustomerModel.$inferSelect
+export type IntegrationWooCommerceModel =
+  typeof schema.integrationWooCommerceModel.$inferSelect
 export type InvoiceModel = typeof schema.invoiceModel.$inferSelect
 export type InvoiceLineItemModel =
   typeof schema.invoiceLineItemModel.$inferSelect

@@ -1,5 +1,7 @@
 import { crmTimelineService } from "@chatbotx.io/business"
+import { integrationWooCommerceService } from "@chatbotx.io/business/integration-woocommerce"
 import { invoiceService } from "@chatbotx.io/business/invoice"
+import { z } from "zod"
 import { requireContactPermissionScope } from "@/features/contacts/permissions"
 import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
 import { contactsAccessAuthorizedMiddleware } from "@/middlewares/auth"
@@ -95,6 +97,7 @@ const privateCreateInvoiceAPI = authorizedAPI
         memo: input.memo,
         dealId: input.dealId,
         method: input.method,
+        integrationId: input.integrationId,
         sourceKey: input.idempotencyKey
           ? `ui:${input.idempotencyKey}`
           : undefined,
@@ -142,7 +145,39 @@ const privateFinalizeInvoiceAPI = authorizedAPI
     ),
   )
 
+/** The linked WooCommerce sites an invoice may be collected on (s211b). */
+const privateListWooCommerceSitesAPI = authorizedAPI
+  .route({
+    method: "GET",
+    path: "/workspaces/{workspaceId}/woocommerce-sites",
+    summary: "List linked WooCommerce sites",
+    tags,
+  })
+  .input(withWorkspaceIdSchema)
+  .use(contactsAccessAuthorizedMiddleware, (input) => input.workspaceId)
+  .output(
+    z.object({
+      data: z.array(
+        z.object({
+          integrationId: z.string(),
+          siteSlug: z.string(),
+          currency: z.string(),
+        }),
+      ),
+    }),
+  )
+  .handler(async ({ input }) => ({
+    data: (
+      await integrationWooCommerceService.listByWorkspaceId(input.workspaceId)
+    ).map((site) => ({
+      integrationId: site.integrationId,
+      siteSlug: site.siteSlug,
+      currency: site.currency,
+    })),
+  }))
+
 export const privateInvoicesAPI = {
+  privateListWooCommerceSitesAPI,
   privateListInvoicesAPI,
   privateGetInvoiceAPI,
   privateCreateInvoiceAPI,

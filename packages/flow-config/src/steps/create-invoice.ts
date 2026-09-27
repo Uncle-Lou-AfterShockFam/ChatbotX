@@ -45,8 +45,13 @@ export const createInvoiceStepSchema = z.object({
    * `stripeCheckout` texts a stable `/pay` link and saves no card.
    */
   method: z
-    .enum(["default", "stripeInvoice", "stripeCheckout"])
+    .enum(["default", "stripeInvoice", "stripeCheckout", "woocommerce"])
     .default("default"),
+  /**
+   * Method `woocommerce` (s211b): the linked site's integration id; empty =
+   * the workspace's only site (several sites and none picked fails the step).
+   */
+  integrationId: z.string().trim().max(20).default(""),
   states: z.tuple([successStateSchema, errorStateSchema]),
 })
 export type CreateInvoiceStepSchema = z.infer<typeof createInvoiceStepSchema>
@@ -59,5 +64,6 @@ export const createInvoiceStepDefaultFn = (): CreateInvoiceStepSchema => ({
   dueInDays: 7,
   memo: "",
   method: "default",
+  integrationId: "",
   states: [successStateDefaultFn(), errorStateDefaultFn()],
 })

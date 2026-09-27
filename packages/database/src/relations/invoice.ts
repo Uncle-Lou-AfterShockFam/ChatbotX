@@ -13,6 +13,16 @@ export const invoiceRelations = defineRelationsPart(schema, (r) => ({
       to: r.workspaceModel.id,
     }),
   },
+  integrationWooCommerceModel: {
+    integration: r.one.integrationModel({
+      from: r.integrationWooCommerceModel.integrationId,
+      to: r.integrationModel.id,
+    }),
+    workspace: r.one.workspaceModel({
+      from: r.integrationWooCommerceModel.workspaceId,
+      to: r.workspaceModel.id,
+    }),
+  },
   stripeCustomerModel: {
     contact: r.one.contactModel({
       from: r.stripeCustomerModel.contactId,

@@ -32,6 +32,11 @@ export const createInvoiceInputSchema = z
     /** How it is collected; absent or `default` = the workspace's Stripe default. */
     method: requestedInvoiceMethods.optional(),
     /**
+     * Method `woocommerce` only (s211b): the site's integration id. Optional
+     * when the workspace has exactly one WooCommerce site.
+     */
+    integrationId: idSchema.optional(),
+    /**
      * Idempotency: the same key in a workspace returns the first invoice; the
      * same key with different content is refused (409), never billed.
      */

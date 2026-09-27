@@ -1,6 +1,6 @@
 import {
-  invoiceMethods,
   STRIPE_SECRET_KEY_PATTERN,
+  stripeInvoiceMethods,
 } from "@chatbotx.io/database/partials"
 import { z } from "zod"
 
@@ -15,5 +15,5 @@ export const connectStripeSchema = z
 
 /** Settings > Integrations > Stripe: what an invoice asking for `default` uses. */
 export const setDefaultMethodSchema = z
-  .object({ method: invoiceMethods })
+  .object({ method: stripeInvoiceMethods })
   .strict()
