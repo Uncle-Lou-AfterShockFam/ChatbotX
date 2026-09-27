@@ -33,6 +33,19 @@ const DAY_KEY_FORMAT = "yyyy-MM-dd"
 const WALL_CLOCK_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSS"
 const WEEK_STARTS_ON = 1 as const
 
+/**
+ * A wall-clock grid day (a local-midnight Date from the builders below) as the
+ * UTC midnight of the same calendar date. Label it with `timeZone: "UTC"`: the
+ * text then depends on the date alone, never on the process zone (UTC on the
+ * server, the viewer's in the browser), so SSR and hydration agree (s210 #418).
+ */
+export function wallClockDayAsUtc(day: Date): Date {
+  // setUTCFullYear, not Date.UTC: Date.UTC maps years 0-99 to 1900-1999.
+  const utc = new Date(0)
+  utc.setUTCFullYear(day.getFullYear(), day.getMonth(), day.getDate())
+  return utc
+}
+
 export function parseDateParam(value: string | null, now = new Date()): Date {
   if (value) {
     const parsed = parse(value, DATE_PARAM_FORMAT, now)
