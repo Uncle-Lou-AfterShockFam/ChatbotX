@@ -37,6 +37,7 @@ export type FinalizedStripeInvoice = {
   pdfUrl: string | null
   dueAt: Date | null
   status: Stripe.Invoice.Status | null
+  collectionMethod: Stripe.Invoice.CollectionMethod
 }
 
 const stripeErrorText = (error: unknown): string =>
@@ -484,6 +485,7 @@ export async function finalizeWithStripe(props: {
     pdfUrl: current.invoice_pdf ?? null,
     dueAt: current.due_date ? new Date(current.due_date * 1000) : null,
     status: current.status,
+    collectionMethod: current.collection_method,
   }
 }
 

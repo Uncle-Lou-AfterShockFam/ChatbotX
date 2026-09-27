@@ -4,6 +4,7 @@ import {
   invoiceService,
   markInvoiceCreated,
 } from "@chatbotx.io/business/invoice"
+import { invoicePdfUrl } from "@chatbotx.io/database/partials"
 import type { CreateInvoiceStepSchema } from "@chatbotx.io/flow-config"
 import { contactVariableService } from "@chatbotx.io/variables"
 import { logger } from "../../lib/logger"
@@ -79,20 +80,26 @@ export async function handleCreateInvoice({
       stepId: step.id,
       contactId,
     })
-    const invoice = await invoiceService.create({
-      workspaceId,
-      contactId,
-      currency: step.currency,
-      lines,
-      dueDays: step.dueInDays,
-      method: step.method,
-      ...(step.method === "woocommerce" && step.integrationId
-        ? { integrationId: step.integrationId }
-        : {}),
-      ...(memo ? { memo: memo.slice(0, 1000) } : {}),
-      sourceKey: invoiceSourceKey(sourcePrefix, flowExecutionKey),
-      reuseRecent: { sourcePrefix, withinMs: FLOW_INVOICE_REUSE_MS },
-    })
+    const invoice = await invoiceService.create(
+      {
+        workspaceId,
+        contactId,
+        currency: step.currency,
+        lines,
+        dueDays: step.dueInDays,
+        method: step.method,
+        ...(step.method === "woocommerce" && step.integrationId
+          ? { integrationId: step.integrationId }
+          : {}),
+        ...(memo ? { memo: memo.slice(0, 1000) } : {}),
+        sourceKey: invoiceSourceKey(sourcePrefix, flowExecutionKey),
+        reuseRecent: { sourcePrefix, withinMs: FLOW_INVOICE_REUSE_MS },
+      },
+      { contactInboxId: contactInbox.id },
+    )
+    // The service marks best-effort when the draft opens; this strict re-mark
+    // (a no-op write then) covers a reused/replayed invoice and fails the step
+    // when the contact write fails, so a later wait never reads a stale id.
     await markInvoiceCreated({ invoice, contactInboxId: contactInbox.id })
     return {
       status: "success",
@@ -103,6 +110,7 @@ export async function handleCreateInvoice({
         total: invoice.total,
         currency: invoice.currency,
         hostedUrl: invoice.hostedUrl,
+        pdfUrl: invoicePdfUrl(invoice),
       },
     }
   } catch (caught) {

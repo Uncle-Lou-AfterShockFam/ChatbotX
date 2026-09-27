@@ -44,6 +44,7 @@ import {
   validationException,
 } from "../errors"
 import { logger } from "../logger"
+import { markInvoiceCreated } from "./contact-marks"
 import {
   bindNewInvoice,
   InvoiceFinalizeError,
@@ -249,7 +250,10 @@ class InvoiceService extends BaseService {
    * Idempotent on `sourceKey`: a replay returns the first invoice (resuming
    * its finalize when it is still a draft) and never creates a second one.
    */
-  async create(input: CreateInvoiceInput): Promise<InvoiceWithLines> {
+  async create(
+    input: CreateInvoiceInput,
+    options: { contactInboxId?: string } = {},
+  ): Promise<InvoiceWithLines> {
     const props = createInvoiceInputSchema.parse(input)
     const currency = normalizeInvoiceCurrency(props.currency)
     if (!currency) {
@@ -409,16 +413,22 @@ class InvoiceService extends BaseService {
       )
     }
     if (invoice.status === "draft") {
-      return await this.finalize({
-        workspaceId: invoice.workspaceId,
-        id: invoice.id,
-      })
+      return await this.finalize(
+        { workspaceId: invoice.workspaceId, id: invoice.id },
+        options,
+      )
     }
     return await this.get({ workspaceId: invoice.workspaceId, id: invoice.id })
   }
 
-  /** Collect a draft through its provider; a non-draft is returned as is. */
-  async finalize(ref: InvoiceRef): Promise<InvoiceWithLines> {
+  /**
+   * Collect a draft through its provider; a non-draft is returned as is.
+   * `contactInboxId` (the flow step's) rides the contact marks' change events.
+   */
+  async finalize(
+    ref: InvoiceRef,
+    options: { contactInboxId?: string } = {},
+  ): Promise<InvoiceWithLines> {
     const invoice = await this.get(ref)
     if (invoice.status !== "draft") {
       return invoice
@@ -443,10 +453,33 @@ class InvoiceService extends BaseService {
     if (!opened) {
       await result.onDraftLost?.()
     }
+    if (opened?.status === "open" || opened?.status === "paid") {
+      // Marks first: an invoiceCreated flow reads invoice_last_id.
+      await this.markCreated(opened, options.contactInboxId)
+    }
     if (opened?.status === "open") {
       await this.emitCreated(opened)
     }
     return await this.get(ref)
+  }
+
+  /**
+   * Best effort: the invoice is already open, so a failed contact write must
+   * not turn the create into an error a caller would retry. The flow step
+   * re-marks strictly on its own.
+   */
+  private async markCreated(
+    opened: InvoiceModel,
+    contactInboxId: string | undefined,
+  ): Promise<void> {
+    try {
+      await markInvoiceCreated({ invoice: opened, contactInboxId })
+    } catch (error) {
+      logger.warn(
+        { err: error, invoiceId: opened.id },
+        "invoice: contact marks at open failed",
+      )
+    }
   }
 
   private async emitCreated(opened: InvoiceModel): Promise<void> {
