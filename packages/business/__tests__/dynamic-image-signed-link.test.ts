@@ -66,6 +66,19 @@ describe("signDynamicImageLinksInStep (s214)", () => {
     expect(out.id).toBe("s")
   })
 
+  test("bulktextSend photoUrl (the line worker fetches it)", async () => {
+    const step = {
+      id: "s",
+      stepType: "bulktextSend",
+      text: "hi",
+      photoUrl: TEMPLATE,
+    }
+    const out = await signDynamicImageLinksInStep(step, { origins, sign })
+    expect(new URL(out.photoUrl).searchParams.get("t")).toBe("tok-img-1")
+    expect(new URL(out.photoUrl).searchParams.get("userId")).toBeNull()
+    expect(out.text).toBe("hi")
+  })
+
   test("sendMultipleImages images[].url, other entries untouched", async () => {
     const step = {
       id: "s",

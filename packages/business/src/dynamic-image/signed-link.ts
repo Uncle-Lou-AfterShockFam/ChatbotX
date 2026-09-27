@@ -67,6 +67,7 @@ export async function signDynamicImageUrl(
 type ImageRef = { url?: string | null }
 type SignableStep = {
   url?: unknown
+  photoUrl?: unknown
   images?: unknown
   cards?: unknown
 }
@@ -79,8 +80,9 @@ const signRef = async <T extends ImageRef>(
 
 /**
  * Signs every Dynamic Image URL in a resolved flow step: `url` (sendImage),
- * `images[].url` (sendMultipleImages) and `cards[].image.url` (cards and
- * carousels). Everything else in the step is returned as is.
+ * `photoUrl` (bulktextSend: the line worker fetches it), `images[].url`
+ * (sendMultipleImages) and `cards[].image.url` (cards and carousels).
+ * Everything else in the step is returned as is.
  */
 export async function signDynamicImageLinksInStep<T extends object>(
   flowStep: T,
@@ -94,6 +96,9 @@ export async function signDynamicImageLinksInStep<T extends object>(
   let next: SignableStep = step
   if (typeof step.url === "string") {
     next = { ...next, url: await signUrl(step.url) }
+  }
+  if (typeof step.photoUrl === "string") {
+    next = { ...next, photoUrl: await signUrl(step.photoUrl) }
   }
   if (Array.isArray(step.images)) {
     next = {
