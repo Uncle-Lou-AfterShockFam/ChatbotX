@@ -31,7 +31,7 @@ export function ReflinkStatsTable() {
             refLinkStats.map((row) => (
               <TableRow key={row.dateReport}>
                 <TableCell>
-                  {formatDateWithYear(new Date(row.dateReport), locale)}
+                  {formatDateWithYear(row.dateReport, locale)}
                 </TableCell>
                 <TableCell>{row.count}</TableCell>
               </TableRow>

@@ -2,6 +2,14 @@ import { differenceInDays } from "date-fns"
 
 type DateInput = Date | string | number | null | undefined
 
+/**
+ * Zone rule for every formatter below (s212): a CALENDAR DAY (a `YYYY-MM-DD`
+ * bucket key, or a day built by date-fns in the local zone) is formatted in
+ * the zone it was built in, so `timeZone` is omitted. An INSTANT (an
+ * `occurredAt`) is formatted in the viewer's zone: pass next-intl's
+ * `useTimeZone()`, which the server render and hydration share.
+ */
+
 const DATE_ONLY_KEY = /^(\d{4})-(\d{2})-(\d{2})$/
 
 function toValidDate(value: DateInput): Date | null {
@@ -25,7 +33,11 @@ function toValidDate(value: DateInput): Date | null {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
-export function formatShortDate(value: DateInput, locale: string): string {
+export function formatShortDate(
+  value: DateInput,
+  locale: string,
+  timeZone?: string,
+): string {
   const date = toValidDate(value)
   if (!date) {
     return ""
@@ -34,10 +46,15 @@ export function formatShortDate(value: DateInput, locale: string): string {
   return new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "short",
+    timeZone,
   }).format(date)
 }
 
-export function formatDateWithYear(value: DateInput, locale: string): string {
+export function formatDateWithYear(
+  value: DateInput,
+  locale: string,
+  timeZone?: string,
+): string {
   const date = toValidDate(value)
   if (!date) {
     return ""
@@ -47,6 +64,7 @@ export function formatDateWithYear(value: DateInput, locale: string): string {
     day: "numeric",
     month: "short",
     year: "numeric",
+    timeZone,
   }).format(date)
 }
 
@@ -63,6 +81,7 @@ export function formatTimeRangeDate(
   fromValue: DateInput,
   toValue: DateInput,
   locale: string,
+  timeZone?: string,
 ): string {
   const date = toValidDate(value)
   if (!date) {
@@ -73,10 +92,11 @@ export function formatTimeRangeDate(
     return new Intl.DateTimeFormat(locale, {
       month: "short",
       year: "numeric",
+      timeZone,
     }).format(date)
   }
 
-  return formatShortDate(date, locale)
+  return formatShortDate(date, locale, timeZone)
 }
 
 /**
@@ -89,6 +109,7 @@ export function formatTimeRangeDateWithYear(
   fromValue: DateInput,
   toValue: DateInput,
   locale: string,
+  timeZone?: string,
 ): string {
   const date = toValidDate(value)
   if (!date) {
@@ -99,8 +120,9 @@ export function formatTimeRangeDateWithYear(
     return new Intl.DateTimeFormat(locale, {
       month: "short",
       year: "numeric",
+      timeZone,
     }).format(date)
   }
 
-  return formatDateWithYear(date, locale)
+  return formatDateWithYear(date, locale, timeZone)
 }

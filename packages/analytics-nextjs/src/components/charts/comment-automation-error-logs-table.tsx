@@ -21,7 +21,7 @@ import {
   TooltipTrigger,
 } from "@chatbotx.io/ui/components/ui/tooltip"
 import { useDebouncedCallback } from "@chatbotx.io/ui/hooks/use-debounced-callback"
-import { useLocale, useTranslations } from "next-intl"
+import { useLocale, useTimeZone, useTranslations } from "next-intl"
 import { useState } from "react"
 import { useAnalysisStore } from "../../provider/analysis-store-context"
 import { formatDateWithYear } from "../../utils/date-format"
@@ -50,6 +50,8 @@ function getInitial(contact: CommentAutomationErrorRow["contact"]): string {
 export function CommentAutomationErrorLogsTable() {
   const t = useTranslations()
   const locale = useLocale()
+  // occurredAt is an instant: the viewer's zone, same on server and client.
+  const timeZone = useTimeZone()
 
   const rows = useAnalysisStore((state) => state.commentAutomationErrors)
   const page = useAnalysisStore((state) => state.commentAutomationErrorsPage)
@@ -143,7 +145,11 @@ export function CommentAutomationErrorLogsTable() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  {formatDateWithYear(new Date(row.occurredAt), locale)}
+                  {formatDateWithYear(
+                    new Date(row.occurredAt),
+                    locale,
+                    timeZone,
+                  )}
                 </TableCell>
               </TableRow>
             ))
