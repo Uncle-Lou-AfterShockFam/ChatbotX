@@ -1,5 +1,9 @@
 import { getDefaultAdsAnalyticsRange } from "@chatbotx.io/business/ads-analytics/date-range"
-import { createSearchParamsCache, parseAsString } from "nuqs/server"
+import {
+  createSearchParamsCache,
+  parseAsString,
+  type SearchParams,
+} from "nuqs/server"
 import { accountSearchParam } from "./account"
 
 export {
@@ -9,9 +13,7 @@ export {
   toDateKey,
 } from "@chatbotx.io/business/ads-analytics/date-range"
 
-const defaultRange = getDefaultAdsAnalyticsRange()
-
-export const adsAnalyticsSearchParamsCache = createSearchParamsCache({
+const adsAnalyticsSearchParamsCache = createSearchParamsCache({
   account: accountSearchParam,
   // `channelAccount` narrows to one messenger/instagram integration for the
   // selected channel — mirrors `account`'s role for whatsapp, but omitted
@@ -20,8 +22,10 @@ export const adsAnalyticsSearchParamsCache = createSearchParamsCache({
   // route segment (`/dashboard/ads/<channel>`), never a search param.
   channelAccount: parseAsString.withDefault(""),
   adAccount: parseAsString.withDefault(""),
-  from: parseAsString.withDefault(defaultRange.from),
-  to: parseAsString.withDefault(defaultRange.to),
+  // No default here: a module-level default would freeze "today" at server
+  // start. `parseAdsAnalyticsSearchParams` fills it per request (s214).
+  from: parseAsString,
+  to: parseAsString,
   // Carries the viewer's IANA timezone name (e.g. `Intl.DateTimeFormat().
   // resolvedOptions().timeZone`, threaded from the client — a server
   // component can't read the browser's timezone). Default "" resolves to
@@ -31,6 +35,29 @@ export const adsAnalyticsSearchParamsCache = createSearchParamsCache({
   tz: parseAsString.withDefault(""),
 })
 
+/**
+ * Parses the ads dashboard's search params, defaulting a missing `from`/`to`
+ * to the last seven days as calendar days in the viewer's zone: the `tz`
+ * param, else `requestTimeZone` (the zone cookie), else UTC.
+ */
+export async function parseAdsAnalyticsSearchParams(
+  searchParams: SearchParams | Promise<SearchParams>,
+  options: { requestTimeZone?: string; now?: Date } = {},
+) {
+  const search = adsAnalyticsSearchParamsCache.parse(await searchParams)
+  // The zone the default days are computed in is also the zone the query
+  // window is read in: returning the raw (empty) `tz` would label New York
+  // days while querying UTC ones.
+  const tz = search.tz || options.requestTimeZone || ""
+  const fallback = getDefaultAdsAnalyticsRange(options.now, tz)
+  return {
+    ...search,
+    tz,
+    from: search.from ?? fallback.from,
+    to: search.to ?? fallback.to,
+  }
+}
+
 export type AdsAnalyticsSearchParams = Awaited<
-  ReturnType<typeof adsAnalyticsSearchParamsCache.parse>
+  ReturnType<typeof parseAdsAnalyticsSearchParams>
 >

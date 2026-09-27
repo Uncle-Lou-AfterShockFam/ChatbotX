@@ -100,6 +100,11 @@ vi.mock("@/features/analytics/components/analytics-nav", () => ({
   AnalyticsNav: () => null,
 }))
 
+// The zone cookie the page reads for the default range (s214).
+vi.mock("next-intl/server", () => ({
+  getTimeZone: () => Promise.resolve("America/New_York"),
+}))
+
 vi.mock("@/features/ads/components/ads-analytics-view", () => ({
   AdsAnalyticsView: mockAdsAnalyticsView,
 }))
@@ -145,6 +150,9 @@ describe("Ads dashboard [channel] page", () => {
         channel: "messenger",
         channelIntegrations: [{ id: "msg-1", name: "My Page" }],
         workspaceId: "ws-1",
+        // No range in the URL: the default is computed per request in the
+        // zone cookie, and the query window uses that same zone (s214).
+        range: expect.objectContaining({ tz: "America/New_York" }),
       }),
       undefined,
     )
