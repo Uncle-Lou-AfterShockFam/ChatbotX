@@ -26,6 +26,7 @@ export function ConversationsMovedChart() {
     >()
 
     for (const item of conversationHandoffs) {
+      // zone: wall-clock (the local day a stat falls on, keyed like the local days of from/to below; client-rendered)
       const dateKey = format(new Date(item.timestamp), "yyyy-MM-dd")
       const existing = groupedByDate.get(dateKey) || {
         to_human: 0,
@@ -44,6 +45,7 @@ export function ConversationsMovedChart() {
     const allDates = eachDayOfInterval({ start: from, end: to })
 
     return allDates.map((date) => {
+      // zone: wall-clock (from/to are local calendar days from the date picker; the key matches the stat keys above)
       const dateKey = format(date, "yyyy-MM-dd")
       const counts = groupedByDate.get(dateKey) || {
         to_human: 0,

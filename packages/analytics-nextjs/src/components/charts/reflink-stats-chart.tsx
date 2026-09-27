@@ -17,7 +17,7 @@ export function ReflinkStatsChart() {
   return (
     <AreaChart
       data={refLinkStats.map((row) => ({
-        label: formatShortDate(new Date(row.dateReport), locale),
+        label: formatShortDate(row.dateReport, locale),
         value: row.count,
       }))}
       title={t("analytics.sessionsThroughTheRef", { ref: linkName })}

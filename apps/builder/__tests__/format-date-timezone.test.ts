@@ -20,6 +20,10 @@ import { beforeAll, describe, expect, test } from "vitest"
  * FAILS rather than being skipped.
  */
 const ROOT = "src"
+// The dashboards' shared package renders inside builder pages (SSR included),
+// so it is held to the same rules (s212).
+const ANALYTICS_ROOT = "../../packages/analytics-nextjs/src"
+const SCAN_ROOTS = [ROOT, ANALYTICS_ROOT]
 const SOURCE_FILE = /\.(ts|tsx)$/
 const NAME = "formatDate"
 
@@ -122,7 +126,7 @@ function scanSource(path: string, source: string): Scan {
 }
 
 describe("formatDate calls pass the user's time zone", () => {
-  const scans = files(ROOT).map((path) =>
+  const scans = SCAN_ROOTS.flatMap(files).map((path) =>
     scanSource(path, readFileSync(path, "utf8")),
   )
   const calls = scans.reduce((sum, s) => sum + s.calls, 0)
@@ -376,6 +380,39 @@ describe("Date#toLocale*String and Intl.DateTimeFormat pass a zone (s202c)", () 
   })
 
   test("every date formatter in src passes timeZone or names the viewer's zone", () => {
+    expect(scan.findings).toEqual([])
+  })
+})
+
+describe("Date#toLocale*String and Intl.DateTimeFormat pass a zone: analytics-nextjs (s212)", () => {
+  let scan: Scan = { calls: 0, findings: [] }
+
+  beforeAll(() => {
+    const configPath = join(ANALYTICS_ROOT, "..", "tsconfig.json")
+    const config = ts.getParsedCommandLineOfConfigFile(
+      configPath,
+      {},
+      { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => undefined },
+    )
+    if (!config) {
+      throw new Error(`${configPath} did not parse`)
+    }
+    const roots = new Set(
+      files(ANALYTICS_ROOT).map((path) => join(process.cwd(), path)),
+    )
+    const program = ts.createProgram([...roots], {
+      ...config.options,
+      incremental: false,
+      noEmit: true,
+    })
+    scan = scanZones(program, roots)
+  }, 180_000)
+
+  test("the scan finds the known call sites (a broken scanner is not a pass)", () => {
+    expect(scan.calls).toBeGreaterThanOrEqual(5)
+  })
+
+  test("every date formatter in the package passes timeZone or names the viewer's zone", () => {
     expect(scan.findings).toEqual([])
   })
 })
@@ -666,7 +703,7 @@ function scanDateFns(path: string, source: string): Scan {
 }
 
 describe("date-fns formatters name a zone (s203c)", () => {
-  const scans = files(ROOT).map((path) =>
+  const scans = SCAN_ROOTS.flatMap(files).map((path) =>
     scanDateFns(path, readFileSync(path, "utf8")),
   )
 
@@ -816,7 +853,7 @@ function scanClockFormatters(path: string, source: string): Scan {
 describe("no render-time clock reads through date-fns (s205c)", () => {
   test("no formatDistanceToNow* in src", () => {
     expect(
-      files(ROOT).flatMap(
+      SCAN_ROOTS.flatMap(files).flatMap(
         (path) =>
           scanClockFormatters(path, readFileSync(path, "utf8")).findings,
       ),

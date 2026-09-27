@@ -17,7 +17,7 @@ export function MagicLinkStatsChart() {
   return (
     <AreaChart
       data={magicLinkStats.map((row) => ({
-        label: formatShortDate(new Date(row.dateReport), locale),
+        label: formatShortDate(row.dateReport, locale),
         value: row.count,
       }))}
       title={t("analytics.sessionsThroughTheMagicLink", { ref: linkName })}

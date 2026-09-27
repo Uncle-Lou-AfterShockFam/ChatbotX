@@ -246,13 +246,18 @@ export function DateRangePresetFilter({
       day: "numeric",
       year: "numeric",
     }
+    // The bounds are local calendar days (the picker and the presets build
+    // them with date-fns), so they are read in the local zone. The label only
+    // shows for a custom range, which the client picks.
     if (fromDate.toDateString() === toDate.toDateString()) {
+      // zone: viewer (a local calendar day from the range picker)
       return fromDate.toLocaleDateString(locale, options)
     }
-    return `${fromDate.toLocaleDateString(
-      locale,
-      options,
-    )} - ${toDate.toLocaleDateString(locale, options)}`
+    // zone: viewer (local calendar days from the range picker)
+    const fromLabel = fromDate.toLocaleDateString(locale, options)
+    // zone: viewer (local calendar days from the range picker)
+    const toLabel = toDate.toLocaleDateString(locale, options)
+    return `${fromLabel} - ${toLabel}`
   }, [locale, range, t])
 
   const applyRange = (r: DateRangeResult) => {

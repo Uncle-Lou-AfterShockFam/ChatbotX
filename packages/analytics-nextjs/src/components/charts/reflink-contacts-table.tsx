@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@chatbotx.io/ui/components/ui/table"
-import { useLocale, useTranslations } from "next-intl"
+import { useLocale, useTimeZone, useTranslations } from "next-intl"
 import { useAnalysisStore } from "../../provider/analysis-store-context"
 import { formatDateWithYear } from "../../utils/date-format"
 
@@ -39,6 +39,8 @@ function getInitial(contact: FlowNodeContactData): string {
 export function ReflinkContactsTable() {
   const t = useTranslations()
   const locale = useLocale()
+  // occurredAt is an instant: the viewer's zone, same on server and client.
+  const timeZone = useTimeZone()
   const {
     reflinkContacts: contacts,
     reflinkContactsPage: page,
@@ -73,7 +75,11 @@ export function ReflinkContactsTable() {
                     {getFullName(contact)}
                   </TableCell>
                   <TableCell>
-                    {formatDateWithYear(new Date(contact.occurredAt), locale)}
+                    {formatDateWithYear(
+                      new Date(contact.occurredAt),
+                      locale,
+                      timeZone,
+                    )}
                   </TableCell>
                   <TableCell>{contact.sourceId ?? "-"}</TableCell>
                 </TableRow>
