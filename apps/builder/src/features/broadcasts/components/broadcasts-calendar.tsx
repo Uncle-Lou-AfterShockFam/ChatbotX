@@ -39,6 +39,7 @@ import {
   parseDateParam,
   parseEndDateParam,
   sortBySchedulesAt,
+  wallClockDayAsUtc,
 } from "../lib/calendar-grid"
 import { broadcastsSearchParsers } from "../schema/search-parsers"
 
@@ -62,31 +63,36 @@ const TITLE_FORMATTERS: Record<
   (anchor: Date, formatter: Formatter, endAnchor: Date) => string
 > = {
   month: (anchor, formatter) =>
-    formatter.dateTime(anchor, { month: "long", year: "numeric" }),
+    formatter.dateTime(wallClockDayAsUtc(anchor), {
+      month: "long",
+      timeZone: "UTC",
+      year: "numeric",
+    }),
   week: (anchor, formatter) => {
     const { from, to } = calendarRangeConfig.week.getVisibleInterval(
       anchor,
       anchor,
     )
-    return formatter.dateTimeRange(from, to, {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    })
+    return formatter.dateTimeRange(
+      wallClockDayAsUtc(from),
+      wallClockDayAsUtc(to),
+      { day: "numeric", month: "short", timeZone: "UTC", year: "numeric" },
+    )
   },
   day: (anchor, formatter) =>
-    formatter.dateTime(anchor, {
+    formatter.dateTime(wallClockDayAsUtc(anchor), {
       day: "numeric",
       month: "long",
+      timeZone: "UTC",
       weekday: "long",
       year: "numeric",
     }),
   custom: (anchor, formatter, endAnchor) =>
-    formatter.dateTimeRange(anchor, endAnchor, {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    }),
+    formatter.dateTimeRange(
+      wallClockDayAsUtc(anchor),
+      wallClockDayAsUtc(endAnchor),
+      { day: "numeric", month: "short", timeZone: "UTC", year: "numeric" },
+    ),
 }
 
 function StatusDot({ status }: { status: string }) {
@@ -325,7 +331,10 @@ export function BroadcastsCalendar({
           className="border-b bg-muted px-2 py-1.5 font-medium text-muted-foreground text-xs"
           key={`weekday-${dayKey(day)}`}
         >
-          {formatter.dateTime(day, { weekday: "short" })}
+          {formatter.dateTime(wallClockDayAsUtc(day), {
+            timeZone: "UTC",
+            weekday: "short",
+          })}
         </div>
       ))}
     </>
@@ -425,9 +434,10 @@ export function BroadcastsCalendar({
                       "rounded-full bg-primary text-primary-foreground",
                   )}
                 >
-                  {formatter.dateTime(day, {
+                  {formatter.dateTime(wallClockDayAsUtc(day), {
                     day: "numeric",
                     month: "short",
+                    timeZone: "UTC",
                     weekday: "short",
                   })}
                 </div>

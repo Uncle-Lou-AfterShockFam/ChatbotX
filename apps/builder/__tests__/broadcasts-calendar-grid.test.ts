@@ -14,6 +14,7 @@ import {
   resolveDateParam,
   resolveEndDateParam,
   sortBySchedulesAt,
+  wallClockDayAsUtc,
 } from "@/features/broadcasts/lib/calendar-grid"
 
 describe("parseDateParam", () => {
@@ -392,5 +393,25 @@ describe("sortBySchedulesAt", () => {
     const sorted = sortBySchedulesAt(rows)
     expect(sorted.map((r) => r.id)).toEqual(["a", "b", "c"])
     expect(rows).toEqual(original)
+  })
+})
+
+describe("wallClockDayAsUtc", () => {
+  test("is the UTC midnight of the local calendar date, time of day dropped", () => {
+    const utc = wallClockDayAsUtc(new Date(2026, 8, 28, 23, 59, 59, 999))
+    expect(utc.toISOString()).toBe("2026-09-28T00:00:00.000Z")
+  })
+
+  test("keeps years 0-99 (Date.UTC would move them to 19xx)", () => {
+    const local = new Date(2000, 4, 5)
+    local.setFullYear(99)
+    expect(wallClockDayAsUtc(local).getUTCFullYear()).toBe(99)
+    expect(wallClockDayAsUtc(local).getUTCDate()).toBe(5)
+  })
+
+  test("an invalid date stays invalid", () => {
+    expect(
+      Number.isNaN(wallClockDayAsUtc(new Date(Number.NaN)).getTime()),
+    ).toBe(true)
   })
 })
