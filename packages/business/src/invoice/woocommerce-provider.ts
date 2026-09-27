@@ -231,3 +231,59 @@ export async function createWooCommerceOrder(props: {
   }
   return { orderId, payUrl }
 }
+
+/** The site-side Idempotency-Key of an invoice's `order.cancel` (0.7.0). */
+export const wooCommerceCancelKey = (invoiceId: string): string =>
+  `${wooCommerceIdempotencyKey(invoiceId)}:cancel`
+
+export type WooCommerceCancelOutcome =
+  /** The order is cancelled on the site (now, or already). */
+  | { kind: "cancelled" }
+  /** The site holds a payment for it: the hub must not void. */
+  | { kind: "paid"; orderStatus: string }
+  /** No verdict (site down, a pre-0.7.0 plugin, a revoked token, ...). */
+  | { kind: "failed"; reason: string }
+
+/**
+ * Ask the site to cancel the pending order of a voided hub invoice
+ * (hub-connector `order.cancel`). Never throws: every answer but `cancelled`
+ * and `order-paid` is a `failed` the caller reports for a human.
+ */
+export async function cancelWooCommerceOrder(props: {
+  credentials: WooCommerceCredentials
+  invoice: Pick<InvoiceModel, "id" | "number">
+  orderId: string
+}): Promise<WooCommerceCancelOutcome> {
+  const { credentials, invoice, orderId } = props
+  let answer: SiteAnswer
+  try {
+    answer = await postSiteAction({
+      siteUrl: credentials.siteUrl,
+      token: credentials.auth.actionToken,
+      action: "order.cancel",
+      body: {
+        subject: { type: "order", id: orderId },
+        args: {
+          hub_invoice_id: invoice.id,
+          reason: `Hub invoice #${invoice.number} voided`,
+        },
+      },
+      idempotencyKey: wooCommerceCancelKey(invoice.id),
+    })
+  } catch (error) {
+    return {
+      kind: "failed",
+      reason: error instanceof Error ? error.message : "request failed",
+    }
+  }
+  if (answer.status === 200 && answer.body?.ok === true) {
+    return { kind: "cancelled" }
+  }
+  if (answer.status === 409 && siteErrorCode(answer) === "order-paid") {
+    return {
+      kind: "paid",
+      orderStatus: String(answer.body?.order_status ?? "paid"),
+    }
+  }
+  return { kind: "failed", reason: siteErrorMessage(answer) }
+}

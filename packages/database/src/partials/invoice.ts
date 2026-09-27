@@ -224,10 +224,17 @@ export function decimalStringToMinor(value: string, currency: string): bigint {
 }
 
 /**
- * The hub's own PDF of a stripeCheckout invoice (s210b): an INVOICE while it
- * is open, a RECEIPT once paid, served at `/pay/<token>/pdf`.
+ * The hub's own PDF of a stripeCheckout (s210b) or woocommerce (s213b)
+ * invoice: an INVOICE while it is open, a RECEIPT once paid, served at
+ * `/pay/<token>/pdf`.
  */
 export type InvoiceDocumentKind = "invoice" | "receipt"
+
+/** The methods whose PDF the hub renders itself (Stripe hosts stripeInvoice's). */
+export const hubDocumentMethods: readonly InvoiceMethod[] = [
+  "stripeCheckout",
+  "woocommerce",
+]
 
 /** The document an invoice in `status` has, or null (draft, void, ...). */
 const INVOICE_DOCUMENT_KINDS: Partial<
@@ -239,8 +246,10 @@ export const invoiceDocumentKind = (
 ): InvoiceDocumentKind | null => INVOICE_DOCUMENT_KINDS[status] ?? null
 
 /**
- * The PDF link an API/UI row shows: Stripe's for a stripeInvoice, the hub's
- * `/pay/<token>/pdf` for an open or paid stripeCheckout invoice, else null.
+ * The PDF link an API/UI row shows: Stripe's for a stripeInvoice, else the
+ * hub's `/pay/<token>/pdf` while the invoice is open or paid (stripeCheckout
+ * derives it from its pay link; woocommerce stores it at open, since its
+ * `hostedUrl` is the site's order-pay page), else null.
  */
 export const invoicePdfUrl = (invoice: {
   method: InvoiceMethod
@@ -248,11 +257,14 @@ export const invoicePdfUrl = (invoice: {
   hostedUrl: string | null
   pdfUrl: string | null
 }): string | null => {
-  if (invoice.method !== "stripeCheckout") {
+  if (invoice.method === "stripeInvoice") {
     return invoice.pdfUrl
   }
-  if (!(invoice.hostedUrl && invoiceDocumentKind(invoice.status))) {
+  if (!invoiceDocumentKind(invoice.status)) {
     return null
   }
-  return `${invoice.hostedUrl}/pdf`
+  if (invoice.method === "woocommerce") {
+    return invoice.pdfUrl
+  }
+  return invoice.hostedUrl ? `${invoice.hostedUrl}/pdf` : null
 }

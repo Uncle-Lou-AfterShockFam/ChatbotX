@@ -121,7 +121,7 @@ export const invoicesPublicRouter = {
       path: "/v1/invoices/{id}/void",
       summary: "Void invoice",
       description:
-        "Voids an unpaid invoice here and at Stripe. A paid invoice cannot be voided.",
+        "Voids an unpaid invoice here and at its provider (Stripe, or the WooCommerce site, which cancels its order). A paid invoice cannot be voided, nor one whose WooCommerce order is already paid on the site.",
       tags: ["Invoices"],
     })
     .input(invoiceIdInput)

@@ -8,8 +8,9 @@ import { checkApiRateLimit } from "@/lib/rate-limit/api-rate-limit"
 import { loadServableWorkspace } from "@/lib/workspace/load-servable-workspace"
 
 /**
- * The hub's PDF of a stripeCheckout invoice (s210b): `/pay/<token>/pdf`, the
- * same credential as the pay link. Open -> the invoice, paid -> the receipt;
+ * The hub's PDF of a stripeCheckout (s210b) or woocommerce (s213b) invoice:
+ * `/pay/<token>/pdf`, the same credential as the pay link (woocommerce has
+ * no hub pay page: its token serves only this PDF). Open -> the invoice, paid -> the receipt;
  * rendered once and stored on the contact, served from here (never a
  * redirect to storage). Never touches Stripe.
  * The link does not expire (unlike the row's own 30-day `/f/<token>`): a

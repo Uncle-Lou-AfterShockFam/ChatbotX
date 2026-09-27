@@ -14,15 +14,22 @@ import {
   integrationStripeService,
   type StripeCredentials,
 } from "../integration-stripe/service"
-import { integrationWooCommerceService } from "../integration-woocommerce/service"
+import {
+  integrationWooCommerceService,
+  type WooCommerceCredentials,
+} from "../integration-woocommerce/service"
 import { logger } from "../logger"
+import { resolveWorkspaceAppUrl } from "../platform/settings"
 import {
   assertCheckoutNotPaid,
   expireCheckoutAfterVoid,
+  invoicePayUrl,
+  mintInvoicePayToken,
   prepareCheckoutInvoice,
 } from "./checkout-provider"
 import { finalizeWithStripe, voidWithStripe } from "./stripe-provider"
 import {
+  cancelWooCommerceOrder,
   createWooCommerceOrder,
   wooCommerceOrderIdOf,
   wooCommerceProviderInvoiceId,
@@ -320,11 +327,40 @@ const stripeCheckoutProvider: InvoiceProvider = {
 }
 
 /**
+ * The site an existing woocommerce invoice was opened through, or null when
+ * it is gone, another workspace's, or its origin changed since.
+ */
+async function wooCommerceSiteOf(
+  invoice: InvoiceModel,
+): Promise<WooCommerceCredentials | null> {
+  const credentials = invoice.integrationId
+    ? await integrationWooCommerceService.credentialsByIntegrationId(
+        invoice.integrationId,
+      )
+    : null
+  if (
+    !credentials ||
+    credentials.workspaceId !== invoice.workspaceId ||
+    (invoice.providerAccountId &&
+      invoice.providerAccountId !== credentials.siteUrl)
+  ) {
+    return null
+  }
+  return credentials
+}
+
+/**
  * woocommerce (s211b): the invoice's site (`Invoice.integrationId`) creates a
  * pending order through hub-connector `order.invoice`; the order-pay page is
- * the link and the site posts `order.paid` to the hub webhook. A void is
- * hub-only (the plugin has no cancel action): `lastError` names the order to
- * cancel on the site, and a later payment of it is flagged, never applied.
+ * the link and the site posts `order.paid` to the hub webhook. The hub's own
+ * PDF (s213b) rides the invoice's `/pay/<token>/pdf` (an invoice while open,
+ * a receipt once paid); `/pay/<token>` itself stays checkout-only.
+ *
+ * A void asks the site to cancel the order FIRST (hub-connector 0.7.0
+ * `order.cancel`, owner s213b): a site that says it is paid refuses the void
+ * (refund it in WooCommerce); any other failure (site down, an older plugin,
+ * a revoked token) still voids here and `lastError` names the order to cancel
+ * there. A later payment of a voided invoice is flagged, never applied.
  */
 const wooCommerceProvider: InvoiceProvider = {
   async bind({ workspaceId, integrationId, currency }) {
@@ -346,17 +382,8 @@ const wooCommerceProvider: InvoiceProvider = {
     }
   },
   async connect(invoice) {
-    const credentials = invoice.integrationId
-      ? await integrationWooCommerceService.credentialsByIntegrationId(
-          invoice.integrationId,
-        )
-      : null
-    if (
-      !credentials ||
-      credentials.workspaceId !== invoice.workspaceId ||
-      (invoice.providerAccountId &&
-        invoice.providerAccountId !== credentials.siteUrl)
-    ) {
+    const credentials = await wooCommerceSiteOf(invoice)
+    if (!credentials) {
       throw validationException(
         "invoice",
         "This invoice's WooCommerce site is no longer connected",
@@ -369,6 +396,10 @@ const wooCommerceProvider: InvoiceProvider = {
           credentials.siteUrl,
           order.orderId,
         )
+        const payToken = mintInvoicePayToken()
+        const appUrl = await resolveWorkspaceAppUrl({
+          workspaceId: invoice.workspaceId,
+        })
         return {
           set: {
             status: "open",
@@ -376,15 +407,27 @@ const wooCommerceProvider: InvoiceProvider = {
             providerAccountId: credentials.siteUrl,
             integrationId: credentials.integrationId,
             hostedUrl: order.payUrl,
+            payToken,
+            pdfUrl: `${invoicePayUrl(appUrl, payToken)}/pdf`,
           },
-          // Voided here while the site created the order: the void row names
-          // it (to cancel there) and a later payment of it is flagged.
+          // Voided here while the site created the order: cancel it there
+          // too; the void row names it (a later payment of it is flagged),
+          // and says to cancel it by hand when the site did not.
           onDraftLost: async () => {
+            const outcome = await cancelWooCommerceOrder({
+              credentials,
+              invoice,
+              orderId: order.orderId,
+            })
             await db
               .update(invoiceModel)
               .set({
                 providerInvoiceId,
-                lastError: `Voided here while WooCommerce created order ${order.orderId}: cancel it on ${credentials.siteSlug}`,
+                ...(outcome.kind === "cancelled"
+                  ? {}
+                  : {
+                      lastError: `Voided here while WooCommerce created order ${order.orderId}: cancel it on ${credentials.siteSlug}`,
+                    }),
                 updatedAt: new Date(),
               })
               .where(
@@ -399,18 +442,37 @@ const wooCommerceProvider: InvoiceProvider = {
       },
     }
   },
-  prepareVoid() {
-    return Promise.resolve({
+  async prepareVoid(invoice) {
+    const orderId = wooCommerceOrderIdOf(invoice.providerInvoiceId)
+    if (!orderId) {
+      // A draft: no order exists yet (an open in flight cancels its own).
+      return {}
+    }
+    const credentials = await wooCommerceSiteOf(invoice)
+    const outcome = credentials
+      ? await cancelWooCommerceOrder({ credentials, invoice, orderId })
+      : { kind: "failed" as const, reason: "the site is no longer connected" }
+    if (outcome.kind === "paid") {
+      throw validationException(
+        "invoice",
+        `WooCommerce order ${orderId} is already ${outcome.orderStatus} on ${credentials?.siteSlug ?? "the site"}: refund it in WooCommerce`,
+      )
+    }
+    if (outcome.kind === "cancelled") {
+      return {}
+    }
+    logger.warn(
+      { invoiceId: invoice.id, orderId, reason: outcome.reason },
+      "invoice: voiding here, but the WooCommerce order was not cancelled",
+    )
+    return {
       async afterVoid(voided) {
-        const orderId = wooCommerceOrderIdOf(voided.providerInvoiceId)
-        if (orderId) {
-          await recordLastError(
-            voided.id,
-            `Voided here: WooCommerce order ${orderId} stays pending on the site, cancel it there`,
-          )
-        }
+        await recordLastError(
+          voided.id,
+          `Voided here, but WooCommerce order ${orderId} was not cancelled on the site (${outcome.reason.slice(0, 300)}): cancel it there`,
+        )
       },
-    })
+    }
   },
 }
 

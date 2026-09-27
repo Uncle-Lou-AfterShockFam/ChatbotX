@@ -11,9 +11,9 @@ import { tagService } from "../tag/service"
  * What an invoice writes onto its contact so a flow can branch or WAIT on it:
  * - `invoice_link` / `invoice_last_id`: the latest invoice (written when it
  *   opens, whichever path created it: flow step, Invoices page or /v1)
- * - `invoice_pdf_link`: its PDF (hub `/pay/<t>/pdf` for stripeCheckout, which
- *   serves the receipt once paid; Stripe's PDF for stripeInvoice; "" when the
- *   method has none, e.g. woocommerce)
+ * - `invoice_pdf_link`: its PDF (hub `/pay/<t>/pdf` for stripeCheckout and
+ *   woocommerce, which serves the receipt once paid; Stripe's PDF for
+ *   stripeInvoice; "" for a woocommerce invoice opened before s213b)
  * - `invoice_last_status`: its latest status (`open`, `paid`, `payment_failed`, ...)
  * - `invoice_paid_id`: the id of the invoice that was just PAID. A flow waits
  *   per invoice with `customFieldChanged` on it and matchValue

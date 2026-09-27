@@ -1,5 +1,6 @@
 import { and, db, eq } from "@chatbotx.io/database/client"
 import {
+  hubDocumentMethods,
   INVOICE_DOCUMENT_REF_PREFIX,
   type InvoiceDocumentKind,
   invoiceDocumentKind,
@@ -18,7 +19,8 @@ import { logger } from "../logger"
 import { isInvoicePayToken } from "./checkout-provider"
 
 /**
- * The hub's own PDF of a stripeCheckout invoice (s210b, PR 2b): an INVOICE
+ * The hub's own PDF of a stripeCheckout (s210b, PR 2b) or woocommerce
+ * (s213b) invoice: an INVOICE
  * while it is open, a RECEIPT once it is paid. Each is rendered once
  * (Gotenberg) and stored as a ContactDocument (`invoice:<id>:<kind>`), so the
  * contact and workspace purges cover it; `/pay/<token>/pdf` serves it. A
@@ -223,7 +225,7 @@ export async function visitInvoicePdf(
     return { kind: "notFound" }
   }
   const invoice = await loadWithLines({ payToken: token })
-  if (invoice?.method !== "stripeCheckout") {
+  if (!(invoice && hubDocumentMethods.includes(invoice.method))) {
     return { kind: "notFound" }
   }
   const kind = invoiceDocumentKind(invoice.status)
@@ -245,7 +247,7 @@ export async function visitInvoicePdf(
 }
 
 /**
- * Best effort, after a checkout payment is marked: store the receipt now so
+ * Best effort, after a checkout or WooCommerce payment is marked: store the receipt now so
  * the first `/pay/<token>/pdf` is instant. Never throws (the visit renders
  * it on demand when this fails).
  */
@@ -254,7 +256,10 @@ export async function prerenderInvoiceReceipt(
 ): Promise<void> {
   try {
     const invoice = await loadWithLines({ id: invoiceId })
-    if (invoice?.method !== "stripeCheckout" || invoice.status !== "paid") {
+    if (
+      !(invoice && hubDocumentMethods.includes(invoice.method)) ||
+      invoice.status !== "paid"
+    ) {
       return
     }
     await ensureInvoiceDocument({ invoice, kind: "receipt" })

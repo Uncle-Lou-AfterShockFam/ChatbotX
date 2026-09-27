@@ -74,4 +74,43 @@ describe("invoicePdfUrl", () => {
       }),
     ).toBeNull()
   })
+  const hubPdf = `${pay}/pdf`
+  test.each([
+    "open",
+    "paid",
+  ] as const)("an %s woocommerce invoice links the hub PDF stored at open (s213b)", (status) => {
+    expect(
+      invoicePdfUrl({
+        method: "woocommerce",
+        status,
+        hostedUrl: "https://bakery.example.org/checkout/order-pay/3701/",
+        pdfUrl: hubPdf,
+      }),
+    ).toBe(hubPdf)
+  })
+  test.each([
+    "draft",
+    "void",
+    "uncollectible",
+    "refunded",
+  ] as const)("a %s woocommerce invoice has no PDF link", (status) => {
+    expect(
+      invoicePdfUrl({
+        method: "woocommerce",
+        status,
+        hostedUrl: "https://bakery.example.org/checkout/order-pay/3701/",
+        pdfUrl: hubPdf,
+      }),
+    ).toBeNull()
+  })
+  test("a woocommerce invoice opened before s213b (no stored PDF) has none", () => {
+    expect(
+      invoicePdfUrl({
+        method: "woocommerce",
+        status: "open",
+        hostedUrl: "https://bakery.example.org/checkout/order-pay/3701/",
+        pdfUrl: null,
+      }),
+    ).toBeNull()
+  })
 })

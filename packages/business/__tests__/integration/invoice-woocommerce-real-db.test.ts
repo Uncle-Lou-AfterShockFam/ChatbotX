@@ -10,7 +10,8 @@
  * the event and the invoice, and the invoice stays void; a refund before
  * its payment records nothing (retried); order.completed after order.paid
  * never marks twice; a draft voided before its order was recorded still gets
- * its late payment flagged. The site
+ * its late payment flagged; a hub void racing the site's payment ends in
+ * exactly one of paid, or void flagged "refund it" (s213b). The site
  * credentials lookup (encryption) and the contact marks are mocked.
  *
  *     DATABASE_URL=postgres://... pnpm --filter @chatbotx.io/business test:db
@@ -28,6 +29,14 @@ const m = vi.hoisted(() => ({
   >(),
   marks: vi.fn(async () => undefined),
   emitPaid: vi.fn(async () => undefined),
+  cancel: vi.fn(async () => ({ kind: "cancelled" as const })),
+}))
+
+vi.mock("../../src/invoice/woocommerce-provider", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("../../src/invoice/woocommerce-provider")
+  >()),
+  cancelWooCommerceOrder: m.cancel,
 }))
 
 vi.mock("../../src/integration-woocommerce/service", () => ({
@@ -68,6 +77,7 @@ const databaseUrl = requireRealDatabaseUrl()
 const { handleWooCommerceWebhook } = await import(
   "../../src/invoice/woocommerce-webhook"
 )
+const { invoiceService } = await import("../../src/invoice/service")
 
 const ref = (siteUrl: string, orderId: string) => `wc:${siteUrl}:${orderId}`
 
@@ -212,6 +222,7 @@ afterEach(async () => {
   m.sites.clear()
   m.marks.mockClear()
   m.emitPaid.mockClear()
+  m.cancel.mockClear()
 })
 
 afterAll(async () => {
@@ -350,6 +361,44 @@ describe.skipIf(!databaseUrl)("WooCommerce payment webhook (s211b)", () => {
       { outcome: "paid-after-void", invoiceId },
     ])
     expect(m.marks).not.toHaveBeenCalled()
+  })
+
+  test("a hub void racing the site's payment: paid, or void flagged to refund, never both or neither", async () => {
+    const { workspaceId, contactId } = await seedWorkspace()
+    const site = await seedSite(workspaceId)
+    for (let round = 0; round < 8; round++) {
+      const orderId = String(3800 + round)
+      const invoiceId = await seedInvoice({
+        workspaceId,
+        contactId,
+        integrationId: site.integrationId,
+        number: 100 + round,
+        providerInvoiceId: ref(site.siteUrl, orderId),
+      })
+      // The site answered `cancelled` (its check ran before the payment),
+      // then the payment landed anyway: the hub must still see it.
+      await Promise.allSettled([
+        invoiceService.void({ workspaceId, id: invoiceId }),
+        deliver({
+          integrationId: site.integrationId,
+          secret: site.webhookSecret,
+          orderId,
+          hubInvoiceId: invoiceId,
+        }),
+      ])
+      const row = await invoiceRow(invoiceId)
+      const outcomes = (await eventRows(site.integrationId))
+        .filter((e) => e.invoiceId === invoiceId)
+        .map((e) => e.outcome)
+      if (row?.status === "paid") {
+        expect(outcomes).toEqual(["marked:paid"])
+      } else {
+        expect(row?.status).toBe("void")
+        expect(row?.lastError).toContain("refund it in WooCommerce")
+        expect(outcomes).toEqual(["paid-after-void"])
+      }
+    }
+    expect(m.cancel).toHaveBeenCalledTimes(8)
   })
 
   test("a refund that overtakes its payment is retried, then applies after it", async () => {

@@ -326,10 +326,12 @@ describe("visitInvoicePdf", () => {
   })
 
   test.each([
-    ["open", "invoice:501:invoice"],
-    ["paid", "invoice:501:receipt"],
-  ])("%s serves its %s document from storage", async (status, ref) => {
-    m.findFirst.mockResolvedValue(invoiceRow({ status }))
+    ["stripeCheckout", "open", "invoice:501:invoice"],
+    ["stripeCheckout", "paid", "invoice:501:receipt"],
+    ["woocommerce", "open", "invoice:501:invoice"],
+    ["woocommerce", "paid", "invoice:501:receipt"],
+  ])("a %s %s invoice serves its %s document from storage", async (method, status, ref) => {
+    m.findFirst.mockResolvedValue(invoiceRow({ method, status }))
     m.findByRef.mockResolvedValue(stored({ title: "Doc" }))
     const visit = await visitInvoicePdf(TOKEN, { canServe })
     expect(m.findFirst).toHaveBeenCalledWith(
@@ -361,8 +363,11 @@ describe("visitInvoicePdf", () => {
 })
 
 describe("prerenderInvoiceReceipt", () => {
-  test("a paid checkout invoice stores its receipt", async () => {
-    m.findFirst.mockResolvedValue(invoiceRow({ status: "paid" }))
+  test.each([
+    "stripeCheckout",
+    "woocommerce",
+  ])("a paid %s invoice stores its receipt", async (method) => {
+    m.findFirst.mockResolvedValue(invoiceRow({ status: "paid", method }))
     m.selects.push([contact], [workspace])
     await prerenderInvoiceReceipt("501")
     expect(m.findFirst).toHaveBeenCalledWith(
