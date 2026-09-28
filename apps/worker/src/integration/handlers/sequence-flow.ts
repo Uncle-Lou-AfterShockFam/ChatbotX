@@ -110,6 +110,13 @@ async function runSendSequenceFlow(
   if (completedAt) {
     sentAt = completedAt
   } else {
+    // Re-read right before sending: the enrolment may have been removed (a
+    // stop-on-reply reply, an unsubscribe) while the step was looked up, and
+    // its dispatch cascades away with it.
+    if (!(await fetchDispatch(dispatchId, workspaceId))) {
+      await scheduler.removeFromSchedule(bucket, dispatchId)
+      return
+    }
     const { companyStopped } = await sendFlowDirect({
       flowId: validStep.flow.id,
       workspaceId,

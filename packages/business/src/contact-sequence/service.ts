@@ -4,6 +4,7 @@ import {
   db,
   eq,
   inArray,
+  lte,
   type Transaction,
 } from "@chatbotx.io/database/client"
 import {
@@ -313,16 +314,23 @@ class ContactSequenceService extends BaseService {
 
   /**
    * Sequence stop-on-reply (s220b): ends the contact's enrolments in every
-   * sequence of the workspace that has `stopOnReply` on. Other enrolments,
-   * and the contact's parked flow waits, are untouched (a `waitForEvent`
-   * replied branch must still fire). Returns the ended sequence ids.
+   * sequence of the workspace that has `stopOnReply` on and that already
+   * existed when the reply arrived (`repliedAt`): a late or re-delivered
+   * reply event never ends an enrolment the reply itself started (a keyword
+   * flow's subscribe step). Other enrolments, and the contact's parked flow
+   * waits, are untouched (a `waitForEvent` replied branch must still fire).
+   * Returns the ended sequence ids.
    */
   async removeStopOnReplyEnrollments(props: {
     workspaceId: string
     contactId: string
+    repliedAt: Date
     contactInboxId?: string
   }): Promise<string[]> {
-    const { workspaceId, contactId } = props
+    const { workspaceId, contactId, repliedAt } = props
+    if (!(repliedAt instanceof Date) || Number.isNaN(repliedAt.getTime())) {
+      throw new TypeError("removeStopOnReplyEnrollments: invalid repliedAt")
+    }
     const rows = await db
       .select({ sequenceId: contactsOnSequenceModel.sequenceId })
       .from(contactsOnSequenceModel)
@@ -338,6 +346,7 @@ class ContactSequenceService extends BaseService {
           eq(contactsOnSequenceModel.workspaceId, workspaceId),
           eq(contactsOnSequenceModel.contactId, contactId),
           eq(sequenceModel.stopOnReply, true),
+          lte(contactsOnSequenceModel.enrolledAt, repliedAt),
         ),
       )
     if (rows.length === 0) {

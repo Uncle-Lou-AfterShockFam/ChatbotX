@@ -27,6 +27,7 @@ export async function handleSequenceStopOnReply(
         await contactSequenceService.removeStopOnReplyEnrollments({
           workspaceId: payload.workspaceId,
           contactId: payload.contactId,
+          repliedAt: new Date(payload.occurredAt),
           contactInboxId: payload.contactInboxId,
         })
       if (sequenceIds.length > 0) {

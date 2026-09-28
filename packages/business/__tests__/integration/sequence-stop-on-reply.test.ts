@@ -45,7 +45,11 @@ function mintId(): string {
 const seeded: Record<string, string[]> = {
   SequenceDispatch: [],
   ContactOnSequence: [],
+  SequenceStep: [],
+  ContactInbox: [],
+  Contact: [],
   Sequence: [],
+  Workspace: [],
 }
 
 async function asReplica(statement: ReturnType<typeof sql>): Promise<void> {
@@ -73,14 +77,17 @@ async function seedEnrollment(props: {
   sequenceId: string
   contactId: string
   dispatchStatus?: "pending" | "running"
+  enrolledAt?: Date
 }): Promise<{ enrollmentId: string; dispatchId: string }> {
   const enrollmentId = mintId()
   const dispatchId = mintId()
   await asReplica(sql`
     INSERT INTO "ContactOnSequence"
-      (id, "contactId", "sequenceId", "workspaceId", status, "nextRunAt")
+      (id, "contactId", "sequenceId", "workspaceId", status, "nextRunAt",
+       "enrolledAt")
     VALUES (${enrollmentId}, ${props.contactId}, ${props.sequenceId},
-            ${props.workspaceId}, 'active', now() + interval '1 day')`)
+            ${props.workspaceId}, 'active', now() + interval '1 day',
+            ${(props.enrolledAt ?? new Date(Date.now() - 60_000)).toISOString()})`)
   seeded.ContactOnSequence?.push(enrollmentId)
   await asReplica(sql`
     INSERT INTO "SequenceDispatch"
@@ -103,7 +110,7 @@ afterEach(async () => {
   if (!databaseUrl) {
     return
   }
-  for (const table of ["SequenceDispatch", "ContactOnSequence", "Sequence"]) {
+  for (const table of Object.keys(seeded)) {
     const ids = seeded[table]?.splice(0) ?? []
     if (ids.length > 0) {
       await asReplica(sql`
@@ -150,6 +157,7 @@ describe.skipIf(!databaseUrl)("removeStopOnReplyEnrollments", () => {
     const ended = await contactSequenceService.removeStopOnReplyEnrollments({
       workspaceId,
       contactId: replier,
+      repliedAt: new Date(),
     })
 
     expect(ended).toEqual([stopSeq])
@@ -176,6 +184,7 @@ describe.skipIf(!databaseUrl)("removeStopOnReplyEnrollments", () => {
     await contactSequenceService.removeStopOnReplyEnrollments({
       workspaceId,
       contactId,
+      repliedAt: new Date(),
     })
 
     expect(
@@ -184,6 +193,89 @@ describe.skipIf(!databaseUrl)("removeStopOnReplyEnrollments", () => {
         workspaceId,
       }),
     ).toBeUndefined()
+  })
+
+  test("an enrolment made after the reply (a late or re-delivered event) is kept", async () => {
+    const workspaceId = mintId()
+    const stopSeq = await seedSequence({ workspaceId, stopOnReply: true })
+    const contactId = mintId()
+    const repliedAt = new Date(Date.now() - 180_000)
+    const fresh = await seedEnrollment({
+      workspaceId,
+      sequenceId: stopSeq,
+      contactId,
+      enrolledAt: new Date(repliedAt.getTime() + 1000),
+    })
+
+    const ended = await contactSequenceService.removeStopOnReplyEnrollments({
+      workspaceId,
+      contactId,
+      repliedAt,
+    })
+
+    expect(ended).toEqual([])
+    expect(await exists("ContactOnSequence", fresh.enrollmentId)).toBe(true)
+  })
+
+  test("an invalid repliedAt is refused before any query", async () => {
+    await expect(
+      contactSequenceService.removeStopOnReplyEnrollments({
+        workspaceId: mintId(),
+        contactId: mintId(),
+        repliedAt: new Date("nope"),
+      }),
+    ).rejects.toBeInstanceOf(TypeError)
+  })
+
+  test("the real dispatch FK error is recognised by name (the advance / bulk-enrol catch)", async () => {
+    const { createDispatch } = await import("@chatbotx.io/sequence-scheduler")
+    const { isForeignKeyViolationError } = await import(
+      "@chatbotx.io/database/client"
+    )
+    // Every OTHER referenced row exists, as it does in the real race, so the
+    // only FK the insert can trip is the (removed) enrolment's.
+    const workspaceId = mintId()
+    const contactId = mintId()
+    const contactInboxId = mintId()
+    const stepId = mintId()
+    await asReplica(sql`
+      INSERT INTO "Workspace" (id, name, "ownerId")
+      VALUES (${workspaceId}, ${`s220b ${workspaceId}`}, 1)`)
+    seeded.Workspace?.push(workspaceId)
+    const sequenceId = await seedSequence({ workspaceId, stopOnReply: true })
+    await asReplica(sql`
+      INSERT INTO "Contact" (id, "workspaceId") VALUES (${contactId}, ${workspaceId})`)
+    seeded.Contact?.push(contactId)
+    await asReplica(sql`
+      INSERT INTO "ContactInbox"
+        (id, "originalContactId", "contactId", "inboxId", channel, source, "sourceId")
+      VALUES (${contactInboxId}, ${contactId}, ${contactId}, 1, 'api', 'api',
+              ${`s220b-${contactInboxId}`})`)
+    seeded.ContactInbox?.push(contactInboxId)
+    await asReplica(sql`
+      INSERT INTO "SequenceStep" (id, "order", "delayDays", "sequenceId")
+      VALUES (${stepId}, 0, 0, ${sequenceId})`)
+    seeded.SequenceStep?.push(stepId)
+
+    const error = await createDispatch({
+      workspaceId,
+      sequenceId,
+      contactId,
+      contactInboxId,
+      stepId,
+      enrollmentId: mintId(),
+      runAt: new Date(),
+    }).then(
+      () => "inserted",
+      (err: unknown) => err,
+    )
+
+    expect(
+      isForeignKeyViolationError(
+        error,
+        "SequenceDispatch_enrollment_workspace_fkey",
+      ),
+    ).toBe(true)
   })
 
   test("a second reply is a no-op", async () => {
@@ -195,10 +287,12 @@ describe.skipIf(!databaseUrl)("removeStopOnReplyEnrollments", () => {
     const first = await contactSequenceService.removeStopOnReplyEnrollments({
       workspaceId,
       contactId,
+      repliedAt: new Date(),
     })
     const second = await contactSequenceService.removeStopOnReplyEnrollments({
       workspaceId,
       contactId,
+      repliedAt: new Date(),
     })
 
     expect(first).toEqual([stopSeq])
@@ -222,6 +316,7 @@ describe.skipIf(!databaseUrl)("removeStopOnReplyEnrollments", () => {
     const ended = await contactSequenceService.removeStopOnReplyEnrollments({
       workspaceId,
       contactId,
+      repliedAt: new Date(),
     })
 
     expect(ended).toEqual([])
@@ -232,6 +327,7 @@ describe.skipIf(!databaseUrl)("removeStopOnReplyEnrollments", () => {
     const ended = await contactSequenceService.removeStopOnReplyEnrollments({
       workspaceId: mintId(),
       contactId: mintId(),
+      repliedAt: new Date(),
     })
     expect(ended).toEqual([])
   })

@@ -43,6 +43,7 @@ describe("handleSequenceStopOnReply", () => {
     expect(mockRemove).toHaveBeenCalledWith({
       workspaceId: "ws-1",
       contactId: "c-1",
+      repliedAt: new Date("2026-09-28T00:00:00Z"),
       contactInboxId: "ci-1",
     })
     expect(mockInfo).toHaveBeenCalledTimes(1)

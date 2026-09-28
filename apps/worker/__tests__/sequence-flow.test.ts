@@ -181,6 +181,21 @@ describe("handleSendSequenceFlow", () => {
     })
   })
 
+  describe("enrolment removed while the step was looked up (s220b)", () => {
+    test("the re-read before sending misses the dispatch: nothing is sent", async () => {
+      findRunningSpy
+        .mockResolvedValueOnce(makeDispatch())
+        .mockResolvedValueOnce(undefined)
+
+      await handleSendSequenceFlow(makeData(), makeJob())
+
+      expect(sendFlowDirectSpy).not.toHaveBeenCalled()
+      expect(markCompletedSpy).not.toHaveBeenCalled()
+      expect(advanceEnrollmentSpy).not.toHaveBeenCalled()
+      expect(removeFromScheduleSpy).toHaveBeenCalledWith(42, "dispatch-1")
+    })
+  })
+
   describe("enrolment removed while the step was sending (s220b)", () => {
     test("is benign: completes, unschedules, never throws or retries", async () => {
       advanceEnrollmentSpy.mockRejectedValueOnce(

@@ -1,4 +1,8 @@
-import { db, type Transaction } from "@chatbotx.io/database/client"
+import {
+  db,
+  isForeignKeyViolationError,
+  type Transaction,
+} from "@chatbotx.io/database/client"
 import { contactsOnSequenceModel } from "@chatbotx.io/database/schema"
 import { sequenceConnections } from "@chatbotx.io/redis"
 import { SchedulerClient } from "@chatbotx.io/scheduler"
@@ -155,15 +159,30 @@ export async function enrollContactsInSequenceBulk(
     )
 
     for (const contactInbox of contactInboxes) {
-      const dispatch = await createDispatch({
-        workspaceId,
-        sequenceId: enrollment.sequenceId,
-        contactId: enrollment.contactId,
-        contactInboxId: contactInbox.id,
-        stepId: enrollment.nextStepId,
-        enrollmentId: enrollment.id,
-        runAt: enrollment.nextRunAt,
-      })
+      let dispatch: Awaited<ReturnType<typeof createDispatch>>
+      try {
+        dispatch = await createDispatch({
+          workspaceId,
+          sequenceId: enrollment.sequenceId,
+          contactId: enrollment.contactId,
+          contactInboxId: contactInbox.id,
+          stepId: enrollment.nextStepId,
+          enrollmentId: enrollment.id,
+          runAt: enrollment.nextRunAt,
+        })
+      } catch (err) {
+        // This enrolment was removed mid-loop (a stop-on-reply reply, an
+        // unsubscribe): skip it, never abort the rest of the batch.
+        if (
+          isForeignKeyViolationError(
+            err,
+            "SequenceDispatch_enrollment_workspace_fkey",
+          )
+        ) {
+          break
+        }
+        throw err
+      }
 
       await scheduler.addToSchedule(
         dispatch.bucket,
