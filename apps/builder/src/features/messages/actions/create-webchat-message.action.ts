@@ -486,10 +486,7 @@ async function getConversationFromInput(
 
   // A fresh guest id is one page load away, so creation has its own budget
   // (s217); a returning guest above never touches it.
-  const createLimit = await checkGuestCreateRateLimit({
-    webchatId: parsedInput.webchatId,
-    clientIp,
-  })
+  const createLimit = await checkGuestCreateRateLimit({ clientIp })
   if (createLimit.limited) {
     const t = await getTranslations("webchat")
     throw new ChatbotXException(

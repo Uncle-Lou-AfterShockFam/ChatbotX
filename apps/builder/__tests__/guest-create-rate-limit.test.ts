@@ -7,12 +7,8 @@ vi.mock("@/lib/log", () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }))
 
-const {
-  checkGuestCreateRateLimit,
-  GUEST_CREATE_IP_LIMIT,
-  GUEST_CREATE_WEBCHAT_LIMIT,
-  UNKNOWN_CLIENT_IP,
-} = await import("../src/lib/rate-limit/guest-rate-limit")
+const { checkGuestCreateRateLimit, GUEST_CREATE_IP_LIMIT, UNKNOWN_CLIENT_IP } =
+  await import("../src/lib/rate-limit/guest-rate-limit")
 const { resetFixedWindowMemory } = await import(
   "../src/lib/rate-limit/fixed-window"
 )
@@ -45,7 +41,7 @@ describe("guest creation rate limit (s217)", () => {
   test("10 new guests per ip per minute, then limited; another ip and the next window are not", async () => {
     const store = makeStore()
     const create = (clientIp: string, at = now) =>
-      checkGuestCreateRateLimit({ webchatId: "w1", clientIp, store, now: at })
+      checkGuestCreateRateLimit({ clientIp, store, now: at })
 
     for (let i = 0; i < GUEST_CREATE_IP_LIMIT; i++) {
       expect((await create("198.51.100.7")).limited).toBe(false)
@@ -58,76 +54,32 @@ describe("guest creation rate limit (s217)", () => {
     expect((await create("198.51.100.7", now + 60_000)).limited).toBe(false)
   })
 
-  test("the ip bucket spans webchats: rotating the webchat does not reset it", async () => {
+  test("many ips never lock out a new visitor from another ip (no shared per-webchat bucket)", async () => {
     const store = makeStore()
-    for (let i = 0; i < GUEST_CREATE_IP_LIMIT; i++) {
+    for (let i = 0; i < 1000; i++) {
       await checkGuestCreateRateLimit({
-        webchatId: `w${i}`,
-        clientIp: "198.51.100.7",
+        clientIp: `10.${Math.floor(i / 250)}.0.${i % 250}`,
         store,
         now,
       })
     }
     expect(
-      (
-        await checkGuestCreateRateLimit({
-          webchatId: "w-new",
-          clientIp: "198.51.100.7",
-          store,
-          now,
-        })
-      ).limited,
-    ).toBe(true)
-  })
-
-  test("the webchat bucket trips across many ips", async () => {
-    const store = makeStore()
-    for (let i = 0; i < GUEST_CREATE_WEBCHAT_LIMIT; i++) {
-      const r = await checkGuestCreateRateLimit({
-        webchatId: "w1",
-        clientIp: `10.0.${Math.floor(i / 250)}.${i % 250}`,
-        store,
-        now,
-      })
-      expect(r.limited).toBe(false)
-    }
-    expect(
-      (
-        await checkGuestCreateRateLimit({
-          webchatId: "w1",
-          clientIp: "203.0.113.1",
-          store,
-          now,
-        })
-      ).limited,
-    ).toBe(true)
-    // Another webchat is unaffected.
-    expect(
-      (
-        await checkGuestCreateRateLimit({
-          webchatId: "w2",
-          clientIp: "203.0.113.2",
-          store,
-          now,
-        })
-      ).limited,
+      (await checkGuestCreateRateLimit({ clientIp: "203.0.113.1", store, now }))
+        .limited,
     ).toBe(false)
   })
 
-  test("an unknown client ip skips the ip bucket instead of sharing one", async () => {
+  test("an unknown client ip is not limited and never touches the store", async () => {
     const store = makeStore()
     for (let i = 0; i < GUEST_CREATE_IP_LIMIT + 5; i++) {
       const r = await checkGuestCreateRateLimit({
-        webchatId: "w1",
         clientIp: UNKNOWN_CLIENT_IP,
         store,
         now,
       })
       expect(r.limited).toBe(false)
     }
-    expect([...store.counters.keys()].some((k) => k.includes(":ip:"))).toBe(
-      false,
-    )
+    expect(store.setNumberIfNotExists).not.toHaveBeenCalled()
   })
 
   test("a failing store falls back to per-process counting, never to no limit", async () => {
@@ -136,17 +88,11 @@ describe("guest creation rate limit (s217)", () => {
       incrementCounter: vi.fn(() => Promise.reject(new Error("down"))),
     }
     for (let i = 0; i < GUEST_CREATE_IP_LIMIT; i++) {
-      await checkGuestCreateRateLimit({
-        webchatId: "w1",
-        clientIp: "198.51.100.9",
-        store,
-        now,
-      })
+      await checkGuestCreateRateLimit({ clientIp: "198.51.100.9", store, now })
     }
     expect(
       (
         await checkGuestCreateRateLimit({
-          webchatId: "w1",
           clientIp: "198.51.100.9",
           store,
           now,
@@ -162,7 +108,6 @@ describe("guest creation rate limit (s217)", () => {
     }
     const started = Date.now()
     const r = await checkGuestCreateRateLimit({
-      webchatId: "w1",
       clientIp: "198.51.100.10",
       store: hung,
       now,
@@ -170,5 +115,35 @@ describe("guest creation rate limit (s217)", () => {
     })
     expect(r.limited).toBe(false)
     expect(Date.now() - started).toBeLessThan(1000)
+  })
+
+  test("a store call that lands AFTER the timeout only over-counts: the decision already came from the fallback", async () => {
+    const store = makeStore()
+    let release: (() => void) | undefined
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const slow = {
+      setNumberIfNotExists: vi.fn(async (key: string, value: number) => {
+        await gate
+        return store.setNumberIfNotExists(key, value)
+      }),
+      incrementCounter: vi.fn(async (key: string, by: number) => {
+        await gate
+        return store.incrementCounter(key, by)
+      }),
+    }
+    const r = await checkGuestCreateRateLimit({
+      clientIp: "198.51.100.11",
+      store: slow,
+      now,
+      storeTimeoutMs: 20,
+    })
+    expect(r.limited).toBe(false)
+    release?.()
+    await vi.waitFor(() => expect(store.counters.size).toBe(1))
+    // The late write counted the request once in the store: an over-count
+    // that can only trip the limit early, never admit extra traffic.
+    expect([...store.counters.values()]).toEqual([1])
   })
 })

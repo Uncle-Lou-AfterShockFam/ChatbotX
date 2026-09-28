@@ -709,14 +709,13 @@ describe("handleCreateWebchatMessage — MAC quota", () => {
     expect(mockCheckGuestCreateRateLimit).not.toHaveBeenCalled()
   })
 
-  test("a new guest is checked against the creation budget by webchat and client ip (s217)", async () => {
+  test("a new guest is checked against the per-ip creation budget (s217)", async () => {
     mockContactInboxFindLatest.mockResolvedValue(undefined)
     seedNewContactInserts()
 
     await handleCreateWebchatMessage({ parsedInput: input })
 
     expect(mockCheckGuestCreateRateLimit).toHaveBeenCalledWith({
-      webchatId: "webchat-1",
       clientIp: "192.0.2.1",
     })
   })

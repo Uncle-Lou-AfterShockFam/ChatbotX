@@ -216,38 +216,39 @@ export const resolveGuestRateLimitKey = (
  * inserts a Contact, ContactInbox and Conversation, and a guest id costs one
  * page load to mint, so the per-session message budget above never bounds
  * it. Checked only on the branch that creates the contact: 10 new guests per
- * minute per client ip, 300 per minute per webchat. A caller with no proxy
- * header (`UNKNOWN_CLIENT_IP`) skips the ip bucket rather than share one
- * bucket with every other such caller; the webchat bucket still applies.
+ * minute per client ip, across every webchat.
+ *
+ * Deliberately NO shared per-webchat bucket (s217 skeptic): ~30 ips could
+ * hold it full and 429 every genuine new visitor of a victim's webchat, a
+ * lockout worse than the spam it bounds. The workspace MAC quota stays the
+ * ceiling on total contacts. A caller with no proxy header
+ * (`UNKNOWN_CLIENT_IP`) is not limited here rather than share one bucket
+ * with every other such caller (the netcup Caddy always sets the header).
  */
 const CREATE_WINDOW_SECONDS = 60
 export const GUEST_CREATE_IP_LIMIT = 10
-export const GUEST_CREATE_WEBCHAT_LIMIT = 300
 
-export const checkGuestCreateRateLimit = ({
-  webchatId,
+export const checkGuestCreateRateLimit = async ({
   clientIp,
   store,
   now = Date.now(),
   storeTimeoutMs,
 }: {
-  webchatId: string
   clientIp: string
   store?: FixedWindowStore
   now?: number
   storeTimeoutMs?: number
 }): Promise<FixedWindowResult> => {
+  if (clientIp === UNKNOWN_CLIENT_IP) {
+    return { limited: false, retryAfter: 0 }
+  }
   const suffix = windowSuffix(now, CREATE_WINDOW_SECONDS)
-  const key = (...parts: string[]) =>
-    ["guest-create-rate-limit", ...parts, suffix].join(":")
-  const ipBuckets =
-    clientIp === UNKNOWN_CLIENT_IP
-      ? []
-      : [{ key: key("ip", clientIp), limit: GUEST_CREATE_IP_LIMIT }]
-  return checkFixedWindow({
+  return await checkFixedWindow({
     buckets: [
-      ...ipBuckets,
-      { key: key("webchat", webchatId), limit: GUEST_CREATE_WEBCHAT_LIMIT },
+      {
+        key: ["guest-create-rate-limit", "ip", clientIp, suffix].join(":"),
+        limit: GUEST_CREATE_IP_LIMIT,
+      },
     ],
     windowSeconds: CREATE_WINDOW_SECONDS,
     store,

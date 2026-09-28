@@ -76,7 +76,9 @@ export async function checkFixedWindow(props: {
   assertTimeoutMs(storeTimeoutMs)
   const retryAfter = secondsUntilNextWindow(now, windowSeconds)
   // ONE budget for every round trip (as in guest-rate-limit, s201c): a hung
-  // store takes the local fallback instead of holding the request.
+  // store takes the local fallback instead of holding the request. The
+  // abandoned calls may still land later in the window (accepted over-count:
+  // it can only make a limit trip early, never let traffic past it).
   const checkStore = async (): Promise<FixedWindowResult> => {
     for (const bucket of buckets) {
       if (
