@@ -3040,7 +3040,8 @@
       "empty": "Không tìm thấy trường tùy chỉnh ActiveCampaign."
     },
     "errors": {
-      "invalidCredentials": "API URL hoặc API Key ActiveCampaign không hợp lệ. Vui lòng kiểm tra thông tin và thử lại."
+      "invalidCredentials": "API URL hoặc API Key ActiveCampaign không hợp lệ. Vui lòng kiểm tra thông tin và thử lại.",
+      "unreachableApiUrl": "This API URL cannot be reached from the hub (it points to a private address or redirects). Use your ActiveCampaign account URL, e.g. https://youraccount.api-us1.com."
     }
   },
   "getResponse": {

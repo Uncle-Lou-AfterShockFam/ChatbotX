@@ -2898,7 +2898,8 @@
       "empty": "Nej ActiveCampaign brugerdefineret felter found."
     },
     "errors": {
-      "invalidCredentials": "Ugyldig ActiveCampaign API URL eller API Nøgle. Venligst check din credentials og try again."
+      "invalidCredentials": "Ugyldig ActiveCampaign API URL eller API Nøgle. Venligst check din credentials og try again.",
+      "unreachableApiUrl": "This API URL cannot be reached from the hub (it points to a private address or redirects). Use your ActiveCampaign account URL, e.g. https://youraccount.api-us1.com."
     }
   },
   "getResponse": {

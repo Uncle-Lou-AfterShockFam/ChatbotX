@@ -2898,7 +2898,8 @@
       "empty": "Nessun campo personalizzato ActiveCampaign trovato."
     },
     "errors": {
-      "invalidCredentials": "URL API o chiave API di ActiveCampaign non validi. Controlla le credenziali e riprova."
+      "invalidCredentials": "URL API o chiave API di ActiveCampaign non validi. Controlla le credenziali e riprova.",
+      "unreachableApiUrl": "This API URL cannot be reached from the hub (it points to a private address or redirects). Use your ActiveCampaign account URL, e.g. https://youraccount.api-us1.com."
     }
   },
   "getResponse": {

@@ -174,7 +174,8 @@
       "description": "输入 ActiveCampaign 帐户设置中的 API URL 和 API 密钥。"
     },
     "errors": {
-      "invalidCredentials": "ActiveCampaign API URL 或 API 密钥无效。请检查您的凭证并重试。"
+      "invalidCredentials": "ActiveCampaign API URL 或 API 密钥无效。请检查您的凭证并重试。",
+      "unreachableApiUrl": "This API URL cannot be reached from the hub (it points to a private address or redirects). Use your ActiveCampaign account URL, e.g. https://youraccount.api-us1.com."
     },
     "fields": {
       "addCustomField": "添加自订字段",

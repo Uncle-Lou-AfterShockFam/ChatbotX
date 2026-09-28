@@ -2898,7 +2898,8 @@
       "empty": "ActiveCampaignin mukautettuja kenttiä ei löytynyt."
     },
     "errors": {
-      "invalidCredentials": "Virheellinen ActiveCampaignin API-URL tai API-avain. Tarkista tunnistetietosi ja yritä uudelleen."
+      "invalidCredentials": "Virheellinen ActiveCampaignin API-URL tai API-avain. Tarkista tunnistetietosi ja yritä uudelleen.",
+      "unreachableApiUrl": "This API URL cannot be reached from the hub (it points to a private address or redirects). Use your ActiveCampaign account URL, e.g. https://youraccount.api-us1.com."
     }
   },
   "getResponse": {

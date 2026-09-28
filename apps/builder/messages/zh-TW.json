@@ -3215,7 +3215,8 @@
       "empty": "找不到 ActiveCampaign 自訂欄位。"
     },
     "errors": {
-      "invalidCredentials": "ActiveCampaign API URL 或 API 金鑰無效。請檢查您的憑證並重試。"
+      "invalidCredentials": "ActiveCampaign API URL 或 API 金鑰無效。請檢查您的憑證並重試。",
+      "unreachableApiUrl": "This API URL cannot be reached from the hub (it points to a private address or redirects). Use your ActiveCampaign account URL, e.g. https://youraccount.api-us1.com."
     }
   },
   "getResponse": {

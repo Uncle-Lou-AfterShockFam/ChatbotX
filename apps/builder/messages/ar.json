@@ -3040,7 +3040,8 @@
       "empty": "لم يتم العثور على أي حقول مخصصة في ActiveCampaign."
     },
     "errors": {
-      "invalidCredentials": "رابط API أو مفتاح API لـ ActiveCampaign غير صالح. يرجى التحقق من بيانات الاعتماد والمحاولة مرة أخرى."
+      "invalidCredentials": "رابط API أو مفتاح API لـ ActiveCampaign غير صالح. يرجى التحقق من بيانات الاعتماد والمحاولة مرة أخرى.",
+      "unreachableApiUrl": "This API URL cannot be reached from the hub (it points to a private address or redirects). Use your ActiveCampaign account URL, e.g. https://youraccount.api-us1.com."
     }
   },
   "getResponse": {

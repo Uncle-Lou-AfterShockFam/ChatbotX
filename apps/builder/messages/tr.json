@@ -3040,7 +3040,8 @@
       "empty": "ActiveCampaign özel alanı bulunamadı."
     },
     "errors": {
-      "invalidCredentials": "Geçersiz ActiveCampaign API URL'si veya API Anahtarı. Lütfen bilgilerinizi kontrol edip tekrar deneyin."
+      "invalidCredentials": "Geçersiz ActiveCampaign API URL'si veya API Anahtarı. Lütfen bilgilerinizi kontrol edip tekrar deneyin.",
+      "unreachableApiUrl": "This API URL cannot be reached from the hub (it points to a private address or redirects). Use your ActiveCampaign account URL, e.g. https://youraccount.api-us1.com."
     }
   },
   "getResponse": {

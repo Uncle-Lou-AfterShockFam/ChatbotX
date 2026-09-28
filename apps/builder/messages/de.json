@@ -2898,7 +2898,8 @@
       "empty": "Keine benutzerdefinierten ActiveCampaign-Felder gefunden."
     },
     "errors": {
-      "invalidCredentials": "Ungültige ActiveCampaign-API-URL oder ungültiger API-Schlüssel. Überprüfen Sie Ihre Anmeldedaten und versuchen Sie es erneut."
+      "invalidCredentials": "Ungültige ActiveCampaign-API-URL oder ungültiger API-Schlüssel. Überprüfen Sie Ihre Anmeldedaten und versuchen Sie es erneut.",
+      "unreachableApiUrl": "This API URL cannot be reached from the hub (it points to a private address or redirects). Use your ActiveCampaign account URL, e.g. https://youraccount.api-us1.com."
     }
   },
   "getResponse": {
