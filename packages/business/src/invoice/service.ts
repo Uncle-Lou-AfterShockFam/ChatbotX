@@ -45,6 +45,7 @@ import {
 } from "../errors"
 import { logger } from "../logger"
 import { markInvoiceCreated } from "./contact-marks"
+import { enqueueInvoiceMirror } from "./mirror"
 import {
   bindNewInvoice,
   InvoiceFinalizeError,
@@ -460,6 +461,9 @@ class InvoiceService extends BaseService {
     if (opened?.status === "open") {
       await this.emitCreated(opened)
     }
+    if (opened) {
+      await enqueueInvoiceMirror(opened)
+    }
     return await this.get(ref)
   }
 
@@ -545,6 +549,7 @@ class InvoiceService extends BaseService {
     if (voided) {
       await this.audit("void", `voided invoice #${invoice.number}`)
       await afterVoid?.(voided)
+      await enqueueInvoiceMirror(voided)
     }
     return await this.get(ref)
   }

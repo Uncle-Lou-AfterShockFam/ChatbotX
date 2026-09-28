@@ -165,6 +165,18 @@ export function InvoiceList({
                       {row.lastError}
                     </p>
                   ) : null}
+                  {row.bookkeeping ? (
+                    <p
+                      className={`mt-1 max-w-32 truncate text-xs sm:max-w-64 ${row.bookkeeping.state === "error" ? "text-destructive" : "text-muted-foreground"}`}
+                      data-testid={`invoice-bookkeeping-${row.id}`}
+                      title={row.bookkeeping.error ?? undefined}
+                    >
+                      {t(`quickbooks.mirrorState.${row.bookkeeping.state}`, {
+                        error: row.bookkeeping.error ?? "",
+                        status: t(`invoices.status.${row.status}`),
+                      })}
+                    </p>
+                  ) : null}
                 </TableCell>
                 <TableCell className="hidden text-right tabular-nums sm:table-cell">
                   {money(row)}

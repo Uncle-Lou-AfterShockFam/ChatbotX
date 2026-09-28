@@ -14,6 +14,7 @@ export const credentialTypes = z.enum([
   "paddle",
   "tiktok",
   "make",
+  "quickbooks",
 ])
 export type CredentialType = z.infer<typeof credentialTypes>
 
@@ -216,6 +217,30 @@ export const makeCredentialPublicSchema = makeCredentialSchema.pick({
 })
 export type MakeCredentialPublic = z.infer<typeof makeCredentialPublicSchema>
 
+/**
+ * The platform's Intuit app (s214b): workspaces connect their own QuickBooks
+ * Online company through it. `webhookVerifierToken` signs Intuit's ONE
+ * app-wide webhook; `environment` picks the API host (a sandbox app's keys
+ * only work against sandbox companies).
+ */
+export const quickbooksEnvironments = z.enum(["sandbox", "production"])
+export type QuickbooksEnvironment = z.infer<typeof quickbooksEnvironments>
+
+export const quickbooksCredentialSchema = z.object({
+  clientId: z.string(),
+  clientSecret: z.string(),
+  webhookVerifierToken: z.string(),
+  environment: quickbooksEnvironments,
+})
+export type QuickbooksCredential = z.infer<typeof quickbooksCredentialSchema>
+
+export const quickbooksCredentialPublicSchema = quickbooksCredentialSchema.pick(
+  { clientId: true, environment: true },
+)
+export type QuickbooksCredentialPublic = z.infer<
+  typeof quickbooksCredentialPublicSchema
+>
+
 export const credentialSchemas = {
   whatsapp: whatsappCredentialSchema,
   messenger: messengerCredentialSchema,
@@ -230,6 +255,7 @@ export const credentialSchemas = {
   paddle: paddleCredentialSchema,
   tiktok: tiktokCredentialSchema,
   make: makeCredentialSchema,
+  quickbooks: quickbooksCredentialSchema,
 } as const
 
 export const credentialPublicSchemas = {
@@ -246,6 +272,7 @@ export const credentialPublicSchemas = {
   paddle: paddleCredentialPublicSchema,
   tiktok: tiktokCredentialPublicSchema,
   make: makeCredentialPublicSchema,
+  quickbooks: quickbooksCredentialPublicSchema,
 } as const
 
 export type CredentialByType = {
@@ -262,6 +289,7 @@ export type CredentialByType = {
   paddle: PaddleCredential
   tiktok: TiktokCredential
   make: MakeCredential
+  quickbooks: QuickbooksCredential
 }
 
 export type CredentialPublicByType = {
@@ -278,6 +306,7 @@ export type CredentialPublicByType = {
   paddle: PaddleCredentialPublic
   tiktok: TiktokCredentialPublic
   make: MakeCredentialPublic
+  quickbooks: QuickbooksCredentialPublic
 }
 
 // ─── Update schemas (credential fields required except deliberate optionals) ─
@@ -387,6 +416,16 @@ export const makeCredentialUpdateSchema = z.object({
   inviteUrl: z.string().trim().min(1).url(),
 })
 export type MakeCredentialUpdate = z.infer<typeof makeCredentialUpdateSchema>
+
+export const quickbooksCredentialUpdateSchema = z.object({
+  clientId: z.string().trim().min(1),
+  clientSecret: z.string().trim().min(1),
+  webhookVerifierToken: z.string().trim().min(1),
+  environment: quickbooksEnvironments,
+})
+export type QuickbooksCredentialUpdate = z.infer<
+  typeof quickbooksCredentialUpdateSchema
+>
 
 // ─── Encrypted blob shape stored in Credential.value ─────────────────────────
 

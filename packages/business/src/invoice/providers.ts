@@ -27,6 +27,7 @@ import {
   mintInvoicePayToken,
   prepareCheckoutInvoice,
 } from "./checkout-provider"
+import { quickbooksInvoiceProvider } from "./quickbooks-provider"
 import { finalizeWithStripe, voidWithStripe } from "./stripe-provider"
 import {
   cancelWooCommerceOrder,
@@ -535,6 +536,7 @@ export const invoiceProviders = {
   stripeInvoice: stripeInvoiceProvider,
   stripeCheckout: stripeCheckoutProvider,
   woocommerce: wooCommerceProvider,
+  quickbooks: quickbooksInvoiceProvider,
 } satisfies Record<InvoiceMethod, InvoiceProvider>
 
 /**

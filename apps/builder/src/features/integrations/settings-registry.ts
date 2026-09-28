@@ -1,5 +1,6 @@
 import { SiFacebook, SiMake } from "@icons-pack/react-simple-icons"
 import {
+  BookOpenCheckIcon,
   BotIcon,
   CodeIcon,
   CreditCardIcon,
@@ -68,5 +69,10 @@ export const INTEGRATION_SETTINGS_REGISTRY: readonly IntegrationSettingsEntry[] 
       slug: "woocommerce",
       titleKey: "woocommerce.title",
       icon: ShoppingCartIcon,
+    },
+    {
+      slug: "quickbooks",
+      titleKey: "quickbooks.title",
+      icon: BookOpenCheckIcon,
     },
   ]

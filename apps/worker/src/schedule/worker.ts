@@ -33,6 +33,11 @@ import { purgeExpiredCallRecordings } from "./handlers/purge-expired-call-record
 import { purgeTrackedLinks } from "./handlers/purge-tracked-links"
 import { purgeWhatsappSignupSessions } from "./handlers/purge-whatsapp-signup-sessions"
 import { purgeWorkspaces } from "./handlers/purge-workspaces"
+import {
+  pollQuickbooksChangesSchedule,
+  refreshQuickbooksTokensSchedule,
+  sweepInvoiceMirrorsSchedule,
+} from "./handlers/quickbooks"
 import { reconcileBroadcasts } from "./handlers/reconcile-broadcasts"
 import { reconcileMetaCatalogSyncs } from "./handlers/reconcile-meta-catalog-syncs"
 import { reconcileTenants } from "./handlers/reconcile-tenants"
@@ -120,6 +125,18 @@ async function startScheduleWorker() {
 
             case ScheduleJobData.scanDealTaskOverdue:
               await scanDealTaskOverdue()
+              return
+
+            case ScheduleJobData.pollQuickbooksChanges:
+              await pollQuickbooksChangesSchedule()
+              return
+
+            case ScheduleJobData.sweepInvoiceMirrors:
+              await sweepInvoiceMirrorsSchedule()
+              return
+
+            case ScheduleJobData.refreshQuickbooksTokens:
+              await refreshQuickbooksTokensSchedule()
               return
 
             case ScheduleJobData.syncUserQuota:

@@ -16,6 +16,7 @@ import { InstagramFacebookSettings } from "./instagram-facebook/instagram-facebo
 import { MakeSettings } from "./make/make-settings"
 import { MessengerSettings } from "./messenger/messenger-settings"
 import { CredentialScopeProvider } from "./provider/credential-scope-context"
+import { QuickbooksSettings } from "./quickbooks/quickbooks-settings"
 import type { CredentialScope } from "./scope"
 import { ThreadsSettings } from "./threads/threads-settings"
 import { TiktokSettings } from "./tiktok/tiktok-settings"
@@ -86,6 +87,7 @@ export async function ManagePlatformCredentials({
     giphyResult,
     tiktokResult,
     makeResult,
+    quickbooksResult,
   ] = await Promise.allSettled([
     resolveCard(scopedUserId, "whatsapp"),
     resolveCard(scopedUserId, "messenger"),
@@ -97,6 +99,7 @@ export async function ManagePlatformCredentials({
     resolveCard(scopedUserId, "giphy"),
     resolveCard(scopedUserId, "tiktok"),
     resolveCard(scopedUserId, "make"),
+    resolveCard(scopedUserId, "quickbooks"),
   ])
 
   const emptyCard = { publicConfig: null, isInherited: false } as const
@@ -120,6 +123,8 @@ export async function ManagePlatformCredentials({
   const tiktok =
     tiktokResult.status === "fulfilled" ? tiktokResult.value : emptyCard
   const make = makeResult.status === "fulfilled" ? makeResult.value : emptyCard
+  const quickbooks =
+    quickbooksResult.status === "fulfilled" ? quickbooksResult.value : emptyCard
 
   // For a tenant-owned credential (their own app), provider-facing URLs must
   // use the reseller's active custom domain — falling back to a literal
@@ -185,6 +190,11 @@ export async function ManagePlatformCredentials({
         <MakeSettings
           isInherited={make.isInherited}
           publicConfig={make.publicConfig}
+        />
+        <QuickbooksSettings
+          callbackOrigin={callbackOriginFor(quickbooks.isInherited)}
+          isInherited={quickbooks.isInherited}
+          publicConfig={quickbooks.publicConfig}
         />
       </div>
     </CredentialScopeProvider>

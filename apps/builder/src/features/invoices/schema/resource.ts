@@ -40,6 +40,16 @@ export const invoiceResource = z.object({
   paidAt: z.date().nullable(),
   voidedAt: z.date().nullable(),
   lastError: z.string().nullable(),
+  /**
+   * The QuickBooks bookkeeping copy (s214b), on the hub's own list only:
+   * absent when the workspace does not mirror this invoice.
+   */
+  bookkeeping: z
+    .object({
+      state: z.enum(["synced", "pending", "error"]),
+      error: z.string().nullable(),
+    })
+    .optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
 })
@@ -110,7 +120,7 @@ export const createInvoiceRequest = z
     method: requestedInvoiceMethods
       .optional()
       .describe(
-        "How it is collected: `stripeInvoice` (a Stripe invoice), `stripeCheckout` (a hub pay link to a one-time Stripe Checkout, no card saved), `woocommerce` (a pending order on a linked WooCommerce site, paid on its order-pay page) or `default` (the workspace's Stripe setting, also when omitted).",
+        "How it is collected: `stripeInvoice` (a Stripe invoice), `stripeCheckout` (a hub pay link to a one-time Stripe Checkout, no card saved), `woocommerce` (a pending order on a linked WooCommerce site, paid on its order-pay page), `quickbooks` (an invoice in the connected QuickBooks Online company, paid through its QuickBooks Payments link; the contact needs an email) or `default` (the workspace's Stripe setting, also when omitted).",
       ),
     integrationId: zodBigintAsString()
       .optional()

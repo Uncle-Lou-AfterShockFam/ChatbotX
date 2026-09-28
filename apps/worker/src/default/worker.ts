@@ -18,6 +18,10 @@ import { installTemplate } from "./handlers/install-template"
 import { checkMetaCatalogSync } from "./handlers/meta-catalog/check"
 import { importMetaCatalogProducts } from "./handlers/meta-catalog/import-products"
 import { submitMetaCatalogSync } from "./handlers/meta-catalog/submit"
+import {
+  quickbooksEntityChanged,
+  syncInvoiceMirrorJob,
+} from "./handlers/quickbooks"
 import { runImport } from "./handlers/run-import"
 import { sendAppointmentReminder } from "./handlers/send-appointment-reminder"
 import { sendAuditLog } from "./handlers/send-audit-log"
@@ -153,6 +157,20 @@ async function startDefaultWorker() {
           const { type, data } = job.data
           await runGuardedDefaultJob(data, { source: `default:${type}` }, () =>
             installTemplate(data),
+          )
+          return
+        }
+        case DefaultJobAction.quickbooksEntityChanged: {
+          const { type, data } = job.data
+          await runGuardedDefaultJob(data, { source: `default:${type}` }, () =>
+            quickbooksEntityChanged(data, job),
+          )
+          return
+        }
+        case DefaultJobAction.syncInvoiceMirror: {
+          const { type, data } = job.data
+          await runGuardedDefaultJob(data, { source: `default:${type}` }, () =>
+            syncInvoiceMirrorJob(data, job),
           )
           return
         }

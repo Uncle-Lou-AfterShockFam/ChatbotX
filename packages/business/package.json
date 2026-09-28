@@ -38,6 +38,7 @@
     "./inbox/schema": "./src/inbox/schema.ts",
     "./integration-stripe": "./src/integration-stripe/index.ts",
     "./integration-woocommerce": "./src/integration-woocommerce/index.ts",
+    "./integration-quickbooks": "./src/integration-quickbooks/index.ts",
     "./integration-whatsapp/auth-schema": "./src/integration-whatsapp/auth-schema.ts",
     "./license-startup": "./src/enterprise/license/startup.ts",
     "./invoice": "./src/invoice/index.ts",

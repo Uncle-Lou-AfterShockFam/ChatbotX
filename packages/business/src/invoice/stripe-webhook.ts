@@ -19,6 +19,7 @@ import {
 import { logger } from "../logger"
 import { markInvoiceOnContact } from "./contact-marks"
 import { prerenderInvoiceReceipt } from "./document"
+import { enqueueInvoiceMirror } from "./mirror"
 import { invoiceEventMetadata, invoiceService } from "./service"
 import { isRetryableStripeError } from "./stripe-provider"
 
@@ -696,6 +697,9 @@ export async function handleStripeWebhook(props: {
     // Not awaited: Gotenberg must not hold Stripe's delivery open. It
     // never rejects (it logs its own failure); the catch is belt and braces.
     prerenderInvoiceReceipt(hubInvoice.id).catch(() => undefined)
+  }
+  if (applied) {
+    await enqueueInvoiceMirror(applied)
   }
   return {
     outcome: applied ? "applied" : "noop",

@@ -45,6 +45,10 @@ export const ScheduleJobData = {
   // WhatsApp calling.
   purgeExpiredCallRecordings: "purgeExpiredCallRecordings",
   sweepStaleWhatsappCalls: "sweepStaleWhatsappCalls",
+  // QuickBooks (s214b).
+  pollQuickbooksChanges: "pollQuickbooksChanges",
+  sweepInvoiceMirrors: "sweepInvoiceMirrors",
+  refreshQuickbooksTokens: "refreshQuickbooksTokens",
 } as const
 
 /**
@@ -148,6 +152,21 @@ export type ScheduleJobScanAppointmentReminders = {
 
 export type ScheduleJobScanDealTaskOverdue = {
   type: typeof ScheduleJobData.scanDealTaskOverdue
+  data: Record<string, never>
+}
+
+export type ScheduleJobPollQuickbooksChanges = {
+  type: typeof ScheduleJobData.pollQuickbooksChanges
+  data: Record<string, never>
+}
+
+export type ScheduleJobSweepInvoiceMirrors = {
+  type: typeof ScheduleJobData.sweepInvoiceMirrors
+  data: Record<string, never>
+}
+
+export type ScheduleJobRefreshQuickbooksTokens = {
+  type: typeof ScheduleJobData.refreshQuickbooksTokens
   data: Record<string, never>
 }
 
@@ -278,6 +297,9 @@ export type ScheduleJobData =
   | ScheduleJobScanSmartDelay
   | ScheduleJobScanAppointmentReminders
   | ScheduleJobScanDealTaskOverdue
+  | ScheduleJobPollQuickbooksChanges
+  | ScheduleJobSweepInvoiceMirrors
+  | ScheduleJobRefreshQuickbooksTokens
   | ScheduleJobSyncUserQuota
   | ScheduleJobReconcileTenants
   | ScheduleJobReconcileMac

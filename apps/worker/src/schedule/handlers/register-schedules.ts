@@ -149,6 +149,48 @@ export const registerSchedules = async () => {
   )
 
   await scheduleQueue.upsertJobScheduler(
+    ScheduleJobData.pollQuickbooksChanges,
+    {
+      pattern: "*/15 * * * *",
+    },
+    {
+      name: ScheduleJobData.pollQuickbooksChanges,
+      data: {
+        type: ScheduleJobData.pollQuickbooksChanges,
+        data: {},
+      },
+    },
+  )
+
+  await scheduleQueue.upsertJobScheduler(
+    ScheduleJobData.sweepInvoiceMirrors,
+    {
+      pattern: "7 * * * *",
+    },
+    {
+      name: ScheduleJobData.sweepInvoiceMirrors,
+      data: {
+        type: ScheduleJobData.sweepInvoiceMirrors,
+        data: {},
+      },
+    },
+  )
+
+  await scheduleQueue.upsertJobScheduler(
+    ScheduleJobData.refreshQuickbooksTokens,
+    {
+      pattern: "23 4 * * *",
+    },
+    {
+      name: ScheduleJobData.refreshQuickbooksTokens,
+      data: {
+        type: ScheduleJobData.refreshQuickbooksTokens,
+        data: {},
+      },
+    },
+  )
+
+  await scheduleQueue.upsertJobScheduler(
     ScheduleJobData.scanDealTaskOverdue,
     {
       pattern: "*/5 * * * *",

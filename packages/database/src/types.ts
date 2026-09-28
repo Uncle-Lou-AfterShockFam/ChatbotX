@@ -286,6 +286,11 @@ export type IntegrationStripeModel =
 export type StripeCustomerModel = typeof schema.stripeCustomerModel.$inferSelect
 export type IntegrationWooCommerceModel =
   typeof schema.integrationWooCommerceModel.$inferSelect
+export type IntegrationQuickbooksModel =
+  typeof schema.integrationQuickbooksModel.$inferSelect
+export type QuickbooksCustomerModel =
+  typeof schema.quickbooksCustomerModel.$inferSelect
+export type InvoiceMirrorModel = typeof schema.invoiceMirrorModel.$inferSelect
 export type InvoiceModel = typeof schema.invoiceModel.$inferSelect
 export type InvoiceLineItemModel =
   typeof schema.invoiceLineItemModel.$inferSelect
