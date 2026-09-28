@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import {
+  collectRenderInputs,
   DocumentTooLargeError,
   DocumentValidationError,
   type EmailDocument,
@@ -475,6 +476,11 @@ describe("fuzz: renderWeb never emits executable markup", () => {
     "<p>plain</p>",
     '"><script>',
     "&lt;script&gt;",
+    '{{a"><script>alert(1)</script>}}',
+    "{{x|<img src=x onerror=alert(1)>}}",
+    '<a href="{{x|javascript:alert(1)}}">f</a>',
+    '<img src="{{x|javascript:alert(1)}}">',
+    "{{ first_name }}",
   ]
   test("500 random rich/html documents with hostile values", () => {
     let seed = 1
@@ -490,7 +496,13 @@ describe("fuzz: renderWeb never emits executable markup", () => {
         { id: "2", type: "html", html: body },
         { id: "3", type: "code", text: body },
       ])
-      const { html } = renderWeb(d, { vars: { first_name: pick(), x: pick() } })
+      const { html } = renderWeb(d, {
+        vars: {
+          first_name: pick(),
+          x: pick(),
+          'a"><script>alert(1)</script>': pick(),
+        },
+      })
       expect(executableMarkup(html)).toEqual([])
     }
   })
@@ -595,5 +607,119 @@ describe("second blind probe findings (s220b)", () => {
     )
     expect(html).toContain("Tom &amp; Jerry")
     expect(html).not.toContain("&amp;amp;")
+  })
+})
+
+describe("hub token grammar + collectRenderInputs (phase 2 inputs)", () => {
+  test("hub names merge: bot_field:<id>, coupon:, raw: (still escaped), spaces trimmed", () => {
+    const { html, missing } = renderWeb(
+      doc([
+        text(
+          "1",
+          "<p>{{bot_field:12}} {{coupon:SUMMER}} {{raw:x}} {{ first_name }}</p>",
+        ),
+      ]),
+      {
+        vars: {
+          "bot_field:12": "B",
+          "coupon:SUMMER": "C10",
+          "raw:x": "<b>r</b>",
+          first_name: "Ada",
+        },
+      },
+    )
+    expect(html).toContain("B C10 &lt;b&gt;r&lt;/b&gt; Ada")
+    expect(missing).toEqual([])
+  })
+
+  test("collects token names, template links, flow buttons and assets", () => {
+    const d = doc(
+      [
+        text(
+          "1",
+          '<p>Hi {{first_name}} <a href="https://x.test/a?b=1&amp;c=2">a</a> <a href="{{site}}">s</a></p>',
+        ),
+        {
+          id: "2",
+          type: "button",
+          label: "{{cta|Go}}",
+          action: { kind: "url", url: "https://x.test/b" },
+        },
+        {
+          id: "3",
+          type: "button",
+          label: "Pay",
+          action: { kind: "flow", beforeStep: {}, steps: [] },
+        },
+        {
+          id: "4",
+          type: "image",
+          src: { kind: "media", fileId: "7" },
+          alt: "{{alt_text}}",
+          href: "https://x.test/i",
+        },
+        {
+          id: "5",
+          type: "columns",
+          columns: [
+            {
+              blocks: [
+                {
+                  id: "6",
+                  type: "attachment",
+                  asset: { kind: "media", fileId: "8" },
+                },
+              ],
+            },
+            { blocks: [] },
+          ],
+        },
+      ],
+      { preheader: "{{pre}}" },
+    )
+    expect(collectRenderInputs(parseDocument(d))).toEqual({
+      tokenNames: ["alt_text", "cta", "first_name", "pre", "site"],
+      links: [
+        { blockId: "1", url: "https://x.test/a?b=1&c=2" },
+        { blockId: "2", url: "https://x.test/b" },
+        { blockId: "4", url: "https://x.test/i" },
+      ],
+      buttonIds: ["3"],
+      assetIds: ["7", "8"],
+    })
+  })
+
+  test("a pre-signed link map built from the collector always hits at render", async () => {
+    const d = parseDocument(
+      doc([
+        text("1", '<p><a href="https://x.test/a?b=1&amp;c=2">a</a></p>'),
+        {
+          id: "2",
+          type: "button",
+          label: "Go",
+          action: { kind: "url", url: "https://x.test/b" },
+        },
+      ]),
+    )
+    const signed = new Map(
+      collectRenderInputs(d).links.map((l) => [
+        `${l.blockId} ${l.url}`,
+        `https://hub.test/s/${l.blockId}`,
+      ]),
+    )
+    const misses: string[] = []
+    const out = await renderEmail(d, {
+      vars: {},
+      link: (url, blockId) => {
+        const hit = signed.get(`${blockId} ${url}`)
+        if (!hit) {
+          misses.push(url)
+        }
+        return hit ?? url
+      },
+    })
+    expect(misses).toEqual([])
+    expect(out.html).toContain("https://hub.test/s/1")
+    expect(out.html).toContain("https://hub.test/s/2")
   })
 })

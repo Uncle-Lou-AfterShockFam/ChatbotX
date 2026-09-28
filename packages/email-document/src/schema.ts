@@ -29,7 +29,8 @@ export const fontFamilies = z.enum([
 
 /** http(s), mailto, or a string that is exactly one merge token. */
 const SAFE_SCHEME = /^(https?:\/\/|mailto:)/i
-const TOKEN_ONLY = /^\{\{\s*[a-zA-Z0-9_.]+(\|[^}]*)?\s*\}\}$/
+/** Exactly one merge token (the grammar in tokens.ts). */
+const TOKEN_ONLY = /^\s*\{\{[^{}\n|]+(\|[^{}\n]*)?\}\}\s*$/
 export const linkSchema = z
   .string()
   .trim()

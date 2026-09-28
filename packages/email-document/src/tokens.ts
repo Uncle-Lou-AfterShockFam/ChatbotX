@@ -1,17 +1,24 @@
 /**
- * Merge tokens: `{{name}}` or `{{name|fallback}}`. Names are whatever the
- * caller resolved into `vars` (packages/variables keys); nothing is invented
- * here. Unknown names render their fallback (or nothing) and are reported in
- * `missing`, never thrown.
+ * Merge tokens: `{{name}}` or `{{name|fallback}}`. A name is the hub's own
+ * grammar (@chatbotx.io/utils VARIABLE_PLACEHOLDER_SOURCE: any run of
+ * characters other than a brace or newline, trimmed - so `{{bot_field:12}}`,
+ * `{{coupon:SUMMER}}` and `{{raw:x}}` are names too), minus `|`, which
+ * starts the fallback. `raw:` gets no special treatment: every value is
+ * escaped. Names are whatever the caller resolved into `vars`; unknown names
+ * render their fallback (or nothing) and are reported in `missing`.
  */
-const TOKEN = /\{\{\s*([a-zA-Z0-9_.]+)(?:\|([^}]*))?\s*\}\}/g
-const WHOLE_TOKEN = /^\{\{\s*([a-zA-Z0-9_.]+)(?:\|([^}]*))?\s*\}\}$/
+export const TOKEN_NAME_SOURCE = String.raw`[^{}\n|]+`
+const TOKEN_BODY = String.raw`\{\{(${TOKEN_NAME_SOURCE})(?:\|([^{}\n]*))?\}\}`
+const TOKEN = new RegExp(TOKEN_BODY, "g")
+const WHOLE_TOKEN = new RegExp(String.raw`^\s*${TOKEN_BODY}\s*$`)
 const SAFE_URL = /^(https?:\/\/|mailto:)/i
 const HTTP_ONLY = /^https?:\/\//i
 /** Any explicit scheme (`x:`) - a merged URL with a foreign scheme is refused. */
 const TOKEN_FREE_SCHEME = /^[a-zA-Z][a-zA-Z0-9+.-]*:/
-const URL_ATTR_OR_TOKEN =
-  /(\s(href|src)=")([^"]*)(")|\{\{\s*([a-zA-Z0-9_.]+)(?:\|([^}]*))?\s*\}\}/gi
+const URL_ATTR_OR_TOKEN = new RegExp(
+  String.raw`(\s(href|src)=")([^"]*)(")|${TOKEN_BODY}`,
+  "gi",
+)
 
 export type TokenVars = Readonly<Record<string, string>>
 
@@ -32,11 +39,12 @@ function lookup(
   fallback: string | undefined,
   missing: Set<string>,
 ): Resolved {
-  const value = Object.hasOwn(vars, name) ? vars[name] : undefined
+  const key = name.trim()
+  const value = Object.hasOwn(vars, key) ? vars[key] : undefined
   if (typeof value === "string" && value.length > 0) {
     return { value, fromVars: true }
   }
-  missing.add(name)
+  missing.add(key)
   return { value: fallback?.trim() ?? "", fromVars: false }
 }
 
@@ -131,4 +139,9 @@ function unescapeAttr(value: string): string {
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&amp;/g, "&")
+}
+
+/** Every token name in `text` (trimmed), for a caller that resolves vars first. */
+export function tokenNames(text: string): string[] {
+  return [...text.matchAll(TOKEN)].map((match) => (match[1] as string).trim())
 }
