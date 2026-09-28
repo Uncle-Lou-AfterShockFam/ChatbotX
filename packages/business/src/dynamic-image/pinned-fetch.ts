@@ -1,16 +1,18 @@
-import { lookup as dnsLookup, type LookupAddress } from "node:dns"
 import http from "node:http"
 import https from "node:https"
 import type { LookupFunction } from "node:net"
 import type { Readable } from "node:stream"
 import zlib from "node:zlib"
 import { isBlockedIp } from "../net/ssrf-guard"
+import {
+  hostOf,
+  isIpLiteral,
+  type Resolver,
+  guardedLookup as sharedGuardedLookup,
+} from "../net-node/guarded-lookup"
 
-// Node only (this subpath already needs @napi-rs/canvas), so the check can be
-// bound to the connection: a `lookup` hook validates every address the
-// system resolver returns and the socket connects to one of THOSE addresses.
-// A separate check-then-fetch (DoH, then fetch's own resolver) can be steered
-// by a name that answers differently each time (s215 Codex).
+// Node only (this subpath already needs @napi-rs/canvas). The connection-bound
+// check lives in net-node/guarded-lookup (shared with pinnedFetch since s216).
 const MAX_REDIRECTS = 5
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 const TIMEOUT_MS = 15_000
@@ -24,63 +26,27 @@ export class ImageFetchRefusedError extends Error {
     | "tooLarge"
     | "httpError"
     | "unsupportedEncoding"
+    | "unreachable"
+  readonly detail: string
 
   constructor(reason: ImageFetchRefusedError["reason"], detail: string) {
     super(`[image-fetch] ${reason}: ${detail}`)
     this.name = "ImageFetchRefusedError"
     this.reason = reason
+    this.detail = detail
   }
 }
 
-type Resolver = (hostname: string) => Promise<LookupAddress[]>
-
-const systemResolver: Resolver = (hostname) =>
-  new Promise((resolve, reject) => {
-    dnsLookup(hostname, { all: true, verbatim: true }, (error, addresses) =>
-      error ? reject(error) : resolve(addresses),
-    )
-  })
-
-/**
- * A `net` lookup that refuses the whole name when ANY address it resolves to
- * is blocked (so neither address family can be used to slip past), and
- * otherwise hands the socket exactly the validated addresses.
- */
-export const guardedLookup =
-  (
-    resolver: Resolver = systemResolver,
-    isBlocked = isBlockedIp,
-  ): LookupFunction =>
-  (hostname, options, callback) => {
-    resolver(hostname).then(
-      (addresses) => {
-        if (
-          addresses.length === 0 ||
-          addresses.some((entry) => isBlocked(entry.address))
-        ) {
-          callback(new ImageFetchRefusedError("unsafeAddress", hostname), "", 0)
-          return
-        }
-        if ((options as { all?: boolean }).all) {
-          ;(callback as unknown as (e: null, a: LookupAddress[]) => void)(
-            null,
-            addresses,
-          )
-          return
-        }
-        callback(null, addresses[0]?.address ?? "", addresses[0]?.family ?? 4)
-      },
-      (error: Error) => callback(error as NodeJS.ErrnoException, "", 0),
-    )
-  }
-
-const IPV6_BRACKETS = /^\[|\]$/g
-const DOTTED_IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/
-
-const hostOf = (url: URL) => url.hostname.replace(IPV6_BRACKETS, "")
-
-const isIpLiteral = (host: string) =>
-  DOTTED_IPV4.test(host) || host.includes(":")
+/** The shared guarded lookup, refusing with this module's error type. */
+export const guardedLookup = (
+  resolver?: Resolver,
+  isBlocked: (ip: string) => boolean = isBlockedIp,
+): LookupFunction =>
+  sharedGuardedLookup(
+    resolver,
+    isBlocked,
+    (hostname) => new ImageFetchRefusedError("unsafeAddress", hostname),
+  )
 
 const DECODERS: Record<
   string,
@@ -212,7 +178,15 @@ export const fetchImageBytes = async (
       lookup,
       maxBytes,
       signal,
-    )
+    ).catch((error: unknown) => {
+      // DNS failure, refused connection, reset or the chain deadline: the
+      // URL cannot be loaded, which is the caller's input, not a crash.
+      if (error instanceof ImageFetchRefusedError) {
+        throw error
+      }
+      // The URL only: raw resolver/socket text never reaches the API client.
+      throw new ImageFetchRefusedError("unreachable", url.href)
+    })
     if (status < 300 || status >= 400) {
       if (status < 200 || status >= 300) {
         throw new ImageFetchRefusedError("httpError", `${status} ${url.href}`)

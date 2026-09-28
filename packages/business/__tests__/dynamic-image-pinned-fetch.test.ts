@@ -64,6 +64,13 @@ beforeAll(async () => {
         res.writeHead(302, { location: "/slow-hop" })
         res.end()
       }, 120)
+    } else if (path === "/reset-mid-body") {
+      res.writeHead(200, { "content-length": "4096" })
+      res.write(Buffer.alloc(512, 1))
+      setTimeout(() => req.socket.destroy(), 20)
+    } else if (path === "/stall") {
+      res.writeHead(200, { "content-length": "4096" })
+      res.write(Buffer.alloc(512, 1))
     } else if (path === "/big") {
       res.writeHead(200)
       res.end(Buffer.alloc(2048, 1))
@@ -202,9 +209,31 @@ describe("fetchImageBytes (s215)", () => {
         maxRedirects: 50,
         timeoutMs: 300,
       }),
-    ).rejects.toThrow()
+    ).rejects.toMatchObject({ reason: "unreachable" })
     // Each hop takes 120 ms (< 300), so a per-hop deadline would run for 50.
     expect(Date.now() - started).toBeLessThan(1500)
+  })
+
+  // s216 (s215 skeptic MEDIUM): a connection that dies or stalls mid-body
+  // settles as `unreachable` within the deadline instead of hanging a render.
+  test("a reset mid-body is unreachable, not a hang", async () => {
+    await expect(
+      fetchImageBytes(at("/reset-mid-body"), { ...opts, timeoutMs: 2000 }),
+    ).rejects.toMatchObject({ reason: "unreachable" })
+  })
+
+  test("a body that stalls is cut off by the deadline", async () => {
+    const started = Date.now()
+    await expect(
+      fetchImageBytes(at("/stall"), { ...opts, timeoutMs: 300 }),
+    ).rejects.toThrow()
+    expect(Date.now() - started).toBeLessThan(1500)
+  })
+
+  test("an unresolvable name is unreachable (a 422 upstream, never a 500)", async () => {
+    await expect(
+      fetchImageBytes("http://nowhere.test/x.png", opts),
+    ).rejects.toMatchObject({ reason: "unreachable" })
   })
 
   test("the body cap fires", async () => {

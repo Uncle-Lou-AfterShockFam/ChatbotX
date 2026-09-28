@@ -3,7 +3,11 @@ import { checkSsrfSafety } from "./ssrf-guard"
 /** Hop cap for {@link fetchFollowingSafeRedirects} when a caller names none. */
 export const DEFAULT_MAX_REDIRECTS = 5
 
-export type SsrfFetchRefusal = "unsafeRedirect" | "tooManyRedirects"
+export type SsrfFetchRefusal =
+  | "unsafeUrl"
+  | "unsafeAddress"
+  | "unsafeRedirect"
+  | "tooManyRedirects"
 
 /** An outbound fetch the SSRF guard refused; `reason` says which check. */
 export class SsrfFetchError extends Error {

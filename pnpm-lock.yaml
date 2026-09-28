@@ -2280,6 +2280,9 @@ importers:
       stripe:
         specifier: ^22.1.0
         version: 22.2.0(@types/node@24.13.1)
+      undici:
+        specifier: ^7.29.0
+        version: 7.29.0
       universal-error-normalizer:
         specifier: ^1.0.0
         version: 1.0.0
