@@ -11,6 +11,7 @@ class SsrfFetchError extends Error {}
 
 vi.mock("@chatbotx.io/business", () => ({
   assertPublicUrl: mocks.assertPublicUrl,
+  DOWNLOAD_TIMEOUT_MS: 120_000,
   outboundFetch: mocks.kyGet,
   SsrfFetchError,
 }))
@@ -145,7 +146,7 @@ describe("downloadWithByteLimit", () => {
     expect(mocks.kyGet).toHaveBeenCalledWith(
       "https://cdn.example.com/audio.mp3",
       expect.objectContaining({ redirect: "manual" }),
-      { timeoutMs: 10_000 },
+      { timeoutMs: 120_000 },
     )
     expect(result.buffer).toEqual(Buffer.from([1, 2, 3]))
     expect(result.contentType).toBe("audio/mpeg")
@@ -228,5 +229,51 @@ describe("downloadWithByteLimit", () => {
         url: "https://rebinding.example.com/audio.mp3",
       }),
     ).rejects.toThrow(new ExpectedHeavyStepError("Unsafe audio URL"))
+  })
+
+  // s216 Codex: `timeout` bounds the wait for headers only (ky's meaning); a
+  // slow body after prompt headers runs under the caller's signal instead.
+  test("the header timeout does not abort a body still arriving", async () => {
+    let hopSignal: AbortSignal | undefined
+    mocks.kyGet.mockImplementationOnce(
+      (_url: string, init: { signal: AbortSignal }) => {
+        hopSignal = init.signal
+        return Promise.resolve(
+          responseWithBody({
+            body: new Uint8Array([1]),
+            contentType: "audio/mpeg",
+          }),
+        )
+      },
+    )
+    await downloadWithByteLimit({
+      label: "audio",
+      maxBytes: 10,
+      signal: new AbortController().signal,
+      timeout: 20,
+      url: "https://cdn.example.com/audio.mp3",
+    })
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    expect(hopSignal?.aborted).toBe(false)
+  })
+
+  test("headers slower than the timeout abort the hop", async () => {
+    mocks.kyGet.mockImplementationOnce(
+      (_url: string, init: { signal: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener("abort", () =>
+            reject(init.signal.reason),
+          )
+        }),
+    )
+    await expect(
+      downloadWithByteLimit({
+        label: "audio",
+        maxBytes: 10,
+        signal: new AbortController().signal,
+        timeout: 20,
+        url: "https://cdn.example.com/audio.mp3",
+      }),
+    ).rejects.toMatchObject({ name: "TimeoutError" })
   })
 })

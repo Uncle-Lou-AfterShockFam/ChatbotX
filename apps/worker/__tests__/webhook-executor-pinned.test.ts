@@ -62,7 +62,16 @@ describe("WebhookExecutor pinned delivery (s216)", () => {
     expect(mocks.outboundFetch).toHaveBeenCalledTimes(1)
   })
 
-  test("a socket failure reported on `cause` is retried", async () => {
+  test("a reset after sending is NOT retried (the receiver may have committed it)", async () => {
+    const reset = Object.assign(new TypeError("fetch failed"), {
+      cause: { code: "ECONNRESET", message: "read ECONNRESET" },
+    })
+    mocks.outboundFetch.mockRejectedValue(reset)
+    await new WebhookExecutor().execute({ webhook, payload })
+    expect(mocks.outboundFetch).toHaveBeenCalledTimes(1)
+  })
+
+  test("a connect-phase failure reported on `cause` is retried", async () => {
     const refused = Object.assign(new TypeError("fetch failed"), {
       cause: { code: "ECONNREFUSED", message: "connect ECONNREFUSED" },
     })

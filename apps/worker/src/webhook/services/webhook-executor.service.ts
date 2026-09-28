@@ -23,10 +23,13 @@ export class WebhookExecutor {
       .cause
     const message =
       `${error.message} ${cause?.code ?? ""} ${cause?.message ?? ""}`.toLowerCase()
+    // Only failures that happen BEFORE the request can have been delivered
+    // (connect phase). A reset after the POST was sent may follow a receiver
+    // that already committed it; retrying would duplicate the delivery
+    // (s216 Codex), so ECONNRESET is not retried.
     const connectionErrors = [
       "econnrefused",
       "enotfound",
-      "econnreset",
       "enetunreach",
       "ehostunreach",
     ]
