@@ -104,7 +104,7 @@
   "scripts": {
     "check-types": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
-    "test:db": "REQUIRE_REAL_DB=1 DATABASE_DEBUG=false vitest run --dir __tests__/integration",
+    "test:db": "REQUIRE_REAL_DB=1 DATABASE_DEBUG=false vitest run --dir __tests__/integration --no-file-parallelism",
     "test:watch": "vitest"
   }
 }
