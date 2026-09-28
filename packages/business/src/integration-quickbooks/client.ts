@@ -2,7 +2,7 @@ import type {
   QuickbooksCredential,
   QuickbooksEnvironment,
 } from "@chatbotx.io/database/partials"
-import { readCapped } from "../documents/gotenberg"
+import { readCapped } from "@chatbotx.io/sdk/outbound-fetch"
 
 /**
  * QuickBooks Online over plain fetch (s214b). Every host is Intuit's, fixed

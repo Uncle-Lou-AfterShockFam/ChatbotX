@@ -3,6 +3,7 @@ import {
   OutboundFetchNotInstalledError,
   registerOutboundFetch,
   SsrfFetchError,
+  uninstallOutboundFetch,
 } from "@chatbotx.io/sdk/outbound-fetch"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { ActiveCampaignApiError } from "../src/error"
@@ -30,11 +31,6 @@ const createContext = (
     getRealtimeAuthHeaders: async () => ({}),
   },
 })
-
-const REGISTRY_KEY = Symbol.for("chatbotx.outboundFetch")
-const uninstallOutboundFetch = () => {
-  delete (globalThis as Record<symbol, unknown>)[REGISTRY_KEY]
-}
 
 /**
  * Every ActiveCampaign request must go through the pinned outbound fetch
@@ -302,5 +298,19 @@ describe("ActiveCampaign integration", () => {
 
     expect(error).toBeInstanceOf(SsrfFetchError)
     expect(seen).toEqual(["http://169.254.169.254/api/3/accounts"])
+  })
+
+  test("refuses redirects, so the Api-Token never follows a hop", async () => {
+    const seen: Array<string | undefined> = []
+    registerOutboundFetch((_input, init) => {
+      seen.push(init?.redirect)
+      return Promise.resolve(jsonResponse({ accounts: [] }))
+    })
+
+    await integration.runAction("validateCredentials", {
+      props: { apiUrl: "https://example.api-us1.com", apiKey: "key" },
+    })
+
+    expect(seen).toEqual(["error"])
   })
 })

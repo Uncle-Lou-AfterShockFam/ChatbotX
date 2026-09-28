@@ -8,10 +8,10 @@ vi.mock("@/lib/log", () => ({
 }))
 
 const {
-  checkDynamicImageRenderLimit,
+  checkDynamicImageRateLimit,
   DYNAMIC_IMAGE_RENDER_LIMIT,
-  DynamicImageRenderLimitInputError,
-  resetDynamicImageRenderLimitMemory,
+  DynamicImageRateLimitInputError,
+  resetDynamicImageRateLimitMemory,
 } = await import("../src/lib/rate-limit/dynamic-image-rate-limit")
 
 /** A store that counts in memory but through the real key contract. */
@@ -37,15 +37,15 @@ const makeStore = () => {
 const NOW = 1_759_000_000_000
 
 describe("dynamic-image render limit (s219)", () => {
-  beforeEach(() => resetDynamicImageRenderLimitMemory())
+  beforeEach(() => resetDynamicImageRateLimitMemory())
 
   test("6 renders per (image, contact) per minute, the 7th is limited", async () => {
     const store = makeStore()
     const input = { dynamicImageId: "img-1", contactId: "c-1", store, now: NOW }
     for (let i = 0; i < DYNAMIC_IMAGE_RENDER_LIMIT; i++) {
-      expect((await checkDynamicImageRenderLimit(input)).limited).toBe(false)
+      expect((await checkDynamicImageRateLimit(input)).limited).toBe(false)
     }
-    const r = await checkDynamicImageRenderLimit(input)
+    const r = await checkDynamicImageRateLimit(input)
     expect(r.limited).toBe(true)
     expect(r.retryAfter).toBeGreaterThan(0)
     expect(r.retryAfter).toBeLessThanOrEqual(60)
@@ -55,19 +55,18 @@ describe("dynamic-image render limit (s219)", () => {
     const store = makeStore()
     const base = { dynamicImageId: "img-1", contactId: "c-1", store, now: NOW }
     for (let i = 0; i <= DYNAMIC_IMAGE_RENDER_LIMIT; i++) {
-      await checkDynamicImageRenderLimit(base)
+      await checkDynamicImageRateLimit(base)
     }
-    expect((await checkDynamicImageRenderLimit(base)).limited).toBe(true)
+    expect((await checkDynamicImageRateLimit(base)).limited).toBe(true)
     expect(
-      (await checkDynamicImageRenderLimit({ ...base, contactId: "c-2" }))
+      (await checkDynamicImageRateLimit({ ...base, contactId: "c-2" })).limited,
+    ).toBe(false)
+    expect(
+      (await checkDynamicImageRateLimit({ ...base, dynamicImageId: "img-2" }))
         .limited,
     ).toBe(false)
     expect(
-      (await checkDynamicImageRenderLimit({ ...base, dynamicImageId: "img-2" }))
-        .limited,
-    ).toBe(false)
-    expect(
-      (await checkDynamicImageRenderLimit({ ...base, now: NOW + 60_000 }))
+      (await checkDynamicImageRateLimit({ ...base, now: NOW + 60_000 }))
         .limited,
     ).toBe(false)
   })
@@ -82,9 +81,9 @@ describe("dynamic-image render limit (s219)", () => {
     }
     const input = { dynamicImageId: "img-9", contactId: "c-9", store, now: NOW }
     for (let i = 0; i < DYNAMIC_IMAGE_RENDER_LIMIT; i++) {
-      expect((await checkDynamicImageRenderLimit(input)).limited).toBe(false)
+      expect((await checkDynamicImageRateLimit(input)).limited).toBe(false)
     }
-    expect((await checkDynamicImageRenderLimit(input)).limited).toBe(true)
+    expect((await checkDynamicImageRateLimit(input)).limited).toBe(true)
     const context = warn.mock.calls[0]?.[0] as Record<string, unknown>
     expect(context).toMatchObject({
       scope: "dynamic-image-render",
@@ -101,17 +100,17 @@ describe("dynamic-image render limit (s219)", () => {
     ["a missing contact id", { dynamicImageId: "img-1" }],
   ])("%s is a typed refusal", (_label, bad) => {
     expect(() =>
-      checkDynamicImageRenderLimit(
-        bad as unknown as Parameters<typeof checkDynamicImageRenderLimit>[0],
+      checkDynamicImageRateLimit(
+        bad as unknown as Parameters<typeof checkDynamicImageRateLimit>[0],
       ),
-    ).toThrow(DynamicImageRenderLimitInputError)
+    ).toThrow(DynamicImageRateLimitInputError)
   })
 
   test("a burst of 50 concurrent checks admits exactly 6", async () => {
     const store = makeStore()
     const input = { dynamicImageId: "img-1", contactId: "c-1", store, now: NOW }
     const results = await Promise.all(
-      Array.from({ length: 50 }, () => checkDynamicImageRenderLimit(input)),
+      Array.from({ length: 50 }, () => checkDynamicImageRateLimit(input)),
     )
     expect(results.filter((r) => !r.limited)).toHaveLength(
       DYNAMIC_IMAGE_RENDER_LIMIT,

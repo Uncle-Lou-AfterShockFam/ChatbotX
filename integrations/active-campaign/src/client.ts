@@ -48,10 +48,13 @@ export const getActiveCampaignClient = (
 ) => {
   const auth = activeCampaignCredentialSchema.parse(authValue)
   // apiUrl is workspace-supplied: every request goes through the pinned
-  // outbound fetch, so it can never reach a private address (s219).
+  // outbound fetch, so it can never reach a private address, and a redirect
+  // is refused outright, so the Api-Token never follows a hop to another
+  // origin (the pinned fetch strips only Authorization / Cookie) (s219).
   return ky.create({
     baseUrl: auth.apiUrl,
     fetch: kyOutboundFetch,
+    redirect: "error",
     headers: {
       Accept: "application/json",
       "Api-Token": auth.apiKey,

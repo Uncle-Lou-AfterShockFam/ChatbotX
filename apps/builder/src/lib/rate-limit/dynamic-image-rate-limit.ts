@@ -17,25 +17,25 @@ import {
 const WINDOW_SECONDS = 60
 export const DYNAMIC_IMAGE_RENDER_LIMIT = 6
 
-export type DynamicImageRenderLimitInput = {
+export type DynamicImageRateLimitInput = {
   dynamicImageId: string
   contactId: string
   store?: FixedWindowStore
   now?: number
 }
 
-export class DynamicImageRenderLimitInputError extends Error {
+export class DynamicImageRateLimitInputError extends Error {
   constructor() {
     super("dynamicImageId and contactId are required")
-    this.name = "DynamicImageRenderLimitInputError"
+    this.name = "DynamicImageRateLimitInputError"
   }
 }
 
-export const checkDynamicImageRenderLimit = (
-  input: DynamicImageRenderLimitInput,
+export const checkDynamicImageRateLimit = (
+  input: DynamicImageRateLimitInput,
 ): Promise<FixedWindowResult> => {
   if (!(input?.dynamicImageId && input.contactId)) {
-    throw new DynamicImageRenderLimitInputError()
+    throw new DynamicImageRateLimitInputError()
   }
   const { dynamicImageId, contactId, store, now = Date.now() } = input
   const suffix = windowSuffix(now, WINDOW_SECONDS)
@@ -57,4 +57,4 @@ export const checkDynamicImageRenderLimit = (
 }
 
 /** Test seam: forget every in-memory window. */
-export const resetDynamicImageRenderLimitMemory = resetFixedWindowMemory
+export const resetDynamicImageRateLimitMemory = resetFixedWindowMemory

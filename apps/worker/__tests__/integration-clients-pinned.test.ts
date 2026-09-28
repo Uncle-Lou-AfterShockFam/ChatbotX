@@ -5,14 +5,16 @@ import type { AddressInfo } from "node:net"
 import { installPinnedOutboundFetch } from "@chatbotx.io/business/net-node"
 import { integration as activeCampaign } from "@chatbotx.io/integration-active-campaign"
 import { uploadAttachment } from "@chatbotx.io/integration-zalo"
-import { SsrfFetchError } from "@chatbotx.io/sdk/outbound-fetch"
+import {
+  SsrfFetchError,
+  uninstallOutboundFetch,
+} from "@chatbotx.io/sdk/outbound-fetch"
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest"
 
 // s219: the integration clients that fetch a workspace- or flow-supplied URL
 // go through the REAL pinned fetch the worker installs at boot. A local
 // server stands in for an internal service: every private target is refused
 // at connect and the server never sees a request.
-const REGISTRY_KEY = Symbol.for("chatbotx.outboundFetch")
 let server: http.Server
 let port = 0
 let hits: string[] = []
@@ -29,7 +31,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  delete (globalThis as Record<symbol, unknown>)[REGISTRY_KEY]
+  uninstallOutboundFetch()
   await new Promise<void>((resolve) => server.close(() => resolve()))
 })
 

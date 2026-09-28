@@ -80,6 +80,11 @@ export const registerOutboundFetch = (fetchImpl: OutboundFetch): void => {
   ;(globalThis as Registry)[REGISTRY_KEY] = fetchImpl
 }
 
+/** Test seam: forget the installed fetch (the registry fails closed again). */
+export const uninstallOutboundFetch = (): void => {
+  delete (globalThis as Registry)[REGISTRY_KEY]
+}
+
 /**
  * `fetch` for a user- or workspace-supplied URL, pinned to the addresses the
  * SSRF guard validated at connect. Throws `SsrfFetchError` on a refusal and

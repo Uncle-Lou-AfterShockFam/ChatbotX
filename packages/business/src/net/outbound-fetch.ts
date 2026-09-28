@@ -12,4 +12,5 @@ export {
   outboundDownload,
   outboundFetch,
   registerOutboundFetch,
+  uninstallOutboundFetch,
 } from "@chatbotx.io/sdk/outbound-fetch"

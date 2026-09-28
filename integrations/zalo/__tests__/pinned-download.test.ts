@@ -4,6 +4,7 @@ import {
   type OutboundRequestInit,
   registerOutboundFetch,
   SsrfFetchError,
+  uninstallOutboundFetch,
 } from "@chatbotx.io/sdk/outbound-fetch"
 import { HttpResponse, http, server } from "@chatbotx.io/vitest-config/msw"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
@@ -32,11 +33,6 @@ const ctx = {
   storagePrefix: "public/space/ws/zalo",
   uploader: { putObject },
 } as unknown as Context<ZaloAuthValue>
-
-const REGISTRY_KEY = Symbol.for("chatbotx.outboundFetch")
-const uninstall = () => {
-  delete (globalThis as Record<symbol, unknown>)[REGISTRY_KEY]
-}
 
 type Call = { url: string; init?: OutboundRequestInit }
 let calls: Call[] = []
@@ -78,7 +74,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  uninstall()
+  uninstallOutboundFetch()
   vi.unstubAllGlobals()
 })
 
@@ -227,12 +223,37 @@ describe("fetchAndReuploadImage", () => {
     expect(putObject).not.toHaveBeenCalled()
   })
 
-  test("a refused avatar URL throws and stores nothing", async () => {
+  test("a refused avatar URL is no avatar and stores nothing", async () => {
     install((url) => Promise.reject(new SsrfFetchError("unsafeAddress", url)))
 
     await expect(
       fetchAndReuploadImage({ ctx, avatarUrl: "http://127.0.0.1/a.jpg" }),
-    ).rejects.toBeInstanceOf(SsrfFetchError)
+    ).resolves.toBeUndefined()
     expect(putObject).not.toHaveBeenCalled()
+  })
+
+  test("an oversized avatar is no avatar, never a failed profile sync", async () => {
+    install(
+      () =>
+        new Response("x", {
+          headers: {
+            "content-type": "image/jpeg",
+            "content-length": String(ZALO_DOWNLOAD_MAX_BYTES + 1),
+          },
+        }),
+    )
+
+    await expect(
+      fetchAndReuploadImage({ ctx, avatarUrl: "https://zalo.example/big.jpg" }),
+    ).resolves.toBeUndefined()
+    expect(putObject).not.toHaveBeenCalled()
+  })
+
+  test("any other download failure still propagates", async () => {
+    install(() => Promise.reject(new TypeError("fetch failed")))
+
+    await expect(
+      fetchAndReuploadImage({ ctx, avatarUrl: "https://zalo.example/a.jpg" }),
+    ).rejects.toBeInstanceOf(TypeError)
   })
 })

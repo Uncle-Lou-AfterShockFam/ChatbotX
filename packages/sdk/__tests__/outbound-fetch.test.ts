@@ -8,12 +8,8 @@ import {
   readCapped,
   registerOutboundFetch,
   SsrfFetchError,
+  uninstallOutboundFetch,
 } from "../src/outbound-fetch"
-
-const REGISTRY_KEY = Symbol.for("chatbotx.outboundFetch")
-const uninstall = () => {
-  delete (globalThis as Record<symbol, unknown>)[REGISTRY_KEY]
-}
 
 type Call = { url: string; init?: OutboundRequestInit }
 
@@ -26,7 +22,7 @@ const record = (answer = () => new Response("ok")) => {
   return calls
 }
 
-afterEach(uninstall)
+afterEach(uninstallOutboundFetch)
 
 describe("registry", () => {
   test("uninstalled fails closed", async () => {
@@ -37,7 +33,9 @@ describe("registry", () => {
 
   test("the registry is the globalThis Symbol.for key business installs", () => {
     const calls = record()
-    const registered = (globalThis as Record<symbol, unknown>)[REGISTRY_KEY]
+    const registered = (globalThis as Record<symbol, unknown>)[
+      Symbol.for("chatbotx.outboundFetch")
+    ]
     expect(typeof registered).toBe("function")
     expect(calls).toEqual([])
   })

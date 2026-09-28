@@ -15,11 +15,11 @@ const mocks = vi.hoisted(() => ({
   renderForContact: vi.fn(),
   findInWorkspace: vi.fn(),
   resolveContactVariablesDeep: vi.fn(),
-  checkDynamicImageRenderLimit: vi.fn(),
+  checkDynamicImageRateLimit: vi.fn(),
 }))
 
 vi.mock("@/lib/rate-limit/dynamic-image-rate-limit", () => ({
-  checkDynamicImageRenderLimit: mocks.checkDynamicImageRenderLimit,
+  checkDynamicImageRateLimit: mocks.checkDynamicImageRateLimit,
 }))
 
 vi.mock("@chatbotx.io/business", () => ({
@@ -78,7 +78,7 @@ describe("GET /dynamic-images: signed contact links only (s214)", () => {
     mocks.resolveDynamicElements.mockResolvedValue({})
     mocks.resolveContactVariablesDeep.mockResolvedValue({})
     mocks.renderForContact.mockResolvedValue(RENDERED)
-    mocks.checkDynamicImageRenderLimit.mockResolvedValue({
+    mocks.checkDynamicImageRateLimit.mockResolvedValue({
       limited: false,
       retryAfter: 0,
     })
@@ -158,7 +158,7 @@ describe("GET /dynamic-images: signed contact links only (s214)", () => {
   })
 
   test("past the render budget the signed link degrades to the background (s219)", async () => {
-    mocks.checkDynamicImageRenderLimit.mockResolvedValue({
+    mocks.checkDynamicImageRateLimit.mockResolvedValue({
       limited: true,
       retryAfter: 30,
     })
@@ -166,7 +166,7 @@ describe("GET /dynamic-images: signed contact links only (s214)", () => {
     const res = await get(`dynamicImageId=img-1&t=${t}`)
     expect(res.status).toBe(302)
     expect(res.headers.get("location")).toBe(BACKGROUND)
-    expect(mocks.checkDynamicImageRenderLimit).toHaveBeenCalledWith({
+    expect(mocks.checkDynamicImageRateLimit).toHaveBeenCalledWith({
       dynamicImageId: "img-1",
       contactId: "contact-1",
     })
@@ -177,11 +177,11 @@ describe("GET /dynamic-images: signed contact links only (s214)", () => {
     mocks.findCachedUrlForContact.mockResolvedValue(`${RENDERED}?timestamp=1`)
     const t = await signDynamicImageToken(CLAIMS)
     await get(`dynamicImageId=img-1&t=${t}`)
-    expect(mocks.checkDynamicImageRenderLimit).not.toHaveBeenCalled()
+    expect(mocks.checkDynamicImageRateLimit).not.toHaveBeenCalled()
   })
 
   test("an unsigned request never spends the render budget (s219)", async () => {
     await get("dynamicImageId=img-1")
-    expect(mocks.checkDynamicImageRenderLimit).not.toHaveBeenCalled()
+    expect(mocks.checkDynamicImageRateLimit).not.toHaveBeenCalled()
   })
 })
