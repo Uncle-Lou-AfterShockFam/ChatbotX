@@ -15,12 +15,15 @@ import {
   sql,
 } from "@chatbotx.io/database/client"
 import {
+  depositInvoiceMethods,
   INVOICE_STATUS_TRANSITIONS,
+  type InvoiceDepositType,
   type InvoiceStatus,
   minorToDecimalString,
   normalizeInvoiceCurrency,
   parseMoneyToMinor,
   type RequestedInvoiceMethod,
+  resolveDepositMinor,
 } from "@chatbotx.io/database/partials"
 import {
   contactModel,
@@ -104,6 +107,7 @@ export const invoiceRequestHash = (request: {
   dealId?: string
   method?: RequestedInvoiceMethod
   integrationId?: string
+  deposit?: { type: InvoiceDepositType; amount: string }
 }): string =>
   createHash("sha256")
     .update(
@@ -122,6 +126,9 @@ export const invoiceRequestHash = (request: {
           : []),
         // Only a named site joins it, for the same reason (s211b).
         ...(request.integrationId ? [request.integrationId] : []),
+        // Only a deposit joins it (s216b): the RESOLVED amount, so "25%" and
+        // "50.00" on a 200.00 invoice are the same request.
+        ...(request.deposit ? [["deposit", request.deposit.amount]] : []),
       ]),
     )
     .digest("hex")
@@ -289,7 +296,42 @@ class InvoiceService extends BaseService {
       integrationId: props.integrationId,
       currency,
     })
-    const requestHash = invoiceRequestHash({ ...props, currency, lines })
+    let deposit:
+      | { type: InvoiceDepositType; value: string; amount: string }
+      | undefined
+    if (props.deposit) {
+      if (!depositInvoiceMethods.includes(binding.method)) {
+        throw validationException(
+          "deposit",
+          "Deposits need the stripeCheckout method",
+        )
+      }
+      const depositMinor = resolveDepositMinor({
+        type: props.deposit.type,
+        value: props.deposit.value,
+        totalMinor,
+        currency,
+      })
+      if (depositMinor === null) {
+        throw validationException(
+          "deposit",
+          props.deposit.type === "percent"
+            ? "The deposit must be a percent above 0 and below 100"
+            : `The deposit must be a ${currency} amount above zero and below the total`,
+        )
+      }
+      deposit = {
+        type: props.deposit.type,
+        value: String(props.deposit.value).trim(),
+        amount: minorToDecimalString(depositMinor, currency),
+      }
+    }
+    const requestHash = invoiceRequestHash({
+      ...props,
+      currency,
+      lines,
+      deposit,
+    })
 
     const { invoice, created } = await db.transaction(async (tx) => {
       await tx.execute(
@@ -378,6 +420,9 @@ class InvoiceService extends BaseService {
           method: binding.method,
           currency,
           total: minorToDecimalString(totalMinor, currency),
+          depositType: deposit?.type ?? null,
+          depositValue: deposit?.value ?? null,
+          depositAmount: deposit?.amount ?? null,
           memo: props.memo || null,
           dueAt: new Date(now.getTime() + props.dueDays * DAY_MS),
           sourceKey: props.sourceKey ?? null,
@@ -535,6 +580,12 @@ class InvoiceService extends BaseService {
   /** Void an unpaid invoice here and at the provider. */
   async void(ref: InvoiceRef): Promise<InvoiceWithLines> {
     const invoice = await this.get(ref)
+    if (invoice.status === "partiallyPaid") {
+      throw validationException(
+        "invoice",
+        "A deposit was paid on this invoice: refund it in Stripe, it cannot be voided",
+      )
+    }
     if (!INVOICE_STATUS_TRANSITIONS.void.includes(invoice.status)) {
       throw validationException(
         "invoice",
@@ -552,6 +603,16 @@ class InvoiceService extends BaseService {
       await this.audit("void", `voided invoice #${invoice.number}`)
       await afterVoid?.(voided)
       await enqueueInvoiceMirror(voided)
+    } else {
+      const current = await this.get(ref)
+      if (current.status === "partiallyPaid") {
+        // A deposit landed while this void was in flight (s216b probe H5).
+        throw validationException(
+          "invoice",
+          "A deposit was paid on this invoice while it was being voided: refund it in Stripe, it cannot be voided",
+        )
+      }
+      return current
     }
     return await this.get(ref)
   }

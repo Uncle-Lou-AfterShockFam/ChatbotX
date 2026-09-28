@@ -4,6 +4,7 @@ import {
   INVOICE_MAX_LINE_ITEMS,
   INVOICE_MAX_QUANTITY,
   INVOICE_MEMO_MAX,
+  invoiceDepositTypes,
   invoiceMethods,
   invoicePdfUrl,
   invoiceStatuses,
@@ -28,6 +29,11 @@ export const invoiceResource = z.object({
   method: invoiceMethods,
   currency: z.string(),
   total: z.string(),
+  /** s216b: the deposit the pay link offers (`depositAmount` in `currency`), or nulls. */
+  depositType: invoiceDepositTypes.nullable(),
+  depositAmount: z.string().nullable(),
+  /** What has been paid so far (a deposit makes it less than `total`). */
+  amountPaid: z.string(),
   memo: z.string().nullable(),
   contactId: z.string(),
   companyId: z.string().nullable(),
@@ -127,6 +133,23 @@ export const createInvoiceRequest = z
       .describe(
         "Method `woocommerce` only: the linked site (Settings > Integrations > WooCommerce). Optional when the workspace has one site.",
       ),
+    deposit: z
+      .object({
+        type: invoiceDepositTypes.describe(
+          "`amount` = a money amount in the invoice currency; `percent` = a percent of the total.",
+        ),
+        value: z
+          .string()
+          .trim()
+          .min(1)
+          .max(32)
+          .describe('The amount ("50.00") or the percent ("25").'),
+      })
+      .strict()
+      .optional()
+      .describe(
+        "Method `stripeCheckout` only: the pay link offers this deposit or the full amount; after a deposit it collects the balance. Must come out above zero and below the total.",
+      ),
     idempotencyKey: z
       .string()
       .trim()
@@ -180,6 +203,9 @@ export const toInvoiceResource = <
   method: row.method,
   currency: row.currency,
   total: row.total,
+  depositType: row.depositType,
+  depositAmount: row.depositAmount,
+  amountPaid: row.amountPaid,
   memo: row.memo,
   contactId: row.contactId,
   companyId: row.companyId,

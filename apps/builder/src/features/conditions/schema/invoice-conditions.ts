@@ -12,6 +12,7 @@ const invoiceCondition = <T extends InvoiceConditionType>(type: T) =>
 export const INVOICE_CONDITION_TYPES = [
   triggerEventTypes.enum.invoiceCreated,
   triggerEventTypes.enum.invoicePaid,
+  triggerEventTypes.enum.invoicePartiallyPaid,
   triggerEventTypes.enum.invoicePaymentFailed,
 ] as const
 type InvoiceConditionType = (typeof INVOICE_CONDITION_TYPES)[number]
@@ -20,6 +21,9 @@ export const invoiceCreated = invoiceCondition(
   triggerEventTypes.enum.invoiceCreated,
 )
 export const invoicePaid = invoiceCondition(triggerEventTypes.enum.invoicePaid)
+export const invoicePartiallyPaid = invoiceCondition(
+  triggerEventTypes.enum.invoicePartiallyPaid,
+)
 export const invoicePaymentFailed = invoiceCondition(
   triggerEventTypes.enum.invoicePaymentFailed,
 )

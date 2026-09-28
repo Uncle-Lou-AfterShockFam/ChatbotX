@@ -10,6 +10,8 @@ import { z } from "zod"
 export const invoiceStatuses = z.enum([
   "draft",
   "open",
+  // s216b: a deposit landed, the balance is still due (stripeCheckout only).
+  "partiallyPaid",
   "paid",
   "void",
   "uncollectible",
@@ -71,10 +73,64 @@ export const INVOICE_STATUS_TRANSITIONS: Record<
 > = {
   draft: [],
   open: ["draft"],
-  paid: ["draft", "open", "uncollectible"],
+  partiallyPaid: ["open"],
+  paid: ["draft", "open", "partiallyPaid", "uncollectible"],
+  // Never from partiallyPaid: money is in; refund it in Stripe first.
   void: ["draft", "open", "uncollectible"],
   uncollectible: ["open"],
   refunded: ["paid"],
+}
+
+/**
+ * Deposit (s216b, stripeCheckout only): the pay page offers "pay the deposit"
+ * or "pay in full"; after a deposit the same link collects the balance.
+ * `amount` = a money amount in the invoice currency, `percent` = a whole or
+ * two-decimal percentage of the total, strictly between 0 and 100.
+ */
+export const invoiceDepositTypes = z.enum(["amount", "percent"])
+export type InvoiceDepositType = z.infer<typeof invoiceDepositTypes>
+
+/** What one Checkout Session collects (s216b). */
+export const invoiceCheckoutKinds = z.enum(["full", "deposit", "balance"])
+export type InvoiceCheckoutKind = z.infer<typeof invoiceCheckoutKinds>
+
+/** The methods that support a deposit. */
+export const depositInvoiceMethods: readonly InvoiceMethod[] = [
+  "stripeCheckout",
+]
+
+/**
+ * Resolve a deposit to minor units of `currency`, or null when it is not a
+ * valid deposit for `totalMinor`: the result must be > 0 and < the total
+ * (a deposit equal to the total is just "pay in full"). A percent rounds
+ * half-up to the currency's smallest unit.
+ */
+export function resolveDepositMinor(props: {
+  type: InvoiceDepositType
+  value: unknown
+  totalMinor: bigint
+  currency: string
+}): bigint | null {
+  const { type, value, totalMinor, currency } = props
+  let minor: bigint
+  if (type === "amount") {
+    const parsed = parseMoneyToMinor(value, currency)
+    if (parsed === null) {
+      return null
+    }
+    minor = parsed
+  } else {
+    // Percent in hundredths: "25" -> 2500, "12.5" -> 1250. Currency-free parse.
+    const hundredths = parseMoneyToMinor(value, "USD")
+    if (hundredths === null || hundredths <= 0n || hundredths >= 10_000n) {
+      return null
+    }
+    minor = (totalMinor * hundredths + 5_000n) / 10_000n
+  }
+  if (minor <= 0n || minor >= totalMinor) {
+    return null
+  }
+  return minor
 }
 
 /** A Stripe secret or restricted key; `livemode` follows the prefix. Client-safe. */
@@ -231,7 +287,7 @@ export function decimalStringToMinor(value: string, currency: string): bigint {
  * quickbooks (s214b) invoice: an INVOICE while it is open, a RECEIPT once paid, served at
  * `/pay/<token>/pdf`.
  */
-export type InvoiceDocumentKind = "invoice" | "receipt"
+export type InvoiceDocumentKind = "invoice" | "depositReceipt" | "receipt"
 
 /** The methods whose PDF the hub renders itself (Stripe hosts stripeInvoice's). */
 export const hubDocumentMethods: readonly InvoiceMethod[] = [
@@ -243,7 +299,7 @@ export const hubDocumentMethods: readonly InvoiceMethod[] = [
 /** The document an invoice in `status` has, or null (draft, void, ...). */
 const INVOICE_DOCUMENT_KINDS: Partial<
   Record<InvoiceStatus, InvoiceDocumentKind>
-> = { open: "invoice", paid: "receipt" }
+> = { open: "invoice", partiallyPaid: "depositReceipt", paid: "receipt" }
 
 export const invoiceDocumentKind = (
   status: InvoiceStatus,

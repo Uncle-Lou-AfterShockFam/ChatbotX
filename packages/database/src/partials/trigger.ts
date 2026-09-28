@@ -54,6 +54,8 @@ export const triggerEventTypes = z.enum([
   // hub invoicing (s205b); no sourceId, metadata carries the invoice
   "invoiceCreated",
   "invoicePaid",
+  // s216b: a deposit landed, the balance is still due
+  "invoicePartiallyPaid",
   "invoicePaymentFailed",
   "subscribedToSequence",
   "unsubscribedFromSequence",

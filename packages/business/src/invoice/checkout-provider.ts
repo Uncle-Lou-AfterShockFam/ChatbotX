@@ -1,7 +1,8 @@
-import { and, db, eq, isNull } from "@chatbotx.io/database/client"
+import { and, db, eq, inArray, isNull } from "@chatbotx.io/database/client"
 import {
   decimalStringToMinor,
   INVOICE_PAY_TOKEN_LENGTH,
+  type InvoiceCheckoutKind,
 } from "@chatbotx.io/database/partials"
 import { invoiceModel } from "@chatbotx.io/database/schema"
 import type {
@@ -17,6 +18,7 @@ import {
 } from "../integration-stripe/service"
 import { logger } from "../logger"
 import { resolveWorkspaceAppUrl } from "../platform/settings"
+import { checkoutAmountMinor, nextCheckout } from "./payments"
 import {
   ensureCustomer,
   InvoiceProviderError,
@@ -203,15 +205,75 @@ async function expireSession(
   }
 }
 
+/** The kind the row's claimed generation collects (null before s216b = full). */
+const kindOf = (invoice: InvoiceModel): InvoiceCheckoutKind =>
+  invoice.checkoutKind ?? "full"
+
+/**
+ * One generation's Idempotency-Key. `full` keeps the pre-s216b key (and, in
+ * `sessionParams`, the pre-s216b body), so a generation claimed before the
+ * deploy replays to the same session.
+ */
+const sessionIdempotencyKey = (invoice: InvoiceModel): string => {
+  const kind = kindOf(invoice)
+  const base = `hub-inv-${invoice.id}-cs-${invoice.checkoutGeneration}`
+  return kind === "full" ? base : `${base}-${kind}`
+}
+
+function sessionLineItems(
+  invoice: InvoiceModel,
+  lines: InvoiceLineItemModel[],
+  kind: InvoiceCheckoutKind,
+  amountMinor: bigint,
+): Stripe.Checkout.SessionCreateParams.LineItem[] {
+  const currency = invoice.currency.toLowerCase()
+  if (kind === "full") {
+    return lines.map((line) => ({
+      quantity: line.quantity,
+      price_data: {
+        currency,
+        unit_amount: Number(
+          decimalStringToMinor(line.unitAmount, invoice.currency),
+        ),
+        product_data: { name: line.description },
+      },
+    }))
+  }
+  return [
+    {
+      quantity: 1,
+      price_data: {
+        currency,
+        unit_amount: Number(amountMinor),
+        product_data: {
+          name:
+            kind === "deposit"
+              ? `Deposit for Invoice #${invoice.number}`
+              : `Balance of Invoice #${invoice.number}`,
+        },
+      },
+    },
+  ]
+}
+
 function sessionParams(
   invoice: InvoiceModel,
   lines: InvoiceLineItemModel[],
   mintedAt: Date,
+  amountMinor: bigint,
 ): Stripe.Checkout.SessionCreateParams {
+  const kind = kindOf(invoice)
   const metadata = {
     hub_invoice_id: invoice.id,
     hub_workspace_id: invoice.workspaceId,
     hub_invoice_number: String(invoice.number),
+    // s216b: a deposit / balance session names what it collects; the webhook
+    // applies exactly that. A full session keeps the pre-s216b body byte for
+    // byte (no kind = full), so a generation claimed before the deploy still
+    // replays its Idempotency-Key with the same parameters.
+    ...(kind === "full"
+      ? {}
+      : { hub_payment_kind: kind, hub_payment_minor: String(amountMinor) }),
   }
   return {
     mode: "payment",
@@ -221,16 +283,7 @@ function sessionParams(
     ...(invoice.providerCustomerId
       ? { customer: invoice.providerCustomerId }
       : {}),
-    line_items: lines.map((line) => ({
-      quantity: line.quantity,
-      price_data: {
-        currency: invoice.currency.toLowerCase(),
-        unit_amount: Number(
-          decimalStringToMinor(line.unitAmount, invoice.currency),
-        ),
-        product_data: { name: line.description },
-      },
-    })),
+    line_items: sessionLineItems(invoice, lines, kind, amountMinor),
     expires_at: Math.floor(
       (mintedAt.getTime() + CHECKOUT_SESSION_TTL_MS) / 1000,
     ),
@@ -240,7 +293,10 @@ function sessionParams(
     metadata,
     // No setup_future_usage: a one-time payment, the card is not saved.
     payment_intent_data: {
-      description: `Invoice #${invoice.number}`,
+      description:
+        kind === "full"
+          ? `Invoice #${invoice.number}`
+          : `Invoice #${invoice.number} (${kind})`,
       metadata,
     },
   }
@@ -256,16 +312,21 @@ async function mintSession(props: {
   invoice: InvoiceModel
   lines: InvoiceLineItemModel[]
   mintedAt: Date
-}): Promise<{ recorded: boolean; session: Stripe.Checkout.Session }> {
+}): Promise<
+  | { recorded: boolean; session: Stripe.Checkout.Session }
+  | { recorded: false; session: null }
+> {
   const { stripe, invoice, lines, mintedAt } = props
-  const totalMinor = decimalStringToMinor(invoice.total, invoice.currency)
+  const totalMinor = checkoutAmountMinor(invoice, kindOf(invoice))
+  if (totalMinor === null) {
+    // The claim's kind is no longer payable (a payment landed): re-read.
+    return { recorded: false, session: null }
+  }
   let session: Stripe.Checkout.Session
   try {
     session = await stripe.checkout.sessions.create(
-      sessionParams(invoice, lines, mintedAt),
-      {
-        idempotencyKey: `hub-inv-${invoice.id}-cs-${invoice.checkoutGeneration}`,
-      },
+      sessionParams(invoice, lines, mintedAt, totalMinor),
+      { idempotencyKey: sessionIdempotencyKey(invoice) },
     )
   } catch (error) {
     throw wrapStripeError(error, "create checkout session")
@@ -282,7 +343,7 @@ async function mintSession(props: {
       ),
     )
     throw new InvoiceProviderError(
-      `Stripe checkout total ${session.amount_total} ${session.currency} does not match the hub total ${totalMinor} ${invoice.currency}`,
+      `Stripe checkout total ${session.amount_total} ${session.currency} does not match the hub amount ${totalMinor} ${invoice.currency}`,
       false,
     )
   }
@@ -296,7 +357,7 @@ async function mintSession(props: {
     .where(
       and(
         eq(invoiceModel.id, invoice.id),
-        eq(invoiceModel.status, "open"),
+        eq(invoiceModel.status, invoice.status),
         eq(invoiceModel.checkoutGeneration, invoice.checkoutGeneration),
         isNull(invoiceModel.checkoutSessionId),
       ),
@@ -324,12 +385,14 @@ async function expireAbandonedGeneration(
   ) {
     return
   }
+  const amountMinor = checkoutAmountMinor(invoice, kindOf(invoice))
+  if (amountMinor === null) {
+    return
+  }
   try {
     const replayed = await stripe.checkout.sessions.create(
-      sessionParams(invoice, lines, invoice.checkoutMintedAt),
-      {
-        idempotencyKey: `hub-inv-${invoice.id}-cs-${invoice.checkoutGeneration}`,
-      },
+      sessionParams(invoice, lines, invoice.checkoutMintedAt, amountMinor),
+      { idempotencyKey: sessionIdempotencyKey(invoice) },
     )
     if (replayed.status === "open") {
       await expireSession(stripe, replayed.id)
@@ -345,6 +408,7 @@ async function expireAbandonedGeneration(
 /** Claim the next generation from exactly the state this visit read. */
 async function claimGeneration(
   invoice: InvoiceModel,
+  kind: InvoiceCheckoutKind,
 ): Promise<InvoiceModel | null> {
   const [claimed] = await db
     .update(invoiceModel)
@@ -352,12 +416,13 @@ async function claimGeneration(
       checkoutGeneration: invoice.checkoutGeneration + 1,
       checkoutMintedAt: new Date(),
       checkoutSessionId: null,
+      checkoutKind: kind,
       updatedAt: new Date(),
     })
     .where(
       and(
         eq(invoiceModel.id, invoice.id),
-        eq(invoiceModel.status, "open"),
+        eq(invoiceModel.status, invoice.status),
         eq(invoiceModel.checkoutGeneration, invoice.checkoutGeneration),
         invoice.checkoutSessionId
           ? eq(invoiceModel.checkoutSessionId, invoice.checkoutSessionId)
@@ -368,8 +433,49 @@ async function claimGeneration(
   return claimed ?? null
 }
 
+/** Whether the invoice's recorded session holds a payment (never throws). */
+async function recordedSessionComplete(row: InvoiceModel): Promise<boolean> {
+  try {
+    const credentials = await integrationStripeService.credentialsByWorkspaceId(
+      row.workspaceId,
+    )
+    if (!(credentials && row.checkoutSessionId)) {
+      return false
+    }
+    const stripe = createStripeClient(credentials.auth.secretKey)
+    const session = await stripe.checkout.sessions.retrieve(
+      row.checkoutSessionId,
+    )
+    return (
+      session.status === "complete" &&
+      (await completedHoldsPayment(stripe, session))
+    )
+  } catch (error) {
+    logger.warn(
+      { err: error, invoiceId: row.id },
+      "invoice: could not read the recorded session after the Stripe return",
+    )
+    return false
+  }
+}
+
 export type CheckoutVisit =
   | { kind: "redirect"; url: string; invoice: InvoiceModel }
+  /**
+   * s216b: the invoice offers a deposit and the person has not picked yet:
+   * the pay page shows "pay the deposit" / "pay in full". Nothing is minted.
+   */
+  | {
+      kind: "choose"
+      invoice: InvoiceModel
+      depositMinor: bigint
+      totalMinor: bigint
+    }
+  /**
+   * s216b: back from Stripe after a deposit (`?done=1`): say so, never send
+   * the person straight into the balance checkout.
+   */
+  | { kind: "depositPaid"; invoice: InvoiceModel }
   /** Paid here, or a payment completed at Stripe that the webhook has not settled yet. */
   | { kind: "paid" | "processing"; invoice: InvoiceModel }
   | { kind: "closed"; invoice: InvoiceModel }
@@ -398,6 +504,10 @@ export async function visitCheckout(
      * frozen workspace gets no new Stripe session.
      */
     canServe: (workspaceId: string) => Promise<boolean>
+    /** s216b: `deposit` or `full`, as picked on the pay page (anything else = ask). */
+    requestedKind?: unknown
+    /** Stripe's success redirect (`?done=1`). */
+    justPaid?: boolean
   },
 ): Promise<CheckoutVisit> {
   if (!isInvoicePayToken(token)) {
@@ -411,7 +521,18 @@ export async function visitCheckout(
     return { kind: "frozen", invoice: row }
   }
   try {
-    return await visitRounds(token, row)
+    if (options.justPaid && row.status === "partiallyPaid") {
+      return { kind: "depositPaid", invoice: row }
+    }
+    if (options.justPaid && row.status === "open" && row.checkoutSessionId) {
+      // Back from Stripe before the webhook landed: the recorded session
+      // says whether a payment is settling; never ask the person to pay again.
+      const settling = await recordedSessionComplete(row)
+      if (settling) {
+        return { kind: "processing", invoice: row }
+      }
+    }
+    return await visitRounds(token, row, options.requestedKind)
   } catch (error) {
     if (error instanceof InvoiceProviderError && !error.retryable) {
       // A Stripe refusal every visit would repeat (a deleted customer, a
@@ -421,7 +542,10 @@ export async function visitCheckout(
           .update(invoiceModel)
           .set({ lastError: error.message, updatedAt: new Date() })
           .where(
-            and(eq(invoiceModel.id, row.id), eq(invoiceModel.status, "open")),
+            and(
+              eq(invoiceModel.id, row.id),
+              inArray(invoiceModel.status, ["open", "partiallyPaid"]),
+            ),
           )
           .returning({ id: invoiceModel.id })
       } catch (writeError) {
@@ -438,6 +562,7 @@ export async function visitCheckout(
 async function visitRounds(
   token: string,
   first: NonNullable<Awaited<ReturnType<typeof loadByToken>>>,
+  requestedKind: unknown,
 ): Promise<CheckoutVisit> {
   let row: Awaited<ReturnType<typeof loadByToken>> = first
   const lines = first.lineItems
@@ -448,9 +573,19 @@ async function visitRounds(
     if (row.status === "paid" || row.status === "refunded") {
       return { kind: "paid", invoice: row }
     }
-    if (row.status !== "open") {
+    const next = nextCheckout(row, requestedKind)
+    if (!next) {
       return { kind: "closed", invoice: row }
     }
+    if (next.kind === "choose") {
+      return {
+        kind: "choose",
+        invoice: row,
+        depositMinor: next.depositMinor,
+        totalMinor: next.totalMinor,
+      }
+    }
+    const wanted = next.kind
     if (
       !credentials ||
       row.integrationId !== credentials.integrationId ||
@@ -464,29 +599,39 @@ async function visitRounds(
         stripe,
         row.checkoutSessionId,
       )
-      if (recorded.state === "live") {
+      if (recorded.state === "live" && kindOf(row) === wanted) {
         return { kind: "redirect", url: recorded.url, invoice: row }
       }
-      if (recorded.state === "complete") {
+      // A live session for the other choice (deposit vs full) is expired
+      // before the next generation is claimed: one payable session, always.
+      const settled =
+        recorded.state === "live"
+          ? await expireSession(stripe, row.checkoutSessionId)
+          : recorded
+      if (settled.state === "complete") {
         return { kind: "processing", invoice: row }
       }
       // Expired: nothing of this generation is payable any more.
-      await claimGeneration(row)
+      await claimGeneration(row, wanted)
     } else if (!row.checkoutMintedAt) {
-      await claimGeneration(row)
+      await claimGeneration(row, wanted)
     } else if (
       Date.now() - row.checkoutMintedAt.getTime() >
       PENDING_MINT_JOIN_MS
     ) {
       await expireAbandonedGeneration(stripe, row, lines)
-      await claimGeneration(row)
-    } else {
+      await claimGeneration(row, wanted)
+    } else if (kindOf(row) === wanted) {
       const minted = await mintSession({
         stripe,
         invoice: row,
         lines,
         mintedAt: row.checkoutMintedAt,
       })
+      if (!minted.session) {
+        row = await loadByToken(token)
+        continue
+      }
       if (minted.recorded && minted.session.url) {
         return { kind: "redirect", url: minted.session.url, invoice: row }
       }
@@ -507,6 +652,12 @@ async function visitRounds(
       }
       row = current
       continue
+    } else {
+      // A live racer is minting the other choice: this visit's claim wins
+      // and that racer can no longer record; it expires its own session
+      // (below). No replay here: replaying its key would hand it a session
+      // this visit had just expired.
+      await claimGeneration(row, wanted)
     }
     // Claimed a generation or lost the claim: re-read either way.
     row = await loadByToken(token)

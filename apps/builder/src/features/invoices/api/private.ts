@@ -108,6 +108,7 @@ const privateCreateInvoiceAPI = authorizedAPI
         dealId: input.dealId,
         method: input.method,
         integrationId: input.integrationId,
+        deposit: input.deposit,
         sourceKey: input.idempotencyKey
           ? `ui:${input.idempotencyKey}`
           : undefined,

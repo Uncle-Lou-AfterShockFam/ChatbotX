@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  type InvoiceDepositType,
   type RequestedInvoiceMethod,
   requestedInvoiceMethods,
 } from "@chatbotx.io/database/partials"
@@ -40,6 +41,9 @@ type Line = {
   unitAmount: string
 }
 
+/** "25%" typed into the value box means 25. */
+const TRAILING_PERCENT = /%$/
+
 const MAX_LINES = 50
 const CURRENCY_CODE = /^[A-Za-z]{3}$/
 const newLine = (key: number): Line => ({
@@ -70,6 +74,14 @@ export function CreateInvoiceDialog({
   const [memo, setMemo] = useState("")
   const [method, setMethod] = useState<RequestedInvoiceMethod>("default")
   const [siteId, setSiteId] = useState("")
+  const [depositType, setDepositType] = useState<"none" | InvoiceDepositType>(
+    "none",
+  )
+  const [depositValue, setDepositValue] = useState("")
+  const depositOptions = (["none", "percent", "amount"] as const).map(
+    (value) => ({ value, label: t(`invoices.deposit.${value}`) }),
+  )
+  const depositAllowed = method === "stripeCheckout" || method === "default"
   const siteOptions = useWooCommerceSiteOptions(
     workspaceId,
     open && method === "woocommerce",
@@ -90,6 +102,8 @@ export function CreateInvoiceDialog({
       setMemo("")
       setMethod("default")
       setSiteId("")
+      setDepositType("none")
+      setDepositValue("")
       setSubmitted(undefined)
     }
   }
@@ -105,7 +119,9 @@ export function CreateInvoiceDialog({
         line.unitAmount.trim() &&
         Number.isInteger(Number(line.quantity)) &&
         Number(line.quantity) >= 1,
-    ) && CURRENCY_CODE.test(currency.trim())
+    ) &&
+    CURRENCY_CODE.test(currency.trim()) &&
+    (depositType === "none" || !depositAllowed || depositValue.trim() !== "")
 
   const onSubmit = () => {
     const request = {
@@ -116,6 +132,14 @@ export function CreateInvoiceDialog({
       memo: memo.trim() || undefined,
       method,
       ...(method === "woocommerce" && siteId ? { integrationId: siteId } : {}),
+      ...(depositAllowed && depositType !== "none"
+        ? {
+            deposit: {
+              type: depositType,
+              value: depositValue.trim().replace(TRAILING_PERCENT, ""),
+            },
+          }
+        : {}),
       lines: lines.map((line) => ({
         description: line.description.trim(),
         quantity: Number(line.quantity),
@@ -311,6 +335,54 @@ export function CreateInvoiceDialog({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+          {depositAllowed && (
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1 space-y-1">
+                <Label htmlFor={`${formId}-deposit-type`}>
+                  {t("invoices.fields.depositType")}
+                </Label>
+                <Select
+                  items={depositOptions}
+                  onValueChange={(value) =>
+                    setDepositType(
+                      (value as "none" | InvoiceDepositType | null) ?? "none",
+                    )
+                  }
+                  value={depositType}
+                >
+                  <SelectTrigger
+                    className="w-full"
+                    data-testid="create-invoice-deposit-type"
+                    id={`${formId}-deposit-type`}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {depositOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {depositType !== "none" && (
+                <div className="w-28 shrink-0 space-y-1">
+                  <Label htmlFor={`${formId}-deposit-value`}>
+                    {t("invoices.fields.depositValue")}
+                  </Label>
+                  <Input
+                    data-testid="create-invoice-deposit-value"
+                    id={`${formId}-deposit-value`}
+                    inputMode="decimal"
+                    onChange={(e) => setDepositValue(e.target.value)}
+                    placeholder={depositType === "percent" ? "25" : "50.00"}
+                    value={depositValue}
+                  />
+                </div>
+              )}
             </div>
           )}
           <div className="space-y-1">

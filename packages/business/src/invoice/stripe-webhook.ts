@@ -1,11 +1,21 @@
-import { and, db, eq } from "@chatbotx.io/database/client"
+import { and, db, eq, inArray } from "@chatbotx.io/database/client"
 import {
   decimalStringToMinor,
+  type InvoiceCheckoutKind,
   type InvoiceStatus,
+  invoiceCheckoutKinds,
 } from "@chatbotx.io/database/partials"
-import { invoiceEventModel, invoiceModel } from "@chatbotx.io/database/schema"
+import {
+  invoiceEventModel,
+  invoiceModel,
+  invoicePaymentModel,
+} from "@chatbotx.io/database/schema"
 import type { InvoiceModel } from "@chatbotx.io/database/types"
-import { emitInvoicePaid, emitInvoicePaymentFailed } from "@chatbotx.io/events"
+import {
+  emitInvoicePaid,
+  emitInvoicePartiallyPaid,
+  emitInvoicePaymentFailed,
+} from "@chatbotx.io/events"
 import {
   createStripeClient,
   STRIPE_WEBHOOK_TOLERANCE_SECONDS,
@@ -20,6 +30,12 @@ import { logger } from "../logger"
 import { markInvoiceOnContact } from "./contact-marks"
 import { prerenderInvoiceReceipt } from "./document"
 import { enqueueInvoiceMirror } from "./mirror"
+import {
+  type AppliedPayment,
+  applyCheckoutPayment,
+  claimPaymentMarks,
+  releasePaymentMarks,
+} from "./payments"
 import { invoiceEventMetadata, invoiceService } from "./service"
 import { isRetryableStripeError } from "./stripe-provider"
 
@@ -69,6 +85,8 @@ type Resolution = {
   paymentIntentId: string | null
   /** stripeCheckout: the session the event is about. */
   sessionId?: string
+  /** stripeCheckout (s216b): what the paid session collected. */
+  payment?: { kind: InvoiceCheckoutKind; amountMinor: bigint }
   /** Not decidable yet (a refund before its payment was recorded): 503. */
   retryLater?: boolean
 }
@@ -110,6 +128,23 @@ async function findCheckoutInvoice(
   return row ?? null
 }
 
+const MINTED_MINOR = /^\d{1,15}$/
+
+/**
+ * What a session was minted to collect (s216b `hub_payment_minor`); a session
+ * minted before deposits has none and collected the full total. Malformed =
+ * null (never confirmed).
+ */
+function mintedAmountMinor(
+  minted: string | undefined,
+  invoice: Pick<InvoiceModel, "total" | "currency">,
+): bigint | null {
+  if (minted === undefined) {
+    return decimalStringToMinor(invoice.total, invoice.currency)
+  }
+  return MINTED_MINOR.test(minted) ? BigInt(minted) : null
+}
+
 /**
  * A `checkout.session.*` event: the session is re-read and must be paid for
  * exactly the hub total. Any session of the invoice counts (an older one can
@@ -143,24 +178,45 @@ async function resolveCheckoutSession(
       sessionId: session.id,
     }
   }
-  const paidInFull =
+  // s216b: the session names what it collects. A session minted before
+  // deposits existed carries neither key: it collected the full total.
+  const kind = invoiceCheckoutKinds.safeParse(
+    session.metadata?.hub_payment_kind ?? "full",
+  )
+  const expectedMinor = mintedAmountMinor(
+    session.metadata?.hub_payment_minor,
+    hubInvoice,
+  )
+  const paidAsMinted =
+    kind.success &&
+    expectedMinor !== null &&
     session.payment_status === "paid" &&
     session.amount_total !== null &&
-    BigInt(session.amount_total) ===
-      decimalStringToMinor(hubInvoice.total, hubInvoice.currency) &&
+    BigInt(session.amount_total) === expectedMinor &&
     session.currency?.toLowerCase() === hubInvoice.currency.toLowerCase()
-  if (session.payment_status === "paid" && !paidInFull) {
+  if (session.payment_status === "paid" && !paidAsMinted) {
     logger.error(
       { eventId: event.id, invoiceId: hubInvoice.id, sessionId: session.id },
-      "stripe webhook: checkout session paid an amount that is not the hub total",
+      "stripe webhook: checkout session paid an amount it was not minted for",
     )
+    // Money was taken and cannot be applied: say so where the operator looks.
+    await db
+      .update(invoiceModel)
+      .set({
+        lastError: `Checkout session ${session.id} was paid (${session.amount_total} ${session.currency}) but not for what it was created to collect: check it in Stripe`,
+        updatedAt: new Date(),
+      })
+      .where(eq(invoiceModel.id, hubInvoice.id))
   }
   return {
     hubInvoice,
-    confirmed: paidInFull && !!paymentIntentId,
+    confirmed: paidAsMinted && !!paymentIntentId,
     failedWhileOpen: false,
     paymentIntentId,
     sessionId: session.id,
+    ...(paidAsMinted && kind.success && expectedMinor !== null
+      ? { payment: { kind: kind.data, amountMinor: expectedMinor } }
+      : {}),
   }
 }
 
@@ -229,6 +285,18 @@ async function resolveCheckoutRefund(
     // void invoice never took (the flagged duplicate) is final, not retried.
     return { ...UNRESOLVED, hubInvoice, retryLater: true }
   }
+  if (hubInvoice && (await isSplitPayment(hubInvoice))) {
+    // s216b: one of several payments (a deposit, or the balance after one)
+    // was refunded. `refunded` means the whole invoice; flag it instead.
+    await db
+      .update(invoiceModel)
+      .set({
+        lastError: `Payment ${paymentIntentId} of this ${hubInvoice.status} invoice was refunded in Stripe; the invoice keeps its status: check it`,
+        updatedAt: new Date(),
+      })
+      .where(eq(invoiceModel.id, hubInvoice.id))
+    return UNRESOLVED
+  }
   if (!hubInvoice || hubInvoice.providerInvoiceId !== paymentIntentId) {
     return UNRESOLVED
   }
@@ -238,6 +306,19 @@ async function resolveCheckoutRefund(
     failedWhileOpen: false,
     paymentIntentId,
   }
+}
+
+/** The refunded payment is one of an invoice's several (s216b deposits). */
+async function isSplitPayment(invoice: InvoiceModel): Promise<boolean> {
+  if (invoice.status === "partiallyPaid") {
+    return true
+  }
+  const payments = await db
+    .select({ id: invoicePaymentModel.id })
+    .from(invoicePaymentModel)
+    .where(eq(invoicePaymentModel.invoiceId, invoice.id))
+    .limit(2)
+  return payments.length > 1
 }
 
 /** Resolve an invoice.* or charge.refunded event through the Stripe invoice. */
@@ -416,7 +497,7 @@ async function releaseFailedSession(
     .where(
       and(
         eq(invoiceModel.id, hubInvoice.id),
-        eq(invoiceModel.status, "open"),
+        inArray(invoiceModel.status, ["open", "partiallyPaid"]),
         eq(invoiceModel.checkoutSessionId, sessionId),
       ),
     )
@@ -454,14 +535,29 @@ async function settleUnappliedCheckoutPayment(props: {
       ? { kind: "already-marked" }
       : { kind: "remark", row: current }
   }
+  await flagUnappliedPayment({
+    credentials,
+    event,
+    invoiceId: hubInvoice.id,
+    message: `A second payment (${paymentIntentId}) reached this ${current?.status ?? "unknown"} invoice: refund it in Stripe`,
+  })
+  return { kind: "duplicate-payment" }
+}
+
+/**
+ * Record a confirmed payment the invoice did not take: the event's outcome
+ * says so and `lastError` tells the operator to refund it. Never applied.
+ */
+async function flagUnappliedPayment(props: {
+  credentials: StripeCredentials
+  event: Stripe.Event
+  invoiceId: string
+  message: string
+}): Promise<void> {
+  const { credentials, event } = props
   logger.error(
-    {
-      eventId: event.id,
-      invoiceId: hubInvoice.id,
-      paymentIntentId,
-      status: current?.status,
-    },
-    "stripe webhook: a second payment reached a checkout invoice; refund it in Stripe",
+    { eventId: event.id, invoiceId: props.invoiceId, detail: props.message },
+    "stripe webhook: a checkout payment was not applied; refund it in Stripe",
   )
   await db.transaction(async (tx) => {
     await tx
@@ -475,13 +571,102 @@ async function settleUnappliedCheckoutPayment(props: {
       )
     await tx
       .update(invoiceModel)
-      .set({
-        lastError: `A second payment (${paymentIntentId}) reached this ${current?.status ?? "unknown"} invoice: refund it in Stripe`,
-        updatedAt: new Date(),
-      })
-      .where(eq(invoiceModel.id, hubInvoice.id))
+      .set({ lastError: props.message, updatedAt: new Date() })
+      .where(eq(invoiceModel.id, props.invoiceId))
   })
-  return { kind: "duplicate-payment" }
+}
+
+/**
+ * After a checkout payment's transaction (s216b): flag a rejected payment, or
+ * run the contact marks + event of an applied / known one exactly once (the
+ * InvoicePayment `markedAt` claim; the two events of one payment race for it).
+ */
+async function settleCheckoutPayment(props: {
+  credentials: StripeCredentials
+  event: Stripe.Event
+  hubInvoice: InvoiceModel
+  paymentIntentId: string
+  result: Exclude<AppliedPayment, { kind: "legacyKnown" }>
+}): Promise<StripeWebhookResult> {
+  const { credentials, event, result } = props
+  if (result.kind === "rejected") {
+    try {
+      await flagUnappliedPayment({
+        credentials,
+        event,
+        invoiceId: props.hubInvoice.id,
+        message: `A payment (${props.paymentIntentId}) reached this ${result.row?.status ?? "unknown"} invoice and was not applied (${result.reason}): refund it in Stripe`,
+      })
+    } catch (error) {
+      await dropDedupRow(credentials, event.id)
+      logger.error(
+        { err: error, eventId: event.id, invoiceId: props.hubInvoice.id },
+        "stripe webhook: could not flag an unapplied checkout payment, asking Stripe to redeliver",
+      )
+      return { outcome: "retry", detail: "duplicate-payment flag" }
+    }
+    return { outcome: "noop", detail: "duplicate-payment" }
+  }
+  const { payment } = result
+  let claimed: Date | null
+  try {
+    claimed = await claimPaymentMarks(payment.id)
+  } catch (error) {
+    await dropDedupRow(credentials, event.id)
+    logger.error(
+      { err: error, eventId: event.id },
+      "stripe webhook: could not claim the payment marks, asking Stripe to redeliver",
+    )
+    return { outcome: "retry", detail: "marks claim" }
+  }
+  if (!claimed) {
+    return { outcome: "noop", detail: "already-marked" }
+  }
+  // The row as it is NOW, not as the payment left it: a deposit whose marks
+  // run after the balance paid the invoice must not write `partiallyPaid`
+  // over `paid` (s216b probe H2); the paid marks cover it.
+  const [row = result.row] = await db
+    .select()
+    .from(invoiceModel)
+    .where(eq(invoiceModel.id, result.row.id))
+    .limit(1)
+  const status =
+    payment.kind === "deposit" && row.status !== "partiallyPaid"
+      ? null
+      : row.status
+  try {
+    if (status === "paid" || status === "partiallyPaid") {
+      await markInvoiceOnContact({ invoice: row, status })
+      const emit =
+        status === "paid" ? emitInvoicePaid : emitInvoicePartiallyPaid
+      await emit(row.workspaceId, row.contactId, invoiceEventMetadata(row))
+    }
+  } catch (error) {
+    await releasePaymentMarks(payment.id, claimed).catch(
+      (releaseError: unknown) =>
+        logger.error(
+          { err: releaseError, paymentId: payment.id },
+          "stripe webhook: payment marks not released; the redelivery will skip them",
+        ),
+    )
+    await dropDedupRow(credentials, event.id)
+    logger.warn(
+      { err: error, eventId: event.id, invoiceId: row.id },
+      "stripe webhook: contact marks failed, asking Stripe to redeliver",
+    )
+    return { outcome: "retry", detail: "contact marks" }
+  }
+  if (status) {
+    // Not awaited: Gotenberg must not hold Stripe's delivery open.
+    prerenderInvoiceReceipt(row.id).catch(() => undefined)
+  }
+  if (result.kind === "applied") {
+    await enqueueInvoiceMirror(row)
+  }
+  return {
+    outcome: result.kind === "applied" ? "applied" : "noop",
+    detail: `${event.type} invoice ${row.id} ${payment.kind}`,
+  }
 }
 
 /**
@@ -572,6 +757,7 @@ export async function handleStripeWebhook(props: {
   const { confirmed, paymentIntentId } = resolution
 
   let applied = null as InvoiceModel | null
+  let checkoutPayment = null as AppliedPayment | null
   let inserted = false as boolean
   let outcomeLabel = "unknown-invoice"
   if (hubInvoice) {
@@ -579,6 +765,16 @@ export async function handleStripeWebhook(props: {
   }
   try {
     await db.transaction(async (tx) => {
+      if (hubInvoice && resolution.payment) {
+        // A checkout payment: take the invoice's row lock BEFORE the event
+        // insert (whose invoiceId FK takes KEY SHARE): the two events of one
+        // payment would otherwise deadlock in applyCheckoutPayment (s216b H1).
+        await tx
+          .select({ id: invoiceModel.id })
+          .from(invoiceModel)
+          .where(eq(invoiceModel.id, hubInvoice.id))
+          .for("update")
+      }
       const [row] = await tx
         .insert(invoiceEventModel)
         .values({
@@ -596,6 +792,18 @@ export async function handleStripeWebhook(props: {
         return
       }
       const now = new Date()
+      if (resolution.payment && paymentIntentId && target === "paid") {
+        checkoutPayment = await applyCheckoutPayment(tx, {
+          invoiceId: hubInvoice.id,
+          kind: resolution.payment.kind,
+          amountMinor: resolution.payment.amountMinor,
+          paymentIntentId,
+          now,
+        })
+        applied =
+          checkoutPayment.kind === "applied" ? checkoutPayment.row : null
+        return
+      }
       const stamps = {
         // A checkout payment's PaymentIntent is its provider id (refunds resolve by it).
         paid: {
@@ -628,6 +836,21 @@ export async function handleStripeWebhook(props: {
   if (event.type === "checkout.session.async_payment_failed") {
     await releaseFailedSession(hubInvoice, resolution.sessionId)
   }
+  if (
+    checkoutPayment &&
+    checkoutPayment.kind !== "legacyKnown" &&
+    paymentIntentId
+  ) {
+    return await settleCheckoutPayment({
+      credentials,
+      event,
+      hubInvoice,
+      paymentIntentId,
+      result: checkoutPayment,
+    })
+  }
+  // A charge.refunded of a checkout payment, or the redelivery of a payment
+  // recorded before s216b (no InvoicePayment row): the pre-s216b path.
   const checkoutPaid = target === "paid" && !!paymentIntentId
   if (checkoutPaid && !applied && paymentIntentId) {
     let settled: Awaited<ReturnType<typeof settleUnappliedCheckoutPayment>>

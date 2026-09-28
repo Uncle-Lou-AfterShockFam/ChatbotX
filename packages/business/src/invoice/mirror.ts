@@ -60,7 +60,14 @@ export const MIRROR_SWEEP_LIMIT = 500
 const MIRROR_LOCK_SECONDS = 120
 
 /** The statuses a mirror copies; the others are noted, never written. */
-const MIRRORED: readonly InvoiceModel["status"][] = ["open", "paid", "void"]
+// partiallyPaid (s216b deposits) converges like open: the invoice copy, and
+// ONE Payment for the whole total once the balance lands (status paid).
+const MIRRORED: readonly InvoiceModel["status"][] = [
+  "open",
+  "partiallyPaid",
+  "paid",
+  "void",
+]
 
 export type MirrorOutcome =
   | "skipped"
@@ -368,6 +375,7 @@ export async function sweepInvoiceMirrors(
           ne(invoiceModel.method, "quickbooks"),
           inArray(invoiceModel.status, [
             "open",
+            "partiallyPaid",
             "paid",
             "void",
             "refunded",

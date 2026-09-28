@@ -35,8 +35,12 @@ const m = vi.hoisted(() => {
     failTransactionNumber: 0,
     transactions: 0,
     deleteError: null as Error | null,
-    /** The "marked" outcome claim fails. */
+    /** The "marked" outcome claim fails (and, s216b, the payment marks claim). */
     failMarkedClaim: false,
+    /** s216b InvoicePayment ledger (in memory): providerPaymentId -> row. */
+    payments: new Map<string, Record<string, unknown>>(),
+    /** Payment ids whose marks were claimed. */
+    paymentMarks: new Set<string>(),
   }
   const selectChain: Record<string, unknown> = {}
   selectChain.from = () => selectChain
@@ -68,6 +72,10 @@ const m = vi.hoisted(() => {
         : resolve(undefined),
   }
   const tx = {
+    // The checkout-payment row lock (s216b); the ledger itself is mocked.
+    select: () => ({
+      from: () => ({ where: () => ({ for: () => Promise.resolve([]) }) }),
+    }),
     insert: () => ({
       values: (v: Record<string, unknown>) => {
         state.inserted.push(v)
@@ -119,6 +127,7 @@ const m = vi.hoisted(() => {
     marks: vi.fn(),
     prerender: vi.fn(async () => undefined),
     emitPaid: vi.fn(),
+    emitPartiallyPaid: vi.fn(),
     emitFailed: vi.fn(),
     emitCreated: vi.fn(),
     loggerWarn: vi.fn(),
@@ -176,9 +185,96 @@ vi.mock("../src/invoice/document", () => ({
 }))
 vi.mock("@chatbotx.io/events", () => ({
   emitInvoicePaid: (...a: unknown[]) => m.emitPaid(...a),
+  emitInvoicePartiallyPaid: (...a: unknown[]) => m.emitPartiallyPaid(...a),
   emitInvoicePaymentFailed: (...a: unknown[]) => m.emitFailed(...a),
   emitInvoiceCreated: (...a: unknown[]) => m.emitCreated(...a),
 }))
+/**
+ * The s216b payment ledger, in memory over `m.state.hubRow`: the decision
+ * rules are the REAL ones (`checkoutAmountMinor`); the row lock and the SQL
+ * are pinned by invoice-deposit-real-db.test.ts.
+ */
+vi.mock("../src/invoice/payments", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../src/invoice/payments")>()
+  const { decimalStringToMinor, minorToDecimalString } = await import(
+    "@chatbotx.io/database/partials"
+  )
+  return {
+    ...actual,
+    applyCheckoutPayment: (
+      _tx: unknown,
+      props: {
+        kind: "full" | "deposit" | "balance"
+        amountMinor: bigint
+        paymentIntentId: string
+        now: Date
+      },
+    ) => {
+      const row = m.state.hubRow as Record<string, unknown> | null
+      if (!row) {
+        return Promise.resolve({
+          kind: "rejected",
+          row: null,
+          reason: "no such invoice",
+        })
+      }
+      const known = m.state.payments.get(props.paymentIntentId)
+      if (known) {
+        return Promise.resolve({ kind: "known", row, payment: known })
+      }
+      if (row.providerInvoiceId === props.paymentIntentId) {
+        return Promise.resolve({ kind: "legacyKnown", row })
+      }
+      const invoice = {
+        amountPaid: "0.00",
+        depositAmount: null,
+        ...row,
+      } as Parameters<typeof actual.checkoutAmountMinor>[0]
+      const owed = actual.checkoutAmountMinor(invoice, props.kind)
+      if (owed === null || owed !== props.amountMinor) {
+        return Promise.resolve({
+          kind: "rejected",
+          row,
+          reason: `${props.kind} not owed`,
+        })
+      }
+      const paid =
+        decimalStringToMinor(invoice.amountPaid, "USD") + props.amountMinor
+      const fullyPaid = paid === decimalStringToMinor(String(row.total), "USD")
+      const set = {
+        status: fullyPaid ? "paid" : "partiallyPaid",
+        amountPaid: minorToDecimalString(paid, "USD"),
+        ...(fullyPaid ? { paidAt: props.now } : {}),
+        providerInvoiceId: props.paymentIntentId,
+        checkoutSessionId: null,
+      }
+      m.state.updates.push(set)
+      m.state.hubRow = { ...row, ...set }
+      const payment = {
+        id: `pay-${props.paymentIntentId}`,
+        kind: props.kind,
+        providerPaymentId: props.paymentIntentId,
+      }
+      m.state.payments.set(props.paymentIntentId, payment)
+      return Promise.resolve({ kind: "applied", row: m.state.hubRow, payment })
+    },
+    claimPaymentMarks: (id: string) => {
+      if (m.state.failMarkedClaim) {
+        return Promise.reject(new Error("db down"))
+      }
+      if (m.state.paymentMarks.has(id)) {
+        return Promise.resolve(null)
+      }
+      m.state.paymentMarks.add(id)
+      return Promise.resolve(new Date())
+    },
+    releasePaymentMarks: (id: string) => {
+      m.state.paymentMarks.delete(id)
+      return Promise.resolve()
+    },
+  }
+})
 vi.mock("../src/audit/dispatcher", () => ({ dispatchAuditRecord: vi.fn() }))
 vi.mock("../src/logger", () => ({
   logger: { warn: m.loggerWarn, error: m.loggerError, info: vi.fn() },
@@ -272,6 +368,8 @@ beforeEach(() => {
   m.state.transactions = 0
   m.state.deleteError = null
   m.state.failMarkedClaim = false
+  m.state.payments = new Map()
+  m.state.paymentMarks = new Set()
   m.credentials.mockResolvedValue({
     integrationId: INTEGRATION_ID,
     workspaceId: WORKSPACE_ID,
@@ -290,6 +388,7 @@ beforeEach(() => {
 const expectNoSideEffects = () => {
   expect(m.marks).not.toHaveBeenCalled()
   expect(m.emitPaid).not.toHaveBeenCalled()
+  expect(m.emitPartiallyPaid).not.toHaveBeenCalled()
   expect(m.emitFailed).not.toHaveBeenCalled()
 }
 
@@ -744,7 +843,18 @@ describe("stripeCheckout (s207b): checkout.session.* and refunds", () => {
     const result = await completed()
     expect(result).toEqual({ outcome: "noop", detail: "unconfirmed" })
     expect(m.state.inserted[0]).toMatchObject({ outcome: "unconfirmed" })
-    expect(m.state.updates).toEqual([])
+    // Never a status change. A PAID session for another amount writes only
+    // the operator's warning (s216b review); an unpaid one writes nothing.
+    for (const update of m.state.updates) {
+      expect(Object.keys(update).sort()).toEqual(["lastError", "updatedAt"])
+      expect(update.lastError).toContain("check it in Stripe")
+    }
+    expect(m.state.updates).toHaveLength(
+      (extra as { payment_status?: string }).payment_status === "unpaid" ||
+        (extra as { payment_intent?: null }).payment_intent === null
+        ? 0
+        : 1,
+    )
     expectNoSideEffects()
   })
 
@@ -919,11 +1029,212 @@ describe("stripeCheckout (s207b): checkout.session.* and refunds", () => {
     expect(m.prerender).not.toHaveBeenCalled()
   })
 
-  test("a fresh paid event records that its marks ran (outcome marked)", async () => {
+  test("a fresh paid event claims its payment's marks (s216b ledger)", async () => {
     await completed()
-    expect(m.state.updates).toEqual(
-      expect.arrayContaining([expect.objectContaining({ outcome: "marked" })]),
+    expect([...m.state.paymentMarks]).toEqual(["pay-pi_1"])
+  })
+
+  test("the second event type of a payment already recorded and marked neither marks nor emits", async () => {
+    await completed()
+    vi.clearAllMocks()
+    const result = await completed(
+      "checkout.session.async_payment_succeeded",
+      "evt_cs_2",
     )
+    expect(result).toEqual({ outcome: "noop", detail: "already-marked" })
+    expectNoSideEffects()
+  })
+
+  test("marks that failed are released: the redelivery (known payment) marks them", async () => {
+    m.marks.mockRejectedValueOnce(new Error("fields down"))
+    const first = await completed()
+    expect(first).toEqual({ outcome: "retry", detail: "contact marks" })
+    expect(m.state.paymentMarks.size).toBe(0)
+    const again = await completed("checkout.session.completed", "evt_cs_1b")
+    expect(again.outcome).toBe("noop")
+    expect(m.marks).toHaveBeenCalledTimes(2)
+    expect(m.emitPaid).toHaveBeenCalledTimes(1)
+  })
+
+  describe("deposits (s216b)", () => {
+    const depositRow = (status = "open", extra: Record<string, unknown> = {}) =>
+      checkoutRow(status, {
+        total: "200.00",
+        depositType: "percent",
+        depositValue: "25",
+        depositAmount: "50.00",
+        amountPaid: "0.00",
+        ...extra,
+      })
+    const paidSession = (
+      kind: string,
+      minor: number,
+      pi: string,
+      extra: Record<string, unknown> = {},
+    ) =>
+      session({
+        amount_total: minor,
+        payment_intent: pi,
+        metadata: {
+          hub_invoice_id: HUB_ID,
+          hub_workspace_id: WORKSPACE_ID,
+          hub_payment_kind: kind,
+          hub_payment_minor: String(minor),
+        },
+        ...extra,
+      })
+
+    test("a deposit moves the invoice to partiallyPaid, marks it and emits invoicePartiallyPaid (never invoicePaid)", async () => {
+      m.state.hubRow = depositRow()
+      m.sessionRetrieve.mockResolvedValue(
+        paidSession("deposit", 5000, "pi_dep"),
+      )
+      const result = await completed()
+      expect(result.outcome).toBe("applied")
+      expect(m.state.hubRow).toMatchObject({
+        status: "partiallyPaid",
+        amountPaid: "50.00",
+        providerInvoiceId: "pi_dep",
+      })
+      expect(m.marks).toHaveBeenCalledWith({
+        invoice: expect.objectContaining({ status: "partiallyPaid" }),
+        status: "partiallyPaid",
+      })
+      expect(m.emitPartiallyPaid).toHaveBeenCalledTimes(1)
+      expect(m.emitPaid).not.toHaveBeenCalled()
+    })
+
+    test("the balance after a deposit pays the invoice and emits invoicePaid", async () => {
+      m.state.hubRow = depositRow("partiallyPaid", {
+        amountPaid: "50.00",
+        providerInvoiceId: "pi_dep",
+      })
+      m.state.payments.set("pi_dep", {
+        id: "pay-pi_dep",
+        kind: "deposit",
+        providerPaymentId: "pi_dep",
+      })
+      m.state.paymentMarks.add("pay-pi_dep")
+      m.sessionRetrieve.mockResolvedValue(
+        paidSession("balance", 15_000, "pi_bal"),
+      )
+      const result = await completed("checkout.session.completed", "evt_bal")
+      expect(result.outcome).toBe("applied")
+      expect(m.state.hubRow).toMatchObject({
+        status: "paid",
+        amountPaid: "200.00",
+        providerInvoiceId: "pi_bal",
+      })
+      expect(m.emitPaid).toHaveBeenCalledTimes(1)
+      expect(m.emitPartiallyPaid).not.toHaveBeenCalled()
+    })
+
+    test("a redelivered DEPOSIT event after the balance paid is known, never a false duplicate", async () => {
+      m.state.hubRow = depositRow("paid", {
+        amountPaid: "200.00",
+        providerInvoiceId: "pi_bal",
+      })
+      m.state.payments.set("pi_dep", {
+        id: "pay-pi_dep",
+        kind: "deposit",
+        providerPaymentId: "pi_dep",
+      })
+      m.sessionRetrieve.mockResolvedValue(
+        paidSession("deposit", 5000, "pi_dep"),
+      )
+      const result = await completed(
+        "checkout.session.completed",
+        "evt_dep_late",
+      )
+      // Its marks never ran: they are claimed now, but a deposit mark must
+      // not write partiallyPaid over paid.
+      expect(result.outcome).toBe("noop")
+      expect(m.marks).not.toHaveBeenCalled()
+      expect(m.state.updates).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ outcome: "duplicate-payment" }),
+        ]),
+      )
+    })
+
+    test.each([
+      ["a second deposit", "deposit", 5000, "partiallyPaid", "50.00"],
+      [
+        "a FULL payment after a deposit",
+        "full",
+        20_000,
+        "partiallyPaid",
+        "50.00",
+      ],
+      ["a balance before any deposit", "balance", 15_000, "open", "0.00"],
+      ["a deposit of another amount", "deposit", 4000, "open", "0.00"],
+    ])("%s is never applied: flagged, refund it", async (_l, kind, minor, status, paid) => {
+      m.state.hubRow = depositRow(status, { amountPaid: paid })
+      m.sessionRetrieve.mockResolvedValue(paidSession(kind, minor, "pi_x"))
+      const result = await completed()
+      expect(result).toEqual({ outcome: "noop", detail: "duplicate-payment" })
+      expect(m.state.updates).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            lastError: expect.stringContaining("refund it in Stripe"),
+          }),
+        ]),
+      )
+      expectNoSideEffects()
+    })
+
+    test.each([
+      ["an amount_total other than the minted amount", { amount_total: 4999 }],
+      [
+        "an unknown kind",
+        {
+          metadata: {
+            hub_invoice_id: HUB_ID,
+            hub_workspace_id: WORKSPACE_ID,
+            hub_payment_kind: "tip",
+            hub_payment_minor: "5000",
+          },
+        },
+      ],
+      [
+        "a non-numeric minted amount",
+        {
+          metadata: {
+            hub_invoice_id: HUB_ID,
+            hub_workspace_id: WORKSPACE_ID,
+            hub_payment_kind: "deposit",
+            hub_payment_minor: "50.00",
+          },
+        },
+      ],
+    ])("a session with %s is unconfirmed", async (_l, extra) => {
+      m.state.hubRow = depositRow()
+      m.sessionRetrieve.mockResolvedValue(
+        paidSession("deposit", 5000, "pi_dep", extra),
+      )
+      const result = await completed()
+      expect(result).toEqual({ outcome: "noop", detail: "unconfirmed" })
+      expectNoSideEffects()
+    })
+
+    test("a refund of a deposit flags the invoice and moves nothing", async () => {
+      m.state.hubRow = depositRow("partiallyPaid", {
+        amountPaid: "50.00",
+        providerInvoiceId: "pi_1",
+      })
+      const result = await deliver({
+        id: "evt_ref_dep",
+        type: "charge.refunded",
+        object: { id: "ch_1", object: "charge" },
+      })
+      expect(result).toEqual({ outcome: "noop", detail: "unknown-invoice" })
+      expect(m.state.updates).toEqual([
+        expect.objectContaining({
+          lastError: expect.stringContaining("was refunded in Stripe"),
+        }),
+      ])
+      expect(m.state.updates[0]).not.toHaveProperty("status")
+    })
   })
 
   test("the duplicate-payment flag failing to write drops the dedup row and asks for a retry", async () => {

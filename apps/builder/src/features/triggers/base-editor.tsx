@@ -92,6 +92,8 @@ export const BaseEditor = ({
         return t("trigger.conditions.invoiceCreated")
       case triggerEventTypes.enum.invoicePaid:
         return t("trigger.conditions.invoicePaid")
+      case triggerEventTypes.enum.invoicePartiallyPaid:
+        return t("trigger.conditions.invoicePartiallyPaid")
       case triggerEventTypes.enum.invoicePaymentFailed:
         return t("trigger.conditions.invoicePaymentFailed")
       case triggerEventTypes.enum.subscribedToSequence:

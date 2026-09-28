@@ -441,6 +441,18 @@ export const emitInvoicePaid = async (
   metadata: InvoiceEventMetadata,
 ) => await emitToAllEmitters("invoicePaid", workspaceId, contactId, metadata)
 
+export const emitInvoicePartiallyPaid = async (
+  workspaceId: string,
+  contactId: string,
+  metadata: InvoiceEventMetadata,
+) =>
+  await emitToAllEmitters(
+    "invoicePartiallyPaid",
+    workspaceId,
+    contactId,
+    metadata,
+  )
+
 export const emitInvoicePaymentFailed = async (
   workspaceId: string,
   contactId: string,

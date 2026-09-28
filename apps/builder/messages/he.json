@@ -2467,6 +2467,7 @@
       "formSubmitted": "Web form submitted",
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
+      "invoicePartiallyPaid": "Invoice deposit paid",
       "invoicePaymentFailed": "Invoice payment failed"
     },
     "actions": {
@@ -7468,6 +7469,8 @@
       "currency": "Currency",
       "dueInDays": "Due in days",
       "memo": "Memo",
+      "depositType": "Deposit",
+      "depositValue": "Deposit value",
       "number": "Number",
       "status": "Status",
       "total": "Total",
@@ -7478,6 +7481,7 @@
     "status": {
       "draft": "Draft",
       "open": "Open",
+      "partiallyPaid": "Partly paid",
       "paid": "Paid",
       "void": "Void",
       "uncollectible": "Uncollectible",
@@ -7489,7 +7493,8 @@
       "memoPlaceholder": "Thanks for your order",
       "summary": "{count, plural, one {# line} other {# lines}}: {description} ({currency})",
       "noLines": "No line items",
-      "methodHint": "Stripe Checkout texts a hub pay link that works until the invoice is paid or voided, and saves no card. Stripe invoice uses Stripe's own invoice page. WooCommerce creates a pending order on a linked site and texts its order-pay page."
+      "methodHint": "Stripe Checkout texts a hub pay link that works until the invoice is paid or voided, and saves no card. Stripe invoice uses Stripe's own invoice page. WooCommerce creates a pending order on a linked site and texts its order-pay page.",
+      "depositTypeHint": "\"percent\" or \"amount\" (a variable works too); leave empty for no deposit. Stripe Checkout only."
     },
     "retry": "Retry sending to Stripe",
     "retried": "Invoice sent to Stripe",
@@ -7499,6 +7504,12 @@
       "stripeCheckout": "Stripe Checkout (pay link, no saved card)",
       "woocommerce": "WooCommerce order (the site's order-pay page)",
       "quickbooks": "QuickBooks invoice (QuickBooks Payments pay link)"
-    }
+    },
+    "deposit": {
+      "none": "No deposit",
+      "percent": "Percent of total",
+      "amount": "Fixed amount"
+    },
+    "paidSoFar": "{paid} paid"
   }
 }

@@ -18,6 +18,7 @@ import { formSubmitted } from "./form-conditions"
 import {
   invoiceCreated,
   invoicePaid,
+  invoicePartiallyPaid,
   invoicePaymentFailed,
 } from "./invoice-conditions"
 import {
@@ -68,6 +69,7 @@ export const allConditions = {
   formSubmitted,
   invoiceCreated,
   invoicePaid,
+  invoicePartiallyPaid,
   invoicePaymentFailed,
 }
 

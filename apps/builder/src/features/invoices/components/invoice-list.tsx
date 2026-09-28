@@ -31,6 +31,7 @@ import type { InvoiceResource } from "../schema/resource"
 const STATUS_VARIANT = {
   draft: "outline",
   open: "secondary",
+  partiallyPaid: "secondary",
   paid: "default",
   void: "outline",
   uncollectible: "destructive",
@@ -63,8 +64,8 @@ export function InvoiceList({
   const finalizeInvoice = useFinalizeInvoice()
   const rows = invoices.data?.pages.flatMap((page) => page.data) ?? []
 
-  const money = (row: InvoiceResource) =>
-    format.number(Number(row.total), {
+  const money = (row: InvoiceResource, value = row.total) =>
+    format.number(Number(value), {
       style: "currency",
       currency: row.currency,
     })
@@ -153,6 +154,16 @@ export function InvoiceList({
                   <Badge variant={STATUS_VARIANT[row.status]}>
                     {t(`invoices.status.${row.status}`)}
                   </Badge>
+                  {row.status === "partiallyPaid" ? (
+                    <p
+                      className="mt-1 whitespace-nowrap text-muted-foreground text-xs tabular-nums"
+                      data-testid={`invoice-paid-so-far-${row.id}`}
+                    >
+                      {t("invoices.paidSoFar", {
+                        paid: money(row, row.amountPaid),
+                      })}
+                    </p>
+                  ) : null}
                   <p className="mt-1 whitespace-nowrap text-xs tabular-nums sm:hidden">
                     {money(row)}
                   </p>

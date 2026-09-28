@@ -37,6 +37,36 @@ export const invoiceSourceKey = (prefix: string, flowExecutionKey: string) =>
 /** One invoice per flow step and contact inside this window (loops included). */
 export const FLOW_INVOICE_REUSE_MS = 10 * 60 * 1000
 
+/** A rendered "25%" means 25. */
+const TRAILING_PERCENT = /%$/
+
+/**
+ * The step's deposit after its tokens resolve (s216b): null = none (an empty
+ * type or value), "invalid" = a type other than amount / percent.
+ */
+async function resolveStepDeposit(
+  step: Pick<CreateInvoiceStepSchema, "depositType" | "depositValue">,
+  render: (text: string) => Promise<string>,
+): Promise<{ type: "amount" | "percent"; value: string } | null | "invalid"> {
+  // A step saved before s216b has neither key: no deposit.
+  if (!(step.depositType?.trim() && step.depositValue?.trim())) {
+    return null
+  }
+  const type = (await render(step.depositType)).trim().toLowerCase()
+  const value = (await render(step.depositValue))
+    .trim()
+    .replace(TRAILING_PERCENT, "")
+  if (!type) {
+    return null
+  }
+  // A type without a value is a deposit the author meant but the contact's
+  // fields did not fill: fail the step rather than bill the full amount.
+  if ((type !== "amount" && type !== "percent") || !value) {
+    return "invalid"
+  }
+  return { type, value }
+}
+
 const error = (errorMessage: string): ExecuteStepResult => ({
   status: "error",
   errorMessage,
@@ -75,6 +105,12 @@ export async function handleCreateInvoice({
       })),
     )
     const memo = (await render(step.memo)).trim()
+    const deposit = await resolveStepDeposit(step, render)
+    if (deposit === "invalid") {
+      return error(
+        'The deposit needs a type ("amount" or "percent") and a value; leave the type empty for no deposit',
+      )
+    }
     const sourcePrefix = invoiceSourcePrefix({
       flowId: flowVersion.flowId,
       stepId: step.id,
@@ -92,6 +128,7 @@ export async function handleCreateInvoice({
           ? { integrationId: step.integrationId }
           : {}),
         ...(memo ? { memo: memo.slice(0, 1000) } : {}),
+        ...(deposit ? { deposit } : {}),
         sourceKey: invoiceSourceKey(sourcePrefix, flowExecutionKey),
         reuseRecent: { sourcePrefix, withinMs: FLOW_INVOICE_REUSE_MS },
       },

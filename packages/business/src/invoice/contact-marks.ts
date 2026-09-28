@@ -20,6 +20,10 @@ import { tagService } from "../tag/service"
  *   `{{raw:invoice_last_id}}` (the wait captures the id at wait start).
  * - tag `invoice-paid` on every payment (emitFor "all": a second paid invoice
  *   must still wake a tagApplied wait).
+ * - s216b deposit: status `partiallyPaid`, `invoice_deposit_paid_id` = the
+ *   invoice id, tag `invoice-deposit-paid` (emitFor "all"). `invoice_paid_id`
+ *   and `invoice-paid` stay for the FULL payment only, so a wait on them
+ *   never wakes on a deposit.
  */
 export const INVOICE_LINK_FIELD = "invoice_link"
 export const INVOICE_PDF_LINK_FIELD = "invoice_pdf_link"
@@ -27,6 +31,8 @@ export const INVOICE_LAST_ID_FIELD = "invoice_last_id"
 export const INVOICE_LAST_STATUS_FIELD = "invoice_last_status"
 export const INVOICE_PAID_ID_FIELD = "invoice_paid_id"
 export const INVOICE_PAID_TAG = "invoice-paid"
+export const INVOICE_DEPOSIT_PAID_ID_FIELD = "invoice_deposit_paid_id"
+export const INVOICE_DEPOSIT_PAID_TAG = "invoice-deposit-paid"
 
 async function setFields(props: {
   workspaceId: string
@@ -125,6 +131,9 @@ export async function markInvoiceOnContact(props: {
   if (props.status === "paid") {
     values[INVOICE_PAID_ID_FIELD] = invoice.id
   }
+  if (props.status === "partiallyPaid") {
+    values[INVOICE_DEPOSIT_PAID_ID_FIELD] = invoice.id
+  }
   await setFields({
     workspaceId: invoice.workspaceId,
     contactId: invoice.contactId,
@@ -135,6 +144,14 @@ export async function markInvoiceOnContact(props: {
       workspaceId: invoice.workspaceId,
       contactIds: [invoice.contactId],
       names: [INVOICE_PAID_TAG],
+      emitFor: "all",
+    })
+  }
+  if (props.status === "partiallyPaid") {
+    await tagService.attachByNamesToContacts({
+      workspaceId: invoice.workspaceId,
+      contactIds: [invoice.contactId],
+      names: [INVOICE_DEPOSIT_PAID_TAG],
       emitFor: "all",
     })
   }
