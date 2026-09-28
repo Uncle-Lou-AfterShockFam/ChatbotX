@@ -95,12 +95,14 @@ type Options = {
   isBlocked?: (ip: string) => boolean
   maxBytes?: number
   maxRedirects?: number
+  timeoutMs?: number
 }
 
 const getOnce = (
   url: URL,
   lookup: LookupFunction,
   maxBytes: number,
+  signal: AbortSignal,
 ): Promise<{ status: number; location: string | null; body: Buffer }> =>
   new Promise((resolve, reject) => {
     const client = url.protocol === "https:" ? https : http
@@ -111,7 +113,7 @@ const getOnce = (
         // No pooled keep-alive socket: every request dials, so every
         // connection goes through `lookup` (a reused socket would skip it).
         agent: false,
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal,
       },
       (response) => {
         const status = response.statusCode ?? 0
@@ -167,8 +169,8 @@ const getOnce = (
 /**
  * The bytes of a remote image. Every hop is http(s), an IP-literal host is
  * checked directly, a named host connects only to addresses the guarded
- * lookup validated, redirects are followed by hand (at most 5), and the body
- * is capped at 10 MB. Throws `ImageFetchRefusedError` on any refusal.
+ * lookup validated, redirects are followed by hand (at most 5), the body is
+ * capped at 10 MB and the whole chain at 15 s. Throws `ImageFetchRefusedError` on any refusal.
  */
 export const fetchImageBytes = async (
   rawUrl: string,
@@ -178,6 +180,9 @@ export const fetchImageBytes = async (
   const lookup = guardedLookup(options.resolver, isBlocked)
   const maxBytes = options.maxBytes ?? MAX_IMAGE_BYTES
   const maxRedirects = options.maxRedirects ?? MAX_REDIRECTS
+  // One deadline for the whole chain, not per hop: five slow redirects must
+  // not hold a render for six timeouts (s215 skeptic).
+  const signal = AbortSignal.timeout(options.timeoutMs ?? TIMEOUT_MS)
 
   let url: URL
   try {
@@ -199,7 +204,12 @@ export const fetchImageBytes = async (
         url.href,
       )
     }
-    const { status, location, body } = await getOnce(url, lookup, maxBytes)
+    const { status, location, body } = await getOnce(
+      url,
+      lookup,
+      maxBytes,
+      signal,
+    )
     if (status < 300 || status >= 400) {
       if (status < 200 || status >= 300) {
         throw new ImageFetchRefusedError("httpError", `${status} ${url.href}`)

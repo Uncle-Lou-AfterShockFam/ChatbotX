@@ -59,6 +59,11 @@ beforeAll(async () => {
     } else if (path === "/weird-encoding") {
       res.writeHead(200, { "content-encoding": "compress" })
       res.end("x")
+    } else if (path === "/slow-hop") {
+      setTimeout(() => {
+        res.writeHead(302, { location: "/slow-hop" })
+        res.end()
+      }, 120)
     } else if (path === "/big") {
       res.writeHead(200)
       res.end(Buffer.alloc(2048, 1))
@@ -187,6 +192,19 @@ describe("fetchImageBytes (s215)", () => {
       fetchImageBytes(at("/loop"), { ...opts, maxRedirects: 2 }),
     ).rejects.toMatchObject({ reason: "tooManyRedirects" })
     expect(hits).toHaveLength(3)
+  })
+
+  test("the deadline covers the whole redirect chain, not each hop", async () => {
+    const started = Date.now()
+    await expect(
+      fetchImageBytes(at("/slow-hop"), {
+        ...opts,
+        maxRedirects: 50,
+        timeoutMs: 300,
+      }),
+    ).rejects.toThrow()
+    // Each hop takes 120 ms (< 300), so a per-hop deadline would run for 50.
+    expect(Date.now() - started).toBeLessThan(1500)
   })
 
   test("the body cap fires", async () => {
