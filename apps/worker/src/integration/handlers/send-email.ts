@@ -14,7 +14,10 @@ import type {
   EmailStepSchema,
   PageElementSchema,
 } from "@chatbotx.io/flow-config"
-import { UNSUBSCRIBE_PLACEHOLDER } from "@chatbotx.io/flow-config"
+import {
+  BROADCAST_PAYLOAD_TYPE,
+  UNSUBSCRIBE_PLACEHOLDER,
+} from "@chatbotx.io/flow-config"
 import {
   integration as integrationSmtp,
   smtpAuthSchema,
@@ -203,17 +206,19 @@ export async function sendEmail({
   // Create per-recipient tracking row before building URLs so the token is available.
   let token: string | undefined
   if (step.topicId) {
+    // A broadcast's send (s220b): delivery, opens and clicks also stamp the
+    // recipient's ContactOnBroadcast row, keyed by the broadcast's OWN
+    // contactInboxId (the one its row was written with).
+    const broadcast =
+      metadata?.type === BROADCAST_PAYLOAD_TYPE ? metadata : undefined
     const result = await emailTopicAnalyticsService.createRecipient({
       topicId: step.topicId,
       workspaceId: conversation.workspaceId,
       contactId: conversation.contactId,
       conversationId: conversation.id,
-      contactInboxId: contactInbox.id,
+      contactInboxId: broadcast?.contactInboxId ?? contactInbox.id,
       email: to,
-      // A broadcast's send (s220b): delivery, opens and clicks also stamp
-      // the recipient's ContactOnBroadcast row.
-      broadcastId:
-        metadata?.type === "broadcast" ? (metadata.broadcastId ?? null) : null,
+      broadcastId: broadcast?.broadcastId ?? null,
     })
     token = result.token
   }
@@ -260,10 +265,6 @@ export async function sendEmail({
         "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
       },
     })
-
-    if (token) {
-      await emailTopicAnalyticsService.markDelivered(token)
-    }
   } catch (err) {
     logger.error(
       {
@@ -277,5 +278,15 @@ export async function sendEmail({
       await emailTopicAnalyticsService.markFailed(token)
     }
     return
+  }
+
+  // Outside the send's try: a stats write failing after a sent mail must
+  // never mark that mail failed (it would count it twice in the broadcast).
+  if (token) {
+    try {
+      await emailTopicAnalyticsService.markDelivered(token)
+    } catch (err) {
+      logger.warn({ err, token }, "handleSendEmail: markDelivered failed")
+    }
   }
 }

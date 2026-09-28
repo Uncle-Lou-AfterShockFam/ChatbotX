@@ -66,7 +66,14 @@ export class EmailTopicStatsRepository {
     const [row] = await db
       .update(analyticsEmailTopicModel)
       .set({ failedAt: sql`now()` })
-      .where(eq(analyticsEmailTopicModel.token, token))
+      .where(
+        and(
+          eq(analyticsEmailTopicModel.token, token),
+          // A delivered or already-failed send never becomes (another) failure.
+          isNull(analyticsEmailTopicModel.deliveredAt),
+          isNull(analyticsEmailTopicModel.failedAt),
+        ),
+      )
       .returning(BROADCAST_KEY)
     if (row?.broadcastId && row.contactInboxId) {
       await broadcastStatsRepository.updateFailedBulk([
@@ -150,8 +157,8 @@ export class EmailTopicStatsRepository {
           { ...item, occurredAt: new Date() },
         ])
       } else {
-        await broadcastStatsRepository.updateOccurredAtBulk(
-          [{ ...item, timestamp: new Date() }],
+        await broadcastStatsRepository.stampFirst(
+          item,
           firstColumn === "deliveredAt" ? "deliveredAt" : "seenAt",
         )
       }

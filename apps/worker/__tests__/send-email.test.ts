@@ -252,6 +252,28 @@ describe("s220b: broadcast attribution", () => {
     )
   })
 
+  test("the recipient is keyed by the broadcast's own contactInboxId", async () => {
+    await sendEmail({
+      ...makeProps(),
+      metadata: {
+        type: "broadcast",
+        broadcastId: "b-1",
+        contactInboxId: "ci-broadcast",
+      },
+    } as never)
+    expect(createRecipient).toHaveBeenLastCalledWith(
+      expect.objectContaining({ contactInboxId: "ci-broadcast" }),
+    )
+  })
+
+  test("a stats error after a sent mail never marks it failed", async () => {
+    markDelivered.mockRejectedValueOnce(new Error("db blip"))
+    markFailed.mockClear()
+    await sendEmail(makeProps() as never)
+    expect(runAction).toHaveBeenCalled()
+    expect(markFailed).not.toHaveBeenCalled()
+  })
+
   test("a send outside a broadcast has no broadcastId", async () => {
     await sendEmail({ ...makeProps(), metadata: {} } as never)
     expect(createRecipient).toHaveBeenLastCalledWith(

@@ -176,6 +176,51 @@ describe.skipIf(!databaseUrl)("broadcast email attribution", () => {
     )
   })
 
+  test("markFailed after delivery changes nothing (no double count in message:sent)", async () => {
+    const s = await seed()
+    const { token } = await emailTopicStatsRepository.createRecipient({
+      topicId: s.topicId,
+      workspaceId: s.workspaceId,
+      email: "s220b@example.test",
+      contactId: s.contactId,
+      contactInboxId: s.contactInboxId,
+      broadcastId: s.broadcastId,
+    })
+    await emailTopicStatsRepository.markDelivered(token)
+    await emailTopicStatsRepository.markFailed(token)
+
+    const row = await cob(s.broadcastId)
+    expect(row?.deliveredAt).toBeTruthy()
+    expect(row?.failedAt).toBeNull()
+    const stats = await broadcastStatsRepository.getStats({
+      workspaceId: s.workspaceId,
+      broadcastId: s.broadcastId,
+    })
+    expect(stats["message:sent"]).toBe(1)
+  })
+
+  test("a resend's second token never moves the first delivery / open stamp", async () => {
+    const s = await seed()
+    const recipient = {
+      topicId: s.topicId,
+      workspaceId: s.workspaceId,
+      email: "s220b@example.test",
+      contactId: s.contactId,
+      contactInboxId: s.contactInboxId,
+      broadcastId: s.broadcastId,
+    }
+    const first = await emailTopicStatsRepository.createRecipient(recipient)
+    await emailTopicStatsRepository.markDelivered(first.token)
+    await emailTopicStatsRepository.recordOpen(first.token)
+    const before = await cob(s.broadcastId)
+
+    const second = await emailTopicStatsRepository.createRecipient(recipient)
+    await emailTopicStatsRepository.markDelivered(second.token)
+    await emailTopicStatsRepository.recordOpen(second.token)
+
+    expect(await cob(s.broadcastId)).toEqual(before)
+  })
+
   test("a send outside a broadcast never touches ContactOnBroadcast", async () => {
     const s = await seed()
     const { token } = await emailTopicStatsRepository.createRecipient({
