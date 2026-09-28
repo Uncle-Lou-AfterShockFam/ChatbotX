@@ -373,7 +373,7 @@ describe("WorkspaceService.teardownDueWorkspace — contact document files", () 
     logger.warn.mockClear()
   })
 
-  test("purges the workspace's documents prefix after the heavy-data drain and before the row delete", async () => {
+  test("purges the workspace's documents and contact-files prefixes after the heavy-data drain and before the row delete", async () => {
     const order: string[] = []
     workspaceLifecycleService.purgeWorkspaceHeavyData.mockImplementation(() => {
       order.push("heavy")
@@ -389,11 +389,19 @@ describe("WorkspaceService.teardownDueWorkspace — contact document files", () 
     })
 
     await expect(teardown(due)).resolves.toEqual(due)
-    expect(order).toEqual(["heavy", "purge:workspaces/ws-9/documents/", "row"])
+    expect(order).toEqual([
+      "heavy",
+      "purge:workspaces/ws-9/documents/",
+      "purge:public/space/ws-9/contacts/",
+      "row",
+    ])
     expect(deleteByPrefix).toHaveBeenCalledWith(
       "workspaces/ws-9/documents/",
       {},
     )
+    // Only the contacts subtree: flow media and logos under public/space/<ws>/
+    // can be referenced by templates installed into other workspaces.
+    expect(deleteByPrefix).not.toHaveBeenCalledWith("public/space/ws-9/", {})
   })
 
   test("a storage failure is logged and the workspace row is still deleted", async () => {
@@ -403,6 +411,10 @@ describe("WorkspaceService.teardownDueWorkspace — contact document files", () 
     expect(deleteRow).toHaveBeenCalledTimes(1)
     expect(logger.warn).toHaveBeenCalledWith(
       { workspaceId: "ws-9", prefix: "workspaces/ws-9/documents/", err },
+      "workspace-purge: failed to purge storage objects under prefix",
+    )
+    expect(logger.warn).toHaveBeenCalledWith(
+      { workspaceId: "ws-9", prefix: "public/space/ws-9/contacts/", err },
       "workspace-purge: failed to purge storage objects under prefix",
     )
   })

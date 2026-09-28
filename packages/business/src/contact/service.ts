@@ -46,6 +46,7 @@ import { logger } from "../logger"
 import { messageCleanupService } from "../message-cleanup/service"
 import { outboundDownload } from "../net/outbound-fetch"
 import { quotaEnforcementService } from "../quota-enforcement/service"
+import { contactAvatarPrefix } from "../storage/paths"
 import { purgeStoragePrefix } from "../storage/purge-prefix"
 import { userQuotaService } from "../user-quota/service"
 import { workspaceService } from "../workspace/service"
@@ -78,7 +79,7 @@ import { parseContactIdentifier } from "./utils"
 // One DELETE per chunk keeps each statement's lock scope and cascade work
 // bounded (mirrors CONTACT_CHUNK_SIZE in tag/service.ts).
 const CONTACT_DELETE_CHUNK_SIZE = 50
-const CONTACT_DOCUMENT_PURGE_CONCURRENCY = 8
+const CONTACT_FILE_PURGE_CONCURRENCY = 8
 
 type ContactWriteData = Partial<
   Pick<
@@ -639,10 +640,11 @@ class ContactService extends BaseService {
       })
 
       // ContactDocument rows cascade with the contact, but their PDFs (rendered
-      // and signed) live in storage under one per-contact prefix. Purged only
-      // AFTER the chunk committed, best-effort: a storage failure leaves an
-      // orphaned file, never a half-deleted contact.
-      await this.purgeDocumentFiles({
+      // and signed) and uploaded avatars (public-read) live in storage under
+      // per-contact prefixes. Purged only AFTER the chunk committed,
+      // best-effort: a storage failure leaves an orphaned file, never a
+      // half-deleted contact.
+      await this.purgeContactFiles({
         workspaceId,
         contactIds: chunk.map((c) => c.id),
       })
@@ -663,19 +665,26 @@ class ContactService extends BaseService {
    * deletes, and the S3 client's agent has ~50 sockets shared with every
    * other storage call in this process (downloads, media uploads).
    */
-  private async purgeDocumentFiles(props: {
+  private async purgeContactFiles(props: {
     workspaceId: string
     contactIds: string[]
   }): Promise<void> {
     await mapWithConcurrency(
       props.contactIds,
-      CONTACT_DOCUMENT_PURGE_CONCURRENCY,
-      (contactId) =>
-        purgeStoragePrefix(
+      CONTACT_FILE_PURGE_CONCURRENCY,
+      async (contactId) => {
+        const context = { workspaceId: props.workspaceId, contactId }
+        await purgeStoragePrefix(
           contactDocumentsPrefix(props.workspaceId, contactId),
-          { workspaceId: props.workspaceId, contactId },
+          context,
           "contact-delete",
-        ),
+        )
+        await purgeStoragePrefix(
+          contactAvatarPrefix(props.workspaceId, contactId),
+          context,
+          "contact-delete",
+        )
+      },
     )
   }
 
@@ -928,7 +937,7 @@ class ContactService extends BaseService {
     try {
       const uploaded = await uploadFileFromUrl(
         avatar,
-        `public/space/${workspaceId}/contacts/${contactId}/avatar/${createId()}`,
+        `${contactAvatarPrefix(workspaceId, contactId)}${createId()}`,
         { fetchImpl: outboundDownload },
       )
       return uploaded.originPath

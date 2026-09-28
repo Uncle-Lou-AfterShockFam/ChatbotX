@@ -54,7 +54,7 @@ describe("contactService.delete", () => {
     vi.restoreAllMocks()
   })
 
-  test("purges each deleted contact's document prefix AFTER its chunk committed, and a storage failure never fails the delete", async () => {
+  test("purges each deleted contact's document AND avatar prefixes AFTER its chunk committed, and a storage failure never fails the delete", async () => {
     const contacts = Array.from({ length: 60 }, (_, i) => makeContact(i))
     vi.spyOn(db.query.contactModel, "findMany").mockResolvedValue(
       contacts as never,
@@ -80,7 +80,12 @@ describe("contactService.delete", () => {
       .spyOn(uploader, "deleteByPrefix")
       .mockImplementation((prefix: string) => {
         callOrder.push(`purge:${prefix}`)
+        // contact-7's document purge fails: its avatar purge still runs.
         if (prefix.endsWith("/contact-7/")) {
+          return Promise.reject(new Error("S3 unreachable"))
+        }
+        // contact-8's avatar purge fails: the delete still succeeds.
+        if (prefix.endsWith("/contact-8/avatar/")) {
           return Promise.reject(new Error("S3 unreachable"))
         }
         return Promise.resolve({ deleted: 2 })
@@ -92,22 +97,26 @@ describe("contactService.delete", () => {
     })
 
     expect(result).toHaveLength(60)
-    expect(purge).toHaveBeenCalledTimes(60)
+    expect(purge).toHaveBeenCalledTimes(120)
     for (const contact of contacts) {
       expect(purge).toHaveBeenCalledWith(
         `workspaces/ws-1/documents/${contact.id}/`,
         {},
       )
+      expect(purge).toHaveBeenCalledWith(
+        `public/space/ws-1/contacts/${contact.id}/avatar/`,
+        {},
+      )
     }
-    // 60 contacts / 50 per chunk: chunk 1's tx, its 50 purges, chunk 2's tx,
-    // its 10 purges. No purge before the chunk's row delete committed.
+    // 60 contacts / 50 per chunk: chunk 1's tx, its 100 purges, chunk 2's tx,
+    // its 20 purges. No purge before the chunk's row delete committed.
     expect(callOrder[0]).toBe("tx")
-    expect(callOrder.slice(1, 51).every((c) => c.startsWith("purge:"))).toBe(
+    expect(callOrder.slice(1, 101).every((c) => c.startsWith("purge:"))).toBe(
       true,
     )
-    expect(callOrder[51]).toBe("tx")
-    expect(callOrder.slice(52).every((c) => c.startsWith("purge:"))).toBe(true)
-    expect(callOrder).toHaveLength(62)
+    expect(callOrder[101]).toBe("tx")
+    expect(callOrder.slice(102).every((c) => c.startsWith("purge:"))).toBe(true)
+    expect(callOrder).toHaveLength(122)
   })
 
   test("chunks deletes and records tombstones atomically per chunk", async () => {
