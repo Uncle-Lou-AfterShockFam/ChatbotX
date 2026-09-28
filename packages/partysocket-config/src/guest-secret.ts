@@ -9,7 +9,8 @@ import { isMintedGuestConversationId } from "./guest-id"
 // it. It is stateless: nothing secret is stored, and rotating the broadcast
 // secret ends every guest session.
 const GUEST_SECRET_KEY_LABEL = "cbx-guest-secret-v1"
-const GUEST_SECRET_REGEX = /^[0-9a-f]{64}$/
+/** The shape of a guest secret (lower-case SHA-256 hex); the widget checks stored ones against it. */
+export const GUEST_SECRET_REGEX = /^[0-9a-f]{64}$/
 const MIN_BROADCAST_SECRET_LENGTH = 32
 
 const deriveGuestSecretKey = (broadcastSecret: string) =>

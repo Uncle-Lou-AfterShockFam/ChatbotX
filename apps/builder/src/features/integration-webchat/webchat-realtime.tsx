@@ -28,7 +28,10 @@ export function WebchatRealtime({
     room: guestConversationId,
     party: "guests",
     // The room is the id, which the API and exports show; the secret is what
-    // lets this visitor in (s215). A query param: a socket cannot send headers.
+    // lets this visitor in (s215). A query param: a socket cannot send headers,
+    // so the edge access log deletes `k` (deploy/chatbotx/Caddyfile). A socket
+    // refused after a broadcast-secret rotation recovers on the next send or
+    // history load (401 -> restartGuestSession -> this component remounts).
     query: { k: guestSecret },
 
     // onOpen() {},

@@ -1,10 +1,9 @@
 import { isMintedGuestConversationId } from "@chatbotx.io/partysocket-config/guest-id"
+import { GUEST_SECRET_REGEX } from "@chatbotx.io/partysocket-config/guest-secret"
 
-export const GUEST_CONVERSATION_ID_KEY = "x-conversation-id" as const
+const GUEST_CONVERSATION_ID_KEY = "x-conversation-id"
 export const LEGACY_GLOBAL_KEY = GUEST_CONVERSATION_ID_KEY
-export const GUEST_SESSION_KEY = "x-guest-session" as const
-
-const GUEST_SECRET_FORMAT = /^[0-9a-f]{64}$/
+const GUEST_SESSION_KEY = "x-guest-session"
 
 const memoryStorage = new Map<string, string>()
 
@@ -49,7 +48,7 @@ export const readGuestSession = (
   if (
     !isMintedGuestConversationId(guestConversationId, workspaceId) ||
     typeof guestSecret !== "string" ||
-    !GUEST_SECRET_FORMAT.test(guestSecret)
+    !GUEST_SECRET_REGEX.test(guestSecret)
   ) {
     return null
   }

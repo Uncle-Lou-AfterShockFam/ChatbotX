@@ -225,13 +225,17 @@ export const createGuestSessionStore = (
           buildGuestSessionKey(config.workspaceId, config.id),
           serverGuestSession,
         )
-        set({
+        set((state) => ({
           ...serverGuestSession,
           isNewGuestSession: true,
-          messages: [],
+          // The old conversation's messages go; a visitor bubble the server
+          // never confirmed (no conversation yet) stays, so the send that hit
+          // the refusal can still be marked failed.
+          messages: state.messages.filter((m) => m.conversationId === ""),
           nextCursorMessage: null,
           hasNextMessagePage: true,
-        })
+          isTyping: false,
+        }))
       },
 
       setGuestUser: (user: UserResource) => {

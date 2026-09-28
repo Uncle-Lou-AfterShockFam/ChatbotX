@@ -43,6 +43,9 @@ export const WebchatWrapper = ({ referral }: { referral?: string }) => {
         accessToken={accessToken}
         guestConversationId={guestConversationId ?? ""}
         guestSecret={guestSecret ?? ""}
+        // Keyed so a restarted session (s215) runs its own init: the welcome
+        // flow and a `?ref=` entry flow fire only from init.
+        key={guestConversationId ?? ""}
         parentOrigin={parentOrigin}
         webchatId={config.id}
         workspaceId={config.workspaceId}

@@ -203,7 +203,7 @@ describe("webchat guest session store", () => {
     expect(localStorageMock.items.has(legacyScopedKey)).toBe(false)
   })
 
-  test("restartGuestSession swaps in the server pair once and clears the thread", () => {
+  test("restartGuestSession swaps in the server pair once and clears the old thread", () => {
     const localStorageMock = createLocalStorageMock({
       [sessionKey]: stored(MINTED, SECRET),
     })
@@ -211,22 +211,35 @@ describe("webchat guest session store", () => {
 
     const store = newStore()
     store.getState().initGuestSession(SERVER_SESSION)
-    store.getState().appendMessage({ text: "old thread" })
+    // A confirmed message of the old conversation, and the visitor's send
+    // that the refusal hit (optimistic: no conversation yet).
+    store
+      .getState()
+      .appendMessage({ text: "old thread", conversationId: "c-1" })
+    const pending = store.getState().appendMessage({ text: "refused send" })
+    store.setState({ isTyping: true })
     store.getState().restartGuestSession()
 
     const state = store.getState()
     expect(state.guestConversationId).toBe(SERVER)
     expect(state.guestSecret).toBe(SERVER_SECRET)
     expect(state.isNewGuestSession).toBe(true)
-    expect(state.messages).toEqual([])
+    expect(state.isTyping).toBe(false)
+    expect(state.messages.map((m) => m.text)).toEqual(["refused send"])
     expect(JSON.parse(localStorageMock.items.get(sessionKey) ?? "")).toEqual(
       SERVER_SESSION,
     )
 
-    // Already the server pair: a second refusal does not loop.
-    store.getState().appendMessage({ text: "new thread" })
+    // The refused send is still there to be flagged, not silently gone.
+    store.getState().markSendFailed(pending.clientId as string, "refused")
+    expect(store.getState().messages[0]?.sendError).toBe("refused")
+
+    // Already the server pair: a second refusal does not loop or clear again.
+    store
+      .getState()
+      .appendMessage({ text: "new thread", conversationId: "c-2" })
     store.getState().restartGuestSession()
-    expect(store.getState().messages).toHaveLength(1)
+    expect(store.getState().messages).toHaveLength(2)
   })
 
   test("restartGuestSession before init is a no-op", () => {
