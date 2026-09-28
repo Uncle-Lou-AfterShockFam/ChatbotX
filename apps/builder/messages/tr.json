@@ -5637,6 +5637,9 @@
     "portalPricingPage": "Fiyatlandırma"
   },
   "unsubscribePage": {
+    "confirmTitle": "Unsubscribe from these emails?",
+    "confirmDescription": "You will no longer receive emails from this sender.",
+    "confirmButton": "Unsubscribe",
     "title": "Abonelikten çıkarıldınız.",
     "description": "Artık bu gönderenden e-posta almayacaksınız.",
     "invalidTitle": "Geçersiz abonelikten çıkma bağlantısı.",

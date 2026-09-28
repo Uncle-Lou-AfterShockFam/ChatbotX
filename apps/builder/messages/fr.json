@@ -5637,6 +5637,9 @@
     "portalPricingPage": "Tarification"
   },
   "unsubscribePage": {
+    "confirmTitle": "Unsubscribe from these emails?",
+    "confirmDescription": "You will no longer receive emails from this sender.",
+    "confirmButton": "Unsubscribe",
     "title": "Vous avez été désabonné.",
     "description": "Vous ne recevrez plus d’e-mails de cet expéditeur.",
     "invalidTitle": "Lien de désabonnement non valide.",

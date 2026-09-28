@@ -51,5 +51,9 @@ export type SmtpActions<IAuth extends SmtpAuthValue = SmtpAuthValue> = {
     to: string
     subject: string
     html: string
+    /** The text/plain alternative. */
+    text?: string
+    /** Extra headers, e.g. List-Unsubscribe (RFC 2369 / 8058). */
+    headers?: Record<string, string>
   }) => Promise<void>
 }

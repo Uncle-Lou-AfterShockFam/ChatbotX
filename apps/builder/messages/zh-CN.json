@@ -5420,6 +5420,9 @@
     "title": "触发器"
   },
   "unsubscribePage": {
+    "confirmTitle": "Unsubscribe from these emails?",
+    "confirmDescription": "You will no longer receive emails from this sender.",
+    "confirmButton": "Unsubscribe",
     "description": "您将不会再收到来自该寄件者的电子邮件。",
     "invalidDescription": "此链接无效或已过期。",
     "invalidTitle": "取消订阅链接无效。",
