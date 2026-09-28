@@ -451,7 +451,9 @@ class InvoiceService extends BaseService {
         and(eq(invoiceModel.id, invoice.id), eq(invoiceModel.status, "draft")),
       )
       .returning()
-    if (!opened) {
+    if (opened) {
+      await result.afterOpen?.()
+    } else {
       await result.onDraftLost?.()
     }
     if (opened?.status === "open" || opened?.status === "paid") {

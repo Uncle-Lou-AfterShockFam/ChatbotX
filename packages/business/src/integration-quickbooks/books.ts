@@ -249,3 +249,28 @@ export async function upsertQuickbooksInvoice(props: {
       quickbooksAmountToMinor(qbo.totalAmt, invoice.currency) === expected,
   }
 }
+
+/**
+ * A live QBO copy of a hub invoice that no row records (an attempt that
+ * created it and died, or whose answer was lost), found by the hub marker.
+ * Only a contact this company already has a customer for can have one.
+ */
+export async function findUnrecordedQuickbooksInvoice(props: {
+  call: QuickbooksCall
+  integrationId: string
+  invoice: Pick<InvoiceModel, "id" | "contactId" | "createdAt">
+}): Promise<QuickbooksInvoice | null> {
+  const customer = await db.query.quickbooksCustomerModel.findFirst({
+    where: {
+      integrationId: props.integrationId,
+      contactId: props.invoice.contactId,
+    },
+  })
+  return customer
+    ? await findQuickbooksInvoiceByMarker(props.call, {
+        customerId: customer.customerId,
+        marker: quickbooksHubMarker(props.invoice.id),
+        since: props.invoice.createdAt,
+      })
+    : null
+}

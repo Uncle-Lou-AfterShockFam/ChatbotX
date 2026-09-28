@@ -109,6 +109,50 @@ const loadRow = async (integrationId: string) =>
     where: { integrationId },
   })
 
+const SAVE_ATTEMPTS = 4
+
+/**
+ * Persist a rotated pair by CAS on the version read. Intuit already retired
+ * the old refresh token, so a transient database error must not lose the new
+ * one: the write is retried (bounded) before giving up loudly.
+ */
+async function saveRotatedTokens(
+  row: IntegrationQuickbooksModel,
+  tokens: QuickbooksTokenSet,
+): Promise<IntegrationQuickbooksModel | undefined> {
+  const auth = await encryptQuickbooksAuth(tokens, row.integrationId)
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const [saved] = await db
+        .update(integrationQuickbooksModel)
+        .set({
+          auth,
+          tokenVersion: row.tokenVersion + 1,
+          tokenRefreshedAt: new Date(),
+          tokenRefreshError: null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(integrationQuickbooksModel.id, row.id),
+            eq(integrationQuickbooksModel.tokenVersion, row.tokenVersion),
+          ),
+        )
+        .returning()
+      return saved
+    } catch (error) {
+      if (attempt >= SAVE_ATTEMPTS) {
+        logger.error(
+          { err: error, integrationId: row.integrationId },
+          "quickbooks: rotated tokens could not be saved; the company will need a reconnect",
+        )
+        throw error
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** attempt))
+    }
+  }
+}
+
 /**
  * Refresh under the per-integration lock, deciding from the row read INSIDE
  * it: a concurrent caller that already refreshed (a newer `tokenVersion`)
@@ -146,6 +190,15 @@ async function refreshLocked(props: {
         })
       } catch (error) {
         if (error instanceof QuickbooksReconnectRequiredError) {
+          // Another writer may have rotated the pair meanwhile (a reconnect,
+          // or a refresher past a lost lock): its newer tokens win, no mark.
+          const current = await loadRow(props.integrationId)
+          if (current && current.tokenVersion !== row.tokenVersion) {
+            return {
+              row: current,
+              accessToken: (await decryptQuickbooksAuth(current)).accessToken,
+            }
+          }
           await db
             .update(integrationQuickbooksModel)
             .set({ tokenRefreshError: error.message, updatedAt: new Date() })
@@ -158,22 +211,7 @@ async function refreshLocked(props: {
         }
         throw error
       }
-      const [saved] = await db
-        .update(integrationQuickbooksModel)
-        .set({
-          auth: await encryptQuickbooksAuth(tokens, row.integrationId),
-          tokenVersion: row.tokenVersion + 1,
-          tokenRefreshedAt: new Date(),
-          tokenRefreshError: null,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(integrationQuickbooksModel.id, row.id),
-            eq(integrationQuickbooksModel.tokenVersion, row.tokenVersion),
-          ),
-        )
-        .returning()
+      const saved = await saveRotatedTokens(row, tokens)
       if (!saved) {
         // Only possible when the lock expired mid-call (or a reconnect wrote
         // new tokens meanwhile): the rotated pair is lost, the stored one wins.

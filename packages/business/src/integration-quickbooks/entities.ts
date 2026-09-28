@@ -253,7 +253,11 @@ export async function findQuickbooksInvoiceByMarker(
 ): Promise<QuickbooksInvoice | null> {
   for (const row of await recentForCustomer(call, "Invoice", props)) {
     const invoice = readQuickbooksInvoice(row)
-    if (invoice?.privateNote?.includes(props.marker)) {
+    // A copy an earlier attempt voided is not this invoice: keep looking.
+    if (
+      invoice?.privateNote?.includes(props.marker) &&
+      !isQuickbooksInvoiceVoided(invoice)
+    ) {
       return invoice
     }
   }
@@ -291,19 +295,44 @@ export async function createQuickbooksInvoice(
   return invoice
 }
 
+/** A QBO void zeroes the invoice and prefixes its PrivateNote with "Voided". */
+export const isQuickbooksInvoiceVoided = (
+  invoice: QuickbooksInvoice,
+): boolean =>
+  (invoice.privateNote?.startsWith("Voided") ?? false) && invoice.totalAmt === 0
+
+/** QBO shows a payment on it (paid or part-paid). */
+export const quickbooksInvoiceHasPayment = (
+  invoice: QuickbooksInvoice,
+): boolean =>
+  invoice.balance !== null &&
+  invoice.totalAmt !== null &&
+  invoice.balance < invoice.totalAmt
+
+export type QuickbooksVoidOutcome = "voided" | "already-void" | "has-payment"
+
 /**
  * Void an invoice (QBO keeps it, zeroed) with its CURRENT SyncToken: it is
- * re-read first, and once more after a stale-object answer. No request id:
- * a void is idempotent by nature, and a cached failure must not stick.
+ * re-read first, and once more after a stale-object answer. An invoice that
+ * shows a payment on that fresh read is NEVER voided (QBO would turn the
+ * payment into unapplied credit): the caller says "refund it" instead. No
+ * request id: a void is idempotent by nature, and a cached failure must not
+ * stick.
  */
 export async function voidQuickbooksInvoice(
   call: QuickbooksCall,
   invoiceId: string,
-): Promise<void> {
+): Promise<QuickbooksVoidOutcome> {
   for (let attempt = 0; ; attempt++) {
     const current = await getQuickbooksInvoice(call, invoiceId)
     if (!current) {
       throw new Error(`QuickBooks invoice ${invoiceId} not found`)
+    }
+    if (isQuickbooksInvoiceVoided(current)) {
+      return "already-void"
+    }
+    if (quickbooksInvoiceHasPayment(current)) {
+      return "has-payment"
     }
     try {
       await call({
@@ -312,7 +341,7 @@ export async function voidQuickbooksInvoice(
         query: { operation: "void" },
         body: { Id: current.id, SyncToken: current.syncToken },
       })
-      return
+      return "voided"
     } catch (error) {
       if (
         attempt === 0 &&

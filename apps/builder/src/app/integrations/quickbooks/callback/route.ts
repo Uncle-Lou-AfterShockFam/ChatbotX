@@ -1,4 +1,5 @@
 import { withAuditContext } from "@chatbotx.io/business/audit"
+import { ChatbotXException } from "@chatbotx.io/business/errors"
 import { integrationQuickbooksService } from "@chatbotx.io/business/integration-quickbooks"
 import {
   QUICKBOOKS_OAUTH_NONCE_COOKIE,
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
   if (url.searchParams.get("error") || !code || !realmId) {
     return redirect(`${back}?quickbooks=cancelled`)
   }
-  let failure: string | null = null
+  let failure: "conflict" | "failed" | null = null
   try {
     await withAuditContext(
       {
@@ -88,12 +89,13 @@ export async function GET(request: NextRequest) {
       { err: error, workspaceId: state.workspaceId },
       "quickbooks callback: connect failed",
     )
+    // A closed code only: error text (SQL, ids) never goes into a URL.
     failure =
-      error instanceof Error ? error.message.slice(0, 200) : "connect failed"
+      error instanceof ChatbotXException && error.code === "conflict"
+        ? "conflict"
+        : "failed"
   }
   return redirect(
-    failure
-      ? `${back}?quickbooks=error&reason=${encodeURIComponent(failure)}`
-      : `${back}?quickbooks=connected`,
+    failure ? `${back}?quickbooks=${failure}` : `${back}?quickbooks=connected`,
   )
 }

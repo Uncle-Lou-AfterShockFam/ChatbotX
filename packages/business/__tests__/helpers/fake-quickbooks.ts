@@ -40,6 +40,8 @@ export function fakeQuickbooks(options: { realmId?: string } = {}) {
     payments: new Map<string, Row>(),
     replays: new Map<string, Row>(),
     calls: [] as FakeCall[],
+    /** "<METHOD> <path>" whose next call is PERFORMED but answered 500 (a lost answer). */
+    dropAnswer: new Set<string>(),
     /** "<METHOD> <path prefix>" -> [status, body], answered once. */
     failNext: new Map<string, [number, Row]>(),
     nextId: 100,
@@ -330,9 +332,11 @@ export function fakeQuickbooks(options: { realmId?: string } = {}) {
           return HttpResponse.json({ Invoice: invoice })
         }
         if (path === "invoice" && body) {
-          return HttpResponse.json({
-            Invoice: replay(url, "invoice", () => createInvoice(body)),
-          })
+          const created = replay(url, "invoice", () => createInvoice(body))
+          if (state.dropAnswer.delete("POST invoice")) {
+            return HttpResponse.json({}, { status: 500 })
+          }
+          return HttpResponse.json({ Invoice: created })
         }
         if (path === "payment" && body) {
           return HttpResponse.json({

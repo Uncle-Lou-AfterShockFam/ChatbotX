@@ -13,9 +13,8 @@ import {
 import { cookies } from "next/headers"
 import { env } from "@/env"
 import { workspaceIdrequestParams } from "@/features/common/schema"
-import { hasWorkspacePermission } from "@/lib/auth/permission-routes"
-import { workspaceActionClient } from "@/lib/safe-action"
 import { quickbooksRedirectUri } from "../lib"
+import { quickbooksActionClient } from "./action-client"
 
 /**
  * Start a QuickBooks connect (s214b): the answer is Intuit's authorize URL.
@@ -23,12 +22,9 @@ import { quickbooksRedirectUri } from "../lib"
  * rides an HttpOnly cookie that only this browser sends back, so a code
  * cannot be replayed into another session or workspace.
  */
-export const startQuickbooksConnectAction = workspaceActionClient
+export const startQuickbooksConnectAction = quickbooksActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .action(async ({ ctx, bindArgsParsedInputs: [workspaceId] }) => {
-    if (!hasWorkspacePermission(ctx.workspaceMemberPermissions, "superAdmin")) {
-      throw new Error("You need to be a super admin to connect QuickBooks")
-    }
     const app = await quickbooksAppCredential()
     const nonce = mintQuickbooksOAuthNonce()
     const state = await signQuickbooksOAuthState({

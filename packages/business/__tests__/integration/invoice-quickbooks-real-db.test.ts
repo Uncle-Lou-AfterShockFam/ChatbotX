@@ -117,6 +117,9 @@ const PROVIDER_ID_RE = /^qbo:\d+:\d+$/
 const INVOICE_LINK_RE = /^https:\/\/connect\.intuit\.com\//
 const PDF_URL_RE = /^https:\/\/chat\.example\.org\/pay\/.+\/pdf$/
 const EMAIL_RE = /email/
+const REFUND_RE = /already has a payment: refund it in QuickBooks/
+const UNPAID_AGAIN_RE = /unpaid again/
+const STILL_COLLECTED_RE = /still collected through this QuickBooks company/
 const PAYMENTS_RE = /QuickBooks Payments/
 const VOIDED_RE = /^Voided/
 const TAX_RE = /totals this invoice at 17\.23 USD, not 16\.00/
@@ -452,6 +455,141 @@ describe.skipIf(!databaseUrl)("quickbooks method (s214b)", () => {
     expect((await invoiceRow(invoice.id))?.lastError).toBeNull()
   })
 
+  test("a payment landing after the pre-void read is never voided away", async () => {
+    const company = await seedCompany()
+    const invoice = await createQuickbooksInvoice(company)
+    const qboId = qboIdOf(invoice.providerInvoiceId)
+    // prepareVoid's read fails (unreachable voids, owner rule); the customer
+    // pays before afterVoid re-reads it.
+    fake.state.failNext.set("GET invoice/", [500, {}])
+    fake.pay(qboId)
+    const voided = await invoiceService.void({
+      workspaceId: company.workspaceId,
+      id: invoice.id,
+    })
+    expect(voided.status).toBe("void")
+    expect(voided.lastError).toMatch(REFUND_RE)
+    expect(fake.state.invoices.get(qboId)?.PrivateNote).not.toMatch(VOIDED_RE)
+    expect(fake.apiCalls("POST", "invoice").length).toBe(1)
+  })
+
+  test("voiding a draft voids the QBO copy a lost answer left unrecorded", async () => {
+    const company = await seedCompany()
+    fake.state.dropAnswer.add("POST invoice")
+    const error = await createQuickbooksInvoice(company).catch((e) => e)
+    expect(error).toBeInstanceOf(InvoiceFinalizeError)
+    const [draft] = (
+      await db.execute<{ id: string }>(sql`
+        SELECT id FROM "Invoice" WHERE "workspaceId" = ${company.workspaceId}`)
+    ).rows
+    expect(fake.state.invoices.size).toBe(1)
+    await invoiceService.void({
+      workspaceId: company.workspaceId,
+      id: draft?.id as string,
+    })
+    const [copy] = [...fake.state.invoices.values()]
+    expect(String(copy?.PrivateNote)).toMatch(VOIDED_RE)
+  })
+
+  test("a voided copy never shadows the live one on adoption", async () => {
+    const company = await seedCompany()
+    fake.state.dropAnswer.add("POST invoice")
+    await createQuickbooksInvoice(company).catch(() => undefined)
+    const [draft] = (
+      await db.execute<{ id: string }>(sql`
+        SELECT id FROM "Invoice" WHERE "workspaceId" = ${company.workspaceId}`)
+    ).rows
+    const live = [...fake.state.invoices.values()][0] as Record<string, unknown>
+    // An older voided copy of the same hub invoice sits first in QBO.
+    const voidedCopy = {
+      ...live,
+      Id: "5",
+      TotalAmt: 0,
+      Balance: 0,
+      PrivateNote: `Voided - ${live.PrivateNote}`,
+    }
+    fake.state.invoices = new Map([
+      ["5", voidedCopy],
+      [live.Id as string, live],
+    ])
+    const opened = await invoiceService.finalize({
+      workspaceId: company.workspaceId,
+      id: draft?.id as string,
+    })
+    expect(opened.providerInvoiceId).toBe(
+      `qbo:${fake.state.realmId}:${live.Id}`,
+    )
+    expect(fake.apiCalls("POST", "invoice")).toHaveLength(1)
+  })
+
+  test("paid at open queues a settle read so the paid marks still run", async () => {
+    const company = await seedCompany()
+    fake.state.dropAnswer.add("POST invoice")
+    await createQuickbooksInvoice(company).catch(() => undefined)
+    const [draft] = (
+      await db.execute<{ id: string }>(sql`
+        SELECT id FROM "Invoice" WHERE "workspaceId" = ${company.workspaceId}`)
+    ).rows
+    const qboId = [...fake.state.invoices.keys()][0] as string
+    fake.pay(qboId)
+    m.enqueue.mockClear()
+    const opened = await invoiceService.finalize({
+      workspaceId: company.workspaceId,
+      id: draft?.id as string,
+    })
+    expect(opened.status).toBe("paid")
+    expect(m.enqueue).toHaveBeenCalledWith(
+      "quickbooksEntityChanged",
+      expect.objectContaining({
+        data: expect.objectContaining({ entity: "Invoice", entityId: qboId }),
+      }),
+      expect.objectContaining({
+        jobId: expect.stringContaining("qbo-change-open-"),
+      }),
+    )
+    const outcomes = await processQuickbooksChange({
+      workspaceId: company.workspaceId,
+      integrationId: company.integrationId,
+      entity: "Invoice",
+      entityId: qboId,
+    })
+    expect(outcomes).toEqual(["paid"])
+    expect(m.marks).toHaveBeenCalledTimes(1)
+  })
+
+  test("a payment reversed in QBO flags the paid hub invoice, never un-pays it", async () => {
+    const company = await seedCompany()
+    const invoice = await createQuickbooksInvoice(company)
+    const qboId = qboIdOf(invoice.providerInvoiceId)
+    fake.pay(qboId)
+    const job = {
+      workspaceId: company.workspaceId,
+      integrationId: company.integrationId,
+      entity: "Invoice" as const,
+      entityId: qboId,
+    }
+    await processQuickbooksChange(job)
+    const qbo = fake.state.invoices.get(qboId) as Record<string, unknown>
+    qbo.Balance = qbo.TotalAmt
+    await expect(processQuickbooksChange(job)).resolves.toEqual([
+      "unpaid-after-paid",
+    ])
+    const row = await invoiceRow(invoice.id)
+    expect(row?.status).toBe("paid")
+    expect(row?.lastError).toMatch(UNPAID_AGAIN_RE)
+  })
+
+  test("disconnect is refused while a quickbooks invoice is live", async () => {
+    const company = await seedCompany()
+    await createQuickbooksInvoice(company)
+    const { integrationQuickbooksService } = await import(
+      "../../src/integration-quickbooks/service"
+    )
+    await expect(
+      integrationQuickbooksService.disconnect(company.workspaceId),
+    ).rejects.toThrow(STILL_COLLECTED_RE)
+  })
+
   test("the signed webhook queues known companies' changes only", async () => {
     const company = await seedCompany()
     const body = Buffer.from(
@@ -778,24 +916,52 @@ describe.skipIf(!databaseUrl)("quickbooks mirror (s214b)", () => {
 
   test("list states: synced, pending, error; uncovered invoices have none", async () => {
     const company = await seedCompany({ mirror: true })
-    const synced = await seedCheckoutInvoice({ ...company, status: "open", number: 1 })
-    const pending = await seedCheckoutInvoice({ ...company, status: "paid", number: 2 })
-    const failing = await seedCheckoutInvoice({ ...company, status: "open", number: 3 })
-    await syncInvoiceMirror({ workspaceId: company.workspaceId, invoiceId: synced })
+    const synced = await seedCheckoutInvoice({
+      ...company,
+      status: "open",
+      number: 1,
+    })
+    const pending = await seedCheckoutInvoice({
+      ...company,
+      status: "paid",
+      number: 2,
+    })
+    const failing = await seedCheckoutInvoice({
+      ...company,
+      status: "open",
+      number: 3,
+    })
+    await syncInvoiceMirror({
+      workspaceId: company.workspaceId,
+      invoiceId: synced,
+    })
     fake.state.failNext.set("POST invoice", [
       400,
       { Fault: { Error: [{ Message: "Bad item", code: "2500" }] } },
     ])
-    await syncInvoiceMirror({ workspaceId: company.workspaceId, invoiceId: failing })
+    await syncInvoiceMirror({
+      workspaceId: company.workspaceId,
+      invoiceId: failing,
+    })
     const rows = (
-      await db.execute<{ id: string; status: "open" | "paid"; method: "stripeCheckout"; createdAt: Date }>(sql`
+      await db.execute<{
+        id: string
+        status: "open" | "paid"
+        method: "stripeCheckout"
+        createdAt: Date
+      }>(sql`
         SELECT id, status, method, "createdAt" FROM "Invoice" WHERE "workspaceId" = ${company.workspaceId}`)
     ).rows.map((row) => ({ ...row, createdAt: new Date(row.createdAt) }))
     const states = await invoiceBookkeepingStates({
       workspaceId: company.workspaceId,
       invoices: [
         ...rows,
-        { id: "1", status: "draft", method: "stripeCheckout", createdAt: new Date() },
+        {
+          id: "1",
+          status: "draft",
+          method: "stripeCheckout",
+          createdAt: new Date(),
+        },
       ],
     })
     expect(states.get(synced)).toEqual({ state: "synced", error: null })

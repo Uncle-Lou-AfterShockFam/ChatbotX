@@ -5,6 +5,7 @@ import { validationException } from "../errors"
 import {
   assertQuickbooksCurrency,
   ensureQuickbooksCustomer,
+  findUnrecordedQuickbooksInvoice,
   QuickbooksBooksError,
   upsertQuickbooksInvoice,
 } from "../integration-quickbooks/books"
@@ -22,12 +23,15 @@ import {
   isQuickbooksInvoicePaid,
   type QuickbooksCall,
   type QuickbooksInvoice,
+  quickbooksInvoiceHasPayment,
   voidQuickbooksInvoice,
 } from "../integration-quickbooks/entities"
 import { logger } from "../logger"
 import { resolveWorkspaceAppUrl } from "../platform/settings"
 import { invoicePayUrl, mintInvoicePayToken } from "./checkout-provider"
+import { recordLastErrorIfClear } from "./last-error"
 import type { InvoiceProvider } from "./providers"
+import { enqueueQuickbooksChange } from "./quickbooks-jobs"
 import { InvoiceProviderError } from "./stripe-provider"
 
 const QBO_ID = /^\d{1,20}$/
@@ -104,20 +108,11 @@ export function toQuickbooksProviderError(
   )
 }
 
-/** QBO shows a payment on it: a paid or part-paid invoice is never voided. */
-const hasPayment = (invoice: QuickbooksInvoice): boolean =>
-  invoice.balance !== null &&
-  invoice.totalAmt !== null &&
-  invoice.balance < invoice.totalAmt
-
-async function recordLastErrorIfClear(invoiceId: string, message: string) {
-  await db
-    .update(invoiceModel)
-    .set({ lastError: message.slice(0, 1000), updatedAt: new Date() })
-    .where(and(eq(invoiceModel.id, invoiceId), isNull(invoiceModel.lastError)))
-}
-
-/** Best effort: void a QBO invoice the hub no longer collects, else say so. */
+/**
+ * Best effort: void a QBO invoice the hub no longer collects, else say so.
+ * One that shows a payment on the fresh read is left alone (voiding would
+ * turn the money into unapplied credit) and named for a refund.
+ */
 async function voidAtQuickbooks(props: {
   invoiceId: string
   integrationId: string
@@ -125,10 +120,16 @@ async function voidAtQuickbooks(props: {
   why: string
 }): Promise<void> {
   try {
-    await voidQuickbooksInvoice(
+    const outcome = await voidQuickbooksInvoice(
       quickbooksCallFor(props.integrationId),
       props.qboId,
     )
+    if (outcome === "has-payment") {
+      await recordLastErrorIfClear(
+        props.invoiceId,
+        `${props.why}, but QuickBooks invoice ${props.qboId} already has a payment: refund it in QuickBooks`,
+      )
+    }
   } catch (error) {
     logger.warn(
       { err: error, invoiceId: props.invoiceId, qboId: props.qboId },
@@ -138,6 +139,34 @@ async function voidAtQuickbooks(props: {
       props.invoiceId,
       `${props.why}, but QuickBooks invoice ${props.qboId} was not voided (${error instanceof Error ? error.message.slice(0, 300) : "failed"}): void it in QuickBooks`,
     )
+  }
+}
+
+/**
+ * A voided draft's QBO copy that no row recorded (a lost create answer, a
+ * failed mismatch void): found by the hub marker, so it is not left payable.
+ */
+async function unrecordedCopyOf(
+  invoice: InvoiceModel,
+  integrationId: string,
+): Promise<string | null> {
+  try {
+    const copy = await findUnrecordedQuickbooksInvoice({
+      call: quickbooksCallFor(integrationId),
+      integrationId,
+      invoice,
+    })
+    return copy?.id ?? null
+  } catch (error) {
+    logger.warn(
+      { err: error, invoiceId: invoice.id },
+      "invoice: could not look for an unrecorded QuickBooks copy",
+    )
+    await recordLastErrorIfClear(
+      invoice.id,
+      "Voided here, but QuickBooks could not be checked for a copy of this invoice: look for it there",
+    )
+    return null
   }
 }
 
@@ -271,8 +300,29 @@ export const quickbooksInvoiceProvider: InvoiceProvider = {
             pdfUrl: `${invoicePayUrl(appUrl, payToken)}/pdf`,
             paidAt: paid ? new Date() : null,
           },
-          // The draft CAS missed: only a VOID row naming no QBO invoice yet is
-          // ours to claim (a concurrent finalize that won keeps its invoice).
+          // Paid at open (an adopted copy QBO already settled, e.g. with a
+          // customer credit): no QBO change may ever follow, so read it once
+          // more through the settle job, which runs the paid marks.
+          afterOpen: paid
+            ? () =>
+                enqueueQuickbooksChange(
+                  {
+                    workspaceId: invoice.workspaceId,
+                    integrationId: connection.integrationId,
+                    entity: "Invoice",
+                    entityId: qboId,
+                  },
+                  "open",
+                ).catch((error: unknown) =>
+                  logger.warn(
+                    { err: error, invoiceId: invoice.id },
+                    "invoice: paid-at-open settle not queued (the CDC poll backstops it)",
+                  ),
+                )
+            : undefined,
+          // The draft CAS missed. A VOID row naming no QBO invoice is ours to
+          // claim and void; a row that names ANOTHER QBO invoice (a
+          // concurrent finalize won) leaves ours an orphan: void it too.
           onDraftLost: async () => {
             const [claimed] = await db
               .update(invoiceModel)
@@ -285,14 +335,24 @@ export const quickbooksInvoiceProvider: InvoiceProvider = {
                 ),
               )
               .returning({ id: invoiceModel.id })
-            if (claimed) {
-              await voidAtQuickbooks({
-                invoiceId: invoice.id,
-                integrationId: connection.integrationId,
-                qboId,
-                why: "Voided here while QuickBooks opened it",
-              })
+            if (!claimed) {
+              const [current] = await db
+                .select({ providerInvoiceId: invoiceModel.providerInvoiceId })
+                .from(invoiceModel)
+                .where(eq(invoiceModel.id, invoice.id))
+                .limit(1)
+              if (current?.providerInvoiceId === providerInvoiceId) {
+                return
+              }
             }
+            await voidAtQuickbooks({
+              invoiceId: invoice.id,
+              integrationId: connection.integrationId,
+              qboId,
+              why: claimed
+                ? "Voided here while QuickBooks opened it"
+                : "Another attempt opened this invoice",
+            })
           },
         }
       },
@@ -315,7 +375,7 @@ export const quickbooksInvoiceProvider: InvoiceProvider = {
           "invoice: QuickBooks unreachable before a void",
         )
       }
-      if (current && hasPayment(current)) {
+      if (current && quickbooksInvoiceHasPayment(current)) {
         throw validationException(
           "invoice",
           `QuickBooks invoice ${qboId} already has a payment: refund it in QuickBooks`,
@@ -326,11 +386,15 @@ export const quickbooksInvoiceProvider: InvoiceProvider = {
       async afterVoid(voided) {
         // The voided row may name an invoice the snapshot did not (a
         // finalize opened it meanwhile): void whatever the row names now.
-        const voidedId = quickbooksInvoiceIdOf(voided.providerInvoiceId)
+        const current = await connectionFor(voided)
+        const voidedId =
+          quickbooksInvoiceIdOf(voided.providerInvoiceId) ??
+          (current
+            ? await unrecordedCopyOf(voided, current.integrationId)
+            : null)
         if (!voidedId) {
           return
         }
-        const current = await connectionFor(voided)
         if (!current) {
           await recordLastErrorIfClear(
             voided.id,

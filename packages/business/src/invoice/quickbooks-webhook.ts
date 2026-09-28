@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto"
-import { and, db, eq } from "@chatbotx.io/database/client"
+import { and, db, eq, isNull } from "@chatbotx.io/database/client"
 import type { InvoiceStatus } from "@chatbotx.io/database/partials"
 import {
   integrationQuickbooksModel,
@@ -8,11 +8,7 @@ import {
 } from "@chatbotx.io/database/schema"
 import type { InvoiceModel } from "@chatbotx.io/database/types"
 import { emitInvoicePaid } from "@chatbotx.io/events"
-import {
-  DefaultJobAction,
-  defaultQueue,
-  type JobQuickbooksEntityChangedData,
-} from "@chatbotx.io/worker-config"
+import type { JobQuickbooksEntityChangedData } from "@chatbotx.io/worker-config"
 import { QuickbooksApiError } from "../integration-quickbooks/client"
 import {
   quickbooksAppCredential,
@@ -23,12 +19,14 @@ import {
   getQuickbooksInvoice,
   getQuickbooksPayment,
   isQuickbooksInvoicePaid,
+  isQuickbooksInvoiceVoided,
   type QuickbooksInvoice,
   readQuickbooksChanges,
 } from "../integration-quickbooks/entities"
 import { logger } from "../logger"
 import { markInvoiceOnContact } from "./contact-marks"
 import { prerenderInvoiceReceipt } from "./document"
+import { enqueueQuickbooksChange } from "./quickbooks-jobs"
 import {
   quickbooksCallFor,
   quickbooksProviderInvoiceId,
@@ -161,20 +159,6 @@ export function parseQuickbooksNotification(
   return out
 }
 
-/** One job per entity and minute: a burst of updates collapses, a later one runs. */
-export const quickbooksEntityJobId = (data: JobQuickbooksEntityChangedData) =>
-  `qbo-change-${data.integrationId}-${data.entity}-${data.entityId}-${Math.floor(Date.now() / 60_000)}`
-
-export async function enqueueQuickbooksChange(
-  data: JobQuickbooksEntityChangedData,
-): Promise<void> {
-  await defaultQueue.add(
-    DefaultJobAction.quickbooksEntityChanged,
-    { type: DefaultJobAction.quickbooksEntityChanged, data },
-    { jobId: quickbooksEntityJobId(data) },
-  )
-}
-
 export type QuickbooksWebhookResult = {
   status: 200 | 401 | 400 | 503
   queued: number
@@ -227,12 +211,15 @@ export async function handleQuickbooksWebhook(props: {
       if (!connection) {
         continue
       }
-      await enqueueQuickbooksChange({
-        workspaceId: connection.workspaceId,
-        integrationId: connection.integrationId,
-        entity: notice.entity,
-        entityId: notice.entityId,
-      })
+      await enqueueQuickbooksChange(
+        {
+          workspaceId: connection.workspaceId,
+          integrationId: connection.integrationId,
+          entity: notice.entity,
+          entityId: notice.entityId,
+        },
+        "webhook",
+      )
       queued += 1
     }
   } catch (error) {
@@ -248,7 +235,39 @@ export type QuickbooksSettleOutcome =
   | "paid"
   | "voided"
   | "paid-after-void"
+  | "unpaid-after-paid"
   | "unchanged"
+
+/**
+ * A hub invoice marked paid whose QBO invoice owes money again (its payment
+ * was deleted or reversed in QuickBooks). The hub never un-pays (`paid` has
+ * no way back), so it says so on the invoice for a human, once.
+ */
+async function flagUnpaidInQuickbooks(
+  props: { integrationId: string; qbo: QuickbooksInvoice },
+  providerInvoiceId: string,
+): Promise<QuickbooksSettleOutcome> {
+  if ((props.qbo.balance ?? 0) <= 0) {
+    return "unchanged"
+  }
+  const [flagged] = await db
+    .update(invoiceModel)
+    .set({
+      lastError: `QuickBooks shows invoice ${props.qbo.id} unpaid again (its payment was deleted or reversed there): check it`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(invoiceModel.providerInvoiceId, providerInvoiceId),
+        eq(invoiceModel.method, "quickbooks"),
+        eq(invoiceModel.integrationId, props.integrationId),
+        eq(invoiceModel.status, "paid"),
+        isNull(invoiceModel.lastError),
+      ),
+    )
+    .returning({ id: invoiceModel.id })
+  return flagged ? "unpaid-after-paid" : "unchanged"
+}
 
 async function dropEvent(integrationId: string, providerEventId: string) {
   try {
@@ -287,12 +306,9 @@ export async function settleQuickbooksInvoice(props: {
     props.qbo.id,
   )
   const paid = isQuickbooksInvoicePaid(props.qbo)
-  const voided =
-    !paid &&
-    (props.qbo.privateNote?.startsWith("Voided") ?? false) &&
-    props.qbo.totalAmt === 0
+  const voided = !paid && isQuickbooksInvoiceVoided(props.qbo)
   if (!(paid || voided)) {
-    return "unchanged"
+    return await flagUnpaidInQuickbooks(props, providerInvoiceId)
   }
   type Decision =
     | { kind: "not-hub" | "unchanged" | "paid-after-void" }
@@ -526,12 +542,15 @@ export async function pollQuickbooksChanges(
         if (change.deleted) {
           continue
         }
-        await enqueueQuickbooksChange({
-          workspaceId: row.workspaceId,
-          integrationId: row.integrationId,
-          entity: change.entity,
-          entityId: change.id,
-        })
+        await enqueueQuickbooksChange(
+          {
+            workspaceId: row.workspaceId,
+            integrationId: row.integrationId,
+            entity: change.entity,
+            entityId: change.id,
+          },
+          "poll",
+        )
         queued += 1
       }
       await db

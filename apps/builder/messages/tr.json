@@ -7433,7 +7433,9 @@
       "pending": "QuickBooks copy pending"
     },
     "connected": "QuickBooks connected",
-    "connectFailed": "QuickBooks could not be connected: {error}"
+    "connectFailed": "QuickBooks could not be connected. Try again.",
+    "connectConflict": "That QuickBooks company is connected to another workspace, or an invoice is still collected through the current one.",
+    "connectCancelled": "QuickBooks connection cancelled."
   },
   "quickbooksCredential": {
     "title": "QuickBooks (Intuit app)",

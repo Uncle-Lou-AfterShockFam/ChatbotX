@@ -6,7 +6,7 @@ import { Loader2Icon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { SettingRow } from "@/components/setting-row"
 import { DisconnectIntegrationDialog } from "@/features/common/components/disconnect-integration-dialog"
@@ -25,14 +25,43 @@ export type QuickbooksCompanyView = {
   tokenRefreshError: string | null
 }
 
+export type QuickbooksConnectOutcome =
+  | "connected"
+  | "conflict"
+  | "failed"
+  | "cancelled"
+
+const OUTCOME_KEYS = {
+  connected: "quickbooks.connected",
+  conflict: "quickbooks.connectConflict",
+  failed: "quickbooks.connectFailed",
+  cancelled: "quickbooks.connectCancelled",
+} as const
+
 export function ManageQuickbooks(props: {
   workspaceId: string
   appConfigured: boolean
   company: QuickbooksCompanyView | null
+  /** The OAuth callback's closed result code (`?quickbooks=`), shown once. */
+  outcome: QuickbooksConnectOutcome | null
 }) {
   const t = useTranslations()
   const router = useRouter()
   const [open, setOpen] = useState(false)
+  const shown = useRef(false)
+  useEffect(() => {
+    if (!props.outcome || shown.current) {
+      return
+    }
+    shown.current = true
+    const message = t(OUTCOME_KEYS[props.outcome])
+    if (props.outcome === "connected") {
+      toast.success(message)
+    } else {
+      toast.error(message)
+    }
+    router.replace(window.location.pathname)
+  }, [props.outcome, router, t])
   const { company } = props
   const connect = useAction(
     startQuickbooksConnectAction.bind(null, props.workspaceId),

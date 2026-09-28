@@ -256,8 +256,10 @@ async function syncLocked(props: {
     if (invoice.status === "void") {
       if (row.externalPaymentId) {
         note = `Voided here, but QuickBooks already holds payment ${row.externalPaymentId}: reverse it there`
-      } else {
-        await voidQuickbooksInvoice(call, externalInvoiceId)
+      } else if (
+        (await voidQuickbooksInvoice(call, externalInvoiceId)) === "has-payment"
+      ) {
+        note = `Voided here, but QuickBooks invoice ${externalInvoiceId} holds a payment: reverse it there`
       }
     }
     await recordMirror(row.id, {
@@ -297,7 +299,7 @@ async function voidWithoutRecordedCopy(props: {
           since: invoice.createdAt,
         })
       : null
-    if (orphan && !orphan.privateNote?.startsWith("Voided")) {
+    if (orphan) {
       await recordMirror(row.id, { externalInvoiceId: orphan.id })
       await voidQuickbooksInvoice(call, orphan.id)
     }

@@ -3,26 +3,13 @@
 import { integrationQuickbooksService } from "@chatbotx.io/business/integration-quickbooks"
 import { z } from "zod"
 import { workspaceIdrequestParams } from "@/features/common/schema"
-import { hasWorkspacePermission } from "@/lib/auth/permission-routes"
-import { workspaceActionClient } from "@/lib/safe-action"
-
-const requireSuperAdmin = (permissions: unknown) => {
-  if (
-    !hasWorkspacePermission(
-      permissions as Parameters<typeof hasWorkspacePermission>[0],
-      "superAdmin",
-    )
-  ) {
-    throw new Error("You need to be a super admin to change QuickBooks")
-  }
-}
+import { quickbooksActionClient } from "./action-client"
 
 /** Turn the bookkeeping mirror on or off (s214b). */
-export const setQuickbooksMirrorAction = workspaceActionClient
+export const setQuickbooksMirrorAction = quickbooksActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(z.object({ enabled: z.boolean() }).strict())
-  .action(async ({ ctx, bindArgsParsedInputs: [workspaceId], parsedInput }) => {
-    requireSuperAdmin(ctx.workspaceMemberPermissions)
+  .action(async ({ bindArgsParsedInputs: [workspaceId], parsedInput }) => {
     const summary = await integrationQuickbooksService.setMirror({
       workspaceId,
       enabled: parsedInput.enabled,
@@ -31,9 +18,8 @@ export const setQuickbooksMirrorAction = workspaceActionClient
   })
 
 /** Disconnect; refused while a quickbooks invoice is still live. */
-export const disconnectQuickbooksAction = workspaceActionClient
+export const disconnectQuickbooksAction = quickbooksActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
-  .action(async ({ ctx, bindArgsParsedInputs: [workspaceId] }) => {
-    requireSuperAdmin(ctx.workspaceMemberPermissions)
+  .action(async ({ bindArgsParsedInputs: [workspaceId] }) => {
     await integrationQuickbooksService.disconnect(workspaceId)
   })
