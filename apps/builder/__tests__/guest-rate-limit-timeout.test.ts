@@ -239,3 +239,24 @@ describe("checkGuestRateLimit on the shared fixed window (s218)", () => {
     expect((await hit("z")).limited).toBe(true)
   })
 })
+
+describe("guest limiter fallback log (s218)", () => {
+  test("names the webchat, never the client ip", async () => {
+    const { logger } = await import("@/lib/log")
+    const warn = vi.mocked(logger.warn)
+    warn.mockClear()
+    const store = {
+      setNumberIfNotExists: vi.fn(() => Promise.reject(new Error("down"))),
+      incrementCounter: vi.fn(() => Promise.reject(new Error("down"))),
+    }
+    await checkGuestRateLimit({
+      webchatId: "42",
+      clientIp: "203.0.113.7",
+      store,
+      now: 0,
+    })
+    const context = warn.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(context).toMatchObject({ scope: "webchat-guest", webchatId: "42" })
+    expect(JSON.stringify(context)).not.toContain("203.0.113.7")
+  })
+})

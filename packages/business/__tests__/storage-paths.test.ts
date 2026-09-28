@@ -2,12 +2,14 @@ import { describe, expect, test } from "vitest"
 import {
   contactAvatarPrefix,
   isContactAvatarKey,
+  workspaceAvatarsPrefix,
   workspaceContactFilesPrefix,
 } from "../src/storage/paths"
 
 describe("storage paths", () => {
   test("each prefix ends in a slash so a neighbouring id never matches", () => {
     expect(workspaceContactFilesPrefix("1")).toBe("public/space/1/contacts/")
+    expect(workspaceAvatarsPrefix("1")).toBe("public/space/1/avatars/")
     expect(contactAvatarPrefix("1", "2")).toBe(
       "public/space/1/contacts/2/avatar/",
     )

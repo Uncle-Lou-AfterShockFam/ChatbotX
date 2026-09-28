@@ -69,6 +69,7 @@ export const checkGuestRateLimit = async ({
     store,
     now,
     scope: scope ? `webchat-guest-${scope}` : "webchat-guest",
+    logContext: { webchatId },
     storeTimeoutMs,
   })
 }
