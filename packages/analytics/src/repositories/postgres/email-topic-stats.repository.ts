@@ -5,6 +5,7 @@ import {
   emailTopicModel,
 } from "@chatbotx.io/database/schema"
 import { createId } from "@chatbotx.io/utils"
+import { broadcastStatsRepository } from "./broadcast-stats.repository"
 
 export type CreateEmailRecipientInput = {
   topicId: string
@@ -13,6 +14,7 @@ export type CreateEmailRecipientInput = {
   contactId?: string | null
   conversationId?: string | null
   contactInboxId?: string | null
+  broadcastId?: string | null
 }
 
 // Denormalized columns on EmailTopic — each holds a UNIQUE (deduped) count.
@@ -24,6 +26,14 @@ type EmailTopicCounter =
 
 // First-time-only timestamps on a recipient row.
 type FirstEventColumn = "deliveredAt" | "firstSeenAt" | "firstClickedAt"
+
+/** Read lazily: modules that mock the schema must still import this file. */
+function broadcastKey() {
+  return {
+    broadcastId: analyticsEmailTopicModel.broadcastId,
+    contactInboxId: analyticsEmailTopicModel.contactInboxId,
+  }
+}
 
 export class EmailTopicStatsRepository {
   async createRecipient(
@@ -40,6 +50,7 @@ export class EmailTopicStatsRepository {
         contactId: input.contactId ?? null,
         conversationId: input.conversationId ?? null,
         contactInboxId: input.contactInboxId ?? null,
+        broadcastId: input.broadcastId ?? null,
       })
       await this.incrementCounter(
         input.topicId,
@@ -51,11 +62,32 @@ export class EmailTopicStatsRepository {
     return { token }
   }
 
-  markFailed(token: string): Promise<unknown> {
-    return db
+  async markFailed(
+    token: string,
+    errorContent = "smtp-send-failed",
+  ): Promise<void> {
+    const [row] = await db
       .update(analyticsEmailTopicModel)
       .set({ failedAt: sql`now()` })
-      .where(eq(analyticsEmailTopicModel.token, token))
+      .where(
+        and(
+          eq(analyticsEmailTopicModel.token, token),
+          // A delivered or already-failed send never becomes (another) failure.
+          isNull(analyticsEmailTopicModel.deliveredAt),
+          isNull(analyticsEmailTopicModel.failedAt),
+        ),
+      )
+      .returning(broadcastKey())
+    if (row?.broadcastId && row.contactInboxId) {
+      await broadcastStatsRepository.updateFailedBulk([
+        {
+          broadcastId: row.broadcastId,
+          contactInboxId: row.contactInboxId,
+          occurredAt: new Date(),
+          errorContent: JSON.stringify({ error: errorContent }),
+        },
+      ])
+    }
   }
 
   // Delivery is itself a first-time-only transition → bumps deliveredsTotal once.
@@ -110,9 +142,29 @@ export class EmailTopicStatsRepository {
       .returning({
         topicId: analyticsEmailTopicModel.topicId,
         workspaceId: analyticsEmailTopicModel.workspaceId,
+        ...broadcastKey(),
       })
-    if (row) {
-      await this.incrementCounter(row.topicId, row.workspaceId, counter)
+    if (!row) {
+      return
+    }
+    await this.incrementCounter(row.topicId, row.workspaceId, counter)
+    // A broadcast send (s220b): the same first-time transition stamps the
+    // recipient's ContactOnBroadcast row, which the broadcast stats count.
+    if (row.broadcastId && row.contactInboxId) {
+      const item = {
+        broadcastId: row.broadcastId,
+        contactInboxId: row.contactInboxId,
+      }
+      if (firstColumn === "firstClickedAt") {
+        await broadcastStatsRepository.updateClickedBulk([
+          { ...item, occurredAt: new Date() },
+        ])
+      } else {
+        await broadcastStatsRepository.stampFirst(
+          item,
+          firstColumn === "deliveredAt" ? "deliveredAt" : "seenAt",
+        )
+      }
     }
   }
 

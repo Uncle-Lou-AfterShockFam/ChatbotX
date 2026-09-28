@@ -41,6 +41,22 @@ export class BroadcastStatsRepository extends BaseRepository {
     })
   }
 
+  /**
+   * Sets deliveredAt/seenAt on one recipient row only if still null (s220b,
+   * email): a resend's second tracking token never moves the first stamp.
+   */
+  async stampFirst(
+    item: { broadcastId: string; contactInboxId: string },
+    column: "deliveredAt" | "seenAt",
+  ): Promise<void> {
+    await db.execute(sql`
+      UPDATE "ContactOnBroadcast"
+      SET ${sql.identifier(column)} = COALESCE(${sql.identifier(column)}, now())
+      WHERE "broadcastId" = ${item.broadcastId}
+        AND "contactInboxId" = ${item.contactInboxId}
+    `)
+  }
+
   async updateOccurredAtBulk(
     items: { broadcastId: string; contactInboxId: string; timestamp: Date }[],
     updateField: "deliveredAt" | "seenAt",
