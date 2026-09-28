@@ -136,7 +136,7 @@ export async function sendEmail({
   flowVersion,
   step,
   contactInbox,
-  metadata: _metadata,
+  metadata,
 }: ExecuteStepProps<EmailStepSchema>) {
   const contact = await contactService.findBy({
     where: { id: conversation.contactId },
@@ -210,6 +210,10 @@ export async function sendEmail({
       conversationId: conversation.id,
       contactInboxId: contactInbox.id,
       email: to,
+      // A broadcast's send (s220b): delivery, opens and clicks also stamp
+      // the recipient's ContactOnBroadcast row.
+      broadcastId:
+        metadata?.type === "broadcast" ? (metadata.broadcastId ?? null) : null,
     })
     token = result.token
   }

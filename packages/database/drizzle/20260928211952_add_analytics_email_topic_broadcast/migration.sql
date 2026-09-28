@@ -1,0 +1,2 @@
+ALTER TABLE "AnalyticsEmailTopic" ADD COLUMN "broadcastId" bigint;--> statement-breakpoint
+ALTER TABLE "AnalyticsEmailTopic" ADD CONSTRAINT "AnalyticsEmailTopic_broadcastId_Broadcast_id_fkey" FOREIGN KEY ("broadcastId") REFERENCES "Broadcast"("id") ON DELETE SET NULL ON UPDATE CASCADE;

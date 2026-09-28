@@ -15,7 +15,7 @@ export class EmailTopicAnalyticsService {
   }
 
   markFailed(token: string): Promise<void> {
-    return emailTopicStatsRepository.markFailed(token).then(() => undefined)
+    return emailTopicStatsRepository.markFailed(token)
   }
 
   recordOpen(token: string): Promise<void> {

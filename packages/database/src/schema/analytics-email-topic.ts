@@ -11,6 +11,7 @@ import {
   sharedColumns,
   timestampConfig,
 } from "../partials/shared"
+import { broadcastModel } from "./broadcast"
 import { contactModel } from "./contact"
 import { contactInboxModel } from "./contact-inbox"
 import { conversationModel } from "./conversation"
@@ -42,6 +43,12 @@ export const analyticsEmailTopicModel = pgTable(
       onUpdate: "cascade",
     }),
     contactInboxId: bigintAsString().references(() => contactInboxModel.id, {
+      onDelete: "set null",
+      onUpdate: "cascade",
+    }),
+    // The broadcast this send belongs to (s220b), so opens/clicks/delivery
+    // reach ContactOnBroadcast; null for a send outside a broadcast.
+    broadcastId: bigintAsString().references(() => broadcastModel.id, {
       onDelete: "set null",
       onUpdate: "cascade",
     }),
