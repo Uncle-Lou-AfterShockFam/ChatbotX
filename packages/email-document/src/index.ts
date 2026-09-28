@@ -1,3 +1,6 @@
+// The renderers are subpath exports (renderEmail pulls in mjml, Node only):
+//   import { renderWeb } from "@chatbotx.io/email-document/render-web"
+//   import { renderEmail } from "@chatbotx.io/email-document/render-email"
 export type { RenderAsset, RenderContext } from "./context"
 export { UNSUBSCRIBE_PLACEHOLDER } from "./context"
 export * from "./errors"

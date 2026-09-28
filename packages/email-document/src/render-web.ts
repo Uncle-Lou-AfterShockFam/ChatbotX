@@ -6,6 +6,7 @@ import {
   resolveButtonHref,
   resolveSrc,
   resolveTemplateUrl,
+  safeAssetUrl,
 } from "./context"
 import { parseDocument } from "./parse"
 import type { Block, EmailDocument, LeafBlock } from "./schema"
@@ -63,12 +64,11 @@ function leafToHtml(
     case "html":
       return `<div data-block="${block.id}">${prepareRich(block.html, block.id, ctx, missing, "html")}</div>`
     case "attachment": {
-      const asset = ctx.assets?.[block.asset.fileId]
+      const asset = safeAssetUrl(block.asset.fileId, ctx, missing)
       if (!asset) {
-        missing.add(`asset:${block.asset.fileId}`)
         return ""
       }
-      return `<p data-block="${block.id}"><a href="${escapeHtml(asset.url)}" rel="noopener noreferrer" download>${escapeHtml(asset.name)}</a></p>`
+      return `<p data-block="${block.id}"><a href="${escapeHtml(asset.url.trim())}" rel="noopener noreferrer" download>${escapeHtml(asset.name)}</a></p>`
     }
     default:
       return ""

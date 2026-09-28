@@ -17,6 +17,8 @@ const DANGEROUS_ELEMENT = /^<(script|iframe|svg|style|object|embed)\b/i
 const EVENT_HANDLER = /\son[a-z]+\s*=/i
 const JS_URL_ATTR = /(href|src|style)\s*=\s*"[^"]*javascript:/i
 
+const LIVE_LINK_OR_IMG = /href="(?!#)|<img/
+
 const doc = (blocks: unknown[], settings: object = {}): EmailDocument =>
   ({ version: 1, settings, blocks }) as EmailDocument
 
@@ -236,6 +238,48 @@ describe("renderWeb", () => {
     expect(html).not.toContain("unsubscribe?token")
     expect(html).not.toContain("hub.test/o")
     expect(html).toContain('href="https://cdn.test/f.pdf"')
+  })
+
+  test("a contact value containing the unsubscribe sentinel stays inert text", async () => {
+    const out = await renderEmail(doc([text("1", "<p>{{first_name}}</p>")]), {
+      vars: { first_name: "__UNSUBSCRIBE_URL__" },
+      unsubscribeUrl: "https://hub.test/unsubscribe?token=secret",
+    })
+    expect(out.html).not.toContain("token=secret")
+  })
+
+  test("an asset URL that is not http(s) never reaches href/src (skeptic HIGH)", () => {
+    for (const url of [
+      "javascript:alert(1)",
+      " JAVASCRIPT:x",
+      "data:text/html,x",
+      "//evil.test/a",
+    ]) {
+      const { html, missing } = renderWeb(
+        doc([
+          {
+            id: "1",
+            type: "attachment",
+            asset: { kind: "media", fileId: "9" },
+          },
+          {
+            id: "2",
+            type: "image",
+            src: { kind: "media", fileId: "9" },
+            alt: "x",
+          },
+        ]),
+        {
+          vars: {},
+          assets: {
+            "9": { url, name: "evil", size: 1, mimeType: "text/html" },
+          },
+        },
+      )
+      expect(executableMarkup(html)).toEqual([])
+      expect(html).not.toMatch(LIVE_LINK_OR_IMG)
+      expect(missing).toEqual(["asset:9"])
+    }
   })
 
   test("deterministic: same input, same bytes", () => {

@@ -1,7 +1,5 @@
 {
-  "extends": "@chatbotx.io/typescript-config/react-library.json",
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.ts"],
-  "compilerOptions": {
-    "strictNullChecks": true
-  }
+  "extends": "@chatbotx.io/typescript-config/base.json",
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

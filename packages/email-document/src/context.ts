@@ -31,7 +31,9 @@ export type RenderContext = {
 }
 
 export const UNSUBSCRIBE_PLACEHOLDER = "<<unsubscribeUrl>>"
+const UNSUBSCRIBE_SENTINEL = "__UNSUBSCRIBE_URL__"
 const HAS_TOKEN = /\{\{/
+const HTTP_URL = /^https?:\/\//i
 const AMP_ENTITY = /&amp;/g
 const HTTP_HREF = /(\shref=")(https?:\/\/[^"]*)(")/gi
 
@@ -65,11 +67,33 @@ export function prepareRich(
           : `${open}${escapeHtml(link(href.replace(AMP_ENTITY, "&"), blockId))}${close}`,
     )
   }
-  html = mergeHtml(html, ctx.vars, missing)
-  return html.replaceAll(
-    "__UNSUBSCRIBE_URL__",
+  // The sentinel is swapped BEFORE merging: a contact value that happens to
+  // contain it is merged afterwards and stays inert text.
+  html = html.replaceAll(
+    UNSUBSCRIBE_SENTINEL,
     ctx.unsubscribeUrl ? escapeHtml(ctx.unsubscribeUrl) : "#",
   )
+  return mergeHtml(html, ctx.vars, missing)
+}
+
+/**
+ * An asset URL from the caller's `assets` map, admitted only as http(s): the
+ * same scheme rule every other URL path enforces, so a bad asset record can
+ * never put `javascript:` into a public page's href/src.
+ */
+export function safeAssetUrl(
+  fileId: string,
+  ctx: RenderContext,
+  missing: Set<string>,
+): RenderAsset | undefined {
+  const asset = ctx.assets?.[fileId]
+  if (
+    !(asset && typeof asset.url === "string" && HTTP_URL.test(asset.url.trim()))
+  ) {
+    missing.add(`asset:${fileId}`)
+    return
+  }
+  return asset
 }
 
 export function resolveSrc(
@@ -78,12 +102,7 @@ export function resolveSrc(
   missing: Set<string>,
 ): string {
   if (typeof src !== "string") {
-    const asset = ctx.assets?.[src.fileId]
-    if (!asset) {
-      missing.add(`asset:${src.fileId}`)
-      return ""
-    }
-    return asset.url
+    return safeAssetUrl(src.fileId, ctx, missing)?.url.trim() ?? ""
   }
   return mergeUrl(src, ctx.vars, missing)
 }
