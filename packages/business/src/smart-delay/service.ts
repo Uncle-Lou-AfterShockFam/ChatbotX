@@ -60,6 +60,32 @@ const activeInWorkspace = (workspaceId: string) =>
   )
 
 /**
+ * Cancels exactly the rows `pick` locks, in one transaction (a savepoint when
+ * `tx` is one already). Two statements, not `UPDATE ... WHERE id IN (SELECT
+ * ... LIMIT n FOR UPDATE SKIP LOCKED)`: nothing stops the planner rescanning
+ * that locking subquery, and one CI run (s214) saw a batch of 2 cancel 3.
+ * Here the batch is the picked id list, never more than the pick's LIMIT.
+ */
+const cancelPickedRows = async (
+  tx: DatabaseClient,
+  pick: (t: DatabaseClient) => PromiseLike<{ id: string }[]>,
+): Promise<Pick<SmartDelayRow, "id" | "triggerAt">[]> =>
+  await tx.transaction(async (t) => {
+    const ids = (await pick(t)).map((row) => row.id)
+    if (ids.length === 0) {
+      return []
+    }
+    return await t
+      .update(contactOnSmartDelayModel)
+      .set({ status: smartDelayStatuses.enum.canceled })
+      .where(inArray(contactOnSmartDelayModel.id, ids))
+      .returning({
+        id: contactOnSmartDelayModel.id,
+        triggerAt: contactOnSmartDelayModel.triggerAt,
+      })
+  })
+
+/**
  * Needs the `ContactInbox` join on `contactInboxId`. `createdBefore` keeps a
  * re-sweep of an already-stopped company off the waits of flows that started
  * after the stop (they are allowed to run).
@@ -682,22 +708,15 @@ class SmartDelayService extends BaseService {
     limit: number
   }): Promise<Pick<SmartDelayRow, "id" | "triggerAt">[]> {
     const { tx = db, workspaceId, limit } = props
-    const activeRowIds = tx
-      .select({ id: contactOnSmartDelayModel.id })
-      .from(contactOnSmartDelayModel)
-      .where(activeInWorkspace(workspaceId))
-      .orderBy(contactOnSmartDelayModel.triggerAt)
-      .limit(limit)
-      .for("update", { skipLocked: true })
-
-    return await tx
-      .update(contactOnSmartDelayModel)
-      .set({ status: smartDelayStatuses.enum.canceled })
-      .where(inArray(contactOnSmartDelayModel.id, activeRowIds))
-      .returning({
-        id: contactOnSmartDelayModel.id,
-        triggerAt: contactOnSmartDelayModel.triggerAt,
-      })
+    return await cancelPickedRows(tx, (t) =>
+      t
+        .select({ id: contactOnSmartDelayModel.id })
+        .from(contactOnSmartDelayModel)
+        .where(activeInWorkspace(workspaceId))
+        .orderBy(contactOnSmartDelayModel.triggerAt)
+        .limit(limit)
+        .for("update", { skipLocked: true }),
+    )
   }
 
   /** Non-locking: does the workspace still have a firable row (one a cancel skipped)? */
@@ -732,26 +751,19 @@ class SmartDelayService extends BaseService {
     if (contactIds.length === 0) {
       return []
     }
-    const activeRowIds = tx
-      .select({ id: contactOnSmartDelayModel.id })
-      .from(contactOnSmartDelayModel)
-      .innerJoin(
-        contactInboxModel,
-        eq(contactInboxModel.id, contactOnSmartDelayModel.contactInboxId),
-      )
-      .where(activeForContacts(workspaceId, contactIds, createdBefore))
-      .orderBy(contactOnSmartDelayModel.triggerAt)
-      .limit(limit)
-      .for("update", { skipLocked: true, of: contactOnSmartDelayModel })
-
-    return await tx
-      .update(contactOnSmartDelayModel)
-      .set({ status: smartDelayStatuses.enum.canceled })
-      .where(inArray(contactOnSmartDelayModel.id, activeRowIds))
-      .returning({
-        id: contactOnSmartDelayModel.id,
-        triggerAt: contactOnSmartDelayModel.triggerAt,
-      })
+    return await cancelPickedRows(tx, (t) =>
+      t
+        .select({ id: contactOnSmartDelayModel.id })
+        .from(contactOnSmartDelayModel)
+        .innerJoin(
+          contactInboxModel,
+          eq(contactInboxModel.id, contactOnSmartDelayModel.contactInboxId),
+        )
+        .where(activeForContacts(workspaceId, contactIds, createdBefore))
+        .orderBy(contactOnSmartDelayModel.triggerAt)
+        .limit(limit)
+        .for("update", { skipLocked: true, of: contactOnSmartDelayModel }),
+    )
   }
 
   /**
