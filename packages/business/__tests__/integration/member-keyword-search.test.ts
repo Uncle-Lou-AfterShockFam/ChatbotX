@@ -4,9 +4,10 @@
  * Member keyword search (`/space/<id>/agents?keyword=`), against a REAL
  * Postgres. Before s207 every keyword threw `Unknown relational filter field:
  * "user"`: the page count fed the relational `user` filter to a bare
- * relationsFilterToSQL. The keyword matches the member's NAME only
- * (case-insensitive, `%` / `_` literal; never the email, which the list does
- * not return and a substring search would leak), and the count agrees.
+ * relationsFilterToSQL. The keyword matches the member's NAME as a substring
+ * (case-insensitive, `%` / `_` literal) and the EMAIL only as the whole
+ * address (owner s217): the list never returns the email, and a partial
+ * email match would let a caller spell it out. The count agrees.
  *
  * Seeds run under `SET LOCAL session_replication_role = replica` (no
  * Workspace / Tenant rows) and are deleted afterwards. Run with
@@ -132,13 +133,38 @@ describe.skipIf(!databaseUrl)(
       })
     })
 
-    test("an email is never matched, so it cannot be spelled out", async () => {
+    test("the whole email address matches in any case, inside the workspace only", async () => {
+      const { workspaceId, unnamed } = await seedWorkspace()
+
+      for (const keyword of [
+        `nameless-${workspaceId}@example.test`,
+        `NAMELESS-${workspaceId}@Example.TEST`,
+        `  nameless-${workspaceId}@example.test  `,
+      ]) {
+        expect(await search(workspaceId, keyword)).toEqual({
+          ids: [unnamed],
+          pageCount: 1,
+        })
+      }
+      // Another workspace's member never matches, even by exact address.
+      expect(
+        await search(workspaceId, `ada-other-${workspaceId}@example.test`),
+      ).toEqual({ ids: [], pageCount: 0 })
+    })
+
+    test("a partial email is never matched, so it cannot be spelled out", async () => {
       const { workspaceId } = await seedWorkspace()
 
       for (const keyword of [
         "nameless-",
         `ada-${workspaceId}`,
         "example.test",
+        "@example.test",
+        `ada-${workspaceId}@example.tes`,
+        `da-${workspaceId}@example.test`,
+        "%@example.test",
+        `ada-${workspaceId}@example.tes_`,
+        `ada-${workspaceId}%`,
       ]) {
         expect(await search(workspaceId, keyword)).toEqual({
           ids: [],

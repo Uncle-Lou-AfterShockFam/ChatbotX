@@ -22,6 +22,7 @@ import type {
   WorkspaceModel,
 } from "@chatbotx.io/database/types"
 import {
+  escapeLikePattern,
   getPaginationWithDefaults,
   likeContains,
 } from "@chatbotx.io/database/utils"
@@ -479,15 +480,23 @@ export class WorkspaceMemberService extends BaseService {
     const pagination = getPaginationWithDefaults(input)
 
     const keyword = input.keyword?.trim()
-    const pattern = keyword ? likeContains(keyword) : undefined
     // One filter for the page AND its count, so they always agree. The count
     // must resolve the `user` relation: a bare relationsFilterToSQL cannot,
-    // and every keyword search threw (s207). Name only, never email: a
-    // substring match on email would let any caller of this list (an
-    // inbox-scoped token included) spell out a teammate's hidden address.
+    // and every keyword search threw (s207). The name is a substring match;
+    // the email matches only as the WHOLE address (case-insensitive ILIKE
+    // with every wildcard escaped, owner s217). A substring match on email
+    // would let any caller of this list (an inbox-scoped token included)
+    // spell out a teammate's hidden address one character at a time.
     const where = {
       workspaceId: input.workspaceId,
-      user: pattern ? { name: { ilike: pattern } } : undefined,
+      user: keyword
+        ? {
+            OR: [
+              { name: { ilike: likeContains(keyword) } },
+              { email: { ilike: escapeLikePattern(keyword) } },
+            ],
+          }
+        : undefined,
     }
 
     const [data, totalRows] = await Promise.all([
