@@ -26,6 +26,11 @@ vi.mock("@chatbotx.io/database/client", () => {
     eq: (_f: unknown, v: unknown) => ({ eq: v }),
   }
 })
+// s216: the site client fetches through the pinned fetch, not global fetch.
+vi.mock("../src/net-node/pinned-fetch", () => ({
+  pinnedFetch: (...args: unknown[]) =>
+    (globalThis.fetch as (...a: unknown[]) => Promise<Response>)(...args),
+}))
 vi.mock("../src/net/ssrf-guard", () => ({
   isSsrfUnsafeUrl: () => Promise.resolve(m.unsafe),
 }))

@@ -1,4 +1,4 @@
-import { assertPublicUrl } from "@chatbotx.io/business"
+import { assertPublicUrl, outboundFetch } from "@chatbotx.io/business"
 import { logger } from "../../lib/logger"
 import type { WebhookPayload, WebhookWithConditions } from "../types"
 
@@ -17,7 +17,12 @@ export class WebhookExecutor {
       return false
     }
 
-    const message = error.message.toLowerCase()
+    // fetch reports a socket failure as TypeError("fetch failed") with the
+    // errno on `cause`, so read both (the message alone never matched).
+    const cause = (error as { cause?: { code?: string; message?: string } })
+      .cause
+    const message =
+      `${error.message} ${cause?.code ?? ""} ${cause?.message ?? ""}`.toLowerCase()
     const connectionErrors = [
       "econnrefused",
       "enotfound",
@@ -37,17 +42,27 @@ export class WebhookExecutor {
     url: string,
     payload: WebhookPayload,
   ): Promise<Response> {
+    // The DoH pre-check gives an early, clear refusal; the pinned fetch is
+    // the actual guard (checked at connect and on every redirect hop, so a
+    // rebinding name or a redirect to a private address is refused) (s216).
     await assertPublicUrl(url, "Webhook URL")
 
-    return fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "AhaChat-Webhook/1.0",
+    const response = await outboundFetch(
+      url,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": "AhaChat-Webhook/1.0",
+        },
+        body: JSON.stringify(payload),
       },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(30_000),
-    })
+      { timeoutMs: 30_000 },
+    )
+    // Only the status is used; release the socket instead of holding it
+    // until the body is garbage-collected.
+    await response.body?.cancel()
+    return response
   }
 
   private async attemptRequest(
@@ -72,7 +87,10 @@ export class WebhookExecutor {
 
       return true
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
+      if (
+        error instanceof Error &&
+        (error.name === "AbortError" || error.name === "TimeoutError")
+      ) {
         logger.warn(
           { webhookId: webhook.id, url: webhook.url, attempt },
           "Webhook endpoint timed out",

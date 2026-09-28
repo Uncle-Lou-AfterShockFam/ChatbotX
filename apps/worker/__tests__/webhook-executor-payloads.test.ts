@@ -17,6 +17,10 @@ const {
 
 vi.mock("@chatbotx.io/business", () => ({
   assertPublicUrl,
+  // s216: delivery goes through the SSRF-pinned outboundFetch; forward to the
+  // stubbed global fetch so the payload stays visible.
+  outboundFetch: (...args: unknown[]) =>
+    (globalThis.fetch as (...a: unknown[]) => Promise<Response>)(...args),
   contactCustomFieldService: { listWithDefinitions: listCustomFields },
   contactService: { findById: contactFindById },
   tagService: { findNameByIdForWorkspace },

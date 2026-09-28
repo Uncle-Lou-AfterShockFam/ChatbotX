@@ -10,6 +10,14 @@ const mocks = vi.hoisted(() => ({
   setValues: vi.fn(async () => undefined),
 }))
 
+// s216: requests go through the SSRF-pinned outboundFetch (its redirect and
+// connect-time checks are covered by net-node-pinned-fetch.test.ts); here it
+// forwards to the stubbed global fetch so the request shape stays visible.
+vi.mock("../src/net/outbound-fetch", () => ({
+  outboundFetch: (...args: unknown[]) =>
+    (globalThis.fetch as (...a: unknown[]) => Promise<Response>)(...args),
+}))
+
 vi.mock("../src/net/ssrf-guard", () => ({
   checkSsrfSafety: mocks.checkSsrfSafety,
 }))
@@ -58,55 +66,28 @@ describe("externalRequestService.execute", () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  test("follows a redirect to a safe target and returns its response", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        Response.redirect("https://api.example.com/final", 302),
-      )
-      .mockResolvedValueOnce(new Response("{}", { status: 200 }))
-    vi.stubGlobal("fetch", fetchMock)
-
-    const result = await externalRequestService.execute(
-      { method: "GET", url: "https://api.example.com/data", headers: [] },
-      { workspaceId: "workspace-1" },
+  test.each([
+    ["unsafeRedirect", "This URL is not allowed for external requests"],
+    ["unsafeAddress", "This URL is not allowed for external requests"],
+    ["tooManyRedirects", "Too many redirects"],
+  ] as const)("a pinned-fetch refusal (%s) keeps the ssrfBlocked error", async (reason, message) => {
+    const { SsrfFetchError } = await import("../src/net/safe-fetch")
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.reject(new SsrfFetchError(reason, "https://api.example.com")),
+      ),
     )
-
-    expect(result.statusCode).toBe(200)
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("https://api.example.com/final")
-  })
-
-  test("blocks a redirect whose target is SSRF-unsafe", async () => {
-    mocks.checkSsrfSafety
-      .mockResolvedValueOnce({ unsafe: false, resolvedIps: ["93.184.216.34"] })
-      .mockResolvedValueOnce({ unsafe: true })
-    const fetchMock = vi.fn(async () =>
-      Response.redirect("http://169.254.169.254/", 302),
-    )
-    vi.stubGlobal("fetch", fetchMock)
 
     await expect(
       externalRequestService.execute(
         { method: "GET", url: "https://api.example.com/data", headers: [] },
         { workspaceId: "workspace-1" },
       ),
-    ).rejects.toThrow("This URL is not allowed for external requests")
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-  })
-
-  test("stops following redirects once the limit is exceeded", async () => {
-    const fetchMock = vi.fn(async (url: string) =>
-      Response.redirect(`${url}/next`, 302),
-    )
-    vi.stubGlobal("fetch", fetchMock)
-
-    await expect(
-      externalRequestService.execute(
-        { method: "GET", url: "https://api.example.com/data", headers: [] },
-        { workspaceId: "workspace-1" },
-      ),
-    ).rejects.toThrow("Too many redirects")
+    ).rejects.toMatchObject({
+      code: "ssrfBlocked",
+      message: expect.stringContaining(message),
+    })
   })
 
   test("GET builds a request with no body", async () => {
@@ -118,11 +99,15 @@ describe("externalRequestService.execute", () => {
       { workspaceId: "workspace-1" },
     )
 
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const [url, init, options] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+      { maxRedirects: number; timeoutMs: number },
+    ]
     expect(url).toBe("https://api.example.com/data")
     expect(init.method).toBe("GET")
     expect(init.body).toBeUndefined()
-    expect(init.redirect).toBe("manual")
+    expect(options).toEqual({ maxRedirects: 5, timeoutMs: 15_000 })
   })
 
   test("POST with json body sets Content-Type: application/json", async () => {

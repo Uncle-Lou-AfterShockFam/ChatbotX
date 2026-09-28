@@ -1,12 +1,17 @@
-import { assertPublicUrl } from "@chatbotx.io/business"
+import {
+  assertPublicUrl,
+  outboundFetch,
+  SsrfFetchError,
+} from "@chatbotx.io/business"
 import {
   fetchFollowingSafeRedirects,
   readBodyWithLimit,
 } from "@chatbotx.io/filesystem"
-import ky from "ky"
 import { ExpectedHeavyStepError } from "./errors"
 
 const MAX_REDIRECTS = 5
+// ky's default, kept when the caller names none.
+const DEFAULT_TIMEOUT_MS = 10_000
 
 type DownloadWithByteLimitOptions = {
   allowedMimeTypes?: ReadonlySet<string>
@@ -79,12 +84,21 @@ export async function downloadWithByteLimit({
           },
         ),
     },
+    // Each hop is DoH-checked (validateUrl, for a clear early error) AND
+    // pinned at connect by outboundFetch, which is the real guard: a
+    // rebinding name cannot swap in a private address between the two (s216).
     fetchImpl: (candidateUrl) =>
-      ky.get(candidateUrl, {
-        redirect: "manual",
-        signal,
-        throwHttpErrors: false,
-        timeout,
+      outboundFetch(
+        candidateUrl,
+        { redirect: "manual", signal },
+        { timeoutMs: timeout ?? DEFAULT_TIMEOUT_MS },
+      ).catch((error: unknown) => {
+        if (error instanceof SsrfFetchError) {
+          throw new ExpectedHeavyStepError(`Unsafe ${label} URL`, {
+            cause: error,
+          })
+        }
+        throw error
       }),
     maxRedirectHops: MAX_REDIRECTS,
     url,

@@ -1,4 +1,3 @@
-import ky from "ky"
 import { beforeEach, describe, expect, test, vi } from "vitest"
 
 const mocks = vi.hoisted(() => ({
@@ -6,12 +5,14 @@ const mocks = vi.hoisted(() => ({
   kyGet: vi.fn(),
 }))
 
+// s216: the download goes through the SSRF-pinned outboundFetch (mocked here
+// as kyGet so the existing cases keep their shape).
+class SsrfFetchError extends Error {}
+
 vi.mock("@chatbotx.io/business", () => ({
   assertPublicUrl: mocks.assertPublicUrl,
-}))
-
-vi.mock("ky", () => ({
-  default: { get: mocks.kyGet },
+  outboundFetch: mocks.kyGet,
+  SsrfFetchError,
 }))
 
 const { downloadWithByteLimit } = await import(
@@ -141,12 +142,10 @@ describe("downloadWithByteLimit", () => {
       url: "https://cdn.example.com/audio.mp3",
     })
 
-    expect(ky.get).toHaveBeenCalledWith(
+    expect(mocks.kyGet).toHaveBeenCalledWith(
       "https://cdn.example.com/audio.mp3",
-      expect.objectContaining({
-        redirect: "manual",
-        throwHttpErrors: false,
-      }),
+      expect.objectContaining({ redirect: "manual" }),
+      { timeoutMs: 10_000 },
     )
     expect(result.buffer).toEqual(Buffer.from([1, 2, 3]))
     expect(result.contentType).toBe("audio/mpeg")
@@ -216,5 +215,18 @@ describe("downloadWithByteLimit", () => {
     ).rejects.toBeInstanceOf(ExpectedHeavyStepError)
 
     expect(mocks.kyGet).not.toHaveBeenCalled()
+  })
+
+  test("a connect-time SSRF refusal is an expected step error (s216)", async () => {
+    mocks.kyGet.mockRejectedValueOnce(new SsrfFetchError("unsafeAddress"))
+
+    await expect(
+      downloadWithByteLimit({
+        label: "audio",
+        maxBytes: 10,
+        signal: new AbortController().signal,
+        url: "https://rebinding.example.com/audio.mp3",
+      }),
+    ).rejects.toThrow(new ExpectedHeavyStepError("Unsafe audio URL"))
   })
 })
