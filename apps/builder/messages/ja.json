@@ -5635,6 +5635,9 @@
     "portalPricingPage": "料金"
   },
   "unsubscribePage": {
+    "confirmTitle": "Unsubscribe from these emails?",
+    "confirmDescription": "You will no longer receive emails from this sender.",
+    "confirmButton": "Unsubscribe",
     "title": "配信を停止しました。",
     "description": "この送信者からのメールは今後届きません。",
     "invalidTitle": "配信停止リンクが無効です。",

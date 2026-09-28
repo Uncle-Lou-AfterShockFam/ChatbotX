@@ -24,6 +24,10 @@ import type {
   MailElementSchema,
 } from "@chatbotx.io/mail/dynamic"
 import { renderDynamicEmailHtml } from "@chatbotx.io/mail/dynamic"
+import {
+  renderDynamicEmailText,
+  rewriteHtmlLinks,
+} from "@chatbotx.io/mail/extras"
 import { contactVariableService } from "@chatbotx.io/variables"
 import { resolveButtonUrl } from "../../lib/convert-button"
 import { logger } from "../../lib/logger"
@@ -49,6 +53,11 @@ async function resolveElements({
   workspaceId: string
 }): Promise<MailElementSchema[]> {
   const resolved: MailElementSchema[] = []
+  // Links typed into text are tracked like buttons (s220b); the unsubscribe
+  // link never is.
+  const trackUrl = async (url: string) =>
+    `${appUrl}/email-topic/click?r=${token}&u=${await signEmailClickUrl(url, workspaceId)}`
+  const keepUntracked = new Set([unsubscribeUrl])
 
   for (const el of rawElements) {
     switch (el.type) {
@@ -59,12 +68,16 @@ async function resolveElements({
           text: el.text,
           variables,
         })
+        const text = resolvedText.replaceAll(
+          UNSUBSCRIBE_PLACEHOLDER,
+          unsubscribeUrl,
+        )
         resolved.push({
           type: el.type,
-          text: resolvedText.replaceAll(
-            UNSUBSCRIBE_PLACEHOLDER,
-            unsubscribeUrl,
-          ),
+          text:
+            token && el.type !== "code"
+              ? await rewriteHtmlLinks(text, trackUrl, keepUntracked)
+              : text,
         })
         break
       }
@@ -92,8 +105,7 @@ async function resolveElements({
           // Seal the destination into an authenticated token so the click
           // route cannot be abused as an open redirect (the raw URL is never
           // trusted from the query string). base64url is URL-safe.
-          const signedUrl = await signEmailClickUrl(url, workspaceId)
-          url = `${appUrl}/email-topic/click?r=${token}&u=${signedUrl}`
+          url = await trackUrl(url)
         }
 
         resolved.push({ type: "button", url, label: el.label })
@@ -221,6 +233,11 @@ export async function sendEmail({
     integration: { ...smtpIntegration, auth },
   })
 
+  // RFC 8058 one-click: the mail client POSTs to this URL; the /unsubscribe
+  // page itself only unsubscribes after a confirm (link scanners GET it).
+  const oneClickUrl = new URL(unsubscribeUrl)
+  oneClickUrl.pathname = "/unsubscribe/one-click"
+
   try {
     await integrationSmtp.runAction("sendMail", {
       ctx: botContext,
@@ -228,14 +245,20 @@ export async function sendEmail({
       to,
       subject,
       html: await renderDynamicEmailHtml(props),
+      text: renderDynamicEmailText(elements),
+      headers: {
+        "List-Unsubscribe": `<${oneClickUrl.toString()}>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      },
     })
 
     if (token) {
       await emailTopicAnalyticsService.markDelivered(token)
     }
-  } catch {
+  } catch (err) {
     logger.error(
       {
+        err,
         integrationSmtpId: smtpIntegration.id,
         workspaceId: conversation.workspaceId,
       },

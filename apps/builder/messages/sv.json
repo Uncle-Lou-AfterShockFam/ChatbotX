@@ -5418,6 +5418,9 @@
     "title": "Utlösare"
   },
   "unsubscribePage": {
+    "confirmTitle": "Unsubscribe from these emails?",
+    "confirmDescription": "You will no longer receive emails from this sender.",
+    "confirmButton": "Unsubscribe",
     "description": "Du kommer inte längre att få e-post från den här avsändaren.",
     "invalidDescription": "Länken är ogiltig eller har upphört att gälla.",
     "invalidTitle": "Ogiltig avregistreringslänk.",

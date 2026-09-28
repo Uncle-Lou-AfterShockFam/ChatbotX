@@ -23,6 +23,7 @@
     "./preview": "./src/preview.ts",
     "./transport": "./src/transport.ts",
     "./dynamic": "./src/dynamic-email.ts",
+    "./extras": "./src/email-extras.ts",
     "./keys": "./src/keys.ts"
   },
   "scripts": {

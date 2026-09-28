@@ -158,3 +158,53 @@ describe("without topicId", () => {
     expect(runAction).toHaveBeenCalledOnce()
   })
 })
+
+describe("s220b: text part, List-Unsubscribe, tracked text links", () => {
+  const withText = (text: string) =>
+    makeProps({ elements: [{ id: "1", type: "text", text }] }) as never
+
+  test("sends a text part and the RFC 8058 one-click headers", async () => {
+    await sendEmail(withText("<p>Hi there</p>"))
+    const args = runAction.mock.calls[0]?.[1] as {
+      text: string
+      headers: Record<string, string>
+    }
+    expect(args.text).toBe("Hi there")
+    expect(args.headers).toEqual({
+      "List-Unsubscribe":
+        "<https://app.test/unsubscribe/one-click?token=unsub>",
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    })
+  })
+
+  test("a link typed into text is tracked; the unsubscribe link is not", async () => {
+    await sendEmail(
+      withText(
+        '<p><a href="https://x.test/a">a</a> <a href="<<unsubscribeUrl>>">stop</a></p>',
+      ),
+    )
+    const html = renderDynamicEmailHtmlMock.mock.calls.at(-1)?.[0] as {
+      elements: { type: string; text?: string }[]
+    }
+    const text = html.elements.find((el) => el.type === "text")?.text ?? ""
+    expect(text).toContain(
+      'href="https://app.test/email-topic/click?r=test-token-xyz&amp;u=signed-token"',
+    )
+    expect(text).toContain('href="https://app.test/unsubscribe?token=unsub"')
+  })
+
+  test("without a topic nothing in text is rewritten", async () => {
+    await sendEmail(
+      makeProps({
+        topicId: undefined,
+        elements: [
+          { id: "1", type: "text", text: '<a href="https://x.test/a">a</a>' },
+        ],
+      }) as never,
+    )
+    const html = renderDynamicEmailHtmlMock.mock.calls.at(-1)?.[0] as {
+      elements: { type: string; text?: string }[]
+    }
+    expect(html.elements[0]?.text).toBe('<a href="https://x.test/a">a</a>')
+  })
+})

@@ -5668,6 +5668,9 @@
     "portalPricingPage": "定價"
   },
   "unsubscribePage": {
+    "confirmTitle": "Unsubscribe from these emails?",
+    "confirmDescription": "You will no longer receive emails from this sender.",
+    "confirmButton": "Unsubscribe",
     "title": "您已取消訂閱。",
     "description": "您將不會再收到來自該寄件者的電子郵件。",
     "invalidTitle": "取消訂閱連結無效。",

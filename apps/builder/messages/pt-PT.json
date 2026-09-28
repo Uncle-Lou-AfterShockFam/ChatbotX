@@ -5635,6 +5635,9 @@
     "portalPricingPage": "Preços"
   },
   "unsubscribePage": {
+    "confirmTitle": "Unsubscribe from these emails?",
+    "confirmDescription": "You will no longer receive emails from this sender.",
+    "confirmButton": "Unsubscribe",
     "title": "A sua subscrição foi cancelada.",
     "description": "Deixará de receber e-mails deste remetente.",
     "invalidTitle": "Ligação de cancelamento de subscrição inválida.",

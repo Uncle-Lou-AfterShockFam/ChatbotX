@@ -5303,6 +5303,9 @@
     "portalPricingPage": "التسعير"
   },
   "unsubscribePage": {
+    "confirmTitle": "Unsubscribe from these emails?",
+    "confirmDescription": "You will no longer receive emails from this sender.",
+    "confirmButton": "Unsubscribe",
     "title": "تم إلغاء اشتراكك.",
     "description": "لن تتلقى رسائل بريد إلكتروني من هذا المرسل بعد الآن.",
     "invalidTitle": "رابط إلغاء الاشتراك غير صالح.",

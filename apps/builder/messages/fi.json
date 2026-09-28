@@ -5635,6 +5635,9 @@
     "portalPricingPage": "Hinnoittelu"
   },
   "unsubscribePage": {
+    "confirmTitle": "Unsubscribe from these emails?",
+    "confirmDescription": "You will no longer receive emails from this sender.",
+    "confirmButton": "Unsubscribe",
     "title": "Tilauksesi on peruttu.",
     "description": "Et enää saa sähköposteja tältä lähettäjältä.",
     "invalidTitle": "Virheellinen peruutuslinkki.",

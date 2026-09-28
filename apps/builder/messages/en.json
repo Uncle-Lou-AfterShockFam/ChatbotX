@@ -6016,6 +6016,9 @@
     "portalPricingPage": "Pricing"
   },
   "unsubscribePage": {
+    "confirmTitle": "Unsubscribe from these emails?",
+    "confirmDescription": "You will no longer receive emails from this sender.",
+    "confirmButton": "Unsubscribe",
     "title": "You have been unsubscribed.",
     "description": "You will no longer receive emails from this sender.",
     "invalidTitle": "Invalid unsubscribe link.",

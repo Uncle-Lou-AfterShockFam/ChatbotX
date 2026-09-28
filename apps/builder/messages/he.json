@@ -3646,6 +3646,9 @@
     "portalPricingPage": "תמחור"
   },
   "unsubscribePage": {
+    "confirmTitle": "Unsubscribe from these emails?",
+    "confirmDescription": "You will no longer receive emails from this sender.",
+    "confirmButton": "Unsubscribe",
     "title": "ההרשמה שלכם בוטלה.",
     "description": "לא תקבלו עוד הודעות דוא\"ל משולח זה.",
     "invalidTitle": "קישור ביטול הרשמה לא תקין.",

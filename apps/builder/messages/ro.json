@@ -6069,6 +6069,9 @@
     "title": "TikTok"
   },
   "unsubscribePage": {
+    "confirmTitle": "Unsubscribe from these emails?",
+    "confirmDescription": "You will no longer receive emails from this sender.",
+    "confirmButton": "Unsubscribe",
     "description": "Nu vei mai primi e-mailuri de la acest expeditor.",
     "invalidDescription": "Acest link este invalid sau a expirat.",
     "invalidTitle": "Link de dezabonare invalid.",

@@ -5635,6 +5635,9 @@
     "portalPricingPage": "Preise"
   },
   "unsubscribePage": {
+    "confirmTitle": "Unsubscribe from these emails?",
+    "confirmDescription": "You will no longer receive emails from this sender.",
+    "confirmButton": "Unsubscribe",
     "title": "Sie wurden abgemeldet.",
     "description": "Sie erhalten keine E-Mails mehr von diesem Absender.",
     "invalidTitle": "Ungültiger Abmeldelink.",

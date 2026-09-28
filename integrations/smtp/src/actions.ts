@@ -7,6 +7,8 @@ export const sendMail = async (props: {
   to: string
   subject: string
   html: string
+  text?: string
+  headers?: Record<string, string>
   ctx: Context<SmtpAuthValue>
 }): Promise<void> => {
   const { ctx, ...mailOptions } = props

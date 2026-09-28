@@ -5635,6 +5635,9 @@
     "portalPricingPage": "Precios"
   },
   "unsubscribePage": {
+    "confirmTitle": "Unsubscribe from these emails?",
+    "confirmDescription": "You will no longer receive emails from this sender.",
+    "confirmButton": "Unsubscribe",
     "title": "You tiene been unsubscribed.",
     "description": "You se no longer receive correos desde este sender.",
     "invalidTitle": "No válido unsubscribe enlace.",
