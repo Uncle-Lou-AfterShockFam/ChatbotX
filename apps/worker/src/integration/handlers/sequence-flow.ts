@@ -113,7 +113,8 @@ async function runSendSequenceFlow(
     // Re-read right before sending: the enrolment may have been removed (a
     // stop-on-reply reply, an unsubscribe) while the step was looked up, and
     // its dispatch cascades away with it.
-    if (!(await fetchDispatch(dispatchId, workspaceId))) {
+    const current = await fetchDispatch(dispatchId, workspaceId)
+    if (!current) {
       await scheduler.removeFromSchedule(bucket, dispatchId)
       return
     }
@@ -121,6 +122,7 @@ async function runSendSequenceFlow(
       flowId: validStep.flow.id,
       workspaceId,
       contactId: data.contactId,
+      contactInboxId: current.contactInboxId,
       metadata: data.metadata,
       flowExecutionKey: job.id,
       startedAt: new Date(job.timestamp),
