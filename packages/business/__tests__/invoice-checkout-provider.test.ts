@@ -770,10 +770,9 @@ describe("deposits (s216b)", () => {
     const [session] = liveSessions()
     const params = paramsOf(session?.id as string)
     expect(params.line_items).toHaveLength(2)
-    expect(params.metadata).toMatchObject({
-      hub_payment_kind: "full",
-      hub_payment_minor: "1250",
-    })
+    // A full session keeps the pre-s216b body (no kind = full).
+    expect(params.metadata).not.toHaveProperty("hub_payment_kind")
+    expect(params.metadata).not.toHaveProperty("hub_payment_minor")
   })
 
   test("switching picks expires the live session first: one payable session, always", async () => {
@@ -781,13 +780,41 @@ describe("deposits (s216b)", () => {
     await visit("deposit")
     await visit("full")
     expect(liveSessions()).toHaveLength(1)
-    expect(
-      paramsOf(liveSessions()[0]?.id as string).metadata.hub_payment_kind,
-    ).toBe("full")
+    expect(paramsOf(liveSessions()[0]?.id as string).line_items).toHaveLength(2)
     expect(m.stripe.expires).toBe(1)
     // The same pick again reuses the live session.
     await visit("full")
     expect(m.stripe.creates).toBe(2)
+  })
+
+  test("two tabs picking DIFFERENT kinds at once: never two open sessions, never a wrong amount", async () => {
+    for (let round = 0; round < 10; round += 1) {
+      m.stripe.sessions.clear()
+      m.stripe.keys.clear()
+      m.state.row = depositRow()
+      await Promise.all([visit("deposit"), visit("full"), visit("deposit")])
+      const open = liveSessions()
+      expect(open.length).toBeLessThanOrEqual(1)
+      for (const session of open) {
+        expect(session.amount_total).toBe(
+          m.state.row?.checkoutKind === "deposit" ? 500 : 1250,
+        )
+      }
+    }
+  })
+
+  test("back from Stripe BEFORE the webhook: processing, never the choice again", async () => {
+    m.state.row = depositRow()
+    await visit("deposit")
+    const [session] = liveSessions()
+    if (session) {
+      session.status = "complete"
+      session.payment_status = "paid"
+      session.payment_intent = "pi_paid"
+    }
+    m.piStatus.set("pi_paid", "succeeded")
+    expect((await visit(undefined, true)).kind).toBe("processing")
+    expect(m.stripe.creates).toBe(1)
   })
 
   test("a partly paid invoice collects the balance, whatever was picked", async () => {

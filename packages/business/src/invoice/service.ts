@@ -603,6 +603,16 @@ class InvoiceService extends BaseService {
       await this.audit("void", `voided invoice #${invoice.number}`)
       await afterVoid?.(voided)
       await enqueueInvoiceMirror(voided)
+    } else {
+      const current = await this.get(ref)
+      if (current.status === "partiallyPaid") {
+        // A deposit landed while this void was in flight (s216b probe H5).
+        throw validationException(
+          "invoice",
+          "A deposit was paid on this invoice while it was being voided: refund it in Stripe, it cannot be voided",
+        )
+      }
+      return current
     }
     return await this.get(ref)
   }

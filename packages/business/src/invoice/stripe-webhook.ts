@@ -199,6 +199,14 @@ async function resolveCheckoutSession(
       { eventId: event.id, invoiceId: hubInvoice.id, sessionId: session.id },
       "stripe webhook: checkout session paid an amount it was not minted for",
     )
+    // Money was taken and cannot be applied: say so where the operator looks.
+    await db
+      .update(invoiceModel)
+      .set({
+        lastError: `Checkout session ${session.id} was paid (${session.amount_total} ${session.currency}) but not for what it was created to collect: check it in Stripe`,
+        updatedAt: new Date(),
+      })
+      .where(eq(invoiceModel.id, hubInvoice.id))
   }
   return {
     hubInvoice,
@@ -599,8 +607,8 @@ async function settleCheckoutPayment(props: {
     }
     return { outcome: "noop", detail: "duplicate-payment" }
   }
-  const { row, payment } = result
-  let claimed: boolean
+  const { payment } = result
+  let claimed: Date | null
   try {
     claimed = await claimPaymentMarks(payment.id)
   } catch (error) {
@@ -614,8 +622,14 @@ async function settleCheckoutPayment(props: {
   if (!claimed) {
     return { outcome: "noop", detail: "already-marked" }
   }
-  // A deposit whose marks run after the balance already paid the invoice
-  // must not write `partiallyPaid` over `paid`: the paid marks cover it.
+  // The row as it is NOW, not as the payment left it: a deposit whose marks
+  // run after the balance paid the invoice must not write `partiallyPaid`
+  // over `paid` (s216b probe H2); the paid marks cover it.
+  const [row = result.row] = await db
+    .select()
+    .from(invoiceModel)
+    .where(eq(invoiceModel.id, result.row.id))
+    .limit(1)
   const status =
     payment.kind === "deposit" && row.status !== "partiallyPaid"
       ? null
@@ -628,11 +642,12 @@ async function settleCheckoutPayment(props: {
       await emit(row.workspaceId, row.contactId, invoiceEventMetadata(row))
     }
   } catch (error) {
-    await releasePaymentMarks(payment.id).catch((releaseError: unknown) =>
-      logger.error(
-        { err: releaseError, paymentId: payment.id },
-        "stripe webhook: payment marks not released; the redelivery will skip them",
-      ),
+    await releasePaymentMarks(payment.id, claimed).catch(
+      (releaseError: unknown) =>
+        logger.error(
+          { err: releaseError, paymentId: payment.id },
+          "stripe webhook: payment marks not released; the redelivery will skip them",
+        ),
     )
     await dropDedupRow(credentials, event.id)
     logger.warn(
@@ -750,6 +765,16 @@ export async function handleStripeWebhook(props: {
   }
   try {
     await db.transaction(async (tx) => {
+      if (hubInvoice && resolution.payment) {
+        // A checkout payment: take the invoice's row lock BEFORE the event
+        // insert (whose invoiceId FK takes KEY SHARE): the two events of one
+        // payment would otherwise deadlock in applyCheckoutPayment (s216b H1).
+        await tx
+          .select({ id: invoiceModel.id })
+          .from(invoiceModel)
+          .where(eq(invoiceModel.id, hubInvoice.id))
+          .for("update")
+      }
       const [row] = await tx
         .insert(invoiceEventModel)
         .values({

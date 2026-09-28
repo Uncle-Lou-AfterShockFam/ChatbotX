@@ -210,8 +210,9 @@ const kindOf = (invoice: InvoiceModel): InvoiceCheckoutKind =>
   invoice.checkoutKind ?? "full"
 
 /**
- * One generation's Idempotency-Key. `full` keeps the pre-s216b key, so a
- * generation claimed before the deploy replays to the same session.
+ * One generation's Idempotency-Key. `full` keeps the pre-s216b key (and, in
+ * `sessionParams`, the pre-s216b body), so a generation claimed before the
+ * deploy replays to the same session.
  */
 const sessionIdempotencyKey = (invoice: InvoiceModel): string => {
   const kind = kindOf(invoice)
@@ -266,9 +267,13 @@ function sessionParams(
     hub_invoice_id: invoice.id,
     hub_workspace_id: invoice.workspaceId,
     hub_invoice_number: String(invoice.number),
-    // s216b: what this session collects; the webhook applies exactly this.
-    hub_payment_kind: kind,
-    hub_payment_minor: String(amountMinor),
+    // s216b: a deposit / balance session names what it collects; the webhook
+    // applies exactly that. A full session keeps the pre-s216b body byte for
+    // byte (no kind = full), so a generation claimed before the deploy still
+    // replays its Idempotency-Key with the same parameters.
+    ...(kind === "full"
+      ? {}
+      : { hub_payment_kind: kind, hub_payment_minor: String(amountMinor) }),
   }
   return {
     mode: "payment",
@@ -428,6 +433,32 @@ async function claimGeneration(
   return claimed ?? null
 }
 
+/** Whether the invoice's recorded session holds a payment (never throws). */
+async function recordedSessionComplete(row: InvoiceModel): Promise<boolean> {
+  try {
+    const credentials = await integrationStripeService.credentialsByWorkspaceId(
+      row.workspaceId,
+    )
+    if (!(credentials && row.checkoutSessionId)) {
+      return false
+    }
+    const stripe = createStripeClient(credentials.auth.secretKey)
+    const session = await stripe.checkout.sessions.retrieve(
+      row.checkoutSessionId,
+    )
+    return (
+      session.status === "complete" &&
+      (await completedHoldsPayment(stripe, session))
+    )
+  } catch (error) {
+    logger.warn(
+      { err: error, invoiceId: row.id },
+      "invoice: could not read the recorded session after the Stripe return",
+    )
+    return false
+  }
+}
+
 export type CheckoutVisit =
   | { kind: "redirect"; url: string; invoice: InvoiceModel }
   /**
@@ -492,6 +523,14 @@ export async function visitCheckout(
   try {
     if (options.justPaid && row.status === "partiallyPaid") {
       return { kind: "depositPaid", invoice: row }
+    }
+    if (options.justPaid && row.status === "open" && row.checkoutSessionId) {
+      // Back from Stripe before the webhook landed: the recorded session
+      // says whether a payment is settling; never ask the person to pay again.
+      const settling = await recordedSessionComplete(row)
+      if (settling) {
+        return { kind: "processing", invoice: row }
+      }
     }
     return await visitRounds(token, row, options.requestedKind)
   } catch (error) {
@@ -577,14 +616,12 @@ async function visitRounds(
     } else if (!row.checkoutMintedAt) {
       await claimGeneration(row, wanted)
     } else if (
-      Date.now() - row.checkoutMintedAt.getTime() > PENDING_MINT_JOIN_MS ||
-      kindOf(row) !== wanted
+      Date.now() - row.checkoutMintedAt.getTime() >
+      PENDING_MINT_JOIN_MS
     ) {
-      // A stale claim, or a racer minting the other choice: this visit's
-      // claim wins, and that racer can no longer record (it expires its own).
       await expireAbandonedGeneration(stripe, row, lines)
       await claimGeneration(row, wanted)
-    } else {
+    } else if (kindOf(row) === wanted) {
       const minted = await mintSession({
         stripe,
         invoice: row,
@@ -615,6 +652,12 @@ async function visitRounds(
       }
       row = current
       continue
+    } else {
+      // A live racer is minting the other choice: this visit's claim wins
+      // and that racer can no longer record; it expires its own session
+      // (below). No replay here: replaying its key would hand it a session
+      // this visit had just expired.
+      await claimGeneration(row, wanted)
     }
     // Claimed a generation or lost the claim: re-read either way.
     row = await loadByToken(token)

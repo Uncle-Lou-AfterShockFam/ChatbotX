@@ -271,7 +271,7 @@ describe("deposit (s216b)", () => {
     ["", ""],
     ["percent", ""],
     ["", "25"],
-  ])("an empty type or value (%j / %j) is no deposit", async (type, value) => {
+  ])("unset step fields (%j / %j) are no deposit", async (type, value) => {
     await handleCreateInvoice(
       props({ step: { ...step, depositType: type, depositValue: value } }),
     )
@@ -288,6 +288,17 @@ describe("deposit (s216b)", () => {
       }),
     )
     expect(m.create.mock.calls[0]?.[0]).not.toHaveProperty("deposit")
+  })
+
+  test("a TYPE that renders but a value that renders empty fails the step: never billed in full", async () => {
+    m.replaceAll.mockImplementation(({ text }: { text: string }) =>
+      Promise.resolve(text === "{{v}}" ? "" : "percent"),
+    )
+    const result = await handleCreateInvoice(
+      props({ step: { ...step, depositType: "{{t}}", depositValue: "{{v}}" } }),
+    )
+    expect(result.status).toBe("error")
+    expect(m.create).not.toHaveBeenCalled()
   })
 
   test("an unknown type takes the error branch without creating", async () => {

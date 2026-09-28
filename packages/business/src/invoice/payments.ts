@@ -29,12 +29,13 @@ export type NextCheckout =
   | { kind: "choose"; depositMinor: bigint; totalMinor: bigint }
   | null
 
-const minor = (invoice: PayableInvoice, value: string) =>
+const minor = (invoice: Pick<InvoiceModel, "currency">, value: string) =>
   decimalStringToMinor(value, invoice.currency)
 
 /** Minor units still owed. */
-export const amountDueMinor = (invoice: PayableInvoice): bigint =>
-  minor(invoice, invoice.total) - minor(invoice, invoice.amountPaid)
+export const amountDueMinor = (
+  invoice: Pick<InvoiceModel, "total" | "currency" | "amountPaid">,
+): bigint => minor(invoice, invoice.total) - minor(invoice, invoice.amountPaid)
 
 /**
  * The kind a visit collects. A partly paid invoice only takes its balance;
@@ -120,6 +121,9 @@ export async function applyCheckoutPayment(
     .select()
     .from(invoiceModel)
     .where(eq(invoiceModel.id, props.invoiceId))
+    // A caller that also inserts a row referencing this invoice (the
+    // webhook's InvoiceEvent) must take this lock FIRST: that FK insert holds
+    // KEY SHARE, and two such holders asking FOR UPDATE deadlock (s216b H1).
     .for("update")
   if (!row) {
     return { kind: "rejected", row: null, reason: "no such invoice" }
@@ -178,7 +182,8 @@ export async function applyCheckoutPayment(
       checkoutMintedAt: null,
       checkoutKind: null,
       checkoutGeneration: row.checkoutGeneration + 1,
-      lastError: null,
+      // lastError is kept: a "refund it" flag from a rejected payment must
+      // survive the next applied one (s216b probe H3).
       updatedAt: props.now,
     })
     .where(eq(invoiceModel.id, row.id))
@@ -189,11 +194,17 @@ export async function applyCheckoutPayment(
   return { kind: "applied", row: updated, payment }
 }
 
-/** Claim a payment's marks (true = this caller runs them). */
-export async function claimPaymentMarks(paymentId: string): Promise<boolean> {
+/**
+ * Claim a payment's marks: the claim's timestamp (this caller runs them), or
+ * null when another caller holds or ran them.
+ */
+export async function claimPaymentMarks(
+  paymentId: string,
+): Promise<Date | null> {
+  const at = new Date()
   const [claimed] = await db
     .update(invoicePaymentModel)
-    .set({ markedAt: new Date(), updatedAt: new Date() })
+    .set({ markedAt: at, updatedAt: at })
     .where(
       and(
         eq(invoicePaymentModel.id, paymentId),
@@ -201,23 +212,21 @@ export async function claimPaymentMarks(paymentId: string): Promise<boolean> {
       ),
     )
     .returning({ id: invoicePaymentModel.id })
-  return !!claimed
+  return claimed ? at : null
 }
 
-/** Hand the marks back after they failed, so the redelivery runs them. */
-export async function releasePaymentMarks(paymentId: string): Promise<void> {
+/** Hand back THIS caller's claim after its marks failed, so a redelivery runs them. */
+export async function releasePaymentMarks(
+  paymentId: string,
+  claimedAt: Date,
+): Promise<void> {
   await db
     .update(invoicePaymentModel)
     .set({ markedAt: null, updatedAt: new Date() })
-    .where(eq(invoicePaymentModel.id, paymentId))
-}
-
-/** The invoice's payments, oldest first (PDF, API). */
-export async function listInvoicePayments(
-  invoiceId: string,
-): Promise<InvoicePaymentModel[]> {
-  return await db.query.invoicePaymentModel.findMany({
-    where: { invoiceId },
-    orderBy: { paidAt: "asc" },
-  })
+    .where(
+      and(
+        eq(invoicePaymentModel.id, paymentId),
+        eq(invoicePaymentModel.markedAt, claimedAt),
+      ),
+    )
 }

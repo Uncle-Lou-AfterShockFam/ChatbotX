@@ -1,6 +1,5 @@
 import { and, db, eq } from "@chatbotx.io/database/client"
 import {
-  decimalStringToMinor,
   hubDocumentMethods,
   INVOICE_DOCUMENT_REF_PREFIX,
   type InvoiceDocumentKind,
@@ -19,6 +18,7 @@ import { escapeHtml, wrapDocumentHtml } from "../documents/html"
 import { documentService } from "../documents/service"
 import { logger } from "../logger"
 import { isInvoicePayToken } from "./checkout-provider"
+import { amountDueMinor } from "./payments"
 
 /**
  * The hub's own PDF of a stripeCheckout (s210b, PR 2b) or woocommerce
@@ -142,8 +142,7 @@ export function renderInvoiceHtml(props: {
             "Balance due",
             money(
               minorToDecimalString(
-                decimalStringToMinor(invoice.total, invoice.currency) -
-                  decimalStringToMinor(paidSoFar, invoice.currency),
+                amountDueMinor({ ...invoice, amountPaid: paidSoFar }),
                 invoice.currency,
               ),
             ),

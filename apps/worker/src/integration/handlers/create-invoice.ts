@@ -56,10 +56,12 @@ async function resolveStepDeposit(
   const value = (await render(step.depositValue))
     .trim()
     .replace(TRAILING_PERCENT, "")
-  if (!(type && value)) {
+  if (!type) {
     return null
   }
-  if (type !== "amount" && type !== "percent") {
+  // A type without a value is a deposit the author meant but the contact's
+  // fields did not fill: fail the step rather than bill the full amount.
+  if ((type !== "amount" && type !== "percent") || !value) {
     return "invalid"
   }
   return { type, value }
@@ -106,7 +108,7 @@ export async function handleCreateInvoice({
     const deposit = await resolveStepDeposit(step, render)
     if (deposit === "invalid") {
       return error(
-        'The deposit type must be "amount" or "percent" (or empty for none)',
+        'The deposit needs a type ("amount" or "percent") and a value; leave the type empty for no deposit',
       )
     }
     const sourcePrefix = invoiceSourcePrefix({

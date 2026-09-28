@@ -33,6 +33,8 @@ const m = vi.hoisted(() => ({
   emitPaid: vi.fn(async () => undefined),
   emitPartiallyPaid: vi.fn(async () => undefined),
   token: 0,
+  /** When set, claimPaymentMarks waits for it (a payment's marks run late). */
+  claimGate: null as Promise<void> | null,
 }))
 
 vi.mock("../../src/integration-stripe/service", () => {
@@ -85,6 +87,19 @@ vi.mock("../../src/invoice/checkout-provider", async (importOriginal) => ({
     })
   },
 }))
+vi.mock("../../src/invoice/payments", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../src/invoice/payments")>()
+  return {
+    ...actual,
+    claimPaymentMarks: async (id: string) => {
+      const gate = m.claimGate
+      m.claimGate = null
+      await gate
+      return await actual.claimPaymentMarks(id)
+    },
+  }
+})
 vi.mock("../../src/integration-stripe/client", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("../../src/integration-stripe/client")>()
@@ -205,14 +220,18 @@ const apply = (
     }),
   )
 
-function signedCompleted(eventId: string, sessionId: string) {
+function signedCompleted(
+  eventId: string,
+  sessionId: string,
+  type = "checkout.session.completed",
+) {
   const payload = JSON.stringify({
     id: eventId,
     object: "event",
     api_version: "2026-05-27.dahlia",
     created: Math.floor(Date.now() / 1000),
     livemode: false,
-    type: "checkout.session.completed",
+    type,
     data: { object: { id: sessionId, object: "checkout.session" } },
   })
   return {
@@ -527,5 +546,85 @@ describe.skipIf(!databaseUrl)("signed checkout webhook, end to end", () => {
     expect(row).toMatchObject({ status: "partiallyPaid", amountPaid: "50.00" })
     expect(row?.lastError).toContain("pi_f2")
     expect(await paymentRows(invoice.id)).toHaveLength(1)
+  })
+
+  test("probe H1: completed + async_payment_succeeded of one deposit, concurrently x10: never a deadlock, never a retry", async () => {
+    for (let round = 0; round < 10; round += 1) {
+      const { invoice } = await createDepositInvoice()
+      const integrationId = m.integrations.get(invoice.workspaceId) as string
+      m.sessionRetrieve.mockResolvedValue(
+        session(invoice, "deposit", 5000, `pi_h1_${round}`),
+      )
+      const results = await Promise.all([
+        handleStripeWebhook({
+          integrationId,
+          ...signedCompleted(`evt_h1a_${round}`, "cs_h1"),
+        }),
+        handleStripeWebhook({
+          integrationId,
+          ...signedCompleted(
+            `evt_h1b_${round}`,
+            "cs_h1",
+            "checkout.session.async_payment_succeeded",
+          ),
+        }),
+      ])
+      expect(results.map((r) => r.outcome).sort()).toEqual(["applied", "noop"])
+      expect((await invoiceRow(invoice.id))?.amountPaid).toBe("50.00")
+    }
+  })
+
+  test("probe H2: a deposit whose marks run AFTER the balance paid never marks partiallyPaid", async () => {
+    const { invoice } = await createDepositInvoice()
+    const integrationId = m.integrations.get(invoice.workspaceId) as string
+    let release: () => void = () => undefined
+    m.claimGate = new Promise((resolve) => {
+      release = resolve
+    })
+    m.sessionRetrieve.mockResolvedValueOnce(
+      session(invoice, "deposit", 5000, "pi_h2d"),
+    )
+    const deposit = handleStripeWebhook({
+      integrationId,
+      ...signedCompleted("evt_h2d", "cs_h2d"),
+    })
+    // The deposit is applied and parked at its marks claim; the balance lands.
+    await vi.waitFor(async () => {
+      expect((await invoiceRow(invoice.id))?.status).toBe("partiallyPaid")
+    })
+    m.sessionRetrieve.mockResolvedValueOnce(
+      session(invoice, "balance", 15_000, "pi_h2b"),
+    )
+    const balance = await handleStripeWebhook({
+      integrationId,
+      ...signedCompleted("evt_h2b", "cs_h2b"),
+    })
+    expect(balance.outcome).toBe("applied")
+    release()
+    await deposit
+    expect(m.marks).toHaveBeenCalledTimes(1)
+    expect(m.marks).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "paid" }),
+    )
+    expect(m.emitPartiallyPaid).not.toHaveBeenCalled()
+  })
+
+  test("probe H3: a flagged payment's 'refund it' warning survives the next applied payment", async () => {
+    const { invoice } = await createDepositInvoice()
+    const integrationId = m.integrations.get(invoice.workspaceId) as string
+    for (const [kind, minor, pi] of [
+      ["deposit", 5000, "pi_h3d"],
+      ["full", 20_000, "pi_h3f"],
+      ["balance", 15_000, "pi_h3b"],
+    ] as const) {
+      m.sessionRetrieve.mockResolvedValue(session(invoice, kind, minor, pi))
+      await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted(`evt_${pi}`, `cs_${pi}`),
+      })
+    }
+    const row = await invoiceRow(invoice.id)
+    expect(row).toMatchObject({ status: "paid", amountPaid: "200.00" })
+    expect(row?.lastError).toContain("pi_h3f")
   })
 })

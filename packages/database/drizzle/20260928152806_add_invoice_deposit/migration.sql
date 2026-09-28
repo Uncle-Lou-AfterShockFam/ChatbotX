@@ -21,4 +21,6 @@ ALTER TABLE "Invoice" ADD COLUMN "amountPaid" numeric(14,2) DEFAULT '0' NOT NULL
 ALTER TABLE "Invoice" ADD COLUMN "checkoutKind" "invoiceCheckoutKind";--> statement-breakpoint
 CREATE UNIQUE INDEX "InvoicePayment_invoiceId_providerPaymentId_key" ON "InvoicePayment" ("invoiceId","providerPaymentId");--> statement-breakpoint
 ALTER TABLE "InvoicePayment" ADD CONSTRAINT "InvoicePayment_workspaceId_Workspace_id_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
-ALTER TABLE "InvoicePayment" ADD CONSTRAINT "InvoicePayment_invoiceId_Invoice_id_fkey" FOREIGN KEY ("invoiceId") REFERENCES "Invoice"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "InvoicePayment" ADD CONSTRAINT "InvoicePayment_invoiceId_Invoice_id_fkey" FOREIGN KEY ("invoiceId") REFERENCES "Invoice"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
+-- s216b review: invoices paid before deposits existed took their whole total.
+UPDATE "Invoice" SET "amountPaid" = "total" WHERE "status" IN ('paid', 'refunded');

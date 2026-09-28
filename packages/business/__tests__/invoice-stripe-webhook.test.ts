@@ -72,6 +72,10 @@ const m = vi.hoisted(() => {
         : resolve(undefined),
   }
   const tx = {
+    // The checkout-payment row lock (s216b); the ledger itself is mocked.
+    select: () => ({
+      from: () => ({ where: () => ({ for: () => Promise.resolve([]) }) }),
+    }),
     insert: () => ({
       values: (v: Record<string, unknown>) => {
         state.inserted.push(v)
@@ -193,6 +197,9 @@ vi.mock("@chatbotx.io/events", () => ({
 vi.mock("../src/invoice/payments", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("../src/invoice/payments")>()
+  const { decimalStringToMinor, minorToDecimalString } = await import(
+    "@chatbotx.io/database/partials"
+  )
   return {
     ...actual,
     applyCheckoutPayment: (
@@ -233,11 +240,11 @@ vi.mock("../src/invoice/payments", async (importOriginal) => {
         })
       }
       const paid =
-        BigInt(Math.round(Number(invoice.amountPaid) * 100)) + props.amountMinor
-      const fullyPaid = paid === BigInt(Math.round(Number(row.total) * 100))
+        decimalStringToMinor(invoice.amountPaid, "USD") + props.amountMinor
+      const fullyPaid = paid === decimalStringToMinor(String(row.total), "USD")
       const set = {
         status: fullyPaid ? "paid" : "partiallyPaid",
-        amountPaid: (Number(paid) / 100).toFixed(2),
+        amountPaid: minorToDecimalString(paid, "USD"),
         ...(fullyPaid ? { paidAt: props.now } : {}),
         providerInvoiceId: props.paymentIntentId,
         checkoutSessionId: null,
@@ -257,10 +264,10 @@ vi.mock("../src/invoice/payments", async (importOriginal) => {
         return Promise.reject(new Error("db down"))
       }
       if (m.state.paymentMarks.has(id)) {
-        return Promise.resolve(false)
+        return Promise.resolve(null)
       }
       m.state.paymentMarks.add(id)
-      return Promise.resolve(true)
+      return Promise.resolve(new Date())
     },
     releasePaymentMarks: (id: string) => {
       m.state.paymentMarks.delete(id)
@@ -836,7 +843,18 @@ describe("stripeCheckout (s207b): checkout.session.* and refunds", () => {
     const result = await completed()
     expect(result).toEqual({ outcome: "noop", detail: "unconfirmed" })
     expect(m.state.inserted[0]).toMatchObject({ outcome: "unconfirmed" })
-    expect(m.state.updates).toEqual([])
+    // Never a status change. A PAID session for another amount writes only
+    // the operator's warning (s216b review); an unpaid one writes nothing.
+    for (const update of m.state.updates) {
+      expect(Object.keys(update).sort()).toEqual(["lastError", "updatedAt"])
+      expect(update.lastError).toContain("check it in Stripe")
+    }
+    expect(m.state.updates).toHaveLength(
+      (extra as { payment_status?: string }).payment_status === "unpaid" ||
+        (extra as { payment_intent?: null }).payment_intent === null
+        ? 0
+        : 1,
+    )
     expectNoSideEffects()
   })
 
