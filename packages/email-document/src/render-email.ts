@@ -87,10 +87,42 @@ export async function renderEmail(
 ): Promise<RenderEmailResult> {
   const doc = parseDocument(input)
   const missing = new Set<string>()
+  // One callback call per link/button across BOTH parts: the callbacks may
+  // mint tracking tokens, and the HTML and text parts must agree.
+  const linkMemo = new Map<string, string>()
+  const buttonMemo = new Map<string, string>()
+  const link = ctx.link
+  const button = ctx.button
+  const memoCtx: RenderContext = {
+    ...ctx,
+    link: link
+      ? (url, blockId) => {
+          const key = `${blockId}\u0000${url}`
+          const hit = linkMemo.get(key)
+          if (hit !== undefined) {
+            return hit
+          }
+          const out = link(url, blockId)
+          linkMemo.set(key, out)
+          return out
+        }
+      : undefined,
+    button: button
+      ? (blockId) => {
+          const hit = buttonMemo.get(blockId)
+          if (hit !== undefined) {
+            return hit
+          }
+          const out = button(blockId)
+          buttonMemo.set(blockId, out)
+          return out
+        }
+      : undefined,
+  }
   const sections = doc.blocks
     .map((block) => {
       if (block.type !== "columns") {
-        const inner = leafToMjml(block, ctx, missing)
+        const inner = leafToMjml(block, memoCtx, missing)
         return inner
           ? `<mj-section><mj-column>${inner}</mj-column></mj-section>`
           : ""
@@ -98,7 +130,7 @@ export async function renderEmail(
       const columns = block.columns
         .map(
           (column) =>
-            `<mj-column>${column.blocks.map((leaf) => leafToMjml(assertLeaf(leaf), ctx, missing)).join("")}</mj-column>`,
+            `<mj-column>${column.blocks.map((leaf) => leafToMjml(assertLeaf(leaf), memoCtx, missing)).join("")}</mj-column>`,
         )
         .join("")
       return `<mj-section>${columns}</mj-section>`
@@ -117,8 +149,10 @@ export async function renderEmail(
       `mjml render error: ${errors.map((e) => e.formattedMessage).join(", ")}`,
     )
   }
+  // No assets in the text part: attachments are MIME parts, not links.
+  const textCtx: RenderContext = { ...memoCtx, assets: undefined }
   const textSource = doc.blocks
-    .map((block) => blockToHtml(block, ctx, new Set()))
+    .map((block) => blockToHtml(block, textCtx, new Set()))
     .join("\n")
   let text = ""
   try {

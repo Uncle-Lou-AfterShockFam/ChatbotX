@@ -1,4 +1,4 @@
-import type { EmailDocument, LeafBlock } from "./schema"
+import { type EmailDocument, type LeafBlock, leafBlockSchema } from "./schema"
 
 /** Today's email step `elements[]` (flow-config `pageElementSchema`), loosely typed. */
 type LegacyElement = {
@@ -26,6 +26,13 @@ export function fromLegacyElements(
   options: { preheader?: string } = {},
 ): EmailDocument {
   const list = Array.isArray(elements) ? (elements as LegacyElement[]) : []
+  const str = (value: unknown): string => {
+    try {
+      return typeof value === "string" ? value : String(value ?? "")
+    } catch {
+      return ""
+    }
+  }
   const blocks: LeafBlock[] = []
   list.slice(0, 200).forEach((el, index) => {
     const id =
@@ -38,14 +45,14 @@ export function fromLegacyElements(
           id,
           type: "heading",
           level: 2,
-          text: String(el.text ?? ""),
+          text: str(el.text),
         })
         break
       case "text":
-        blocks.push({ id, type: "text", text: String(el.text ?? "") })
+        blocks.push({ id, type: "text", text: str(el.text) })
         break
       case "code":
-        blocks.push({ id, type: "code", text: String(el.text ?? "") })
+        blocks.push({ id, type: "code", text: str(el.text) })
         break
       case "image":
         if (typeof el.url === "string" && HTTP.test(el.url)) {
@@ -67,14 +74,18 @@ export function fromLegacyElements(
           blocks.push({
             id,
             type: "button",
-            label: String(el.label ?? "Open").slice(0, 40) || "Open",
+            label: str(el.label).trim().slice(0, 40) || "Open",
             action: {
               kind: "flow",
               beforeStep: el.beforeStep as Record<string, unknown>,
-              steps: (Array.isArray(el.steps) ? el.steps : []) as Record<
-                string,
-                unknown
-              >[],
+              steps: (Array.isArray(el.steps) ? el.steps : [])
+                .filter(
+                  (step) =>
+                    step !== null &&
+                    typeof step === "object" &&
+                    !Array.isArray(step),
+                )
+                .slice(0, 20) as Record<string, unknown>[],
             },
           })
         }
@@ -83,14 +94,20 @@ export function fromLegacyElements(
         break
     }
   })
-  if (blocks.length === 0) {
-    blocks.push({ id: "1", type: "text", text: "" })
+  // Every converted block must pass the schema on its own: a stored flow
+  // with one odd element keeps rendering instead of failing parseDocument.
+  const valid = blocks.filter(
+    (block) => leafBlockSchema.safeParse(block).success,
+  )
+  if (valid.length === 0) {
+    valid.push({ id: "1", type: "text", text: "" })
   }
   return {
     version: 1,
-    settings: options.preheader
-      ? { preheader: options.preheader.slice(0, 150) }
-      : {},
-    blocks,
+    settings:
+      typeof options.preheader === "string" && options.preheader
+        ? { preheader: options.preheader.slice(0, 150) }
+        : {},
+    blocks: valid,
   }
 }

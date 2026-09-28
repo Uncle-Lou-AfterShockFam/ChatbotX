@@ -495,3 +495,105 @@ describe("fuzz: renderWeb never emits executable markup", () => {
     }
   })
 })
+
+describe("second blind probe findings (s220b)", () => {
+  test("an <img src> token in an html block admits http(s) only", () => {
+    for (const p of [
+      "javascript:alert(1)",
+      "data:image/svg+xml,<svg onload=alert(1)>",
+      "mailto:a@b.test",
+    ]) {
+      const { html } = renderWeb(
+        doc([{ id: "1", type: "html", html: '<img src="{{p}}" alt="">' }]),
+        { vars: { p } },
+      )
+      expect(html).toContain('src=""')
+    }
+    const ok = renderWeb(
+      doc([{ id: "1", type: "html", html: '<img src="{{p}}" alt="">' }]),
+      { vars: { p: "https://cdn.test/a.png" } },
+    )
+    expect(ok.html).toContain('src="https://cdn.test/a.png"')
+  })
+
+  test("merging is single-pass: a value never pulls another var into a link", () => {
+    const { html } = renderWeb(doc([text("1", '<a href="{{url}}">x</a>')]), {
+      vars: { url: "https://e.test/{{secret}}", secret: "S3CRET" },
+    })
+    expect(html).not.toContain("S3CRET")
+  })
+
+  test("a token cannot assemble a foreign scheme in an html-block href", () => {
+    const { html } = renderWeb(
+      doc([{ id: "1", type: "html", html: '<a href="{{a}}:alert(1)">x</a>' }]),
+      { vars: { a: "javascript" } },
+    )
+    expect(executableMarkup(html)).toEqual([])
+  })
+
+  test("the text part reuses the HTML part's link/button results (one call each) and lists no attachment links", async () => {
+    let links = 0
+    let buttons = 0
+    const out = await renderEmail(
+      doc([
+        text("1", '<p><a href="https://x.test/a">a</a></p>'),
+        {
+          id: "2",
+          type: "button",
+          label: "Pay",
+          action: { kind: "flow", beforeStep: {}, steps: [] },
+        },
+        { id: "3", type: "attachment", asset: { kind: "media", fileId: "5" } },
+      ]),
+      {
+        vars: {},
+        link: (url) =>
+          `https://hub.test/c?n=${++links}&u=${encodeURIComponent(url)}`,
+        button: (id) => `https://hub.test/b/${id}?n=${++buttons}`,
+        assets: {
+          "5": {
+            url: "https://cdn.test/f.pdf",
+            name: "f.pdf",
+            size: 1,
+            mimeType: "application/pdf",
+          },
+        },
+      },
+    )
+    expect(links).toBe(1)
+    expect(buttons).toBe(1)
+    expect(out.text).toContain("https://hub.test/c?n=1")
+    expect(out.text).not.toContain("cdn.test/f.pdf")
+  })
+
+  test("legacy conversion never yields an unparseable document", () => {
+    const d = fromLegacyElements(
+      [
+        {
+          id: "1",
+          type: "button",
+          label: "   ",
+          buttonType: "x",
+          beforeStep: {},
+          steps: ["bad", null, {}],
+        },
+        { id: "2", type: "text", text: "y".repeat(30_000) },
+        { id: "3", type: "image", url: `https://x.test/${"a".repeat(3000)}` },
+        { id: "4", type: "text", text: "kept" },
+      ],
+      { preheader: 42 as unknown as string },
+    )
+    const parsed = parseDocument(d)
+    expect(parsed.blocks.map((b) => b.type)).toEqual(["button", "text"])
+    expect(parsed.settings).toEqual({})
+  })
+
+  test("a fallback is not escaped twice", () => {
+    const { html } = renderWeb(
+      doc([text("1", "<p>{{nope|Tom &amp; Jerry}}</p>")]),
+      { vars: {} },
+    )
+    expect(html).toContain("Tom &amp; Jerry")
+    expect(html).not.toContain("&amp;amp;")
+  })
+})
