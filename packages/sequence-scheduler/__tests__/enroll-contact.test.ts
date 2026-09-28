@@ -67,6 +67,14 @@ vi.mock("@chatbotx.io/database/client", () => ({
       return result
     },
   },
+  isForeignKeyViolationError: (err: unknown, constraint?: string) => {
+    const cause = (err as { cause?: { code?: string; constraint?: string } })
+      ?.cause
+    return (
+      cause?.code === "23503" &&
+      (constraint === undefined || cause.constraint === constraint)
+    )
+  },
 }))
 
 vi.mock("@chatbotx.io/database/schema", () => ({
@@ -307,7 +315,58 @@ describe("enrollContactInSequence", () => {
 })
 
 // ---------------------------------------------------------------------------
+const fkError = Object.assign(new Error("fk"), {
+  cause: {
+    code: "23503",
+    constraint: "SequenceDispatch_enrollment_workspace_fkey",
+  },
+})
+
 describe("enrollContactsInSequenceBulk", () => {
+  test("an enrolment removed mid-loop (dispatch FK) is skipped, the rest still schedule (s220b)", async () => {
+    bulkReturningMock.mockResolvedValue([
+      {
+        id: "gone",
+        contactId: "c-1",
+        sequenceId: "seq-1",
+        nextRunAt: NOW,
+        nextStepId: "step-1",
+      },
+      {
+        id: "kept",
+        contactId: "c-2",
+        sequenceId: "seq-1",
+        nextRunAt: NOW,
+        nextStepId: "step-1",
+      },
+    ])
+    vi.mocked(createDispatch)
+      .mockRejectedValueOnce(fkError)
+      .mockResolvedValueOnce(FAKE_DISPATCH)
+
+    await enrollContactsInSequenceBulk(makeBulkParams())
+
+    expect(vi.mocked(createDispatch)).toHaveBeenCalledTimes(2)
+    expect(addToScheduleMock).toHaveBeenCalledTimes(1)
+  })
+
+  test("any other dispatch error still aborts the bulk enrolment", async () => {
+    bulkReturningMock.mockResolvedValue([
+      {
+        id: "e-1",
+        contactId: "c-1",
+        sequenceId: "seq-1",
+        nextRunAt: NOW,
+        nextStepId: "step-1",
+      },
+    ])
+    vi.mocked(createDispatch).mockRejectedValueOnce(new Error("db down"))
+
+    await expect(
+      enrollContactsInSequenceBulk(makeBulkParams()),
+    ).rejects.toThrow("db down")
+  })
+
   function setUpBulkInsert(
     insertedRows: Array<{
       id: string

@@ -20,9 +20,13 @@ vi.mock("@chatbotx.io/redis", () => ({
 
 // ---------- sequence-scheduler spies ----------
 const advanceEnrollmentSpy = vi.fn()
+const { MockEnrollmentNotFoundError } = vi.hoisted(() => ({
+  MockEnrollmentNotFoundError: class extends Error {},
+}))
 
 vi.mock("@chatbotx.io/sequence-scheduler", () => ({
   advanceEnrollment: (...args: unknown[]) => advanceEnrollmentSpy(...args),
+  EnrollmentNotFoundError: MockEnrollmentNotFoundError,
 }))
 
 // ---------- contactSequenceService spies ----------
@@ -69,8 +73,13 @@ vi.mock("../src/integration/handlers/send-flow-direct", () => ({
 // ---------- logger spy ----------
 const loggerErrorSpy = vi.fn()
 
+const loggerInfoSpy = vi.fn()
+
 vi.mock("../src/lib/logger", () => ({
-  logger: { error: (...args: unknown[]) => loggerErrorSpy(...args) },
+  logger: {
+    error: (...args: unknown[]) => loggerErrorSpy(...args),
+    info: (...args: unknown[]) => loggerInfoSpy(...args),
+  },
 }))
 
 import { handleSendSequenceFlow } from "../src/integration/handlers/sequence-flow"
@@ -169,6 +178,47 @@ describe("handleSendSequenceFlow", () => {
       expect(markCompletedSpy).not.toHaveBeenCalled()
       expect(advanceEnrollmentSpy).not.toHaveBeenCalled()
       expect(removeFromScheduleSpy).toHaveBeenCalledOnce()
+    })
+  })
+
+  describe("enrolment removed while the step was looked up (s220b)", () => {
+    test("the re-read before sending misses the dispatch: nothing is sent", async () => {
+      findRunningSpy
+        .mockResolvedValueOnce(makeDispatch())
+        .mockResolvedValueOnce(undefined)
+
+      await handleSendSequenceFlow(makeData(), makeJob())
+
+      expect(sendFlowDirectSpy).not.toHaveBeenCalled()
+      expect(markCompletedSpy).not.toHaveBeenCalled()
+      expect(advanceEnrollmentSpy).not.toHaveBeenCalled()
+      expect(removeFromScheduleSpy).toHaveBeenCalledWith(42, "dispatch-1")
+    })
+  })
+
+  describe("enrolment removed while the step was sending (s220b)", () => {
+    test("is benign: completes, unschedules, never throws or retries", async () => {
+      advanceEnrollmentSpy.mockRejectedValueOnce(
+        new MockEnrollmentNotFoundError("Enrollment enroll-1 not found"),
+      )
+
+      await expect(
+        handleSendSequenceFlow(makeData(), makeJob()),
+      ).resolves.toBeUndefined()
+
+      expect(markCompletedSpy).toHaveBeenCalledOnce()
+      expect(removeFromScheduleSpy).toHaveBeenCalledWith(42, "dispatch-1")
+      expect(loggerErrorSpy).not.toHaveBeenCalled()
+      expect(loggerInfoSpy).toHaveBeenCalledOnce()
+    })
+
+    test("any other advance failure still rethrows for a BullMQ retry", async () => {
+      advanceEnrollmentSpy.mockRejectedValueOnce(new Error("db down"))
+
+      await expect(
+        handleSendSequenceFlow(makeData(), makeJob()),
+      ).rejects.toThrow("db down")
+      expect(loggerErrorSpy).toHaveBeenCalled()
     })
   })
 

@@ -59,6 +59,14 @@ vi.mock("@chatbotx.io/database/client", () => ({
   eq: (c: unknown, v: unknown) => ({ __eq: [c, v] }),
   asc: (c: unknown) => ({ __asc: c }),
   gt: (c: unknown, v: unknown) => ({ __gt: [c, v] }),
+  isForeignKeyViolationError: (err: unknown, constraint?: string) => {
+    const cause = (err as { cause?: { code?: string; constraint?: string } })
+      ?.cause
+    return (
+      cause?.code === "23503" &&
+      (constraint === undefined || cause.constraint === constraint)
+    )
+  },
 }))
 
 vi.mock("@chatbotx.io/database/schema", () => ({
@@ -78,7 +86,10 @@ vi.mock("@chatbotx.io/utils", async (importOriginal) => {
   }
 })
 
-import { advanceEnrollment } from "../src/advance-enrollment"
+import {
+  advanceEnrollment,
+  EnrollmentNotFoundError,
+} from "../src/advance-enrollment"
 // --- lazy imports after mocks ---
 import { calculateNextRunAtFromStep } from "../src/calculate-next-run-at"
 import { getContactInboxes } from "../src/contacts-on-sequences"
@@ -265,6 +276,31 @@ describe("advanceEnrollment", () => {
       await advanceEnrollment(makeParams())
 
       expect(transactionMock).not.toHaveBeenCalled()
+    })
+  })
+
+  describe("when the enrolment is removed before the next dispatch insert (s220b)", () => {
+    test("the dispatch FK surfaces as EnrollmentNotFoundError", async () => {
+      selectLimitMock.mockResolvedValue([NEXT_STEP])
+      transactionMock.mockRejectedValueOnce(
+        Object.assign(new Error("fk"), {
+          cause: {
+            code: "23503",
+            constraint: "SequenceDispatch_enrollment_workspace_fkey",
+          },
+        }),
+      )
+
+      await expect(advanceEnrollment(makeParams())).rejects.toBeInstanceOf(
+        EnrollmentNotFoundError,
+      )
+    })
+
+    test("any other transaction error passes through unchanged", async () => {
+      selectLimitMock.mockResolvedValue([NEXT_STEP])
+      transactionMock.mockRejectedValueOnce(new Error("db down"))
+
+      await expect(advanceEnrollment(makeParams())).rejects.toThrow("db down")
     })
   })
 

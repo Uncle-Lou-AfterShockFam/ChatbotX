@@ -1,4 +1,11 @@
-import { and, asc, db, eq, gt } from "@chatbotx.io/database/client"
+import {
+  and,
+  asc,
+  db,
+  eq,
+  gt,
+  isForeignKeyViolationError,
+} from "@chatbotx.io/database/client"
 import {
   contactsOnSequenceModel,
   sequenceStepModel,
@@ -43,6 +50,20 @@ function calculateNextRunAt(step: NextStepForSchedule, baseTime: Date): Date {
   })
 }
 
+/**
+ * The enrolment row is gone: it was removed (unsubscribe, company stop,
+ * sequence stop-on-reply) after the dispatch was claimed.
+ */
+export class EnrollmentNotFoundError extends Error {
+  readonly enrollmentId: string
+
+  constructor(enrollmentId: string) {
+    super(`Enrollment ${enrollmentId} not found`)
+    this.enrollmentId = enrollmentId
+    this.name = "EnrollmentNotFoundError"
+  }
+}
+
 export interface AdvanceEnrollmentParams {
   contactId: string
   currentStep: { id: string; order: number }
@@ -71,7 +92,7 @@ export async function advanceEnrollment(
   })
 
   if (!enrollment) {
-    throw new Error(`Enrollment ${enrollmentId} not found`)
+    throw new EnrollmentNotFoundError(enrollmentId)
   }
 
   if (enrollment.status !== "active") {
@@ -116,45 +137,58 @@ export async function advanceEnrollment(
     return
   }
 
-  const dispatches = await db.transaction(async (tx) => {
-    const nextRunAt = calculateNextRunAt(nextStep, sentAt)
+  const dispatches = await db
+    .transaction(async (tx) => {
+      const nextRunAt = calculateNextRunAt(nextStep, sentAt)
 
-    await tx
-      .update(contactsOnSequenceModel)
-      .set({
-        currentStep: nextStep.order,
-        lastStepId: currentStep.id,
-        nextStepId: nextStep.id,
-        nextRunAt,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(contactsOnSequenceModel.id, enrollmentId),
-          eq(contactsOnSequenceModel.workspaceId, workspaceId),
-        ),
-      )
+      await tx
+        .update(contactsOnSequenceModel)
+        .set({
+          currentStep: nextStep.order,
+          lastStepId: currentStep.id,
+          nextStepId: nextStep.id,
+          nextRunAt,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(contactsOnSequenceModel.id, enrollmentId),
+            eq(contactsOnSequenceModel.workspaceId, workspaceId),
+          ),
+        )
 
-    const contactInboxes = await getContactInboxes(workspaceId, contactId)
-    const nextDispatches: DispatchToSchedule[] = []
+      const contactInboxes = await getContactInboxes(workspaceId, contactId)
+      const nextDispatches: DispatchToSchedule[] = []
 
-    for (const contactInbox of contactInboxes) {
-      const nextDispatch = await createDispatch({
-        workspaceId,
-        sequenceId,
-        contactId,
-        stepId: nextStep.id,
-        enrollmentId,
-        runAt: nextRunAt,
-        client: tx,
-        contactInboxId: contactInbox.id,
-      })
+      for (const contactInbox of contactInboxes) {
+        const nextDispatch = await createDispatch({
+          workspaceId,
+          sequenceId,
+          contactId,
+          stepId: nextStep.id,
+          enrollmentId,
+          runAt: nextRunAt,
+          client: tx,
+          contactInboxId: contactInbox.id,
+        })
 
-      nextDispatches.push(nextDispatch)
-    }
+        nextDispatches.push(nextDispatch)
+      }
 
-    return nextDispatches
-  })
+      return nextDispatches
+    })
+    .catch((err: unknown) => {
+      // Removed between the read above and the dispatch insert.
+      if (
+        isForeignKeyViolationError(
+          err,
+          "SequenceDispatch_enrollment_workspace_fkey",
+        )
+      ) {
+        throw new EnrollmentNotFoundError(enrollmentId)
+      }
+      throw err
+    })
 
   for (const dispatch of dispatches) {
     await scheduler.addToSchedule(

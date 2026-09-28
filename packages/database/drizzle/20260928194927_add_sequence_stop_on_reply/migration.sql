@@ -1,0 +1,1 @@
+ALTER TABLE "Sequence" ADD COLUMN "stopOnReply" boolean DEFAULT false NOT NULL;

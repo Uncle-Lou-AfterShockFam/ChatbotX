@@ -4,6 +4,7 @@ import {
   db,
   eq,
   inArray,
+  lte,
   type Transaction,
 } from "@chatbotx.io/database/client"
 import {
@@ -43,6 +44,7 @@ type RemoveReason =
   | "subscription_removed"
   | "unsubscribed_via_flow"
   | "company_stopped"
+  | "contact_replied"
 
 type RemoveContactSequencesForContactsParams = {
   client?: DrizzleClient
@@ -308,6 +310,57 @@ class ContactSequenceService extends BaseService {
       sequenceId: enrollment.sequenceId,
       sequenceName: enrollment.sequence.name,
     }))
+  }
+
+  /**
+   * Sequence stop-on-reply (s220b): ends the contact's enrolments in every
+   * sequence of the workspace that has `stopOnReply` on and that already
+   * existed when the reply arrived (`repliedAt`): a late or re-delivered
+   * reply event never ends an enrolment the reply itself started (a keyword
+   * flow's subscribe step). Other enrolments, and the contact's parked flow
+   * waits, are untouched (a `waitForEvent` replied branch must still fire).
+   * Returns the ended sequence ids.
+   */
+  async removeStopOnReplyEnrollments(props: {
+    workspaceId: string
+    contactId: string
+    repliedAt: Date
+    contactInboxId?: string
+  }): Promise<string[]> {
+    const { workspaceId, contactId, repliedAt } = props
+    if (!(repliedAt instanceof Date) || Number.isNaN(repliedAt.getTime())) {
+      throw new TypeError("removeStopOnReplyEnrollments: invalid repliedAt")
+    }
+    const rows = await db
+      .select({ sequenceId: contactsOnSequenceModel.sequenceId })
+      .from(contactsOnSequenceModel)
+      .innerJoin(
+        sequenceModel,
+        and(
+          eq(sequenceModel.id, contactsOnSequenceModel.sequenceId),
+          eq(sequenceModel.workspaceId, contactsOnSequenceModel.workspaceId),
+        ),
+      )
+      .where(
+        and(
+          eq(contactsOnSequenceModel.workspaceId, workspaceId),
+          eq(contactsOnSequenceModel.contactId, contactId),
+          eq(sequenceModel.stopOnReply, true),
+          lte(contactsOnSequenceModel.enrolledAt, repliedAt),
+        ),
+      )
+    if (rows.length === 0) {
+      return []
+    }
+    const sequenceIds = [...new Set(rows.map((row) => row.sequenceId))]
+    await this.removeContactSequencesForContacts({
+      workspaceId,
+      contactIds: [contactId],
+      sequenceIds,
+      reason: "contact_replied",
+      contactInboxId: props.contactInboxId,
+    })
+    return sequenceIds
   }
 
   async removeContactSequencesForContacts(

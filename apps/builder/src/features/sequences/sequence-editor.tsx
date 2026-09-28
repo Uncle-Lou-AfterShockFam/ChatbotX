@@ -16,12 +16,14 @@ import {
   CardHeader,
 } from "@chatbotx.io/ui/components/ui/card"
 import { Label } from "@chatbotx.io/ui/components/ui/label"
+import { Switch } from "@chatbotx.io/ui/components/ui/switch"
 import { PlusIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
 import { useState } from "react"
 import { toast } from "sonner"
 import { FlowStoreProvider } from "../flows/provider/flow-store-context"
+import { updateSequenceAction } from "./actions/update-sequence.action"
 import { upsertSequenceStepAction } from "./actions/upsert-sequence-step.action"
 import { SequenceStepCard } from "./components/sequence-step-card"
 
@@ -43,6 +45,27 @@ export function SequenceEditor({ sequence, workspaceId }: SequenceEditorProps) {
   const t = useTranslations()
   const router = useRouter()
   const [isAddingStep, setIsAddingStep] = useState(false)
+  const [stopOnReply, setStopOnReply] = useState(sequence.stopOnReply)
+  const [isSavingStopOnReply, setIsSavingStopOnReply] = useState(false)
+
+  const handleStopOnReplyChange = async (checked: boolean) => {
+    setIsSavingStopOnReply(true)
+    try {
+      const result = await updateSequenceAction(workspaceId, sequence.id, {
+        stopOnReply: checked,
+      })
+      if (result?.serverError || result?.validationErrors) {
+        toast.error(t("messages.unknownError"))
+        return
+      }
+      setStopOnReply(checked)
+      toast.success(t("messages.savedSuccessfully"))
+    } catch {
+      toast.error(t("messages.unknownError"))
+    } finally {
+      setIsSavingStopOnReply(false)
+    }
+  }
 
   const handleAddStep = async () => {
     try {
@@ -97,7 +120,24 @@ export function SequenceEditor({ sequence, workspaceId }: SequenceEditorProps) {
         </Breadcrumb>
 
         <Card className="mx-auto max-w-6xl border-none py-1 shadow-none">
-          <CardHeader />
+          <CardHeader>
+            <div className="flex items-start justify-between gap-4 rounded-lg border px-4 py-3">
+              <div className="min-w-0 space-y-1">
+                <Label htmlFor="sequence-stop-on-reply">
+                  {t("sequences.stopOnReply")}
+                </Label>
+                <p className="text-muted-foreground text-xs">
+                  {t("sequences.stopOnReplyDescription")}
+                </p>
+              </div>
+              <Switch
+                checked={stopOnReply}
+                disabled={isSavingStopOnReply}
+                id="sequence-stop-on-reply"
+                onCheckedChange={handleStopOnReplyChange}
+              />
+            </div>
+          </CardHeader>
 
           <CardContent>
             {sequence.steps.length > 0 && (

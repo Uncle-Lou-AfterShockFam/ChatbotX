@@ -1,7 +1,10 @@
 import { contactSequenceService } from "@chatbotx.io/business/contact-sequence"
 import { sequenceConnections } from "@chatbotx.io/redis"
 import { SchedulerClient } from "@chatbotx.io/scheduler"
-import { advanceEnrollment } from "@chatbotx.io/sequence-scheduler"
+import {
+  advanceEnrollment,
+  EnrollmentNotFoundError,
+} from "@chatbotx.io/sequence-scheduler"
 import type { IntegrationJobSendSequenceFlow } from "@chatbotx.io/worker-config"
 import type { Job } from "bullmq"
 import { isFinalAttempt } from "../../lib/job-attempts"
@@ -107,6 +110,13 @@ async function runSendSequenceFlow(
   if (completedAt) {
     sentAt = completedAt
   } else {
+    // Re-read right before sending: the enrolment may have been removed (a
+    // stop-on-reply reply, an unsubscribe) while the step was looked up, and
+    // its dispatch cascades away with it.
+    if (!(await fetchDispatch(dispatchId, workspaceId))) {
+      await scheduler.removeFromSchedule(bucket, dispatchId)
+      return
+    }
     const { companyStopped } = await sendFlowDirect({
       flowId: validStep.flow.id,
       workspaceId,
@@ -127,15 +137,28 @@ async function runSendSequenceFlow(
     await markDispatchCompleted(dispatchId, workspaceId, sentAt)
   }
 
-  await advanceEnrollment({
-    enrollmentId: data.enrollmentId,
-    workspaceId,
-    sequenceId,
-    contactId,
-    currentStep: { id: validStep.id, order: validStep.order },
-    sentAt,
-    scheduler,
-  })
+  try {
+    await advanceEnrollment({
+      enrollmentId: data.enrollmentId,
+      workspaceId,
+      sequenceId,
+      contactId,
+      currentStep: { id: validStep.id, order: validStep.order },
+      sentAt,
+      scheduler,
+    })
+  } catch (err) {
+    // The enrolment was removed (a stop-on-reply reply, an unsubscribe, a
+    // company stop) while this step was sending: its dispatch cascaded away,
+    // so there is nothing to advance and nothing a retry could do.
+    if (!(err instanceof EnrollmentNotFoundError)) {
+      throw err
+    }
+    logger.info(
+      { dispatchId, enrollmentId: data.enrollmentId, workspaceId },
+      "sendSequenceFlow: enrolment removed while the step was sending",
+    )
+  }
 
   await scheduler.removeFromSchedule(bucket, dispatchId)
 }
