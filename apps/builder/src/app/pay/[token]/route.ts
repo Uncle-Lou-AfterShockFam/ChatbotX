@@ -1,10 +1,10 @@
 import { escapeHtml } from "@chatbotx.io/business/documents"
 import {
   amountDueMinor,
+  formatInvoiceMinor,
   formatInvoiceMoney,
   visitCheckout,
 } from "@chatbotx.io/business/invoice"
-import { minorToDecimalString } from "@chatbotx.io/database/partials"
 import type { InvoiceModel } from "@chatbotx.io/database/types"
 import { NextResponse } from "next/server"
 import { documensoWebhookRateLimitKey as proxyHopRateLimitKey } from "@/app/integrations/documenso/webhook/route"
@@ -40,10 +40,7 @@ const PAGE_HEADERS = {
 }
 
 const money = (invoice: InvoiceModel, minor: bigint) =>
-  formatInvoiceMoney(
-    minorToDecimalString(minor, invoice.currency),
-    invoice.currency,
-  )
+  formatInvoiceMinor(minor, invoice.currency)
 
 const invoiceLabel = (invoice: InvoiceModel) =>
   `Invoice #${invoice.number} (${formatInvoiceMoney(invoice.total, invoice.currency)})`

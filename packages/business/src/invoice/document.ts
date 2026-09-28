@@ -52,6 +52,10 @@ export const formatInvoiceMoney = (value: string, currency: string): string => {
   }
 }
 
+/** Minor units of `currency`, formatted like `formatInvoiceMoney` (s216b pay page). */
+export const formatInvoiceMinor = (minor: bigint, currency: string): string =>
+  formatInvoiceMoney(minorToDecimalString(minor, currency), currency)
+
 const INVOICE_CSS = `
 .inv-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8mm; }
 .inv-from { font-size: 13pt; font-weight: bold; }

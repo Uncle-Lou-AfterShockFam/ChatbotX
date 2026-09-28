@@ -12,7 +12,18 @@ const loadServableWorkspace = vi.fn()
 const checkApiRateLimit = vi.fn()
 const error = vi.fn()
 
-vi.mock("@chatbotx.io/business/invoice", () => ({ visitCheckout }))
+vi.mock("@chatbotx.io/business/invoice", () => ({
+  visitCheckout,
+  // The real formatter falls back to "<value> <currency>" for a code Intl
+  // rejects; the same shape keeps the escaping test meaningful.
+  formatInvoiceMoney: (value: string, currency: string) =>
+    `${value} ${currency}`,
+  formatInvoiceMinor: (minor: bigint, currency: string) =>
+    `${(Number(minor) / 100).toFixed(2)} ${currency}`,
+  amountDueMinor: (row: { total: string; amountPaid: string }) =>
+    BigInt(Math.round(Number(row.total) * 100)) -
+    BigInt(Math.round(Number(row.amountPaid) * 100)),
+}))
 vi.mock("@/lib/workspace/load-servable-workspace", () => ({
   loadServableWorkspace,
 }))
@@ -57,7 +68,85 @@ test("a live session is a 303 to Stripe, never cached", async () => {
   expect(res.headers.get("cache-control")).toBe("private, no-store")
   expect(visitCheckout).toHaveBeenCalledWith(TOKEN, {
     canServe: expect.any(Function),
+    requestedKind: undefined,
+    justPaid: false,
   })
+})
+
+const post = async (kind: string, token = TOKEN) => {
+  const { POST } = await import("@/app/pay/[token]/route")
+  const body = new URLSearchParams({ kind })
+  return POST(
+    new Request(`http://localhost/pay/${token}`, { method: "POST", body }),
+    { params: Promise.resolve({ token }) },
+  )
+}
+
+test("s216b: a GET never picks a kind, even with ?kind= (a scanner cannot switch the session)", async () => {
+  visitCheckout.mockResolvedValue({ kind: "notFound" })
+  const { GET } = await import("@/app/pay/[token]/route")
+  await GET(new Request(`http://localhost/pay/${TOKEN}?kind=full`), {
+    params: Promise.resolve({ token: TOKEN }),
+  })
+  expect(visitCheckout).toHaveBeenCalledWith(
+    TOKEN,
+    expect.objectContaining({ requestedKind: undefined }),
+  )
+})
+
+test("s216b: the pick is a POST form; a 303 follows to Stripe", async () => {
+  visitCheckout.mockResolvedValue({
+    kind: "redirect",
+    url: "https://checkout.stripe.com/c/pay/cs_dep",
+    invoice,
+  })
+  const res = await post("deposit")
+  expect(res.status).toBe(303)
+  expect(visitCheckout).toHaveBeenCalledWith(
+    TOKEN,
+    expect.objectContaining({ requestedKind: "deposit", justPaid: false }),
+  )
+})
+
+test("s216b: the choice page offers the deposit and the full amount as POST forms", async () => {
+  visitCheckout.mockResolvedValue({
+    kind: "choose",
+    invoice: { ...invoice, total: "200.00" },
+    depositMinor: 5000n,
+    totalMinor: 20_000n,
+  })
+  const res = await get()
+  const html = await res.text()
+  expect(res.status).toBe(200)
+  expect(
+    html.match(/<form method="post" action="\/pay\/0123456789ABCDEFGHIJKL">/g),
+  ).toHaveLength(2)
+  expect(html).toContain('name="kind" value="deposit"')
+  expect(html).toContain('name="kind" value="full"')
+  expect(html).toContain("Pay deposit (50.00 USD)")
+  expect(html).toContain("Pay in full (200.00 USD)")
+  expect(res.headers.get("content-security-policy")).toContain(
+    "form-action 'self' https://checkout.stripe.com",
+  )
+})
+
+test("s216b: back from Stripe after a deposit: the deposit page with the balance and a pay-balance button", async () => {
+  visitCheckout.mockResolvedValue({
+    kind: "depositPaid",
+    invoice: { ...invoice, total: "200.00", amountPaid: "50.00" },
+  })
+  const { GET } = await import("@/app/pay/[token]/route")
+  const res = await GET(new Request(`http://localhost/pay/${TOKEN}?done=1`), {
+    params: Promise.resolve({ token: TOKEN }),
+  })
+  expect(visitCheckout).toHaveBeenCalledWith(
+    TOKEN,
+    expect.objectContaining({ justPaid: true }),
+  )
+  const html = await res.text()
+  expect(html).toContain("Deposit received")
+  expect(html).toContain("The balance of 150.00 USD is due")
+  expect(html).toContain(`href="/pay/${TOKEN}"`)
 })
 
 test.each([
