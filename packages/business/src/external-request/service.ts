@@ -2,6 +2,7 @@ import { getProperty } from "dot-prop"
 import { BaseService } from "../base.service"
 import { contactService } from "../contact/service"
 import { contactCustomFieldService } from "../contact-custom-field/service"
+import { readCapped } from "../documents/gotenberg"
 import { ChatbotXException } from "../errors"
 import { type OutboundRequestInit, outboundFetch } from "../net/outbound-fetch"
 import { SsrfFetchError } from "../net/safe-fetch"
@@ -9,6 +10,9 @@ import { checkSsrfSafety } from "../net/ssrf-guard"
 
 const REQUEST_TIMEOUT_MS = 15_000
 const MAX_REDIRECTS = 5
+// A flow maps fields out of this body; nothing legitimate needs more, and an
+// uncapped read let any endpoint stream unbounded bytes into worker memory.
+export const EXTERNAL_RESPONSE_MAX_BYTES = 5 * 1024 * 1024
 
 // The pinned fetch checks every address at connect and re-checks every
 // redirect hop (s216); its refusals keep this service's error codes.
@@ -148,7 +152,15 @@ class ExternalRequestService extends BaseService {
     const response = await fetchWithRedirectGuard(url, init)
     const durationMs = Math.round(performance.now() - startedAt)
 
-    const responseBody = await response.text()
+    const bytes = await readCapped(response, EXTERNAL_RESPONSE_MAX_BYTES)
+    if (bytes === null) {
+      throw new ChatbotXException(
+        "The external request's response is larger than 5 MB",
+        "responseTooLarge",
+        400,
+      )
+    }
+    const responseBody = new TextDecoder().decode(bytes)
     const responseHeaders: Record<string, string> = {}
     response.headers.forEach((value, key) => {
       responseHeaders[key] = value

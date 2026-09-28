@@ -90,6 +90,28 @@ describe("externalRequestService.execute", () => {
     })
   })
 
+  test("a response over the cap is refused, not buffered (s216)", async () => {
+    const { EXTERNAL_RESPONSE_MAX_BYTES } = await import(
+      "../src/external-request/service"
+    )
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(new Uint8Array(EXTERNAL_RESPONSE_MAX_BYTES + 1), {
+            status: 200,
+          }),
+      ),
+    )
+
+    await expect(
+      externalRequestService.execute(
+        { method: "GET", url: "https://api.example.com/data", headers: [] },
+        { workspaceId: "workspace-1" },
+      ),
+    ).rejects.toMatchObject({ code: "responseTooLarge" })
+  })
+
   test("GET builds a request with no body", async () => {
     const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }))
     vi.stubGlobal("fetch", fetchMock)
