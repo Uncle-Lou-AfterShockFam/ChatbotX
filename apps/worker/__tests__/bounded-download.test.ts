@@ -1,3 +1,7 @@
+import {
+  isSsrfFetchError,
+  SsrfFetchError,
+} from "@chatbotx.io/sdk/outbound-fetch"
 import { beforeEach, describe, expect, test, vi } from "vitest"
 
 const mocks = vi.hoisted(() => ({
@@ -7,12 +11,12 @@ const mocks = vi.hoisted(() => ({
 
 // s216: the download goes through the SSRF-pinned outboundFetch (mocked here
 // as kyGet so the existing cases keep their shape).
-class SsrfFetchError extends Error {}
 
 vi.mock("@chatbotx.io/business", () => ({
   assertPublicUrl: mocks.assertPublicUrl,
   DOWNLOAD_TIMEOUT_MS: 120_000,
   outboundFetch: mocks.kyGet,
+  isSsrfFetchError,
   SsrfFetchError,
 }))
 
@@ -219,7 +223,9 @@ describe("downloadWithByteLimit", () => {
   })
 
   test("a connect-time SSRF refusal is an expected step error (s216)", async () => {
-    mocks.kyGet.mockRejectedValueOnce(new SsrfFetchError("unsafeAddress"))
+    mocks.kyGet.mockRejectedValueOnce(
+      new SsrfFetchError("unsafeAddress", "http://10.0.0.1/x"),
+    )
 
     await expect(
       downloadWithByteLimit({

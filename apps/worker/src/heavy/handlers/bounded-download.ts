@@ -1,8 +1,8 @@
 import {
   assertPublicUrl,
   DOWNLOAD_TIMEOUT_MS,
+  isSsrfFetchError,
   outboundFetch,
-  SsrfFetchError,
 } from "@chatbotx.io/business"
 import {
   fetchFollowingSafeRedirects,
@@ -121,7 +121,7 @@ export async function downloadWithByteLimit({
         signal,
         timeout ?? DEFAULT_HEADER_TIMEOUT_MS,
       ).catch((error: unknown) => {
-        if (error instanceof SsrfFetchError) {
+        if (isSsrfFetchError(error)) {
           throw new ExpectedHeavyStepError(`Unsafe ${label} URL`, {
             cause: error,
           })
