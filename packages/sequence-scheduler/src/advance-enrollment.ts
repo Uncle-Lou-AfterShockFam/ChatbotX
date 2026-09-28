@@ -43,6 +43,17 @@ function calculateNextRunAt(step: NextStepForSchedule, baseTime: Date): Date {
   })
 }
 
+/**
+ * The enrolment row is gone: it was removed (unsubscribe, company stop,
+ * sequence stop-on-reply) after the dispatch was claimed.
+ */
+export class EnrollmentNotFoundError extends Error {
+  constructor(readonly enrollmentId: string) {
+    super(`Enrollment ${enrollmentId} not found`)
+    this.name = "EnrollmentNotFoundError"
+  }
+}
+
 export interface AdvanceEnrollmentParams {
   contactId: string
   currentStep: { id: string; order: number }
@@ -71,7 +82,7 @@ export async function advanceEnrollment(
   })
 
   if (!enrollment) {
-    throw new Error(`Enrollment ${enrollmentId} not found`)
+    throw new EnrollmentNotFoundError(enrollmentId)
   }
 
   if (enrollment.status !== "active") {

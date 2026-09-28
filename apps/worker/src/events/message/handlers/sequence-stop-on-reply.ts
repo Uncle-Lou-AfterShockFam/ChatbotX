@@ -15,6 +15,8 @@ export async function handleSequenceStopOnReply(
   const seen = new Set<string>()
 
   for (const payload of payloads) {
+    // Keyed by workspace too (the company handler keys by contact alone): a
+    // batch may carry several workspaces, and ids are only unique per one.
     const key = `${payload.workspaceId}:${payload.contactId}`
     if (payload.origin !== "inbound" || seen.has(key)) {
       continue

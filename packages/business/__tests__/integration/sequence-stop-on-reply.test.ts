@@ -72,6 +72,7 @@ async function seedEnrollment(props: {
   workspaceId: string
   sequenceId: string
   contactId: string
+  dispatchStatus?: "pending" | "running"
 }): Promise<{ enrollmentId: string; dispatchId: string }> {
   const enrollmentId = mintId()
   const dispatchId = mintId()
@@ -84,10 +85,10 @@ async function seedEnrollment(props: {
   await asReplica(sql`
     INSERT INTO "SequenceDispatch"
       (id, "runAtMs", "idempotencyKey", "workspaceId", "sequenceId",
-       "contactId", "contactInboxId", "stepId", "enrollmentId")
+       "contactId", "contactInboxId", "stepId", "enrollmentId", status)
     VALUES (${dispatchId}, ${Date.now() + 86_400_000}, ${`s220b-${dispatchId}`},
             ${props.workspaceId}, ${props.sequenceId}, ${props.contactId}, 1, 1,
-            ${enrollmentId})`)
+            ${enrollmentId}, ${props.dispatchStatus ?? "pending"})`)
   seeded.SequenceDispatch?.push(dispatchId)
   return { enrollmentId, dispatchId }
 }
@@ -159,6 +160,30 @@ describe.skipIf(!databaseUrl)("removeStopOnReplyEnrollments", () => {
     expect(await exists("SequenceDispatch", ruleOff.dispatchId)).toBe(true)
     expect(await exists("ContactOnSequence", other.enrollmentId)).toBe(true)
     expect(await exists("SequenceDispatch", other.dispatchId)).toBe(true)
+  })
+
+  test("a dispatch already claimed (running) is gone too, so the consumer's findRunning misses it", async () => {
+    const workspaceId = mintId()
+    const stopSeq = await seedSequence({ workspaceId, stopOnReply: true })
+    const contactId = mintId()
+    const claimed = await seedEnrollment({
+      workspaceId,
+      sequenceId: stopSeq,
+      contactId,
+      dispatchStatus: "running",
+    })
+
+    await contactSequenceService.removeStopOnReplyEnrollments({
+      workspaceId,
+      contactId,
+    })
+
+    expect(
+      await contactSequenceService.findRunningDispatch({
+        dispatchId: claimed.dispatchId,
+        workspaceId,
+      }),
+    ).toBeUndefined()
   })
 
   test("a second reply is a no-op", async () => {
