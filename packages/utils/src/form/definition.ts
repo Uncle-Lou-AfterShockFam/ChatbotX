@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { isOptionFieldType } from "../custom-field"
+import { isHttpsUrl } from "./url"
 
 /**
  * Web form definition (roadmap forms, s200). Lives in the generic-utils
@@ -12,6 +13,12 @@ import { isOptionFieldType } from "../custom-field"
  *   steps[] -> fields[]; a field or a step carries `visibleWhen`, a nested
  *   AND/OR condition group; form-level `rules[]` show / hide / require /
  *   optional a field or skip forward to a step.
+ *
+ * One definition, two channels (s219, owner): the same form runs on the web
+ * page and question by question in chat. `image` / `file` / `location` are
+ * CHAT-ONLY until the web page grows upload fields (publish refuses them on a
+ * web form); `chat` carries the per-field prompt / retry / media a chat run
+ * sends, and option `points` score an answer.
  *
  * Everything caller-supplied has a cap and the condition tree has a depth
  * cap, so a hostile definition can neither blow the row nor recurse the
@@ -30,6 +37,7 @@ export const MAX_FORM_LABEL = 120
 export const MAX_FORM_TEXT = 500
 export const MAX_FORM_VALUE = 2000
 export const MAX_FORM_PATTERN = 200
+export const MAX_FORM_OPTION_POINTS = 1000
 
 export const FORM_FIELD_KEY_REGEX = /^[a-z][a-z0-9_]{0,39}$/
 export const FORM_STEP_ID_REGEX = /^[a-z0-9][a-z0-9_-]{0,39}$/
@@ -65,6 +73,9 @@ export const formInputFieldTypes = z.enum([
   "date",
   "datetime",
   "time",
+  "image",
+  "file",
+  "location",
 ])
 export type FormInputFieldType = z.infer<typeof formInputFieldTypes>
 
@@ -86,6 +97,13 @@ export const isFormInputFieldType = (
 export const FORM_LIST_FIELD_TYPES: ReadonlySet<WebFormFieldType> = new Set([
   "checkboxGroup",
 ])
+/**
+ * Answered by sending something in chat (a photo, a file, a shared
+ * location); the web page cannot render them yet, so a form that runs on the
+ * web may not contain them.
+ */
+export const FORM_CHAT_ONLY_FIELD_TYPES: ReadonlySet<WebFormFieldType> =
+  new Set(["image", "file", "location"])
 /** Field types that must carry `options`. */
 export const FORM_OPTION_FIELD_TYPES: ReadonlySet<WebFormFieldType> = new Set([
   "select",
@@ -98,6 +116,7 @@ export const formSystemFieldKeys = z.enum([
   "lastName",
   "email",
   "phoneNumber",
+  "fullName",
 ])
 export type FormSystemFieldKey = z.infer<typeof formSystemFieldKeys>
 
@@ -216,9 +235,33 @@ export const formFieldOption = z
   .object({
     value: z.string().min(1).max(MAX_FORM_LABEL),
     label: z.string().min(1).max(MAX_FORM_LABEL),
+    /** Score earned by choosing this option (a scored questionnaire). */
+    points: z
+      .number()
+      .int()
+      .min(-MAX_FORM_OPTION_POINTS)
+      .max(MAX_FORM_OPTION_POINTS)
+      .optional(),
   })
   .strict()
 export type FormFieldOption = z.infer<typeof formFieldOption>
+
+/** What a chat run sends for this field (the web page ignores it). */
+export const formFieldChat = z
+  .object({
+    /** Sent instead of the label when asking in chat. */
+    prompt: z.string().min(1).max(MAX_FORM_TEXT).optional(),
+    /** Sent when an answer does not validate; a default is used when absent. */
+    retryMessage: z.string().min(1).max(MAX_FORM_TEXT).optional(),
+    /** An image sent with the question (https only). */
+    mediaUrl: z
+      .string()
+      .max(MAX_FORM_VALUE)
+      .refine(isHttpsUrl, "mediaUrl must be an https URL.")
+      .optional(),
+  })
+  .strict()
+export type FormFieldChat = z.infer<typeof formFieldChat>
 
 export const formField = z
   .object({
@@ -235,9 +278,35 @@ export const formField = z
     pattern: z.string().max(MAX_FORM_PATTERN).optional(),
     mapTo: formFieldMapTo.optional(),
     visibleWhen: formConditionGroup.optional(),
+    chat: formFieldChat.optional(),
   })
   .strict()
   .superRefine((field, ctx) => {
+    if (FORM_CHAT_ONLY_FIELD_TYPES.has(field.type)) {
+      for (const prop of ["pattern", "min", "max", "defaultValue"] as const) {
+        if (field[prop] !== undefined) {
+          ctx.addIssue({
+            code: "custom",
+            path: [prop],
+            message: `A ${field.type} field cannot carry ${prop}.`,
+          })
+        }
+      }
+      if (field.mapTo?.kind === "system") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["mapTo"],
+          message: `A ${field.type} answer can only map to a custom field.`,
+        })
+      }
+    }
+    if (!isFormInputFieldType(field.type) && field.chat?.retryMessage) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["chat", "retryMessage"],
+        message: `A ${field.type} block asks nothing, so it has no retry message.`,
+      })
+    }
     const wantsOptions = FORM_OPTION_FIELD_TYPES.has(field.type)
     if (wantsOptions && (field.options?.length ?? 0) === 0) {
       ctx.addIssue({
@@ -437,6 +506,19 @@ export const formDefinition = z
       }
     }
 
+    // fullName writes first AND last name: mapping it beside either one
+    // would let two answers race for the same contact column.
+    if (
+      systemKeys.has("fullName") &&
+      (systemKeys.has("firstName") || systemKeys.has("lastName"))
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["steps"],
+        message: "Full name cannot be mapped together with first or last name.",
+      })
+    }
+
     for (const [r, rule] of def.rules.entries()) {
       for (const key of collectRuleKeys(rule.when, [])) {
         conditionRefs.push({ path: ["rules", r, "when"], key })
@@ -525,6 +607,13 @@ export function formInputFields(def: FormDefinition): FormField[] {
     }
   }
   return out
+}
+
+/** The chat-only fields of a definition (refused on a web form, s219). */
+export function formChatOnlyFields(def: FormDefinition): FormField[] {
+  return formInputFields(def).filter((f) =>
+    FORM_CHAT_ONLY_FIELD_TYPES.has(f.type),
+  )
 }
 
 /** True when any field writes to the contact (system or custom). */

@@ -44,6 +44,9 @@ const httpsUrl = z
     }
   }, "Redirect URL must be https.")
 
+export const formChannels = z.enum(["web", "chat"])
+export type FormChannel = z.infer<typeof formChannels>
+
 export const formSettingsSchema = z
   .object({
     successMessage: z
@@ -71,6 +74,17 @@ export const formSettingsSchema = z
       .array(z.string().regex(FORM_PREFILL_KEY_REGEX))
       .max(FORM_MAX_PREFILL_KEYS)
       .default([]),
+    /**
+     * Where the form runs (s219): `web` = the public page / embed, `chat` =
+     * question by question inside a conversation (the flow step). A chat-only
+     * form has no public page.
+     */
+    channels: z
+      .array(formChannels)
+      .min(1)
+      .max(2)
+      .refine((v) => new Set(v).size === v.length, "Duplicate channel.")
+      .default(["web"]),
   })
   .strict()
 export type FormSettings = z.infer<typeof formSettingsSchema>

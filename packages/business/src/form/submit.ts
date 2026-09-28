@@ -43,6 +43,7 @@ import {
   createContactWithInbox,
   resolveDefaultRegion,
 } from "../contact/create-with-inbox"
+import { splitFullName } from "../contact/full-name"
 import { contactService, type RichSystemContactField } from "../contact/service"
 import { contactCustomFieldService } from "../contact-custom-field/service"
 import { contactInboxService } from "../contact-inbox/service"
@@ -101,6 +102,7 @@ const SYSTEM_KEY_TO_FIELD: Record<FormSystemFieldKey, RichSystemContactField> =
     lastName: "last_name",
     email: "email",
     phoneNumber: "phone_number",
+    fullName: "full_name",
   }
 
 const sha256 = (value: string): string =>
@@ -617,6 +619,10 @@ export class FormSubmitService {
         out.firstName = value.trim()
       } else if (field.mapTo.key === "lastName") {
         out.lastName = value.trim()
+      } else if (field.mapTo.key === "fullName") {
+        const { firstName, lastName } = splitFullName(value)
+        out.firstName = firstName ?? undefined
+        out.lastName = lastName ?? undefined
       }
     }
     return out
@@ -668,6 +674,26 @@ export class FormSubmitService {
       if (field.mapTo.kind === "system") {
         const text = toStoredText(value).trim()
         if (text === "") {
+          continue
+        }
+        if (stored && field.mapTo.key === "fullName") {
+          // Fill-blanks: write only the half the contact is missing, never
+          // replace a stored first or last name (s219).
+          const parts = splitFullName(text)
+          for (const [key, fieldName, part] of [
+            ["firstName", "first_name", parts.firstName],
+            ["lastName", "last_name", parts.lastName],
+          ] as const) {
+            if (part && !stored.system[key]) {
+              await contactService.setRichSystemFieldByKey({
+                workspaceId,
+                contactId,
+                fieldName,
+                value: part,
+                tx,
+              })
+            }
+          }
           continue
         }
         await contactService.setRichSystemFieldByKey({
@@ -783,6 +809,9 @@ export class FormSubmitService {
       lastName: filled(contact?.lastName),
       email: filled(contact?.email),
       phoneNumber: filled(contact?.phoneNumber),
+      // Skipped only when BOTH halves are stored; a half-known name is topped
+      // up part by part in writeMappedFields.
+      fullName: filled(contact?.firstName) && filled(contact?.lastName),
     }
     const ids = formInputFields(def)
       .map((f) => (f.mapTo?.kind === "custom" ? f.mapTo.customFieldId : null))

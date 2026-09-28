@@ -3,7 +3,9 @@ import {
   compareFormValue,
   evaluateForm,
   type FormDefinition,
+  type FormDefinitionInput,
   formDefinition,
+  formScore,
   pruneFormValues,
   validateFormSubmission,
 } from "../src/form"
@@ -357,5 +359,110 @@ describe("pruneFormValues", () => {
     }
     const pruned = pruneFormValues(d, values, evaluateForm(d, values))
     expect(pruned).toEqual({ interest: "none", done: "keep" })
+  })
+})
+
+// s219 A2-1: scoring and the chat-only answer types.
+const chatOne = (field: Record<string, unknown>): FormDefinitionInput => ({
+  steps: [{ id: "s1", fields: [field as never] }],
+  rules: [],
+})
+
+describe("option points + formScore", () => {
+  const scored: FormDefinitionInput = {
+    steps: [
+      {
+        id: "s1",
+        fields: [
+          {
+            key: "mood",
+            type: "radio",
+            options: [
+              { value: "good", label: "Good", points: 3 },
+              { value: "bad", label: "Bad", points: -1 },
+            ],
+          },
+          {
+            key: "tags",
+            type: "checkboxGroup",
+            options: [
+              { value: "a", label: "A", points: 2 },
+              { value: "b", label: "B", points: 5 },
+              { value: "c", label: "C" },
+            ],
+            visibleWhen: {
+              logic: "AND",
+              rules: [{ fieldKey: "mood", op: "eq", value: "good" }],
+            },
+          },
+        ],
+      },
+    ],
+    rules: [],
+  }
+
+  test("sums the chosen options of VISIBLE fields only", () => {
+    const def = formDefinition.parse(scored)
+    expect(formScore(def, { mood: "good", tags: ["a", "b", "c"] })).toBe(10)
+    // tags is hidden when mood is bad: its answer never scores
+    expect(formScore(def, { mood: "bad", tags: ["a", "b"] })).toBe(-1)
+    expect(formScore(def, {})).toBe(0)
+  })
+
+  test("an unscored form reports null, never 0", () => {
+    const def = formDefinition.parse(
+      chatOne({
+        key: "q",
+        type: "select",
+        options: [{ value: "x", label: "X" }],
+      }),
+    )
+    expect(formScore(def, { q: "x" })).toBeNull()
+  })
+
+  test("a score cannot be inflated by answers for unknown keys or unknown options", () => {
+    const def = formDefinition.parse(scored)
+    expect(
+      formScore(def, {
+        mood: "good",
+        tags: ["a", "zzz", "a"],
+        mood2: "good",
+      } as never),
+    ).toBe(5)
+  })
+})
+
+describe("validation of chat answers", () => {
+  const validate = (type: string, value: unknown) => {
+    const def = formDefinition.parse(chatOne({ key: "q", type }))
+    return validateFormSubmission(
+      def,
+      { q: value as never },
+      evaluateForm(def, { q: value as never }),
+    )
+  }
+
+  test.each([
+    ["image", "https://storage.example.com/a.png"],
+    ["file", "http://localhost:9000/space/1/x.pdf"],
+    ["location", "39.95,-75.16"],
+    ["location", "-90, 180"],
+    ["location", "0,0"],
+  ])("%s accepts %s", (type, value) => {
+    expect(validate(type, value)).toEqual([])
+  })
+
+  test.each([
+    ["image", "not a url", "url"],
+    ["file", "javascript:alert(1)", "url"],
+    ["image", ["https://a.example/x.png"], "type"],
+    ["location", "91,0", "location"],
+    ["location", "0,181", "location"],
+    ["location", "39.95", "location"],
+    ["location", "north pole", "location"],
+    ["location", "1e2,3", "location"],
+    ["location", `${"1".repeat(3000)},0`, "length"],
+  ])("%s refuses %j with %s", (type, value, code) => {
+    expect(validate(type, value)).toEqual([{ key: "q", code }])
   })
 })

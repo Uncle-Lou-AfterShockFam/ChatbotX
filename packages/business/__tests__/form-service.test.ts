@@ -308,6 +308,65 @@ describe("formService.update", () => {
     expect((e.data as { reason: string }).reason).toBe("inboxRequired")
   })
 
+  describe("channels on update (s219)", () => {
+    const photoDef = {
+      steps: [{ id: "s1", fields: [{ key: "photo", type: "image" }] }],
+      rules: [],
+    }
+    const chat = { ...DEFAULT_FORM_SETTINGS, channels: ["chat"] }
+
+    test("adding web to a form whose LIVE copy has a chat-only field is refused", async () => {
+      m.state.selects.push([
+        draft({
+          status: "published",
+          settings: chat,
+          definition: {
+            steps: [{ id: "s1", fields: [{ key: "q", type: "text" }] }],
+            rules: [],
+          },
+          publishedDefinition: photoDef,
+        }),
+      ])
+      const e = await field(
+        formService.update({
+          workspaceId: WS,
+          id: "f1",
+          data: { settings: { ...chat, channels: ["chat", "web"] } },
+        }),
+      )
+      expect(e.field).toBe("settings.channels")
+      expect(e.data).toMatchObject({
+        reason: "chatOnlyField",
+        fieldKey: "photo",
+      })
+    })
+
+    test("a chat-only field cannot be saved into a web form's draft", async () => {
+      m.state.selects.push([draft()])
+      const e = await field(
+        formService.update({
+          workspaceId: WS,
+          id: "f1",
+          data: { definition: photoDef },
+        }),
+      )
+      expect(e.data).toMatchObject({ reason: "chatOnlyField" })
+    })
+
+    test("a chat-only form that maps to the contact saves without an inbox", async () => {
+      m.state.selects.push([draft({ settings: chat })])
+      m.state.updates.push([
+        draft({ settings: chat, definition: mappedDefinition }),
+      ])
+      const row = await formService.update({
+        workspaceId: WS,
+        id: "f1",
+        data: { definition: mappedDefinition },
+      })
+      expect(row.inboxId).toBeNull()
+    })
+  })
+
   test("the inbox must exist here and be an api channel", async () => {
     m.state.selects.push([draft()], [])
     const missing = await field(
@@ -504,6 +563,70 @@ describe("formService.publish", () => {
     expect(row.publishedDefinition?.steps).toHaveLength(1)
   })
 
+  describe("channels (s219)", () => {
+    const photoDef = {
+      steps: [
+        {
+          id: "s1",
+          fields: [
+            {
+              key: "photo",
+              type: "image",
+              mapTo: { kind: "custom", customFieldId: "77" },
+            },
+          ],
+        },
+      ],
+      rules: [],
+    }
+
+    test("a chat-only field is refused on a web form, naming the field", async () => {
+      m.state.selects.push([draft({ definition: photoDef, inboxId: "9" })])
+      const e = await field(formService.publish({ workspaceId: WS, id: "f1" }))
+      expect(e.data).toMatchObject({
+        reason: "chatOnlyField",
+        fieldKey: "photo",
+      })
+      m.state.selects.push([
+        draft({
+          definition: photoDef,
+          settings: { ...DEFAULT_FORM_SETTINGS, channels: ["chat", "web"] },
+        }),
+      ])
+      const both = await field(
+        formService.publish({ workspaceId: WS, id: "f1" }),
+      )
+      expect(both.data).toMatchObject({ reason: "chatOnlyField" })
+    })
+
+    test("a chat-only form needs no identity field and no inbox, but still checks mapped fields", async () => {
+      const chat = { ...DEFAULT_FORM_SETTINGS, channels: ["chat"] }
+      m.state.selects.push(
+        [draft({ definition: photoDef, settings: chat })],
+        [], // custom field 77 no longer exists
+      )
+      const e = await field(formService.publish({ workspaceId: WS, id: "f1" }))
+      expect((e.data as { reason: string }).reason).toBe("danglingCustomField")
+
+      m.state.selects.push(
+        [draft({ definition: photoDef, settings: chat })],
+        [{ id: "77", type: "text", options: null }],
+      )
+      m.state.updates.push([
+        draft({
+          status: "published",
+          definition: photoDef,
+          publishedDefinition: photoDef,
+          settings: chat,
+          definitionVersion: 1,
+        }),
+      ])
+      const row = await formService.publish({ workspaceId: WS, id: "f1" })
+      // No inbox lookup: an extra select would underflow the queue and reject.
+      expect(row.status).toBe("published")
+    })
+  })
+
   test("publish is a 409 when the version or updatedAt moved under it", async () => {
     const anon = {
       steps: [{ id: "s1", fields: [{ key: "q", type: "text" }] }],
@@ -641,6 +764,65 @@ describe("formService reads never throw on corrupt jsonb", () => {
     ).toBeNull()
     m.state.selects.push([
       draft({ status: "published", publishedDefinition: { steps: [] } }),
+    ])
+    expect(
+      await formService.findPublishedBySlug({
+        workspaceId: WS,
+        slug: "demo-intake",
+      }),
+    ).toBeNull()
+  })
+
+  test("findPublishedBySlug: a chat-only form has no public page (s219)", async () => {
+    const def = {
+      steps: [{ id: "s1", fields: [{ key: "q", type: "text" }] }],
+      rules: [],
+    }
+    m.state.selects.push([
+      draft({
+        status: "published",
+        publishedDefinition: def,
+        settings: { ...DEFAULT_FORM_SETTINGS, channels: ["chat"] },
+      }),
+    ])
+    expect(
+      await formService.findPublishedBySlug({
+        workspaceId: WS,
+        slug: "demo-intake",
+      }),
+    ).toBeNull()
+    m.state.selects.push([
+      draft({
+        status: "published",
+        publishedDefinition: def,
+        settings: { ...DEFAULT_FORM_SETTINGS, channels: ["chat", "web"] },
+      }),
+    ])
+    expect(
+      await formService.findPublishedBySlug({
+        workspaceId: WS,
+        slug: "demo-intake",
+      }),
+    ).not.toBeNull()
+  })
+
+  test("findPublishedBySlug: a web form whose live copy holds a chat-only field fails closed (s219)", async () => {
+    m.state.selects.push([
+      draft({
+        status: "published",
+        publishedDefinition: {
+          steps: [
+            {
+              id: "s1",
+              fields: [
+                { key: "q", type: "text" },
+                { key: "photo", type: "image" },
+              ],
+            },
+          ],
+          rules: [],
+        },
+      }),
     ])
     expect(
       await formService.findPublishedBySlug({

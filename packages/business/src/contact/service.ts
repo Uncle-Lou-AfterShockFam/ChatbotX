@@ -54,6 +54,7 @@ import { workspaceService } from "../workspace/service"
 import { workspaceUsageService } from "../workspace-usage/service"
 import { emitContactInfoChangeEvents } from "./contact-info-changes"
 import { createContactWithInbox } from "./create-with-inbox"
+import { splitFullName } from "./full-name"
 import {
   type InsertImportedContactBatchInput,
   type InsertImportedContactBatchResult,
@@ -110,8 +111,6 @@ const richSystemContactFields = [
   "first_name",
   "last_name",
 ] as const
-
-const NAME_PARTS_RE = /\s+/
 
 export type RichSystemContactField = (typeof richSystemContactFields)[number]
 
@@ -1101,16 +1100,10 @@ function richSystemFieldToContactData(
       return { firstName: value }
     case "last_name":
       return { lastName: value }
-    case "full_name": {
-      if (value === null) {
-        return { firstName: null, lastName: null }
-      }
-      const [firstName, ...rest] = value.trim().split(NAME_PARTS_RE)
-      return {
-        firstName: firstName || null,
-        lastName: rest.length > 0 ? rest.join(" ") : null,
-      }
-    }
+    case "full_name":
+      return value === null
+        ? { firstName: null, lastName: null }
+        : splitFullName(value)
     default:
       return {}
   }

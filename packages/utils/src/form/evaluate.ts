@@ -11,6 +11,7 @@ import {
   isFormInputFieldType,
   MAX_FORM_VALUE,
 } from "./definition"
+import { isHttpUrl } from "./url"
 
 /**
  * Pure evaluator shared by the editor preview, the public page and the submit
@@ -287,6 +288,7 @@ export type FormValidationIssue = {
     | "pattern"
     | "length"
     | "date"
+    | "location"
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -294,14 +296,17 @@ const PHONE_RE = /^\+?[0-9 ()./-]{6,30}$/
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 const TIME_RE = /^\d{2}:\d{2}(:\d{2})?$/
 const DATETIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?/
+/** A shared location as "lat,lng" in decimal degrees (a chat answer). */
+const LOCATION_RE = /^(-?\d{1,2}(?:\.\d{1,10})?),\s?(-?\d{1,3}(?:\.\d{1,10})?)$/
 
-const isHttpUrl = (value: string): boolean => {
-  try {
-    const url = new URL(value)
-    return url.protocol === "https:" || url.protocol === "http:"
-  } catch {
+const isLocation = (value: string): boolean => {
+  const match = LOCATION_RE.exec(value)
+  if (!match) {
     return false
   }
+  const lat = Number(match[1])
+  const lng = Number(match[2])
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180
 }
 
 function validateOne(
@@ -361,6 +366,14 @@ function validateOne(
       return TIME_RE.test(value) ? null : "date"
     case "datetime":
       return DATETIME_RE.test(value) ? null : "date"
+    // A chat run stores the received photo / file and answers with its URL
+    // (http allowed for a local storage origin). Anything that later FETCHES
+    // such a value server-side goes through the pinned outbound fetch.
+    case "image":
+    case "file":
+      return isHttpUrl(value) ? null : "url"
+    case "location":
+      return isLocation(value) ? null : "location"
     default:
       break
   }
@@ -426,4 +439,37 @@ export function pruneFormValues(
     }
   }
   return out
+}
+
+/**
+ * Sum of the `points` of every chosen option on a VISIBLE field (a scored
+ * questionnaire); `null` when no option in the form carries points, so an
+ * unscored form never reports a score of 0.
+ */
+export function formScore(
+  def: FormDefinition,
+  values: FormValues,
+  evaluation: FormEvaluation = evaluateForm(def, values),
+): number | null {
+  let scored = false
+  let total = 0
+  for (const field of formInputFields(def)) {
+    const options = field.options ?? []
+    if (options.some((o) => o.points !== undefined)) {
+      scored = true
+    }
+    if (!evaluation.visibleFields.has(field.key)) {
+      continue
+    }
+    const value = readFormValue(values, field.key)
+    const chosen = Array.isArray(value)
+      ? new Set(value)
+      : new Set(typeof value === "string" ? [value] : [])
+    for (const option of options) {
+      if (chosen.has(option.value)) {
+        total += option.points ?? 0
+      }
+    }
+  }
+  return scored ? total : null
 }
