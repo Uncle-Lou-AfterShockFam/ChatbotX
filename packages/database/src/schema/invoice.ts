@@ -10,8 +10,12 @@ import {
   varchar,
 } from "drizzle-orm/pg-core"
 import {
+  type InvoiceCheckoutKind,
+  type InvoiceDepositType,
   type InvoiceMethod,
   type InvoiceStatus,
+  invoiceCheckoutKinds,
+  invoiceDepositTypes,
   invoiceMethods,
   invoiceStatuses,
 } from "../partials/invoice"
@@ -29,6 +33,19 @@ import { workspaceModel } from "./workspace"
 export const invoiceStatus = pgEnum(
   "invoiceStatus",
   invoiceStatuses.options as [InvoiceStatus, ...InvoiceStatus[]],
+)
+
+export const invoiceDepositType = pgEnum(
+  "invoiceDepositType",
+  invoiceDepositTypes.options as [InvoiceDepositType, ...InvoiceDepositType[]],
+)
+
+export const invoiceCheckoutKind = pgEnum(
+  "invoiceCheckoutKind",
+  invoiceCheckoutKinds.options as [
+    InvoiceCheckoutKind,
+    ...InvoiceCheckoutKind[],
+  ],
 )
 
 export const invoiceMethod = pgEnum(
@@ -60,6 +77,16 @@ export const invoiceModel = pgTable(
     method: invoiceMethod().notNull(),
     currency: varchar({ length: 3 }).notNull(),
     total: numeric({ precision: 14, scale: 2 }).notNull(),
+    /**
+     * Deposit (s216b): what the creator asked for (`depositValue` as typed,
+     * a money amount or a percent) and what it resolved to at create
+     * (`depositAmount`, in `currency`). All three null = no deposit offered.
+     */
+    depositType: invoiceDepositType(),
+    depositValue: text(),
+    depositAmount: numeric({ precision: 14, scale: 2 }),
+    /** Sum of this invoice's InvoicePayment rows, written in the same tx. */
+    amountPaid: numeric({ precision: 14, scale: 2 }).notNull().default("0"),
     memo: text(),
     dueAt: timestamp(timestampConfig),
     paidAt: timestamp(timestampConfig),
@@ -106,6 +133,8 @@ export const invoiceModel = pgTable(
     checkoutSessionId: text(),
     checkoutGeneration: integer().notNull().default(0),
     checkoutMintedAt: timestamp(timestampConfig),
+    /** What the live session collects (s216b); a visit for another kind re-mints. */
+    checkoutKind: invoiceCheckoutKind(),
   },
   (table) => [
     uniqueIndex("Invoice_workspaceId_number_key").on(
@@ -187,5 +216,47 @@ export const invoiceEventModel = pgTable(
       table.providerEventId,
     ),
     index("InvoiceEvent_invoiceId_idx").on(table.invoiceId),
+  ],
+)
+
+/**
+ * One row per money movement INTO an invoice (s216b): a deposit, a balance or
+ * a full payment. The unique (invoiceId, providerPaymentId) index is the
+ * dedup for the two webhook events one payment produces; `Invoice.amountPaid`
+ * is the sum of these rows, updated in the same transaction.
+ */
+export const invoicePaymentModel = pgTable(
+  "InvoicePayment",
+  {
+    ...sharedColumns,
+    workspaceId: bigintAsString()
+      .notNull()
+      .references(() => workspaceModel.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    invoiceId: bigintAsString()
+      .notNull()
+      .references(() => invoiceModel.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    kind: invoiceCheckoutKind().notNull(),
+    amount: numeric({ precision: 14, scale: 2 }).notNull(),
+    /** Stripe: the PaymentIntent id. */
+    providerPaymentId: text().notNull(),
+    paidAt: timestamp(timestampConfig).notNull(),
+    /**
+     * Claimed (CAS from null) before this payment's contact marks + event
+     * run, so the two webhook events of one payment mark once; reset to null
+     * when the marks fail, so the redelivery marks again.
+     */
+    markedAt: timestamp(timestampConfig),
+  },
+  (table) => [
+    uniqueIndex("InvoicePayment_invoiceId_providerPaymentId_key").on(
+      table.invoiceId,
+      table.providerPaymentId,
+    ),
   ],
 )

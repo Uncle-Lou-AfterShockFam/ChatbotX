@@ -59,6 +59,14 @@ export const createInvoiceStepSchema = z.object({
    * the workspace's only site (several sites and none picked fails the step).
    */
   integrationId: z.string().trim().max(20).default(""),
+  /**
+   * Deposit (s216b, method stripeCheckout): `amount` or `percent`, or a
+   * `{{variable}}` resolving to one; empty (or a value resolving to empty)
+   * = no deposit. The pay link then offers "pay the deposit" or "pay in full".
+   */
+  depositType: z.string().trim().max(64).default(""),
+  /** The deposit amount ("50.00") or percent ("25"); may carry `{{variable}}` tokens. */
+  depositValue: z.string().trim().max(64).default(""),
   states: z.tuple([successStateSchema, errorStateSchema]),
 })
 export type CreateInvoiceStepSchema = z.infer<typeof createInvoiceStepSchema>
@@ -72,5 +80,7 @@ export const createInvoiceStepDefaultFn = (): CreateInvoiceStepSchema => ({
   memo: "",
   method: "default",
   integrationId: "",
+  depositType: "",
+  depositValue: "",
   states: [successStateDefaultFn(), errorStateDefaultFn()],
 })

@@ -4,6 +4,8 @@ import {
   INVOICE_MAX_LINE_ITEMS,
   INVOICE_MAX_QUANTITY,
   INVOICE_MEMO_MAX,
+  invoiceDepositTypes,
+  invoiceStatuses,
   requestedInvoiceMethods,
 } from "@chatbotx.io/database/partials"
 import { z } from "zod"
@@ -36,6 +38,18 @@ export const createInvoiceInputSchema = z
      * when the workspace has exactly one WooCommerce site.
      */
     integrationId: idSchema.optional(),
+    /**
+     * s216b, stripeCheckout only: offer a deposit on the pay page. `value` is
+     * a money amount (type `amount`) or a percent of the total (`percent`);
+     * the deposit must come out above zero and below the total.
+     */
+    deposit: z
+      .object({
+        type: invoiceDepositTypes,
+        value: z.union([z.string().trim().min(1).max(32), z.number()]),
+      })
+      .strict()
+      .optional(),
     /**
      * Idempotency: the same key in a workspace returns the first invoice; the
      * same key with different content is refused (409), never billed.
@@ -74,9 +88,7 @@ export const listInvoicesInputSchema = z
   .object({
     workspaceId: idSchema,
     contactId: idSchema.optional(),
-    status: z
-      .enum(["draft", "open", "paid", "void", "uncollectible", "refunded"])
-      .optional(),
+    status: invoiceStatuses.optional(),
     limit: z.number().int().min(1).max(100).default(25),
     /** s193 assigned-only member: only invoices of contacts assigned to them. */
     restrictToAssignedUserId: idSchema.optional(),

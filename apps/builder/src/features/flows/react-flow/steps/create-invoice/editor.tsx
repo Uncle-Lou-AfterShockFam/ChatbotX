@@ -123,6 +123,25 @@ const CreateInvoiceStepEditor = ({ parentName }: { parentName: string }) => {
         {method === "woocommerce" && (
           <WooCommerceSitePicker parentName={parentName} />
         )}
+        {(method === "stripeCheckout" || method === "default") && (
+          <div className="flex gap-2">
+            <div className="min-w-0 flex-1">
+              <InputField
+                description={t("invoices.step.depositTypeHint")}
+                label={t("invoices.fields.depositType")}
+                name={`${parentName}.depositType`}
+                placeholder="percent"
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <InputField
+                label={t("invoices.fields.depositValue")}
+                name={`${parentName}.depositValue`}
+                placeholder="25"
+              />
+            </div>
+          </div>
+        )}
         <InputField
           label={t("invoices.fields.currency")}
           name={`${parentName}.currency`}

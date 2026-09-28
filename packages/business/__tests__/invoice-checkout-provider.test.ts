@@ -33,6 +33,7 @@ const m = vi.hoisted(() => {
     | { and: Cond[] }
     | { col: string; eq: unknown }
     | { col: string; isNull: true }
+    | { col: string; in: unknown[] }
     | undefined
   const matches = (row: Row, cond: Cond): boolean => {
     if (!cond) {
@@ -43,6 +44,9 @@ const m = vi.hoisted(() => {
     }
     if ("isNull" in cond) {
       return row[cond.col] == null
+    }
+    if ("in" in cond) {
+      return cond.in.includes(row[cond.col])
     }
     const value = row[cond.col]
     return value instanceof Date && cond.eq instanceof Date
@@ -187,6 +191,7 @@ vi.mock("@chatbotx.io/database/client", () => ({
   and: (...c: unknown[]) => ({ and: c }),
   eq: (f: { name: string }, v: unknown) => ({ col: f.name, eq: v }),
   isNull: (f: { name: string }) => ({ col: f.name, isNull: true }),
+  inArray: (f: { name: string }, v: unknown[]) => ({ col: f.name, in: v }),
 }))
 vi.mock("../src/integration-stripe/client", async (importOriginal) => ({
   ...(await importOriginal<
@@ -259,6 +264,11 @@ const openRow = (extra: Row = {}): Row => ({
   checkoutSessionId: null,
   checkoutGeneration: 0,
   checkoutMintedAt: null,
+  checkoutKind: null,
+  depositType: null,
+  depositValue: null,
+  depositAmount: null,
+  amountPaid: "0.00",
   ...extra,
 })
 
@@ -687,5 +697,138 @@ describe("probe findings (s207b review)", () => {
         invoice: m.state.row as never,
       }),
     ).resolves.toBeUndefined()
+  })
+})
+
+describe("deposits (s216b)", () => {
+  const depositRow = (extra: Row = {}) =>
+    openRow({
+      total: "12.50",
+      depositType: "amount",
+      depositValue: "5",
+      depositAmount: "5.00",
+      ...extra,
+    })
+  const visit = (kind?: string, justPaid = false) =>
+    visitCheckout(TOKEN, { ...SERVE, requestedKind: kind, justPaid })
+  const paramsOf = (id: string) =>
+    m.stripe.sessions.get(id)?.params as {
+      line_items: {
+        quantity: number
+        price_data: { unit_amount: number; product_data: { name: string } }
+      }[]
+      metadata: Record<string, string>
+    }
+
+  test.each([
+    [undefined],
+    ["balance"],
+    ["tip"],
+    [""],
+  ])("an open invoice with a deposit and no valid pick (%j) asks first and mints nothing", async (kind) => {
+    m.state.row = depositRow()
+    const result = await visit(kind)
+    expect(result).toMatchObject({
+      kind: "choose",
+      depositMinor: 500n,
+      totalMinor: 1250n,
+    })
+    expect(m.stripe.creates).toBe(0)
+  })
+
+  test("an invoice without a deposit never asks: straight to the full session", async () => {
+    const result = await visit("deposit")
+    expect(result.kind).toBe("redirect")
+    expect(m.state.row?.checkoutKind).toBe("full")
+  })
+
+  test("the deposit pick mints ONE line for the deposit, tagged with its kind and amount", async () => {
+    m.state.row = depositRow()
+    const result = await visit("deposit")
+    expect(result.kind).toBe("redirect")
+    const [session] = liveSessions()
+    const params = paramsOf(session?.id as string)
+    expect(params.line_items).toEqual([
+      expect.objectContaining({
+        quantity: 1,
+        price_data: expect.objectContaining({
+          unit_amount: 500,
+          product_data: { name: "Deposit for Invoice #4" },
+        }),
+      }),
+    ])
+    expect(params.metadata).toMatchObject({
+      hub_payment_kind: "deposit",
+      hub_payment_minor: "500",
+    })
+    expect(m.state.row?.checkoutKind).toBe("deposit")
+  })
+
+  test("the full pick keeps the invoice's own lines", async () => {
+    m.state.row = depositRow()
+    await visit("full")
+    const [session] = liveSessions()
+    const params = paramsOf(session?.id as string)
+    expect(params.line_items).toHaveLength(2)
+    expect(params.metadata).toMatchObject({
+      hub_payment_kind: "full",
+      hub_payment_minor: "1250",
+    })
+  })
+
+  test("switching picks expires the live session first: one payable session, always", async () => {
+    m.state.row = depositRow()
+    await visit("deposit")
+    await visit("full")
+    expect(liveSessions()).toHaveLength(1)
+    expect(
+      paramsOf(liveSessions()[0]?.id as string).metadata.hub_payment_kind,
+    ).toBe("full")
+    expect(m.stripe.expires).toBe(1)
+    // The same pick again reuses the live session.
+    await visit("full")
+    expect(m.stripe.creates).toBe(2)
+  })
+
+  test("a partly paid invoice collects the balance, whatever was picked", async () => {
+    m.state.row = depositRow({
+      status: "partiallyPaid",
+      amountPaid: "5.00",
+    })
+    const result = await visit("full")
+    expect(result.kind).toBe("redirect")
+    const params = paramsOf(liveSessions()[0]?.id as string)
+    expect(params.line_items[0]?.price_data).toMatchObject({
+      unit_amount: 750,
+      product_data: { name: "Balance of Invoice #4" },
+    })
+    expect(params.metadata.hub_payment_kind).toBe("balance")
+  })
+
+  test("back from Stripe after a deposit: a deposit page, never straight into the balance checkout", async () => {
+    m.state.row = depositRow({ status: "partiallyPaid", amountPaid: "5.00" })
+    expect((await visit(undefined, true)).kind).toBe("depositPaid")
+    expect(m.stripe.creates).toBe(0)
+  })
+
+  test("a claim whose kind stopped being payable (a payment landed) re-reads instead of minting", async () => {
+    m.state.row = depositRow({
+      status: "partiallyPaid",
+      amountPaid: "5.00",
+      checkoutKind: "deposit",
+      checkoutGeneration: 3,
+      checkoutMintedAt: new Date(),
+    })
+    const result = await visit()
+    // The stale deposit claim is replaced by a balance claim.
+    expect(result.kind).toBe("redirect")
+    expect(m.state.row?.checkoutKind).toBe("balance")
+    expect(
+      [...m.stripe.sessions.values()].every(
+        (s) =>
+          (s.params as { metadata: Record<string, string> }).metadata
+            .hub_payment_kind === "balance",
+      ),
+    ).toBe(true)
   })
 })

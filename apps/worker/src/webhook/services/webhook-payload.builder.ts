@@ -62,6 +62,7 @@ const EVENT_NAMES = {
   [triggerEventTypes.enum.formSubmitted]: "form_submitted",
   [triggerEventTypes.enum.invoiceCreated]: "invoice_created",
   [triggerEventTypes.enum.invoicePaid]: "invoice_paid",
+  [triggerEventTypes.enum.invoicePartiallyPaid]: "invoice_partially_paid",
   [triggerEventTypes.enum.invoicePaymentFailed]: "invoice_payment_failed",
 } satisfies Record<MatchableEventType, string>
 
@@ -343,6 +344,7 @@ const PAYLOAD_BUILDERS = {
   }),
   [triggerEventTypes.enum.invoiceCreated]: buildInvoicePayload,
   [triggerEventTypes.enum.invoicePaid]: buildInvoicePayload,
+  [triggerEventTypes.enum.invoicePartiallyPaid]: buildInvoicePayload,
   [triggerEventTypes.enum.invoicePaymentFailed]: buildInvoicePayload,
 } satisfies Record<MatchableEventType, PayloadBuilder>
 

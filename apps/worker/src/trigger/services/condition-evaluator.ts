@@ -63,6 +63,7 @@ export class ConditionEvaluator {
       // Hub invoicing (s205b): every invoice of the workspace, no sourceId.
       case triggerEventTypes.enum.invoiceCreated:
       case triggerEventTypes.enum.invoicePaid:
+      case triggerEventTypes.enum.invoicePartiallyPaid:
       case triggerEventTypes.enum.invoicePaymentFailed:
         return true
 

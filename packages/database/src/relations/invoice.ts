@@ -71,6 +71,12 @@ export const invoiceRelations = defineRelationsPart(schema, (r) => ({
       to: r.invoiceLineItemModel.invoiceId,
     }),
   },
+  invoicePaymentModel: {
+    invoice: r.one.invoiceModel({
+      from: r.invoicePaymentModel.invoiceId,
+      to: r.invoiceModel.id,
+    }),
+  },
   invoiceLineItemModel: {
     invoice: r.one.invoiceModel({
       from: r.invoiceLineItemModel.invoiceId,

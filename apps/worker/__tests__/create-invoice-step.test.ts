@@ -238,3 +238,80 @@ describe("createInvoice step", () => {
     expect(m.create.mock.calls[0]?.[0]).not.toHaveProperty("integrationId")
   })
 })
+
+describe("deposit (s216b)", () => {
+  test.each([
+    [
+      "{{contract_deposit_type}}",
+      "{{contract_deposit_value}}",
+      "percent",
+      "25%",
+      { type: "percent", value: "25" },
+    ],
+    ["amount", "{{v}}", "amount", "75.00", { type: "amount", value: "75.00" }],
+    ["PERCENT", "10", "PERCENT", "10", { type: "percent", value: "10" }],
+  ])("type %s / value %s render to a deposit", async (type, value, renderedType, renderedValue, expected) => {
+    m.replaceAll.mockImplementation(({ text }: { text: string }) =>
+      Promise.resolve(
+        (
+          { [type]: renderedType, [value]: renderedValue } as Record<
+            string,
+            string
+          >
+        )[text] ?? text,
+      ),
+    )
+    await handleCreateInvoice(
+      props({ step: { ...step, depositType: type, depositValue: value } }),
+    )
+    expect(m.create.mock.calls[0]?.[0].deposit).toEqual(expected)
+  })
+
+  test.each([
+    ["", ""],
+    ["percent", ""],
+    ["", "25"],
+  ])("an empty type or value (%j / %j) is no deposit", async (type, value) => {
+    await handleCreateInvoice(
+      props({ step: { ...step, depositType: type, depositValue: value } }),
+    )
+    expect(m.create.mock.calls[0]?.[0]).not.toHaveProperty("deposit")
+  })
+
+  test("a variable that renders empty is no deposit", async () => {
+    m.replaceAll.mockImplementation(({ text }: { text: string }) =>
+      Promise.resolve(text.startsWith("{{") ? "" : text),
+    )
+    await handleCreateInvoice(
+      props({
+        step: { ...step, depositType: "{{t}}", depositValue: "{{v}}" },
+      }),
+    )
+    expect(m.create.mock.calls[0]?.[0]).not.toHaveProperty("deposit")
+  })
+
+  test("an unknown type takes the error branch without creating", async () => {
+    m.replaceAll.mockImplementation(({ text }: { text: string }) =>
+      Promise.resolve(text),
+    )
+    const result = await handleCreateInvoice(
+      props({ step: { ...step, depositType: "half", depositValue: "50" } }),
+    )
+    expect(result.status).toBe("error")
+    expect(m.create).not.toHaveBeenCalled()
+  })
+
+  test("a step saved before s216b (no deposit keys) creates without a deposit", async () => {
+    const {
+      depositType: _t,
+      depositValue: _v,
+      ...legacy
+    } = {
+      ...step,
+      depositType: "",
+      depositValue: "",
+    }
+    await handleCreateInvoice(props({ step: legacy as typeof step }))
+    expect(m.create.mock.calls[0]?.[0]).not.toHaveProperty("deposit")
+  })
+})

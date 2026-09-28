@@ -9,6 +9,7 @@ import {
 describe("invoiceDocumentKind", () => {
   const expected: Record<string, string | null> = {
     open: "invoice",
+    partiallyPaid: "depositReceipt",
     paid: "receipt",
   }
   test.each(invoiceStatuses.options)("%s", (status) => {

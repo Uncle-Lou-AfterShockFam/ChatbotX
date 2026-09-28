@@ -645,6 +645,18 @@ export abstract class BaseEventEmitter {
     })
   }
 
+  async invoicePartiallyPaid(
+    workspaceId: string,
+    contactId: string,
+    metadata: InvoiceEventMetadata,
+  ): Promise<void> {
+    await this.emit(triggerEventTypes.enum.invoicePartiallyPaid, {
+      workspaceId,
+      contactId,
+      metadata,
+    })
+  }
+
   async invoicePaymentFailed(
     workspaceId: string,
     contactId: string,
