@@ -27,9 +27,12 @@ type EmailTopicCounter =
 // First-time-only timestamps on a recipient row.
 type FirstEventColumn = "deliveredAt" | "firstSeenAt" | "firstClickedAt"
 
-const BROADCAST_KEY = {
-  broadcastId: analyticsEmailTopicModel.broadcastId,
-  contactInboxId: analyticsEmailTopicModel.contactInboxId,
+/** Read lazily: modules that mock the schema must still import this file. */
+function broadcastKey() {
+  return {
+    broadcastId: analyticsEmailTopicModel.broadcastId,
+    contactInboxId: analyticsEmailTopicModel.contactInboxId,
+  }
 }
 
 export class EmailTopicStatsRepository {
@@ -74,7 +77,7 @@ export class EmailTopicStatsRepository {
           isNull(analyticsEmailTopicModel.failedAt),
         ),
       )
-      .returning(BROADCAST_KEY)
+      .returning(broadcastKey())
     if (row?.broadcastId && row.contactInboxId) {
       await broadcastStatsRepository.updateFailedBulk([
         {
@@ -139,7 +142,7 @@ export class EmailTopicStatsRepository {
       .returning({
         topicId: analyticsEmailTopicModel.topicId,
         workspaceId: analyticsEmailTopicModel.workspaceId,
-        ...BROADCAST_KEY,
+        ...broadcastKey(),
       })
     if (!row) {
       return
