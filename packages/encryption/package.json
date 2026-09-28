@@ -26,6 +26,7 @@
     "./dynamic-image-token": "./src/dynamic-image-token.ts",
     "./keys": "./src/keys.ts",
     "./minigame-play-token": "./src/minigame-play-token.ts",
+    "./quickbooks-oauth-state": "./src/quickbooks-oauth-state.ts",
     "./link-signature": "./src/link-signature.ts",
     "./user-data-webview-token": "./src/user-data-webview-token.ts",
     "./user-hash": "./src/user-hash.ts"

@@ -41,6 +41,8 @@ export const DefaultJobAction = {
   syncExternalCalendarEvent: "syncExternalCalendarEvent",
   sendAppointmentReminder: "sendAppointmentReminder",
   installTemplate: "installTemplate",
+  quickbooksEntityChanged: "quickbooksEntityChanged",
+  syncInvoiceMirror: "syncInvoiceMirror",
 } as const
 
 export const syncExternalCalendarEventJobId = (
@@ -257,6 +259,38 @@ export type JobSendAppointmentReminder = {
   data: JobSendAppointmentReminderData
 }
 
+/** A QBO Invoice or Payment changed (webhook or CDC poll, s214b). */
+export const jobQuickbooksEntityChangedDataSchema = z
+  .object({
+    workspaceId: z.string(),
+    integrationId: z.string(),
+    entity: z.enum(["Invoice", "Payment"]),
+    entityId: z.string().regex(/^\d{1,20}$/),
+  })
+  .strict()
+export type JobQuickbooksEntityChangedData = z.infer<
+  typeof jobQuickbooksEntityChangedDataSchema
+>
+export type JobQuickbooksEntityChanged = {
+  type: typeof DefaultJobAction.quickbooksEntityChanged
+  data: JobQuickbooksEntityChangedData
+}
+
+/** Converge one invoice's QuickBooks bookkeeping copy to its status (s214b). */
+export const jobSyncInvoiceMirrorDataSchema = z
+  .object({
+    workspaceId: z.string(),
+    invoiceId: z.string(),
+  })
+  .strict()
+export type JobSyncInvoiceMirrorData = z.infer<
+  typeof jobSyncInvoiceMirrorDataSchema
+>
+export type JobSyncInvoiceMirror = {
+  type: typeof DefaultJobAction.syncInvoiceMirror
+  data: JobSyncInvoiceMirrorData
+}
+
 export type JobInstallTemplate = {
   type: typeof DefaultJobAction.installTemplate
   data: {
@@ -279,3 +313,5 @@ export type DefaultJobData =
   | JobSyncExternalCalendarEvent
   | JobSendAppointmentReminder
   | JobInstallTemplate
+  | JobQuickbooksEntityChanged
+  | JobSyncInvoiceMirror

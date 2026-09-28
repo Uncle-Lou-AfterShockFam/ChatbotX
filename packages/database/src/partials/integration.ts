@@ -25,6 +25,7 @@ export const integrationTypes = z.enum([
   "openaiCompatible",
   "openrouter",
   "outlookCalendar",
+  "quickbooks",
   "sendGrid",
   "smtp",
   "stripe",

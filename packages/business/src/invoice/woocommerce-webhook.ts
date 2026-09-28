@@ -9,6 +9,7 @@ import { integrationWooCommerceService } from "../integration-woocommerce/servic
 import { logger } from "../logger"
 import { markInvoiceOnContact } from "./contact-marks"
 import { prerenderInvoiceReceipt } from "./document"
+import { enqueueInvoiceMirror } from "./mirror"
 import { invoiceEventMetadata, invoiceService } from "./service"
 import { wooCommerceProviderInvoiceId } from "./woocommerce-provider"
 
@@ -430,6 +431,9 @@ export async function handleWooCommerceWebhook(props: {
     // Not awaited: Gotenberg must not hold the site's delivery open. It
     // never rejects (it logs its own failure); the catch is belt and braces.
     prerenderInvoiceReceipt(invoice.id).catch(() => undefined)
+  }
+  if (outcome.applied) {
+    await enqueueInvoiceMirror(invoice)
   }
   return {
     reason: outcome.applied ? "applied" : "captured",

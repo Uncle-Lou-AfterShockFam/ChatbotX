@@ -42,10 +42,17 @@ export const createInvoiceStepSchema = z.object({
   memo: z.string().trim().max(1000).default(""),
   /**
    * How it is collected (s207b): `default` = the workspace's Stripe setting;
-   * `stripeCheckout` texts a stable `/pay` link and saves no card.
+   * `stripeCheckout` texts a stable `/pay` link and saves no card;
+   * `quickbooks` (s214b) texts the QuickBooks Payments link.
    */
   method: z
-    .enum(["default", "stripeInvoice", "stripeCheckout", "woocommerce"])
+    .enum([
+      "default",
+      "stripeInvoice",
+      "stripeCheckout",
+      "woocommerce",
+      "quickbooks",
+    ])
     .default("default"),
   /**
    * Method `woocommerce` (s211b): the linked site's integration id; empty =

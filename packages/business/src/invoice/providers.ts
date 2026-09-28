@@ -27,6 +27,8 @@ import {
   mintInvoicePayToken,
   prepareCheckoutInvoice,
 } from "./checkout-provider"
+import { recordLastErrorIfClear } from "./last-error"
+import { quickbooksInvoiceProvider } from "./quickbooks-provider"
 import { finalizeWithStripe, voidWithStripe } from "./stripe-provider"
 import {
   cancelWooCommerceOrder,
@@ -57,6 +59,8 @@ export type OpenedInvoice = {
   }
   /** The draft left `draft` (a void) while the provider was opening it. */
   onDraftLost?: () => Promise<void>
+  /** Runs once the draft -> opened CAS applied (never throws). */
+  afterOpen?: () => Promise<void>
 }
 
 /**
@@ -107,17 +111,6 @@ async function recordLastError(invoiceId: string, message: string) {
     .update(invoiceModel)
     .set({ lastError: message, updatedAt: new Date() })
     .where(eq(invoiceModel.id, invoiceId))
-}
-
-/**
- * `lastError` only while it is empty: a note written after the void must
- * not bury one a webhook wrote meanwhile (paid-after-void: "refund it").
- */
-async function recordLastErrorIfClear(invoiceId: string, message: string) {
-  await db
-    .update(invoiceModel)
-    .set({ lastError: message, updatedAt: new Date() })
-    .where(and(eq(invoiceModel.id, invoiceId), isNull(invoiceModel.lastError)))
 }
 
 /** The workspace's Stripe, refused when it is not the one the invoice names. */
@@ -535,6 +528,7 @@ export const invoiceProviders = {
   stripeInvoice: stripeInvoiceProvider,
   stripeCheckout: stripeCheckoutProvider,
   woocommerce: wooCommerceProvider,
+  quickbooks: quickbooksInvoiceProvider,
 } satisfies Record<InvoiceMethod, InvoiceProvider>
 
 /**

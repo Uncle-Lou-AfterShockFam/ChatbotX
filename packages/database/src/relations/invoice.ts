@@ -23,6 +23,28 @@ export const invoiceRelations = defineRelationsPart(schema, (r) => ({
       to: r.workspaceModel.id,
     }),
   },
+  integrationQuickbooksModel: {
+    integration: r.one.integrationModel({
+      from: r.integrationQuickbooksModel.integrationId,
+      to: r.integrationModel.id,
+    }),
+    workspace: r.one.workspaceModel({
+      from: r.integrationQuickbooksModel.workspaceId,
+      to: r.workspaceModel.id,
+    }),
+  },
+  quickbooksCustomerModel: {
+    contact: r.one.contactModel({
+      from: r.quickbooksCustomerModel.contactId,
+      to: r.contactModel.id,
+    }),
+  },
+  invoiceMirrorModel: {
+    invoice: r.one.invoiceModel({
+      from: r.invoiceMirrorModel.invoiceId,
+      to: r.invoiceModel.id,
+    }),
+  },
   stripeCustomerModel: {
     contact: r.one.contactModel({
       from: r.stripeCustomerModel.contactId,

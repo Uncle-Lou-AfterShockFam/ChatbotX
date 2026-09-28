@@ -1,6 +1,9 @@
 import { crmTimelineService } from "@chatbotx.io/business"
 import { integrationWooCommerceService } from "@chatbotx.io/business/integration-woocommerce"
-import { invoiceService } from "@chatbotx.io/business/invoice"
+import {
+  invoiceBookkeepingStates,
+  invoiceService,
+} from "@chatbotx.io/business/invoice"
 import { z } from "zod"
 import { requireContactPermissionScope } from "@/features/contacts/permissions"
 import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
@@ -45,8 +48,15 @@ const privateListInvoicesAPI = authorizedAPI
       cursor: input.cursor,
       restrictToAssignedUserId: await assignedOnly(input.workspaceId),
     })
+    const bookkeeping = await invoiceBookkeepingStates({
+      workspaceId: input.workspaceId,
+      invoices: page.data,
+    })
     return {
-      data: page.data.map(toInvoiceResource),
+      data: page.data.map((row) => ({
+        ...toInvoiceResource(row),
+        bookkeeping: bookkeeping.get(row.id),
+      })),
       nextCursor: page.nextCursor,
     }
   })

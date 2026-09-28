@@ -21,13 +21,16 @@ export type InvoiceStatus = z.infer<typeof invoiceStatuses>
  * How an invoice is collected. `stripeInvoice`: a real Stripe Invoice (Stripe
  * hosts the page and the PDF). `stripeCheckout` (s207b): a one-off Checkout
  * Session minted on each visit to the hub's stable `/pay/<token>` link; no
- * card is saved. `woocommerce`: see WOOCOMMERCE_SITE_SLUG_PATTERN below. A
- * request may also say `default`: the workspace's Stripe choice.
+ * card is saved. `woocommerce`: see WOOCOMMERCE_SITE_SLUG_PATTERN below.
+ * `quickbooks` (s214b): a QuickBooks Online invoice in the workspace's own
+ * QBO company; its InvoiceLink is the pay link (QuickBooks Payments takes the
+ * money). A request may also say `default`: the workspace's Stripe choice.
  */
 export const invoiceMethods = z.enum([
   "stripeInvoice",
   "stripeCheckout",
   "woocommerce",
+  "quickbooks",
 ])
 export type InvoiceMethod = z.infer<typeof invoiceMethods>
 
@@ -224,8 +227,8 @@ export function decimalStringToMinor(value: string, currency: string): bigint {
 }
 
 /**
- * The hub's own PDF of a stripeCheckout (s210b) or woocommerce (s213b)
- * invoice: an INVOICE while it is open, a RECEIPT once paid, served at
+ * The hub's own PDF of a stripeCheckout (s210b), woocommerce (s213b) or
+ * quickbooks (s214b) invoice: an INVOICE while it is open, a RECEIPT once paid, served at
  * `/pay/<token>/pdf`.
  */
 export type InvoiceDocumentKind = "invoice" | "receipt"
@@ -234,6 +237,7 @@ export type InvoiceDocumentKind = "invoice" | "receipt"
 export const hubDocumentMethods: readonly InvoiceMethod[] = [
   "stripeCheckout",
   "woocommerce",
+  "quickbooks",
 ]
 
 /** The document an invoice in `status` has, or null (draft, void, ...). */
@@ -248,8 +252,8 @@ export const invoiceDocumentKind = (
 /**
  * The PDF link an API/UI row shows: Stripe's for a stripeInvoice, else the
  * hub's `/pay/<token>/pdf` while the invoice is open or paid (stripeCheckout
- * derives it from its pay link; woocommerce stores it at open, since its
- * `hostedUrl` is the site's order-pay page), else null.
+ * derives it from its pay link; woocommerce and quickbooks store it at open,
+ * since their `hostedUrl` is the provider's own pay page), else null.
  */
 export const invoicePdfUrl = (invoice: {
   method: InvoiceMethod
@@ -263,7 +267,7 @@ export const invoicePdfUrl = (invoice: {
   if (!invoiceDocumentKind(invoice.status)) {
     return null
   }
-  if (invoice.method === "woocommerce") {
+  if (invoice.method === "woocommerce" || invoice.method === "quickbooks") {
     return invoice.pdfUrl
   }
   return invoice.hostedUrl ? `${invoice.hostedUrl}/pdf` : null

@@ -7411,6 +7411,39 @@
       "copy": "Copy"
     }
   },
+  "quickbooks": {
+    "title": "QuickBooks",
+    "setting": {
+      "label": "QuickBooks Online",
+      "description": "Connect the workspace's own QuickBooks Online company. It can collect invoices (QuickBooks Payments takes the card; the contact needs an email) and keep a bookkeeping copy of every Stripe and WooCommerce invoice."
+    },
+    "connect": "Connect QuickBooks",
+    "reconnect": "Reconnect QuickBooks",
+    "notConfigured": "The platform's QuickBooks app is not set up yet (Admin > Platform credentials).",
+    "company": "Company {name} ({currency})",
+    "sandbox": "Sandbox",
+    "reconnectNeeded": "QuickBooks refused the saved authorization: reconnect it. {error}",
+    "mirror": {
+      "label": "Copy invoices to QuickBooks",
+      "description": "Stripe and WooCommerce invoices created from now on are copied into QuickBooks: an invoice when it opens, a payment into Undeposited Funds when it is paid, a void when voided. Earlier invoices are not copied."
+    },
+    "mirrorState": {
+      "synced": "QuickBooks copy: {status}",
+      "error": "QuickBooks copy failed: {error}",
+      "pending": "QuickBooks copy pending"
+    },
+    "connected": "QuickBooks connected",
+    "connectFailed": "QuickBooks could not be connected. Try again.",
+    "connectConflict": "That QuickBooks company is connected to another workspace, or an invoice is still collected through the current one.",
+    "connectCancelled": "QuickBooks connection cancelled."
+  },
+  "quickbooksCredential": {
+    "title": "QuickBooks (Intuit app)",
+    "environment": "Environment",
+    "webhookVerifierToken": "Webhook verifier token",
+    "webhookUrl": "Webhook URL",
+    "hint": "Create an app at developer.intuit.com with the Accounting and Payments scopes. Register the redirect URL and the webhook URL below (subscribe to Invoice and Payment)."
+  },
   "invoices": {
     "title": "Invoices",
     "empty": "No invoices yet.",
@@ -7456,7 +7489,7 @@
       "memoPlaceholder": "Thanks for your order",
       "summary": "{count, plural, one {# line} other {# lines}}: {description} ({currency})",
       "noLines": "No line items",
-      "methodHint": "Stripe Checkout texts a hub pay link that works until the invoice is paid or voided, and saves no card. Stripe invoice uses Stripe's own invoice page. WooCommerce creates a pending order on a linked site and texts its order-pay page."
+      "methodHint": "Stripe Checkout texts a hub pay link that works until the invoice is paid or voided, and saves no card. Stripe invoice uses Stripe's own invoice page. WooCommerce creates a pending order on a linked site and texts its order-pay page. QuickBooks creates the invoice in the connected QuickBooks company and texts its QuickBooks Payments link (the contact needs an email)."
     },
     "retry": "Retry sending to Stripe",
     "retried": "Invoice sent to Stripe",
@@ -7464,7 +7497,8 @@
       "default": "Workspace default",
       "stripeInvoice": "Stripe invoice",
       "stripeCheckout": "Stripe Checkout (pay link, no saved card)",
-      "woocommerce": "WooCommerce order (the site's order-pay page)"
+      "woocommerce": "WooCommerce order (the site's order-pay page)",
+      "quickbooks": "QuickBooks invoice (QuickBooks Payments pay link)"
     }
   }
 }
