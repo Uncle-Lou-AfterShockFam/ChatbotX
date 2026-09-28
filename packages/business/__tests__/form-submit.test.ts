@@ -405,6 +405,50 @@ describe("formSubmitService.submit (s200)", () => {
     expect(m.emitFormSubmitted).not.toHaveBeenCalled()
   })
 
+  test("a fullName answer names a new contact first + last and writes full_name (s219)", async () => {
+    const def = {
+      steps: [
+        {
+          id: "s1",
+          fields: [
+            {
+              key: "name",
+              type: "text",
+              required: false,
+              label: "",
+              mapTo: { kind: "system", key: "fullName" },
+            },
+            {
+              key: "phone",
+              type: "phone",
+              required: false,
+              label: "",
+              mapTo: { kind: "system", key: "phoneNumber" },
+            },
+          ],
+        },
+      ],
+      rules: [],
+    }
+    m.findPublishedBySlug.mockResolvedValue(FORM({ publishedDefinition: def }))
+    queueClean()
+    await submit({ name: "  Ada   King Lovelace ", phone: "+15550001234" })
+    expect(m.createContactWithInbox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          firstName: "Ada",
+          lastName: "King Lovelace",
+        }),
+      }),
+    )
+    expect(m.setRichSystemFieldByKey).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fieldName: "full_name",
+        value: "Ada   King Lovelace",
+      }),
+    )
+  })
+
   test("an invalid phone answer is a typed 'phone' issue on that field", async () => {
     queueClean()
     const r = await submit({ phone: "12" })

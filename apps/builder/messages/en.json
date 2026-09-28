@@ -5088,7 +5088,8 @@
       "firstName": "First name",
       "lastName": "Last name",
       "email": "Email",
-      "phoneNumber": "Phone number"
+      "phoneNumber": "Phone number",
+      "fullName": "Full name"
     },
     "issues": {
       "required": "This field is required.",

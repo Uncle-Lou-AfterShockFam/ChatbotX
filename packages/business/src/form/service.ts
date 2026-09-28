@@ -16,6 +16,7 @@ import {
   type FormDefinition,
   type FormSettings,
   type FormStatus,
+  formChatOnlyFields,
   formIdentifiesContact,
   formInputFields,
   formMappingIssue,
@@ -265,6 +266,10 @@ export class FormService extends BaseService {
       return null
     }
     const form = this.normalize(row)
+    // A chat-only form has no public page (s219).
+    if (!form.settings.channels.includes("web")) {
+      return null
+    }
     // A published form always has an input field (publish refuses an empty
     // one), so a normalised-to-empty copy is a corrupt row: fail closed.
     if (
@@ -462,7 +467,19 @@ export class FormService extends BaseService {
     if (inputs.length === 0) {
       throw validationException("definition", "Add at least one field first.")
     }
-    if (formMapsToContact(def)) {
+    const onWeb = current.settings.channels.includes("web")
+    // The web page cannot take a photo, a file or a location yet (s219).
+    const chatOnly = onWeb ? formChatOnlyFields(def)[0] : undefined
+    if (chatOnly) {
+      throw validationException(
+        "definition",
+        `Field "${chatOnly.key}" (${chatOnly.type}) can only be answered in chat; remove the web channel or the field.`,
+        { reason: "chatOnlyField", fieldKey: chatOnly.key },
+      )
+    }
+    // A chat run already knows its contact: identity and inbox bind only the
+    // anonymous web page.
+    if (onWeb && formMapsToContact(def)) {
       if (!formIdentifiesContact(def)) {
         throw validationException(
           "definition",
@@ -478,6 +495,8 @@ export class FormService extends BaseService {
         )
       }
       await this.assertApiInbox({ workspaceId, inboxId: current.inboxId, tx })
+    }
+    if (formMapsToContact(def)) {
       const customIds = inputs
         .map((f) => (f.mapTo?.kind === "custom" ? f.mapTo.customFieldId : null))
         .filter((v): v is string => v !== null)

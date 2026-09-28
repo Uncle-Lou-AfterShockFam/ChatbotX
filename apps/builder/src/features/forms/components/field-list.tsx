@@ -20,6 +20,7 @@ import type {
   WebFormFieldType,
 } from "@chatbotx.io/utils/form"
 import {
+  FORM_CHAT_ONLY_FIELD_TYPES,
   MAX_FORM_FIELDS_PER_STEP,
   webFormFieldTypes,
 } from "@chatbotx.io/utils/form"
@@ -125,23 +126,27 @@ export function FieldList(props: {
           }
         />
         <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
-          {webFormFieldTypes.options.map((type) => (
-            <DropdownMenuItem
-              data-testid={`add-field-${type}`}
-              key={type}
-              onClick={() => {
-                const field = newField(
-                  definition,
-                  type as WebFormFieldType,
-                  t(`forms.fieldTypes.${type}`),
-                )
-                onChange(addField(definition, step.id, field))
-                onSelect(field.key)
-              }}
-            >
-              {t(`forms.fieldTypes.${type}`)}
-            </DropdownMenuItem>
-          ))}
+          {/* Chat-only types (photo, file, location) join the picker with the
+              chat editor (s219 A2-4); the web page cannot render them. */}
+          {webFormFieldTypes.options
+            .filter((type) => !FORM_CHAT_ONLY_FIELD_TYPES.has(type))
+            .map((type) => (
+              <DropdownMenuItem
+                data-testid={`add-field-${type}`}
+                key={type}
+                onClick={() => {
+                  const field = newField(
+                    definition,
+                    type as WebFormFieldType,
+                    t(`forms.fieldTypes.${type}`),
+                  )
+                  onChange(addField(definition, step.id, field))
+                  onSelect(field.key)
+                }}
+              >
+                {t(`forms.fieldTypes.${type}`)}
+              </DropdownMenuItem>
+            ))}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
