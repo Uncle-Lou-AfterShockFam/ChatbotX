@@ -4,6 +4,7 @@ import { z } from "zod"
 import {
   refineGuestIdWorkspace,
   zodGuestConversationId,
+  zodGuestSecret,
 } from "@/features/integration-webchat/lib/guest-conversation-id"
 
 const MAX_FILE_SIZE = 5 * 1000 * 1000
@@ -163,6 +164,7 @@ export const createWebchatMessageRequest = z
         workspaceId: zodBigintAsString(),
         webchatId: zodBigintAsString(),
         guestConversationId: zodGuestConversationId(),
+        guestSecret: zodGuestSecret(),
         ref: z.string().optional(),
         parentUrl: z.url().max(2048).optional(),
         locale: z.string().max(35).optional(),

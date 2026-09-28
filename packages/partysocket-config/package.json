@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@chatbotx.io/logger": "workspace:*",
+    "@chatbotx.io/utils": "workspace:*",
     "@t3-oss/env-core": "^0.13.11",
     "jose": "^6.2.3",
     "ky": "^2.0.2",
@@ -20,6 +21,7 @@
     ".": "./src/index.ts",
     "./auth": "./src/auth.ts",
     "./guest-id": "./src/guest-id.ts",
+    "./guest-secret": "./src/guest-secret.ts",
     "./keys": "./src/keys.ts",
     "./presence": "./src/presence.ts"
   },

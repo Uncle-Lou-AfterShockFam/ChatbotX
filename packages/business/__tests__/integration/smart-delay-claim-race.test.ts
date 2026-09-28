@@ -829,3 +829,86 @@ describe.skipIf(!databaseUrl)(
     })
   },
 )
+
+// s215: `UPDATE ... WHERE id IN (SELECT ... LIMIT n FOR UPDATE SKIP LOCKED)`
+// let the planner re-run the locking subquery (a rescan skips the rows the
+// first pass locked and returns MORE), so a batch of 2 once canceled 3 and
+// the loop's batch-cap accounting broke (flaky "batch cap with rows left").
+// The picked ids are now materialized once; a batch never exceeds its limit.
+describe.skipIf(!databaseUrl)(
+  "smart delay cancel batch never exceeds its limit (s215)",
+  () => {
+    test(`workspace cancel: ${RACE_ITERATIONS} rounds of 3 rows under a limit of 2`, async () => {
+      for (let round = 0; round < RACE_ITERATIONS; round++) {
+        const workspaceId = mintId()
+        const ids = [
+          await insertRow({ status: "pending", workspaceId }),
+          await insertRow({ status: "scheduled", workspaceId }),
+          await insertRow({ status: "pending", workspaceId }),
+        ]
+        const rows = await smartDelayService.cancelActiveForWorkspace({
+          workspaceId,
+          limit: 2,
+        })
+        expect(rows.length, `round ${round}`).toBe(2)
+        const statuses = await statusesOf(ids)
+        expect(
+          statuses.filter((s) => s === "canceled").length,
+          `round ${round}`,
+        ).toBe(2)
+        // The earliest triggerAt rows are the ones taken.
+        expect(rows.map((r) => r.id).sort()).toEqual(ids.slice(0, 2).sort())
+      }
+    })
+
+    test(`contacts cancel: ${RACE_ITERATIONS} rounds of 3 rows under a limit of 2`, async () => {
+      for (let round = 0; round < RACE_ITERATIONS; round++) {
+        const workspaceId = mintId()
+        const contactId = mintId()
+        const contactInboxId = await insertContactInbox(contactId)
+        const ids = [
+          await insertRow({ status: "pending", workspaceId, contactInboxId }),
+          await insertRow({ status: "scheduled", workspaceId, contactInboxId }),
+          await insertRow({ status: "pending", workspaceId, contactInboxId }),
+        ]
+        const rows = await smartDelayService.cancelActiveForContacts({
+          workspaceId,
+          contactIds: [contactId],
+          limit: 2,
+        })
+        expect(rows.length, `round ${round}`).toBe(2)
+        expect(
+          (await statusesOf(ids)).filter((s) => s === "canceled").length,
+          `round ${round}`,
+        ).toBe(2)
+      }
+    })
+
+    test("concurrent workspace cancels never take more than their limits", async () => {
+      for (let round = 0; round < RACE_ITERATIONS; round++) {
+        const workspaceId = mintId()
+        const ids: string[] = []
+        for (let i = 0; i < 9; i++) {
+          ids.push(await insertRow({ status: "pending", workspaceId }))
+        }
+        const batches = await Promise.all(
+          [0, 1, 2].map(() =>
+            smartDelayService.cancelActiveForWorkspace({
+              workspaceId,
+              limit: 2,
+            }),
+          ),
+        )
+        for (const batch of batches) {
+          expect(batch.length, `round ${round}`).toBeLessThanOrEqual(2)
+        }
+        const all = batches.flat()
+        const taken = new Set(all.map((r) => r.id))
+        expect(taken.size, `round ${round}: no row twice`).toBe(all.length)
+        expect(
+          (await statusesOf(ids)).filter((s) => s === "canceled").length,
+        ).toBe(taken.size)
+      }
+    })
+  },
+)

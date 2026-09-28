@@ -8,6 +8,7 @@ import {
   ensureDynamicImageFontsRegistered,
   resolveDynamicImageFontFamily,
 } from "./fonts"
+import { fetchImageBytes } from "./pinned-fetch"
 import { renderQrCodeBuffer } from "./qr"
 
 const VARIABLE_RE = /\{\{[^}]+\}\}/
@@ -41,20 +42,15 @@ export function elementHasVariable(text: string): boolean {
 /**
  * `@napi-rs/canvas`'s built-in `loadImage(url)` only follows 301/302
  * redirects, so it rejects outright on the 307/308 a storage provider (S3,
- * RustFS, CDNs) commonly issues for object URLs. `fetch` follows every
- * redirect status, so route remote URLs through it first and hand
- * `loadImage` the resulting buffer instead of the URL.
+ * RustFS, CDNs) commonly issues for object URLs. So the URL is fetched here
+ * and `loadImage` gets the buffer. The URL (an operator-set element, a QR
+ * logo, a contact's custom field) and every redirect hop go through the
+ * connection-pinned SSRF guard (s215): the render runs inside the hub network.
  */
 export async function loadRemoteImage(
   url: string,
 ): ReturnType<typeof loadImage> {
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch image from ${url}: ${response.status} ${response.statusText}`,
-    )
-  }
-  return loadImage(Buffer.from(await response.arrayBuffer()))
+  return loadImage(await fetchImageBytes(url))
 }
 
 /** Static elements are baked once into the background image at save time. */

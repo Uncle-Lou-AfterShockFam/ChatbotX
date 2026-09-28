@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import { signGuestSecret } from "@chatbotx.io/partysocket-config/guest-secret"
 import { beforeEach, describe, expect, test, vi } from "vitest"
 
 const {
@@ -268,6 +269,13 @@ const { handleCreateWebchatMessage } = await import(
   "../src/features/messages/actions/create-webchat-message.action"
 )
 
+// s215: the credential is the secret minted with the id, under the test env's
+// broadcast secret (vitest-config setup-env).
+const GUEST_SECRET = await signGuestSecret(
+  "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+  process.env.REALTIME_BROADCAST_SECRET as string,
+)
+
 const conversation = {
   id: "conv-1",
   workspaceId: "1",
@@ -343,6 +351,7 @@ describe("handleCreateWebchatMessage", () => {
         workspaceId: "1",
         webchatId: "webchat-1",
         guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+        guestSecret: GUEST_SECRET,
       },
     })
 
@@ -370,6 +379,7 @@ describe("handleCreateWebchatMessage", () => {
           workspaceId: "1",
           webchatId: "webchat-1",
           guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+          guestSecret: GUEST_SECRET,
         },
       }),
     ).rejects.toMatchObject({
@@ -386,6 +396,7 @@ describe("handleCreateWebchatMessage", () => {
         workspaceId: "1",
         webchatId: "webchat-1",
         guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+        guestSecret: GUEST_SECRET,
       },
     })
 
@@ -414,6 +425,7 @@ describe("handleCreateWebchatMessage", () => {
         workspaceId: "1",
         webchatId: "webchat-1",
         guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+        guestSecret: GUEST_SECRET,
       },
     })
 
@@ -432,6 +444,7 @@ describe("handleCreateWebchatMessage", () => {
         workspaceId: "1",
         webchatId: "webchat-1",
         guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+        guestSecret: GUEST_SECRET,
       },
     })
 
@@ -452,6 +465,7 @@ describe("handleCreateWebchatMessage", () => {
         workspaceId: "1",
         webchatId: "webchat-1",
         guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+        guestSecret: GUEST_SECRET,
       },
     })
 
@@ -479,6 +493,7 @@ describe("handleCreateWebchatMessage", () => {
           workspaceId: "1",
           webchatId: "webchat-1",
           guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+          guestSecret: GUEST_SECRET,
           parentOrigin: "https://attacker.test",
         },
       }),
@@ -503,6 +518,7 @@ describe("handleCreateWebchatMessage", () => {
         workspaceId: "1",
         webchatId: "webchat-1",
         guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+        guestSecret: GUEST_SECRET,
         parentOrigin: "app.chatbotx.io",
       },
     }).catch((error: { httpStatusCode?: number }) => {
@@ -526,6 +542,7 @@ describe("handleCreateWebchatMessage", () => {
           workspaceId: "1",
           webchatId: "webchat-1",
           guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+          guestSecret: GUEST_SECRET,
           parentOrigin: "app.chatbotx.io",
         },
       }),
@@ -547,6 +564,7 @@ describe("handleCreateWebchatMessage", () => {
           workspaceId: "1",
           webchatId: "webchat-1",
           guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+          guestSecret: GUEST_SECRET,
         },
       }),
     ).rejects.toMatchObject({
@@ -580,6 +598,7 @@ describe("handleCreateWebchatMessage — flowId", () => {
           workspaceId: "1",
           webchatId: "webchat-1",
           guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+          guestSecret: GUEST_SECRET,
         },
       }),
     ).rejects.toMatchObject({
@@ -605,6 +624,7 @@ describe("handleCreateWebchatMessage — flowId", () => {
         workspaceId: "1",
         webchatId: "webchat-1",
         guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+        guestSecret: GUEST_SECRET,
       },
     })
 
@@ -633,6 +653,7 @@ describe("handleCreateWebchatMessage — MAC quota", () => {
     workspaceId: "1",
     webchatId: "webchat-1",
     guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+    guestSecret: GUEST_SECRET,
   }
 
   const seedNewContactInserts = () => {
@@ -844,6 +865,42 @@ describe("handleCreateWebchatMessage — MAC quota", () => {
     expect(mockWorkspaceFind).not.toHaveBeenCalled()
     expect(mockContactInboxFindLatest).not.toHaveBeenCalled()
     expect(tx.insert).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    ["no secret (the id alone, as the API and exports show it)", undefined],
+    ["an empty secret", ""],
+    ["a well-formed guess", "0".repeat(64)],
+    ["the secret upper-cased", "UPPER"],
+  ])("the raw handler refuses %s with 401 before any lookup or create (s215)", async (_, secret) => {
+    mockContactInboxFindLatest.mockResolvedValue(undefined)
+    const guestSecret = secret === "UPPER" ? GUEST_SECRET.toUpperCase() : secret
+    await expect(
+      handleCreateWebchatMessage({
+        parsedInput: { ...input, guestSecret },
+      }),
+    ).rejects.toMatchObject({
+      code: "guestSecretRefused",
+      httpStatusCode: 401,
+    })
+    expect(mockWorkspaceFind).not.toHaveBeenCalled()
+    expect(mockVerifyWebchatAccessToken).not.toHaveBeenCalled()
+    expect(mockCheckGuestRateLimit).not.toHaveBeenCalled()
+    expect(mockContactInboxFindLatest).not.toHaveBeenCalled()
+    expect(tx.insert).not.toHaveBeenCalled()
+  })
+
+  test("another guest's secret does not open this id (s215)", async () => {
+    const other = await signGuestSecret(
+      "1:1f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+      process.env.REALTIME_BROADCAST_SECRET as string,
+    )
+    await expect(
+      handleCreateWebchatMessage({
+        parsedInput: { ...input, guestSecret: other },
+      }),
+    ).rejects.toMatchObject({ httpStatusCode: 401 })
+    expect(mockContactInboxFindLatest).not.toHaveBeenCalled()
   })
 
   test("never copies the guest id into the new contact's email (s213)", async () => {

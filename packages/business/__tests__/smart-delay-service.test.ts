@@ -99,6 +99,10 @@ vi.mock("@chatbotx.io/database/client", () => ({
     insert: mockDbInsert,
     select: mockDbSelect,
     update: mockDbUpdate,
+    // The client is its own transaction handle here (cancelPickedRows).
+    transaction: vi.fn(async (fn: (tx: unknown) => unknown) =>
+      fn({ select: mockDbSelect, update: mockDbUpdate }),
+    ),
     query: {
       contactOnSmartDelayModel: {
         findFirst: mockDbFindFirst,
@@ -531,6 +535,7 @@ describe("smartDelayService", () => {
       { id: "row-1", triggerAt: new Date("2026-07-16T00:01:00.000Z") },
       { id: "row-2", triggerAt: new Date("2026-07-16T00:02:00.000Z") },
     ]
+    mockDbFor.mockResolvedValueOnce([{ id: "row-1" }, { id: "row-2" }])
     mockDbReturning.mockResolvedValueOnce(canceled)
 
     await expect(
@@ -541,6 +546,12 @@ describe("smartDelayService", () => {
     ).resolves.toEqual(canceled)
 
     expect(mockDbSet).toHaveBeenCalledWith({ status: "canceled" })
+    // s215: the UPDATE targets exactly the picked id list, not a subquery the
+    // planner could rescan into a bigger batch.
+    expect(mockInArray).toHaveBeenCalledWith(expect.anything(), [
+      "row-1",
+      "row-2",
+    ])
     expect(mockEq).toHaveBeenCalledWith(expect.anything(), "workspace-1")
     // Only rows that can still fire — completed/failed/canceled are left alone.
     expect(mockInArray).toHaveBeenCalledWith(expect.anything(), [
@@ -551,5 +562,17 @@ describe("smartDelayService", () => {
     // Bounded claim so a workspace with a huge backlog cannot lock the table.
     expect(mockDbLimit).toHaveBeenCalledWith(500)
     expect(mockDbFor).toHaveBeenCalledWith("update", { skipLocked: true })
+  })
+
+  test("cancelActiveForWorkspace writes nothing when the pick is empty (every row locked)", async () => {
+    mockDbFor.mockResolvedValueOnce([])
+
+    await expect(
+      smartDelayService.cancelActiveForWorkspace({
+        limit: 500,
+        workspaceId: "workspace-1",
+      }),
+    ).resolves.toEqual([])
+    expect(mockDbUpdate).not.toHaveBeenCalled()
   })
 })

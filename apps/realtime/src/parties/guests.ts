@@ -1,4 +1,5 @@
 import { isMintedGuestConversationId } from "@chatbotx.io/partysocket-config/guest-id"
+import { verifyGuestSecret } from "@chatbotx.io/partysocket-config/guest-secret"
 import type * as Party from "partykit/server"
 import { env } from "../env"
 import { verifyBroadcastRequest } from "../lib/realtime-auth"
@@ -14,12 +15,17 @@ export default class GuestConversationParty implements Party.Server {
     return new Response("ok", { status: 200 })
   }
 
-  // The room name is the guest conversation id, the conversation's only
-  // credential (connect-time token auth adds no secret, s212). Only the minted
-  // `<workspaceId>:<uuid>` form is a room: a guessable digits-only name is
-  // refused before any socket opens (s213).
-  static onBeforeConnect(req: Party.Request, lobby: Party.Lobby) {
-    if (!isMintedGuestConversationId(lobby.id)) {
+  // The room name is the guest conversation id, which the API and exports
+  // show, so it is no credential (s215). The visitor proves the room is theirs
+  // with the guest secret minted beside the id, sent as `?k=` (a socket cannot
+  // send headers). Only the minted `<workspaceId>:<uuid>` form is a room
+  // (s213); both checks run before any socket opens.
+  static async onBeforeConnect(req: Party.Request, lobby: Party.Lobby) {
+    const secret = new URL(req.url).searchParams.get("k")
+    const valid =
+      isMintedGuestConversationId(lobby.id) &&
+      (await verifyGuestSecret(lobby.id, secret, env.REALTIME_BROADCAST_SECRET))
+    if (!valid) {
       return new Response("Access denied", { status: 403 })
     }
     return req

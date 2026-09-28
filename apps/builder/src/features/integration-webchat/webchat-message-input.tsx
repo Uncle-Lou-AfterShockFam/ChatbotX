@@ -15,6 +15,7 @@ import { FileUploadPreview } from "../messages/components/file-upload"
 import { createWebchatMessageRequest } from "../messages/schema/mutation"
 import { getWebchatProfileFields } from "./browser-profile-fields"
 import WebchatMessageMenu from "./components/webchat-message-menu"
+import { GUEST_SECRET_REFUSED_MESSAGE } from "./lib/guest-conversation-id"
 import { useGuestSessionStore } from "./providers/store/guest-session-provider"
 
 type WebchatMessageInputProps = {
@@ -36,9 +37,11 @@ export const WebchatMessageInput = (props: WebchatMessageInputProps) => {
   const {
     sendMessage,
     guestConversationId,
+    guestSecret,
     appendMessage,
     freshAccessToken,
     markSendFailed,
+    restartGuestSession,
   } = useGuestSessionStore((state) => state)
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -49,6 +52,7 @@ export const WebchatMessageInput = (props: WebchatMessageInputProps) => {
       workspaceId,
       webchatId,
       guestConversationId: guestConversationId ?? "",
+      guestSecret: guestSecret ?? undefined,
       ref: referral,
       ...getWebchatProfileFields(),
       accessToken: accessToken ?? undefined,
@@ -58,6 +62,7 @@ export const WebchatMessageInput = (props: WebchatMessageInputProps) => {
       workspaceId,
       webchatId,
       guestConversationId,
+      guestSecret,
       referral,
       parentOrigin,
       accessToken,
@@ -99,6 +104,10 @@ export const WebchatMessageInput = (props: WebchatMessageInputProps) => {
         // back unless the visitor already typed more, and take a new clientId
         // so the next send is not merged into this bubble (s212 probe).
         onError: ({ error, input }) => {
+          // A refused guest secret (s215): continue as a fresh conversation.
+          if (error.serverError === GUEST_SECRET_REFUSED_MESSAGE) {
+            restartGuestSession()
+          }
           if (input.clientId) {
             markSendFailed(
               input.clientId,
@@ -151,6 +160,10 @@ export const WebchatMessageInput = (props: WebchatMessageInputProps) => {
     setIsPreparingSend(true)
     try {
       setValue("accessToken", (await freshAccessToken()) ?? undefined)
+      // The credentials as they are now, not as the form cached them at
+      // mount (a restart swaps both).
+      setValue("guestConversationId", guestConversationId ?? "")
+      setValue("guestSecret", guestSecret ?? undefined)
       await handleSubmitWithAction()
     } finally {
       sendingRef.current = false

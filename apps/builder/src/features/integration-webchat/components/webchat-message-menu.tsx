@@ -19,6 +19,7 @@ import { useAction } from "next-safe-action/hooks"
 import { Fragment, useEffect, useRef, useState } from "react"
 import { createWebchatMessageAction } from "@/features/messages/actions/create-webchat-message.action"
 import { getWebchatProfileFields } from "../browser-profile-fields"
+import { GUEST_SECRET_REFUSED_MESSAGE } from "../lib/guest-conversation-id"
 import { useGuestSessionStore } from "../providers/store/guest-session-provider"
 
 type WebchatMessageMenuProps = {
@@ -44,8 +45,10 @@ export default function WebchatMessageMenu({
   const {
     appendMessage,
     guestConversationId,
+    guestSecret,
     freshAccessToken,
     markSendFailed,
+    restartGuestSession,
   } = useGuestSessionStore((state) => state)
   const sendingRef = useRef(false)
 
@@ -72,6 +75,10 @@ export default function WebchatMessageMenu({
       }
     },
     onError: ({ error, input }) => {
+      // A refused guest secret (s215): continue as a fresh conversation.
+      if (error.serverError === GUEST_SECRET_REFUSED_MESSAGE) {
+        restartGuestSession()
+      }
       if (input.clientId) {
         markSendFailed(
           input.clientId,
@@ -113,6 +120,7 @@ export default function WebchatMessageMenu({
                       workspaceId,
                       webchatId,
                       guestConversationId: guestConversationId ?? "",
+                      guestSecret: guestSecret ?? undefined,
                       ...getWebchatProfileFields(),
                       accessToken: token ?? accessToken ?? undefined,
                       parentOrigin: parentOrigin ?? undefined,

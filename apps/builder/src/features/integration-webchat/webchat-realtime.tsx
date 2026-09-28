@@ -11,9 +11,13 @@ import { useGuestSessionStore } from "./providers/store/guest-session-provider"
 
 type WebchatRealtimeProps = {
   guestConversationId: string
+  guestSecret: string
 }
 
-export function WebchatRealtime({ guestConversationId }: WebchatRealtimeProps) {
+export function WebchatRealtime({
+  guestConversationId,
+  guestSecret,
+}: WebchatRealtimeProps) {
   const { wsUrl } = useTenantSettings()
   const { handleNewMessage, setIsTyping } = useGuestSessionStore(
     (state) => state,
@@ -23,14 +27,12 @@ export function WebchatRealtime({ guestConversationId }: WebchatRealtimeProps) {
     host: wsUrl,
     room: guestConversationId,
     party: "guests",
-
-    // query: async () => {
-    //   const oneTimeToken = await authClient.oneTimeToken.generate()
-
-    //   return {
-    //     token: oneTimeToken.data?.token,
-    //   }
-    // },
+    // The room is the id, which the API and exports show; the secret is what
+    // lets this visitor in (s215). A query param: a socket cannot send headers,
+    // so the edge access log deletes `k` (deploy/chatbotx/Caddyfile). A socket
+    // refused after a broadcast-secret rotation recovers on the next send or
+    // history load (401 -> restartGuestSession -> this component remounts).
+    query: { k: guestSecret },
 
     // onOpen() {},
     onMessage(e) {

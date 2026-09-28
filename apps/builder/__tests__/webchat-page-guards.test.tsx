@@ -68,8 +68,11 @@ vi.mock("next-intl/server", () => ({
   }),
 }))
 
-vi.mock("@/features/integration-webchat/lib/guest-conversation-id", () => ({
-  createGuestConversationId: vi.fn(() => "workspace-1:guest-1"),
+vi.mock("@/features/integration-webchat/lib/guest-secret", () => ({
+  mintGuestSession: vi.fn(async () => ({
+    guestConversationId: "workspace-1:guest-1",
+    guestSecret: "secret-1",
+  })),
 }))
 
 vi.mock("@/features/integration-webchat/lib/webchat-access-token", () => ({
@@ -150,10 +153,12 @@ describe("WebchatPage", () => {
       }),
     })
 
-    expect(
-      (element as { props: { serverGuestConversationId: string } }).props
-        .serverGuestConversationId,
-    ).toBe("workspace-1:guest-1")
+    const { props } = element as {
+      props: { serverGuestConversationId: string; serverGuestSecret: string }
+    }
+    expect(props.serverGuestConversationId).toBe("workspace-1:guest-1")
+    // The secret is minted with the id, never for a URL-supplied one (s215).
+    expect(props.serverGuestSecret).toBe("secret-1")
   })
 
   test("renders the chat for a first-party referer matching the app host", async () => {

@@ -126,7 +126,9 @@ export const verifyWebchatAccessToken = async ({
   // (it lives in the iframe's own localStorage, unreachable from
   // plugin.js), so a returning visitor's page reload always mints a
   // fresh token while the client still presents its old persisted id.
-  // Binding the token to an id would reject that legitimate case.
+  // Binding the token to an id would reject that legitimate case. The
+  // conversation itself is proved by the guest secret stored with the id
+  // (guest-secret.ts, s215), checked separately on every guest route.
   const authorized =
     payload.workspaceId === workspaceId &&
     payload.webchatId === webchatId &&

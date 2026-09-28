@@ -19,7 +19,7 @@ import {
   getHostFromOrigin,
   isEmbedOriginAllowed,
 } from "@/features/integration-webchat/lib/authorized-domain"
-import { createGuestConversationId } from "@/features/integration-webchat/lib/guest-conversation-id"
+import { mintGuestSession } from "@/features/integration-webchat/lib/guest-secret"
 import { createWebchatAccessToken } from "@/features/integration-webchat/lib/webchat-access-token"
 import { CustomWidgetStyle } from "@/features/integration-webchat/lib/widget-css"
 import { GuestSessionStoreProvider } from "@/features/integration-webchat/providers/store/guest-session-provider"
@@ -104,7 +104,8 @@ export default async function WebchatPage(props: WebchatPageProps) {
   // Always minted here, never taken from the URL (s213): a `?guestConversationId=`
   // would let a crafted link plant an id its author knows. A returning
   // visitor's own id comes from the iframe's storage (initGuestSession).
-  const guestConversationId = createGuestConversationId(
+  // The secret is minted with it and is the visitor's credential (s215).
+  const { guestConversationId, guestSecret } = await mintGuestSession(
     targetWebchat.workspaceId,
   )
 
@@ -142,6 +143,7 @@ export default async function WebchatPage(props: WebchatPageProps) {
       // Only the host the token binds, never the embedder's path or query.
       parentOrigin={getHostFromOrigin(embeddingOrigin)}
       serverGuestConversationId={guestConversationId}
+      serverGuestSecret={guestSecret}
       workspaceLogoUrl={workspaceLogoUrl}
     >
       {targetWebchat.customCss && (

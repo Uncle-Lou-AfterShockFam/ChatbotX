@@ -10,6 +10,8 @@ import {
   isFirstPartyOrigin,
   isGuestOriginAllowed,
 } from "@/features/integration-webchat/lib/authorized-domain"
+import { GUEST_SECRET_HEADER } from "@/features/integration-webchat/lib/guest-conversation-id"
+import { assertGuestSecret } from "@/features/integration-webchat/lib/guest-secret"
 import { verifyWebchatAccessToken } from "@/features/integration-webchat/lib/webchat-access-token"
 import { findIntegrationWebchat } from "@/features/integration-webchat/queries"
 import { handleCreateWebchatMessage } from "@/features/messages/actions/create-webchat-message.action"
@@ -83,6 +85,13 @@ export async function GET(req: NextRequest) {
     }
     const searchParams = Object.fromEntries(req.nextUrl.searchParams)
     const data = listGuestMessagesRequest.parse(searchParams)
+    // The credential is the secret, not the id (s215); a header so it stays
+    // out of query strings and access logs.
+    await assertGuestSecret({
+      guestConversationId: data.guestConversationId,
+      guestSecret: req.headers.get(GUEST_SECRET_HEADER),
+      workspaceId: data.workspaceId,
+    })
 
     const workspace = await workspaceService.find({
       where: { id: data.workspaceId },
