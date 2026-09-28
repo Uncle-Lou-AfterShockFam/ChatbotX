@@ -52,13 +52,15 @@ describe("POST /unsubscribe/one-click", () => {
   test("RFC 8058 one-click body unsubscribes and answers 200", async () => {
     const res = await route.POST(post({ "List-Unsubscribe": "One-Click" }))
     expect(res.status).toBe(200)
-    expect(mockUnsubscribeEmail).toHaveBeenCalledWith("c-1")
+    expect(mockUnsubscribeEmail).toHaveBeenCalledWith("c-1", "ws-1")
   })
 
   test("the confirm form redirects back to the page result (303)", async () => {
     const res = await route.POST(post({ source: "page" }))
     expect(res.status).toBe(303)
-    const location = new URL(res.headers.get("location") ?? "")
+    const raw = res.headers.get("location") ?? ""
+    expect(raw.startsWith("/unsubscribe?")).toBe(true)
+    const location = new URL(raw, ORIGIN)
     expect(location.pathname).toBe("/unsubscribe")
     expect(location.searchParams.get("result")).toBe("done")
     expect(mockUnsubscribeEmail).toHaveBeenCalledOnce()
@@ -91,6 +93,26 @@ describe("POST /unsubscribe/one-click", () => {
     const res = await route.POST(post({ "List-Unsubscribe": "One-Click" }))
     expect(res.status).toBe(410)
     expect(mockUnsubscribeEmail).not.toHaveBeenCalled()
+  })
+
+  test("a token whose contact is not in its workspace is 400 and never mutates", async () => {
+    mockFindById.mockResolvedValue(undefined)
+    const res = await route.POST(post({ "List-Unsubscribe": "One-Click" }))
+    expect(res.status).toBe(400)
+    expect(mockUnsubscribeEmail).not.toHaveBeenCalled()
+  })
+
+  test("an oversized body is 413 before any token work", async () => {
+    const req = new Request(`${ORIGIN}/unsubscribe/one-click?token=tok`, {
+      method: "POST",
+      body: "x".repeat(2000),
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "content-length": "2000",
+      },
+    })
+    expect((await route.POST(req)).status).toBe(413)
+    expect(mockVerify).not.toHaveBeenCalled()
   })
 
   test("GET is not handled (a link scanner cannot unsubscribe)", () => {

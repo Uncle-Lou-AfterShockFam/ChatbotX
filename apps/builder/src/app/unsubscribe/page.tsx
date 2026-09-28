@@ -4,6 +4,8 @@ import { checkUnsubscribeToken } from "@/lib/unsubscribe/unsubscribe-by-token"
 
 export const metadata: Metadata = {
   title: "Unsubscribe",
+  // The token is in the URL: never send it on as a Referer.
+  referrer: "no-referrer",
 }
 
 type UnsubscribePageProps = {

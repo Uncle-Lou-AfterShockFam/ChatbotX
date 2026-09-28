@@ -976,11 +976,17 @@ class ContactService extends BaseService {
     }
   }
 
-  async unsubscribeEmail(cid: string) {
+  /** Scoped to the token's workspace: a cid from another workspace is a no-op. */
+  async unsubscribeEmail(cid: string, workspaceId: string) {
     await db
       .update(contactModel)
       .set({ emailOptIn: false })
-      .where(eq(contactModel.id, cid))
+      .where(
+        and(
+          eq(contactModel.id, cid),
+          eq(contactModel.workspaceId, workspaceId),
+        ),
+      )
     await invalidateCacheByTags([`contacts:${cid}`])
   }
 

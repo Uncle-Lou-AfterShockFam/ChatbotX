@@ -10,9 +10,17 @@ import { unsubscribeByToken } from "@/lib/unsubscribe/unsubscribe-by-token"
  * Only POST acts: link scanners GET every URL in a mail, so a GET that
  * unsubscribed would opt people out unasked.
  */
+/** A one-click body is ~30 bytes; the confirm form ~20. */
+const MAX_BODY_BYTES = 1024
+
 export async function POST(request: Request) {
   const url = new URL(request.url)
   const token = url.searchParams.get("token")
+
+  const declared = Number(request.headers.get("content-length") ?? "0")
+  if (!Number.isFinite(declared) || declared > MAX_BODY_BYTES) {
+    return new NextResponse(null, { status: 413 })
+  }
 
   let fromPage = false
   let oneClick = false
@@ -31,10 +39,16 @@ export async function POST(request: Request) {
   const status = await unsubscribeByToken(token)
 
   if (fromPage) {
-    const back = new URL("/unsubscribe", url.origin)
-    back.searchParams.set("token", token ?? "")
-    back.searchParams.set("result", status === "valid" ? "done" : status)
-    return NextResponse.redirect(back, { status: 303 })
+    // Relative Location: behind the proxy request.url may not carry the
+    // public scheme/host, and the token must not be sent anywhere else.
+    const back = new URLSearchParams({
+      token: token ?? "",
+      result: status === "valid" ? "done" : status,
+    })
+    return new NextResponse(null, {
+      status: 303,
+      headers: { Location: `/unsubscribe?${back.toString()}` },
+    })
   }
 
   if (status === "invalid") {

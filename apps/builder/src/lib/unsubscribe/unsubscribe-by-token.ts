@@ -5,13 +5,14 @@ export type UnsubscribeTokenStatus = "valid" | "invalid" | "unavailable"
 
 /**
  * Verifies an unsubscribe token WITHOUT acting on it (the GET page).
- * `emailOptIn` is the contact's current state (undefined when not found).
+ * `emailOptIn` is the contact's current state.
  */
 export async function checkUnsubscribeToken(
   token: string | null | undefined,
 ): Promise<{
   status: UnsubscribeTokenStatus
   contactId?: string
+  workspaceId?: string
   emailOptIn?: boolean
 }> {
   if (typeof token !== "string" || token.length === 0 || token.length > 4096) {
@@ -31,10 +32,15 @@ export async function checkUnsubscribeToken(
     workspaceId: payload.wid,
     id: payload.cid,
   })
+  // A contact that is not in the token's workspace makes the token invalid.
+  if (!contact) {
+    return { status: "invalid" }
+  }
   return {
     status: "valid",
     contactId: payload.cid,
-    emailOptIn: contact?.emailOptIn,
+    workspaceId: payload.wid,
+    emailOptIn: contact.emailOptIn,
   }
 }
 
@@ -43,9 +49,12 @@ export async function unsubscribeByToken(
   token: string | null | undefined,
 ): Promise<UnsubscribeTokenStatus> {
   const checked = await checkUnsubscribeToken(token)
-  if (checked.status !== "valid" || !checked.contactId) {
+  if (
+    checked.status !== "valid" ||
+    !(checked.contactId && checked.workspaceId)
+  ) {
     return checked.status
   }
-  await contactService.unsubscribeEmail(checked.contactId)
+  await contactService.unsubscribeEmail(checked.contactId, checked.workspaceId)
   return "valid"
 }
