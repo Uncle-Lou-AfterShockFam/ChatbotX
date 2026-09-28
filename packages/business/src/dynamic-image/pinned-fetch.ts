@@ -2,6 +2,8 @@ import { lookup as dnsLookup, type LookupAddress } from "node:dns"
 import http from "node:http"
 import https from "node:https"
 import type { LookupFunction } from "node:net"
+import type { Readable } from "node:stream"
+import zlib from "node:zlib"
 import { isBlockedIp } from "../net/ssrf-guard"
 
 // Node only (this subpath already needs @napi-rs/canvas), so the check can be
@@ -21,6 +23,7 @@ export class ImageFetchRefusedError extends Error {
     | "tooManyRedirects"
     | "tooLarge"
     | "httpError"
+    | "unsupportedEncoding"
 
   constructor(reason: ImageFetchRefusedError["reason"], detail: string) {
     super(`[image-fetch] ${reason}: ${detail}`)
@@ -76,6 +79,17 @@ const hostOf = (url: URL) => url.hostname.replace(/^\[|\]$/g, "")
 const isIpLiteral = (host: string) =>
   /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(":")
 
+const DECODERS: Record<
+  string,
+  "identity" | (() => zlib.Gunzip | zlib.Inflate | zlib.BrotliDecompress)
+> = {
+  identity: "identity",
+  gzip: () => zlib.createGunzip(),
+  "x-gzip": () => zlib.createGunzip(),
+  deflate: () => zlib.createInflate(),
+  br: () => zlib.createBrotliDecompress(),
+}
+
 type Options = {
   resolver?: Resolver
   isBlocked?: (ip: string) => boolean
@@ -110,24 +124,40 @@ const getOnce = (
           })
           return
         }
+        // What fetch did for free: a precompressed object (Content-Encoding)
+        // is decoded, and the cap counts DECODED bytes (a zip bomb stops at
+        // the cap, not at the wire size).
+        const encoding = (response.headers["content-encoding"] ?? "identity")
+          .trim()
+          .toLowerCase()
+        const decoder = DECODERS[encoding]
+        if (!decoder) {
+          response.resume()
+          reject(new ImageFetchRefusedError("unsupportedEncoding", encoding))
+          return
+        }
+        const body: Readable =
+          decoder === "identity" ? response : response.pipe(decoder())
         const chunks: Buffer[] = []
         let size = 0
         let tooLarge = false
-        response.on("data", (chunk: Buffer) => {
+        body.on("data", (chunk: Buffer) => {
           size += chunk.length
           if (size > maxBytes) {
             tooLarge = true
             reject(new ImageFetchRefusedError("tooLarge", url.href))
             request.destroy()
+            body.destroy()
             return
           }
           chunks.push(chunk)
         })
-        response.on("end", () => {
+        body.on("end", () => {
           if (!tooLarge) {
             resolve({ status, location: null, body: Buffer.concat(chunks) })
           }
         })
+        body.on("error", reject)
         response.on("error", reject)
       },
     )

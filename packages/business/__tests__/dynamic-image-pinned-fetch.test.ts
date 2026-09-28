@@ -2,6 +2,7 @@
 
 import http from "node:http"
 import type { AddressInfo } from "node:net"
+import { gzipSync } from "node:zlib"
 import { server as msw } from "@chatbotx.io/vitest-config/msw"
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest"
 import {
@@ -49,6 +50,15 @@ beforeAll(async () => {
     } else if (path === "/no-location") {
       res.writeHead(302)
       res.end()
+    } else if (path === "/gzip.png") {
+      res.writeHead(200, { "content-encoding": "gzip" })
+      res.end(gzipSync(Buffer.from("PNGDATA")))
+    } else if (path === "/gzip-bomb") {
+      res.writeHead(200, { "content-encoding": "gzip" })
+      res.end(gzipSync(Buffer.alloc(64 * 1024)))
+    } else if (path === "/weird-encoding") {
+      res.writeHead(200, { "content-encoding": "compress" })
+      res.end("x")
     } else if (path === "/big") {
       res.writeHead(200)
       res.end(Buffer.alloc(2048, 1))
@@ -183,6 +193,23 @@ describe("fetchImageBytes (s215)", () => {
     await expect(
       fetchImageBytes(at("/big"), { ...opts, maxBytes: 1024 }),
     ).rejects.toMatchObject({ reason: "tooLarge" })
+  })
+
+  test("a gzip Content-Encoding is decoded, as fetch did", async () => {
+    const body = await fetchImageBytes(at("/gzip.png"), opts)
+    expect(body.toString()).toBe("PNGDATA")
+  })
+
+  test("the body cap counts decoded bytes (a small gzip that inflates past it)", async () => {
+    await expect(
+      fetchImageBytes(at("/gzip-bomb"), { ...opts, maxBytes: 1024 }),
+    ).rejects.toMatchObject({ reason: "tooLarge" })
+  })
+
+  test("an unknown Content-Encoding is refused, not handed to the decoder", async () => {
+    await expect(
+      fetchImageBytes(at("/weird-encoding"), opts),
+    ).rejects.toMatchObject({ reason: "unsupportedEncoding" })
   })
 
   test("a non-2xx answer is an error, not an image", async () => {
