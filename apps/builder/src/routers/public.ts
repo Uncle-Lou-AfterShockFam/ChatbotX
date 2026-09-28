@@ -29,6 +29,7 @@ import {
 import { dealsPublicRouter } from "@/features/deals/api/public"
 import { documentsPublicRouter } from "@/features/documents/api/public"
 import { dynamicImagesPublicRouter } from "@/features/dynamic-images/api/public"
+import { emailTemplatesPublicRouter } from "@/features/email-templates/api/public"
 import { emailTopicsPublicRouter } from "@/features/email-topics/api/public"
 import { errorLogsPublicRouter } from "@/features/error-logs/api/public"
 import { appointmentExternalCalendarsPublicRouter } from "@/features/external-calendars/api/public"
@@ -99,6 +100,7 @@ export const publicRouter = {
   },
   documents: documentsPublicRouter,
   dynamicImages: dynamicImagesPublicRouter,
+  emailTemplates: emailTemplatesPublicRouter,
   emailTopics: emailTopicsPublicRouter,
   errorLogs: errorLogsPublicRouter,
   externalWebhooks: externalWebhooksPublicRouter,

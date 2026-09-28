@@ -24,6 +24,7 @@
     "./deal-comment": "./src/deal-comment/index.ts",
     "./deal-task": "./src/deal-task/index.ts",
     "./documents": "./src/documents/index.ts",
+    "./email-templates": "./src/email-templates/index.ts",
     "./form": "./src/form/index.ts",
     "./coexist": "./src/coexist/index.ts",
     "./coexist/history": "./src/coexist/history-window.ts",
@@ -64,6 +65,7 @@
   "dependencies": {
     "@chatbotx.io/analytics": "workspace:*",
     "@chatbotx.io/database": "workspace:*",
+    "@chatbotx.io/email-document": "workspace:*",
     "@chatbotx.io/encryption": "workspace:*",
     "@chatbotx.io/event-bus": "workspace:*",
     "@chatbotx.io/events": "workspace:*",

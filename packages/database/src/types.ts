@@ -298,6 +298,7 @@ export type InvoiceEventModel = typeof schema.invoiceEventModel.$inferSelect
 export type InvoicePaymentModel = typeof schema.invoicePaymentModel.$inferSelect
 export type DocumentTemplateModel =
   typeof schema.documentTemplateModel.$inferSelect
+export type EmailTemplateModel = typeof schema.emailTemplateModel.$inferSelect
 export type ContactDocumentModel =
   typeof schema.contactDocumentModel.$inferSelect
 export type FormModel = typeof schema.formModel.$inferSelect
