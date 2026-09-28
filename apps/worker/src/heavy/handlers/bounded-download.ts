@@ -1,12 +1,45 @@
-import { assertPublicUrl } from "@chatbotx.io/business"
+import {
+  assertPublicUrl,
+  DOWNLOAD_TIMEOUT_MS,
+  outboundFetch,
+  SsrfFetchError,
+} from "@chatbotx.io/business"
 import {
   fetchFollowingSafeRedirects,
   readBodyWithLimit,
 } from "@chatbotx.io/filesystem"
-import ky from "ky"
 import { ExpectedHeavyStepError } from "./errors"
 
 const MAX_REDIRECTS = 5
+// ky's default response-header timeout, kept when the caller names none.
+const DEFAULT_HEADER_TIMEOUT_MS = 10_000
+
+/**
+ * One hop through the pinned fetch with ky's timing: `timeout` bounds only
+ * the wait for response headers (ky's meaning); the body read is bounded by
+ * the caller's signal and the pinned fetch's overall download deadline, so a
+ * slow but size-capped body is not cut off at the header timeout (s216 Codex).
+ */
+const fetchHop = async (
+  url: string,
+  signal: AbortSignal,
+  headerTimeoutMs: number,
+): Promise<Response> => {
+  const headers = new AbortController()
+  const timer = setTimeout(
+    () => headers.abort(new DOMException("headers timed out", "TimeoutError")),
+    headerTimeoutMs,
+  )
+  try {
+    return await outboundFetch(
+      url,
+      { redirect: "manual", signal: AbortSignal.any([signal, headers.signal]) },
+      { timeoutMs: DOWNLOAD_TIMEOUT_MS },
+    )
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 type DownloadWithByteLimitOptions = {
   allowedMimeTypes?: ReadonlySet<string>
@@ -79,12 +112,21 @@ export async function downloadWithByteLimit({
           },
         ),
     },
+    // Each hop is DoH-checked (validateUrl, for a clear early error) AND
+    // pinned at connect by outboundFetch, which is the real guard: a
+    // rebinding name cannot swap in a private address between the two (s216).
     fetchImpl: (candidateUrl) =>
-      ky.get(candidateUrl, {
-        redirect: "manual",
+      fetchHop(
+        candidateUrl,
         signal,
-        throwHttpErrors: false,
-        timeout,
+        timeout ?? DEFAULT_HEADER_TIMEOUT_MS,
+      ).catch((error: unknown) => {
+        if (error instanceof SsrfFetchError) {
+          throw new ExpectedHeavyStepError(`Unsafe ${label} URL`, {
+            cause: error,
+          })
+        }
+        throw error
       }),
     maxRedirectHops: MAX_REDIRECTS,
     url,

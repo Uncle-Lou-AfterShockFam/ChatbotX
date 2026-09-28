@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { assertPublicUrl } from "@chatbotx.io/business"
+import { assertPublicUrl, outboundFetch } from "@chatbotx.io/business"
 import { aiConversationSourceStatuses } from "@chatbotx.io/database/partials"
 import {
   type AiConversationSourceWithAttachment,
@@ -217,34 +217,22 @@ async function processDocumentSource(source: SourceRecord): Promise<void> {
   }
 }
 
-async function fetchSafe(
-  url: string,
-  signal: AbortSignal,
-  redirectsLeft = MAX_REDIRECTS,
-): Promise<Response> {
+async function fetchSafe(url: string, signal: AbortSignal): Promise<Response> {
   await assertPublicUrl(url, "URL source")
 
-  const response = await fetch(url, {
-    signal,
-    redirect: "manual",
-    headers: {
-      "User-Agent": "ChatbotX-URLContext/1.0",
-      Accept: "text/html,text/plain;q=0.9",
+  // Pinned at connect and on every redirect hop (at most MAX_REDIRECTS): the
+  // DoH check above cannot be swapped out by a rebinding name (s216).
+  return await outboundFetch(
+    url,
+    {
+      signal,
+      headers: {
+        "User-Agent": "ChatbotX-URLContext/1.0",
+        Accept: "text/html,text/plain;q=0.9",
+      },
     },
-  })
-
-  if (response.status >= 300 && response.status < 400) {
-    if (redirectsLeft <= 0) {
-      throw new Error("Too many redirects")
-    }
-    const location = response.headers.get("location")
-    if (!location) {
-      throw new Error("Redirect with no Location header")
-    }
-    return fetchSafe(new URL(location, url).href, signal, redirectsLeft - 1)
-  }
-
-  return response
+    { maxRedirects: MAX_REDIRECTS, timeoutMs: URL_FETCH_TIMEOUT_MS },
+  )
 }
 
 async function fetchHtmlText(url: string): Promise<string> {

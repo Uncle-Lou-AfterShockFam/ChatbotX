@@ -2,19 +2,29 @@ import { getProperty } from "dot-prop"
 import { BaseService } from "../base.service"
 import { contactService } from "../contact/service"
 import { contactCustomFieldService } from "../contact-custom-field/service"
+import { readCapped } from "../documents/gotenberg"
 import { ChatbotXException } from "../errors"
-import { fetchFollowingSafeRedirects, SsrfFetchError } from "../net/safe-fetch"
+import { type OutboundRequestInit, outboundFetch } from "../net/outbound-fetch"
+import { SsrfFetchError } from "../net/safe-fetch"
 import { checkSsrfSafety } from "../net/ssrf-guard"
 
 const REQUEST_TIMEOUT_MS = 15_000
 const MAX_REDIRECTS = 5
+// A flow maps fields out of this body; nothing legitimate needs more, and an
+// uncapped read let any endpoint stream unbounded bytes into worker memory.
+export const EXTERNAL_RESPONSE_MAX_BYTES = 5 * 1024 * 1024
 
-// Every hop's Location is re-checked by the shared guard (an unvalidated
-// redirect target is a classic SSRF vector); its refusals keep this
-// service's error codes.
-const fetchWithRedirectGuard = async (url: string, init: RequestInit) => {
+// The pinned fetch checks every address at connect and re-checks every
+// redirect hop (s216); its refusals keep this service's error codes.
+const fetchWithRedirectGuard = async (
+  url: string,
+  init: OutboundRequestInit,
+) => {
   try {
-    return await fetchFollowingSafeRedirects(url, init, MAX_REDIRECTS)
+    return await outboundFetch(url, init, {
+      maxRedirects: MAX_REDIRECTS,
+      timeoutMs: REQUEST_TIMEOUT_MS,
+    })
   } catch (error) {
     if (!(error instanceof SsrfFetchError)) {
       throw error
@@ -64,16 +74,9 @@ class ExternalRequestService extends BaseService {
     input: ExternalRequestInput,
     workspaceId: string,
     contactId: string | undefined,
-  ): Promise<{ url: string; init: RequestInit }> {
-    // Best-effort only: undici (Node's fetch) always sends the Host header
-    // matching the actual connection target and ignores any Host override,
-    // so the validated IP below cannot be pinned through a portable fetch()
-    // call — the fetch a few lines down re-resolves the hostname itself.
-    // This leaves a narrow DNS-rebinding race window between this check and
-    // that connection; there is no portable Web API (usable from both this
-    // package's Node callers and the Edge bundle that transitively imports
-    // it) that lets us connect to a specific IP while still validating TLS/
-    // sending Host against the original hostname.
+  ): Promise<{ url: string; init: OutboundRequestInit }> {
+    // An early, clear refusal; the actual guard is the pinned fetch below,
+    // which binds the check to the socket (no DNS-rebinding window, s216).
     const ssrfCheck = await checkSsrfSafety(input.url)
     if (ssrfCheck.unsafe) {
       throw new ChatbotXException(
@@ -131,8 +134,6 @@ class ExternalRequestService extends BaseService {
         method: input.method,
         headers,
         body,
-        redirect: "manual",
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       },
     }
   }
@@ -151,7 +152,15 @@ class ExternalRequestService extends BaseService {
     const response = await fetchWithRedirectGuard(url, init)
     const durationMs = Math.round(performance.now() - startedAt)
 
-    const responseBody = await response.text()
+    const bytes = await readCapped(response, EXTERNAL_RESPONSE_MAX_BYTES)
+    if (bytes === null) {
+      throw new ChatbotXException(
+        "The external request's response is larger than 5 MB",
+        "responseTooLarge",
+        400,
+      )
+    }
+    const responseBody = new TextDecoder().decode(bytes)
     const responseHeaders: Record<string, string> = {}
     response.headers.forEach((value, key) => {
       responseHeaders[key] = value
