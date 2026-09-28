@@ -62,6 +62,7 @@ vi.mock("@chatbotx.io/events", () => ({
 
 vi.mock("@chatbotx.io/filesystem", () => ({
   uploadFileFromUrl: vi.fn(),
+  UploadValidationError: class UploadValidationError extends Error {},
 }))
 
 vi.mock("@chatbotx.io/utils", async (importOriginal) => {
@@ -101,7 +102,9 @@ vi.mock("../src/workspace/service", () => ({
 }))
 
 const { contactService } = await import("../src/contact/service")
-const { uploadFileFromUrl } = await import("@chatbotx.io/filesystem")
+const { uploadFileFromUrl, UploadValidationError } = await import(
+  "@chatbotx.io/filesystem"
+)
 const { outboundDownload } = await import("../src/net/outbound-fetch")
 const { contactSources } = await import("@chatbotx.io/database/partials")
 const { emitContactCreated } = await import("@chatbotx.io/events")
@@ -157,6 +160,40 @@ describe("contactService.upsertByIdentifier", () => {
       { fetchImpl: outboundDownload },
     )
     update.mockRestore()
+  })
+
+  test("a refused avatar URL skips the avatar, never the contact (s216)", async () => {
+    vi.mocked(uploadFileFromUrl).mockRejectedValue(
+      new UploadValidationError("The provided URL is not allowed"),
+    )
+    const update = vi.spyOn(contactService, "update")
+
+    const result = await contactService.upsertByIdentifier({
+      workspaceId: "ws-1",
+      identifier: "email:ada@example.com",
+      source: contactSources.enum.api,
+      data: { firstName: "Ada" },
+      avatar: "http://169.254.169.254/latest/meta-data",
+    })
+
+    expect(result.isNew).toBe(true)
+    expect(update).not.toHaveBeenCalled()
+    update.mockRestore()
+  })
+
+  test("a storage outage while saving the avatar still fails loudly", async () => {
+    const outage = new Error("connect ECONNREFUSED filesystem:9000")
+    vi.mocked(uploadFileFromUrl).mockRejectedValue(outage)
+
+    await expect(
+      contactService.upsertByIdentifier({
+        workspaceId: "ws-1",
+        identifier: "email:ada@example.com",
+        source: contactSources.enum.api,
+        data: { firstName: "Ada" },
+        avatar: "https://cdn.example.com/a.png",
+      }),
+    ).rejects.toBe(outage)
   })
 
   test("creates the contact via the no-MAC path, never the MAC-gated one", async () => {
