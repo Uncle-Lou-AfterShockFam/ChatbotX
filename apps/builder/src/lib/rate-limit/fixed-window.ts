@@ -1,5 +1,7 @@
 import { distributedStore } from "@chatbotx.io/redis"
+import { assertTimeoutMs, withTimeout } from "@chatbotx.io/utils"
 import { logger } from "@/lib/log"
+import { STORE_TIMEOUT_MS } from "./api-rate-limit"
 
 /**
  * One fixed-window counter shared by the public limiters (s200): the window
@@ -59,6 +61,8 @@ export async function checkFixedWindow(props: {
   now?: number
   /** Names the caller in the fallback log line. */
   scope: string
+  /** Test seam; app code keeps the default `STORE_TIMEOUT_MS`. */
+  storeTimeoutMs?: number
 }): Promise<FixedWindowResult> {
   const {
     buckets,
@@ -66,9 +70,16 @@ export async function checkFixedWindow(props: {
     store = distributedStore,
     now = Date.now(),
     scope,
+    storeTimeoutMs = STORE_TIMEOUT_MS,
   } = props
+  // Outside the try: a bad seam value is a caller bug, never a fallback.
+  assertTimeoutMs(storeTimeoutMs)
   const retryAfter = secondsUntilNextWindow(now, windowSeconds)
-  try {
+  // ONE budget for every round trip (as in guest-rate-limit, s201c): a hung
+  // store takes the local fallback instead of holding the request. The
+  // abandoned calls may still land later in the window (accepted over-count:
+  // it can only make a limit trip early, never let traffic past it).
+  const checkStore = async (): Promise<FixedWindowResult> => {
     for (const bucket of buckets) {
       if (
         (await incrementStore(store, bucket.key, windowSeconds)) > bucket.limit
@@ -77,6 +88,13 @@ export async function checkFixedWindow(props: {
       }
     }
     return { limited: false, retryAfter }
+  }
+  try {
+    return await withTimeout(
+      checkStore(),
+      storeTimeoutMs,
+      "Rate limit store did not answer in time",
+    )
   } catch (error) {
     logger.warn(
       { err: error, scope },

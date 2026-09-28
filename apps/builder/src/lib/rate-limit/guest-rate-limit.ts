@@ -2,6 +2,12 @@ import { distributedStore } from "@chatbotx.io/redis"
 import { assertTimeoutMs, withTimeout } from "@chatbotx.io/utils"
 import { logger } from "@/lib/log"
 import { STORE_TIMEOUT_MS } from "./api-rate-limit"
+import {
+  checkFixedWindow,
+  type FixedWindowResult,
+  type FixedWindowStore,
+  windowSuffix,
+} from "./fixed-window"
 
 const WINDOW_SECONDS = 10
 const IP_LIMIT = 60
@@ -203,4 +209,51 @@ export const resolveGuestRateLimitKey = (
 ) => {
   const clientIp = getGuestClientIp(headers)
   return clientIp === UNKNOWN_CLIENT_IP ? fallbackKey : clientIp
+}
+
+/**
+ * Guest CREATION limiter (s217): every first message from a fresh guest id
+ * inserts a Contact, ContactInbox and Conversation, and a guest id costs one
+ * page load to mint, so the per-session message budget above never bounds
+ * it. Checked only on the branch that creates the contact: 10 new guests per
+ * minute per client ip, across every webchat.
+ *
+ * Deliberately NO shared per-webchat bucket (s217 skeptic): ~30 ips could
+ * hold it full and 429 every genuine new visitor of a victim's webchat, a
+ * lockout worse than the spam it bounds. The workspace MAC quota stays the
+ * ceiling on total contacts. A caller with no proxy header
+ * (`UNKNOWN_CLIENT_IP`) is not limited here rather than share one bucket
+ * with every other such caller (the netcup Caddy always sets the header).
+ */
+const CREATE_WINDOW_SECONDS = 60
+export const GUEST_CREATE_IP_LIMIT = 10
+
+export const checkGuestCreateRateLimit = async ({
+  clientIp,
+  store,
+  now = Date.now(),
+  storeTimeoutMs,
+}: {
+  clientIp: string
+  store?: FixedWindowStore
+  now?: number
+  storeTimeoutMs?: number
+}): Promise<FixedWindowResult> => {
+  if (clientIp === UNKNOWN_CLIENT_IP) {
+    return { limited: false, retryAfter: 0 }
+  }
+  const suffix = windowSuffix(now, CREATE_WINDOW_SECONDS)
+  return await checkFixedWindow({
+    buckets: [
+      {
+        key: ["guest-create-rate-limit", "ip", clientIp, suffix].join(":"),
+        limit: GUEST_CREATE_IP_LIMIT,
+      },
+    ],
+    windowSeconds: CREATE_WINDOW_SECONDS,
+    store,
+    now,
+    scope: "webchat-guest-create",
+    storeTimeoutMs,
+  })
 }

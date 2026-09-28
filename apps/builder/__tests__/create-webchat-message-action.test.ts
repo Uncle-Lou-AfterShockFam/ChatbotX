@@ -23,6 +23,7 @@ const {
   mockIntegrationQueueAdd,
   mockQuotaIncrement,
   mockCheckGuestRateLimit,
+  mockCheckGuestCreateRateLimit,
   mockVerifyWebchatAccessToken,
   mockRepositoryCreate,
   mockWorkspaceFind,
@@ -84,6 +85,7 @@ const {
     mockFindOrFail: vi.fn(),
     mockIntegrationQueueAdd: vi.fn().mockResolvedValue(undefined),
     mockQuotaIncrement: vi.fn().mockResolvedValue(undefined),
+    mockCheckGuestCreateRateLimit: vi.fn(),
     mockCheckGuestRateLimit: vi
       .fn()
       .mockResolvedValue({ limited: false, retryAfter: 10 }),
@@ -150,6 +152,7 @@ vi.mock("@/lib/log", () => ({
 }))
 
 vi.mock("@/lib/rate-limit/guest-rate-limit", () => ({
+  checkGuestCreateRateLimit: mockCheckGuestCreateRateLimit,
   checkGuestRateLimit: mockCheckGuestRateLimit,
   getGuestClientIp: vi.fn(() => "192.0.2.1"),
 }))
@@ -326,6 +329,10 @@ const resetCommonMocks = () => {
   insertBuilder.returning.mockReset()
   mockQuotaIncrement.mockResolvedValue(undefined)
   mockCheckGuestRateLimit.mockResolvedValue({ limited: false, retryAfter: 10 })
+  mockCheckGuestCreateRateLimit.mockResolvedValue({
+    limited: false,
+    retryAfter: 60,
+  })
   mockVerifyWebchatAccessToken.mockResolvedValue({
     authorized: true,
   })
@@ -692,6 +699,44 @@ describe("handleCreateWebchatMessage — MAC quota", () => {
 
     expect(mockCreateNewContactWithMac).not.toHaveBeenCalled()
     expect(mockQuotaIncrement).not.toHaveBeenCalled()
+  })
+
+  test("a returning visitor never spends the guest-creation budget (s217)", async () => {
+    mockContactInboxFindLatest.mockResolvedValue(contactInbox)
+
+    await handleCreateWebchatMessage({ parsedInput: input })
+
+    expect(mockCheckGuestCreateRateLimit).not.toHaveBeenCalled()
+  })
+
+  test("a new guest is checked against the per-ip creation budget (s217)", async () => {
+    mockContactInboxFindLatest.mockResolvedValue(undefined)
+    seedNewContactInserts()
+
+    await handleCreateWebchatMessage({ parsedInput: input })
+
+    expect(mockCheckGuestCreateRateLimit).toHaveBeenCalledWith({
+      clientIp: "192.0.2.1",
+    })
+  })
+
+  test("an exhausted creation budget answers 429 and creates nothing (s217)", async () => {
+    mockContactInboxFindLatest.mockResolvedValue(undefined)
+    mockCheckGuestCreateRateLimit.mockResolvedValue({
+      limited: true,
+      retryAfter: 42,
+    })
+
+    await expect(
+      handleCreateWebchatMessage({ parsedInput: input }),
+    ).rejects.toMatchObject({
+      code: "rateLimitExceeded",
+      httpStatusCode: 429,
+    })
+
+    expect(mockCreateNewContactWithMac).not.toHaveBeenCalled()
+    expect(tx.insert).not.toHaveBeenCalled()
+    expect(mockEmitContactCreated).not.toHaveBeenCalled()
   })
 
   test("does not requeue the welcome flow for a returning visitor", async () => {
