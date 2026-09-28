@@ -3,10 +3,35 @@ import { BaseService } from "../base.service"
 import { contactService } from "../contact/service"
 import { contactCustomFieldService } from "../contact-custom-field/service"
 import { ChatbotXException } from "../errors"
+import { fetchFollowingSafeRedirects, SsrfFetchError } from "../net/safe-fetch"
 import { checkSsrfSafety } from "../net/ssrf-guard"
 
 const REQUEST_TIMEOUT_MS = 15_000
 const MAX_REDIRECTS = 5
+
+// Every hop's Location is re-checked by the shared guard (an unvalidated
+// redirect target is a classic SSRF vector); its refusals keep this
+// service's error codes.
+const fetchWithRedirectGuard = async (url: string, init: RequestInit) => {
+  try {
+    return await fetchFollowingSafeRedirects(url, init, MAX_REDIRECTS)
+  } catch (error) {
+    if (!(error instanceof SsrfFetchError)) {
+      throw error
+    }
+    throw error.reason === "tooManyRedirects"
+      ? new ChatbotXException(
+          "Too many redirects for this external request",
+          "ssrfBlocked",
+          400,
+        )
+      : new ChatbotXException(
+          "This URL is not allowed for external requests",
+          "ssrfBlocked",
+          400,
+        )
+  }
+}
 
 export type ExternalRequestHeader = { key: string; value: string }
 
@@ -112,54 +137,6 @@ class ExternalRequestService extends BaseService {
     }
   }
 
-  // redirect: "manual" stops fetch from following redirects itself so each
-  // hop's Location target can be re-validated against the SSRF guard before
-  // being followed (an unvalidated redirect target is a classic SSRF vector).
-  private async fetchFollowingSafeRedirects(
-    url: string,
-    init: RequestInit,
-    redirectsLeft: number,
-  ): Promise<Response> {
-    const response = await fetch(url, init)
-
-    if (response.status < 300 || response.status >= 400) {
-      return response
-    }
-
-    if (redirectsLeft <= 0) {
-      throw new ChatbotXException(
-        "Too many redirects for this external request",
-        "ssrfBlocked",
-        400,
-      )
-    }
-
-    const location = response.headers.get("location")
-    if (!location) {
-      throw new ChatbotXException(
-        "This URL is not allowed for external requests",
-        "ssrfBlocked",
-        400,
-      )
-    }
-
-    const redirectUrl = new URL(location, url).href
-    const ssrfCheck = await checkSsrfSafety(redirectUrl)
-    if (ssrfCheck.unsafe) {
-      throw new ChatbotXException(
-        "This URL is not allowed for external requests",
-        "ssrfBlocked",
-        400,
-      )
-    }
-
-    return this.fetchFollowingSafeRedirects(
-      redirectUrl,
-      init,
-      redirectsLeft - 1,
-    )
-  }
-
   async execute(
     input: ExternalRequestInput,
     props: { workspaceId: string; contactId?: string },
@@ -171,11 +148,7 @@ class ExternalRequestService extends BaseService {
     )
 
     const startedAt = performance.now()
-    const response = await this.fetchFollowingSafeRedirects(
-      url,
-      init,
-      MAX_REDIRECTS,
-    )
+    const response = await fetchWithRedirectGuard(url, init)
     const durationMs = Math.round(performance.now() - startedAt)
 
     const responseBody = await response.text()
