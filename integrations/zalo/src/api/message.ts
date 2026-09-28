@@ -59,11 +59,8 @@ export const getMessageAttachmentEntity = ({
     const mimeType = response.headers.get("content-type") ?? "image/png"
     const fileType = guessFileTypeFromMimeType(mimeType)
 
-    await ctx.uploader?.putObject(originPath, Buffer.from(bytes), {
-      ACL: "public-read",
-      ContentType: mimeType,
-    })
-
+    // Measure before storing: an unreadable image throws here and leaves no
+    // orphaned public object behind (s219).
     const imageProperties: {
       width?: number
       height?: number
@@ -74,6 +71,11 @@ export const getMessageAttachmentEntity = ({
       imageProperties.width = dimensions.width
       imageProperties.height = dimensions.height
     }
+
+    await ctx.uploader?.putObject(originPath, Buffer.from(bytes), {
+      ACL: "public-read",
+      ContentType: mimeType,
+    })
 
     return {
       sourceId: createId(),

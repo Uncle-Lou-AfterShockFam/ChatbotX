@@ -23,7 +23,8 @@ export class ZaloAttachmentTooLargeError extends ZaloException {
 /**
  * GETs a flow- or webhook-supplied URL through the pinned outbound fetch
  * (private addresses refused at connect, one download deadline) and reads at
- * most ZALO_DOWNLOAD_MAX_BYTES. `null` = a non-2xx answer.
+ * most ZALO_DOWNLOAD_MAX_BYTES. `null` = a non-2xx or empty answer (nothing
+ * worth storing).
  */
 export const fetchZaloDownload = async (
   url: string,
@@ -47,7 +48,7 @@ export const fetchZaloDownload = async (
   if (bytes === null) {
     throw new ZaloAttachmentTooLargeError(what)
   }
-  return { response, bytes }
+  return bytes.byteLength > 0 ? { response, bytes } : null
 }
 
 /** `fetchZaloDownload` where a non-2xx answer is a ZaloException. */

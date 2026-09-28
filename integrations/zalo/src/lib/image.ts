@@ -29,11 +29,13 @@ export const fetchAndReuploadImage = async ({
     }
     throw error
   })
-  if (!download) {
+  const mimeType = download?.response.headers.get("content-type") ?? "image/png"
+  // Only an image is stored as an avatar (a remote text/html answer is never
+  // published to storage under the contact's avatar).
+  if (!(download && mimeType.startsWith("image/"))) {
     return
   }
   const originPath = `${ctx.storagePrefix}/${createId()}`
-  const mimeType = download.response.headers.get("content-type") ?? "image/png"
 
   await ctx.uploader?.putObject(originPath, Buffer.from(download.bytes), {
     ACL: "public-read",

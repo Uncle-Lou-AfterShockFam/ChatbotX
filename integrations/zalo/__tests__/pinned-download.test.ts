@@ -256,4 +256,59 @@ describe("fetchAndReuploadImage", () => {
       fetchAndReuploadImage({ ctx, avatarUrl: "https://zalo.example/a.jpg" }),
     ).rejects.toBeInstanceOf(TypeError)
   })
+
+  test.each([
+    [
+      "an empty 200",
+      () =>
+        new Response(new Uint8Array(0), {
+          headers: { "content-type": "image/png" },
+        }),
+    ],
+    ["a 204", () => new Response(null, { status: 204 })],
+    [
+      "an html answer",
+      () =>
+        new Response("<script>1</script>", {
+          headers: { "content-type": "text/html" },
+        }),
+    ],
+  ])("%s is no avatar and stores nothing", async (_label, answer) => {
+    install(answer)
+
+    await expect(
+      fetchAndReuploadImage({ ctx, avatarUrl: "https://zalo.example/a.jpg" }),
+    ).resolves.toBeUndefined()
+    expect(putObject).not.toHaveBeenCalled()
+  })
+})
+
+describe("getMessageAttachmentEntity stores only what it could read", () => {
+  const attachment = {
+    type: "image",
+    payload: { url: "https://zalo-cdn.example.com/in.png" },
+  } as MessageAttachment
+
+  test.each([
+    [
+      "an empty body",
+      () =>
+        new Response(new Uint8Array(0), {
+          headers: { "content-type": "image/png" },
+        }),
+    ],
+    ["a 204", () => new Response(null, { status: 204 })],
+    [
+      "bytes that are not an image",
+      () =>
+        new Response("not a png", { headers: { "content-type": "image/png" } }),
+    ],
+  ])("%s throws before any object is stored", async (_label, answer) => {
+    install(answer)
+
+    await expect(
+      getMessageAttachmentEntity({ ctx, attachment }),
+    ).rejects.toBeInstanceOf(ZaloException)
+    expect(putObject).not.toHaveBeenCalled()
+  })
 })
