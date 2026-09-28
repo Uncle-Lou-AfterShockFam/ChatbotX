@@ -50,13 +50,26 @@ describe("connectActiveCampaignAction (s219)", () => {
     mocks.upsert.mockReset()
   })
 
-  test("a refused API URL is a 400 naming the problem, and nothing is saved", async () => {
-    mocks.runAction.mockRejectedValue(
-      new SsrfFetchError(
-        "unsafeAddress",
-        "http://169.254.169.254/api/3/accounts",
-      ),
-    )
+  test.each([
+    [
+      "this layer's class",
+      () => new SsrfFetchError("unsafeAddress", "http://169.254.169.254"),
+    ],
+    [
+      // Production (s219): the action and the integration live in different
+      // Next module layers, so the thrown class is a foreign copy.
+      "a copy from another module layer",
+      () =>
+        Object.assign(
+          new Error("[ssrf-guard] unsafeUrl: http://169.254.169.254"),
+          {
+            name: "SsrfFetchError",
+            reason: "unsafeUrl",
+          },
+        ),
+    ],
+  ])("a refused API URL (%s) is a 400 naming the problem, and nothing is saved", async (_label, make) => {
+    mocks.runAction.mockRejectedValue(make())
     const error = await call().catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(SdkException)
     expect((error as InstanceType<typeof SdkException>).message).toBe(

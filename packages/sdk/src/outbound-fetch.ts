@@ -63,6 +63,26 @@ export class SsrfFetchError extends Error {
   }
 }
 
+const SSRF_REFUSALS: ReadonlySet<string> = new Set<SsrfFetchRefusal>([
+  "unsafeUrl",
+  "unsafeAddress",
+  "unsafeRedirect",
+  "tooManyRedirects",
+])
+
+/**
+ * Is this a refusal of the pinned fetch? Use this, never `instanceof`: Next
+ * loads a package once per module layer (the server action vs the code that
+ * threw), so the class a caller imports is not always the class that threw
+ * (s219: an ActiveCampaign refusal fell through to the generic error). The
+ * name + a known `reason` identify it across copies.
+ */
+export const isSsrfFetchError = (error: unknown): error is SsrfFetchError =>
+  error instanceof SsrfFetchError ||
+  (error instanceof Error &&
+    error.name === "SsrfFetchError" &&
+    SSRF_REFUSALS.has((error as { reason?: unknown }).reason as string))
+
 const REGISTRY_KEY = Symbol.for("chatbotx.outboundFetch")
 
 type Registry = { [REGISTRY_KEY]?: OutboundFetch }

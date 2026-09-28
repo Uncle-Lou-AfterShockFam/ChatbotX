@@ -1,5 +1,5 @@
 import type { Context } from "@chatbotx.io/sdk"
-import { SsrfFetchError } from "@chatbotx.io/sdk/outbound-fetch"
+import { isSsrfFetchError } from "@chatbotx.io/sdk/outbound-fetch"
 import { createId } from "@chatbotx.io/utils"
 import type { ZaloAuthValue } from "../schema/definition"
 import { fetchZaloDownload, ZaloAttachmentTooLargeError } from "./download"
@@ -23,7 +23,7 @@ export const fetchAndReuploadImage = async ({
   ).catch((error: unknown) => {
     if (
       error instanceof ZaloAttachmentTooLargeError ||
-      error instanceof SsrfFetchError
+      isSsrfFetchError(error)
     ) {
       return null
     }

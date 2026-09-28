@@ -1,6 +1,7 @@
 import ky from "ky"
 import { afterEach, describe, expect, test } from "vitest"
 import {
+  isSsrfFetchError,
   kyOutboundFetch,
   OutboundFetchNotInstalledError,
   type OutboundRequestInit,
@@ -158,5 +159,39 @@ describe("readCapped", () => {
 
   test("an empty body is zero bytes", async () => {
     expect((await readCapped(new Response(null), 1))?.byteLength).toBe(0)
+  })
+})
+
+describe("isSsrfFetchError (s219: a refusal crosses Next module layers)", () => {
+  // What a second module layer holds: the same class, another identity.
+  class ForeignSsrfFetchError extends Error {
+    readonly reason: string
+    constructor(reason: string) {
+      super(`[ssrf-guard] ${reason}: http://10.0.0.1`)
+      this.name = "SsrfFetchError"
+      this.reason = reason
+    }
+  }
+
+  test("recognises this layer's class and a foreign copy", () => {
+    expect(isSsrfFetchError(new SsrfFetchError("unsafeUrl", "x"))).toBe(true)
+    const foreign = new ForeignSsrfFetchError("unsafeAddress")
+    expect(foreign instanceof SsrfFetchError).toBe(false)
+    expect(isSsrfFetchError(foreign)).toBe(true)
+  })
+
+  test.each([
+    ["an unknown reason", new ForeignSsrfFetchError("somethingElse")],
+    [
+      "the name without a reason",
+      Object.assign(new Error("x"), { name: "SsrfFetchError" }),
+    ],
+    ["another error", new TypeError("fetch failed")],
+    ["a plain object", { name: "SsrfFetchError", reason: "unsafeUrl" }],
+    ["null", null],
+    ["undefined", undefined],
+    ["a string", "SsrfFetchError"],
+  ])("rejects %s", (_label, value) => {
+    expect(isSsrfFetchError(value)).toBe(false)
   })
 })

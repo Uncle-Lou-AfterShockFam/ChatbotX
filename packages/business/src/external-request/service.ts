@@ -5,7 +5,7 @@ import { contactService } from "../contact/service"
 import { contactCustomFieldService } from "../contact-custom-field/service"
 import { ChatbotXException } from "../errors"
 import { type OutboundRequestInit, outboundFetch } from "../net/outbound-fetch"
-import { SsrfFetchError } from "../net/safe-fetch"
+import { isSsrfFetchError } from "../net/safe-fetch"
 import { checkSsrfSafety } from "../net/ssrf-guard"
 
 const REQUEST_TIMEOUT_MS = 15_000
@@ -26,7 +26,7 @@ const fetchWithRedirectGuard = async (
       timeoutMs: REQUEST_TIMEOUT_MS,
     })
   } catch (error) {
-    if (!(error instanceof SsrfFetchError)) {
+    if (!isSsrfFetchError(error)) {
       throw error
     }
     throw error.reason === "tooManyRedirects"

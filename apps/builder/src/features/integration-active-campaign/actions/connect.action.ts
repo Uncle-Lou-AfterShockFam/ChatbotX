@@ -6,7 +6,7 @@ import {
   integration as activeCampaignIntegration,
 } from "@chatbotx.io/integration-active-campaign"
 import { SdkException } from "@chatbotx.io/sdk"
-import { SsrfFetchError } from "@chatbotx.io/sdk/outbound-fetch"
+import { isSsrfFetchError } from "@chatbotx.io/sdk/outbound-fetch"
 import { getTranslations } from "next-intl/server"
 import { normalizeError } from "universal-error-normalizer"
 import { workspaceIdrequestParams } from "@/features/common/schema"
@@ -35,7 +35,7 @@ export const connectActiveCampaignAction = workspaceActionClient
       }
       // The pinned outbound fetch refused the API URL (a private / internal
       // address, or a redirect): say so, not a generic server error (s219).
-      if (error instanceof SsrfFetchError) {
+      if (isSsrfFetchError(error)) {
         const t = await getTranslations("activeCampaign.errors")
         throw new SdkException(t("unreachableApiUrl"), 400, 400)
       }
