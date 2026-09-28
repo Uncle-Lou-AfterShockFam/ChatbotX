@@ -4590,6 +4590,8 @@
     "title": "ユーザー"
   },
   "sequences": {
+    "stopOnReply": "Stop on reply",
+    "stopOnReplyDescription": "When on, a reply from an enrolled contact ends that contact's enrolment in this sequence. Other sequences and the contact's flow waits are not affected.",
     "title": "シーケンス",
     "subscribers": "登録者",
     "step": "メッセージ",

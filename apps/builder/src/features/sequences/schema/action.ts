@@ -59,6 +59,11 @@ export const updateSequenceSchema = z
   .object({
     name: z.string().trim().min(1).max(255).describe("New sequence name."),
     active: z.boolean().describe("Whether the sequence is active."),
+    stopOnReply: z
+      .boolean()
+      .describe(
+        "When true, an inbound reply from an enrolled contact ends that contact's enrolment in this sequence.",
+      ),
   })
   .partial()
 export type UpdateSequenceSchema = z.infer<typeof updateSequenceSchema>

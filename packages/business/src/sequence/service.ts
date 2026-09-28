@@ -109,14 +109,19 @@ class SequenceService extends BaseService {
   }
 
   /**
-   * Partial update of a sequence's name/active/folderId. No-ops when
+   * Partial update of a sequence's name/active/stopOnReply/folderId. No-ops when
    * nothing changed. A duplicate `name` raises `validationException("name",
    * ...)` — the action maps that to a form-level `returnValidationErrors`
    * response, mirroring `create`'s handling of the same unique constraint.
    */
   async update(
     ctx: { workspaceId: string; id: string },
-    data: { name?: string; active?: boolean; folderId?: string | null },
+    data: {
+      name?: string
+      active?: boolean
+      stopOnReply?: boolean
+      folderId?: string | null
+    },
   ): Promise<void> {
     const sequence = await findOrFail({
       table: sequenceModel,
@@ -163,6 +168,10 @@ class SequenceService extends BaseService {
       detail = data.active
         ? `enabled a sequence (#${sequence.id})`
         : `disabled a sequence (#${sequence.id})`
+    } else if (changedKeys.length === 1 && changedKeys[0] === "stopOnReply") {
+      detail = data.stopOnReply
+        ? `turned on stop-on-reply for a sequence (#${sequence.id})`
+        : `turned off stop-on-reply for a sequence (#${sequence.id})`
     }
 
     await this.audit("update", detail)

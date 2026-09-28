@@ -97,9 +97,9 @@ export const sequencesPublicRouter = {
     .route({
       method: "PATCH",
       path: "/v1/sequences/{id}",
-      summary: "Update sequence name or active state",
+      summary: "Update sequence name, active state or stop-on-reply",
       description:
-        "Changes a sequence name or active state without replacing its steps. Call `sequences.get` to inspect the current sequence, or use `sequences.list` to resolve its id.",
+        "Changes a sequence name, active state or stop-on-reply rule without replacing its steps. Call `sequences.get` to inspect the current sequence, or use `sequences.list` to resolve its id.",
       successStatus: 204,
       tags: ["Sequences"],
       spec: mcpSpec({ visibility: "default" }),

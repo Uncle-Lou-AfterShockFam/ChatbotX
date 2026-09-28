@@ -43,6 +43,7 @@ type RemoveReason =
   | "subscription_removed"
   | "unsubscribed_via_flow"
   | "company_stopped"
+  | "contact_replied"
 
 type RemoveContactSequencesForContactsParams = {
   client?: DrizzleClient
@@ -308,6 +309,49 @@ class ContactSequenceService extends BaseService {
       sequenceId: enrollment.sequenceId,
       sequenceName: enrollment.sequence.name,
     }))
+  }
+
+  /**
+   * Sequence stop-on-reply (s220b): ends the contact's enrolments in every
+   * sequence of the workspace that has `stopOnReply` on. Other enrolments,
+   * and the contact's parked flow waits, are untouched (a `waitForEvent`
+   * replied branch must still fire). Returns the ended sequence ids.
+   */
+  async removeStopOnReplyEnrollments(props: {
+    workspaceId: string
+    contactId: string
+    contactInboxId?: string
+  }): Promise<string[]> {
+    const { workspaceId, contactId } = props
+    const rows = await db
+      .select({ sequenceId: contactsOnSequenceModel.sequenceId })
+      .from(contactsOnSequenceModel)
+      .innerJoin(
+        sequenceModel,
+        and(
+          eq(sequenceModel.id, contactsOnSequenceModel.sequenceId),
+          eq(sequenceModel.workspaceId, contactsOnSequenceModel.workspaceId),
+        ),
+      )
+      .where(
+        and(
+          eq(contactsOnSequenceModel.workspaceId, workspaceId),
+          eq(contactsOnSequenceModel.contactId, contactId),
+          eq(sequenceModel.stopOnReply, true),
+        ),
+      )
+    if (rows.length === 0) {
+      return []
+    }
+    const sequenceIds = [...new Set(rows.map((row) => row.sequenceId))]
+    await this.removeContactSequencesForContacts({
+      workspaceId,
+      contactIds: [contactId],
+      sequenceIds,
+      reason: "contact_replied",
+      contactInboxId: props.contactInboxId,
+    })
+    return sequenceIds
   }
 
   async removeContactSequencesForContacts(

@@ -34,6 +34,7 @@ import { messageEventTypeSchema } from "@chatbotx.io/flow-config"
 import { logger } from "../../lib/logger"
 import { handleCompanyStopOnReply } from "./handlers/company-stop-on-reply"
 import { recordProviderErrorLog } from "./handlers/record-provider-error-log"
+import { handleSequenceStopOnReply } from "./handlers/sequence-stop-on-reply"
 
 /**
  * Mirrors the per-workspace MAC deltas `macTrackingService.trackMessage{In,Out}`
@@ -365,6 +366,10 @@ export const messageListeners: Partial<MessageEvenTypeMap> = {
     {
       name: "company-stop-on-reply",
       handler: handleCompanyStopOnReply,
+    },
+    {
+      name: "sequence-stop-on-reply",
+      handler: handleSequenceStopOnReply,
     },
   ],
 }

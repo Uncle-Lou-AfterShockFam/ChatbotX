@@ -4644,6 +4644,8 @@
     "title": "使用者"
   },
   "sequences": {
+    "stopOnReply": "Stop on reply",
+    "stopOnReplyDescription": "When on, a reply from an enrolled contact ends that contact's enrolment in this sequence. Other sequences and the contact's flow waits are not affected.",
     "title": "序列",
     "subscribers": "訂閱者",
     "step": "訊息",

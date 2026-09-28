@@ -20,6 +20,9 @@ export const sequenceModel = pgTable(
       onUpdate: "cascade",
     }),
     active: boolean().notNull().default(true),
+    // Per-contact stop rule (s220b): an inbound reply from an enrolled
+    // contact ends that contact's enrolment in this sequence only.
+    stopOnReply: boolean().notNull().default(false),
     subscribers: integer().notNull().default(0),
     messages: integer().notNull().default(0),
     workspaceId: bigintAsString()
