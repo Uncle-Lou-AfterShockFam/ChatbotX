@@ -81,7 +81,7 @@ describe("workspaceMemberService.listPaginated", () => {
     )
   })
 
-  test("a keyword matches the name only, and the count uses the same filter", async () => {
+  test("a keyword matches a name substring or the WHOLE email (s217), and the count uses the same filter", async () => {
     await workspaceMemberService.listPaginated({
       workspaceId: "1",
       keyword: "  a_b ",
@@ -90,7 +90,11 @@ describe("workspaceMemberService.listPaginated", () => {
     const where = {
       workspaceId: "1",
       user: {
-        name: { ilike: "%a\\_b%" },
+        OR: [
+          { name: { ilike: "%a\\_b%" } },
+          // No `%`: the whole address or nothing, wildcards escaped.
+          { email: { ilike: "a\\_b" } },
+        ],
       },
     }
     expect(mocks.memberFindMany).toHaveBeenCalledWith(
