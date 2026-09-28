@@ -2,6 +2,12 @@ import { distributedStore } from "@chatbotx.io/redis"
 import { assertTimeoutMs, withTimeout } from "@chatbotx.io/utils"
 import { logger } from "@/lib/log"
 import { STORE_TIMEOUT_MS } from "./api-rate-limit"
+import {
+  checkFixedWindow,
+  type FixedWindowResult,
+  type FixedWindowStore,
+  windowSuffix,
+} from "./fixed-window"
 
 const WINDOW_SECONDS = 10
 const IP_LIMIT = 60
@@ -203,4 +209,50 @@ export const resolveGuestRateLimitKey = (
 ) => {
   const clientIp = getGuestClientIp(headers)
   return clientIp === UNKNOWN_CLIENT_IP ? fallbackKey : clientIp
+}
+
+/**
+ * Guest CREATION limiter (s217): every first message from a fresh guest id
+ * inserts a Contact, ContactInbox and Conversation, and a guest id costs one
+ * page load to mint, so the per-session message budget above never bounds
+ * it. Checked only on the branch that creates the contact: 10 new guests per
+ * minute per client ip, 300 per minute per webchat. A caller with no proxy
+ * header (`UNKNOWN_CLIENT_IP`) skips the ip bucket rather than share one
+ * bucket with every other such caller; the webchat bucket still applies.
+ */
+const CREATE_WINDOW_SECONDS = 60
+export const GUEST_CREATE_IP_LIMIT = 10
+export const GUEST_CREATE_WEBCHAT_LIMIT = 300
+
+export const checkGuestCreateRateLimit = ({
+  webchatId,
+  clientIp,
+  store,
+  now = Date.now(),
+  storeTimeoutMs,
+}: {
+  webchatId: string
+  clientIp: string
+  store?: FixedWindowStore
+  now?: number
+  storeTimeoutMs?: number
+}): Promise<FixedWindowResult> => {
+  const suffix = windowSuffix(now, CREATE_WINDOW_SECONDS)
+  const key = (...parts: string[]) =>
+    ["guest-create-rate-limit", ...parts, suffix].join(":")
+  const ipBuckets =
+    clientIp === UNKNOWN_CLIENT_IP
+      ? []
+      : [{ key: key("ip", clientIp), limit: GUEST_CREATE_IP_LIMIT }]
+  return checkFixedWindow({
+    buckets: [
+      ...ipBuckets,
+      { key: key("webchat", webchatId), limit: GUEST_CREATE_WEBCHAT_LIMIT },
+    ],
+    windowSeconds: CREATE_WINDOW_SECONDS,
+    store,
+    now,
+    scope: "webchat-guest-create",
+    storeTimeoutMs,
+  })
 }

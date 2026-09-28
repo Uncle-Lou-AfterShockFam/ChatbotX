@@ -53,6 +53,7 @@ import { verifyWebchatAccessToken } from "@/features/integration-webchat/lib/web
 import { getDomainFromHeader } from "@/lib/domain"
 import { logger } from "@/lib/log"
 import {
+  checkGuestCreateRateLimit,
   checkGuestRateLimit,
   getGuestClientIp,
 } from "@/lib/rate-limit/guest-rate-limit"
@@ -169,7 +170,12 @@ export async function handleCreateWebchatMessage({
   }
 
   const { conversation, isNewContact, contact, contactInbox } =
-    await getConversationFromInput(parsedInput, integrationWebchat, workspace)
+    await getConversationFromInput(
+      parsedInput,
+      integrationWebchat,
+      workspace,
+      getGuestClientIp(requestHeaders),
+    )
 
   if (
     "init" in parsedInput &&
@@ -429,6 +435,7 @@ async function getConversationFromInput(
   parsedInput: CreateWebchatMessageRequest,
   integrationWebchat: typeof integrationWebchatModel.$inferSelect,
   workspace: WorkspaceModel | undefined,
+  clientIp: string,
 ) {
   const sourceId = parsedInput.guestConversationId
 
@@ -475,6 +482,21 @@ async function getConversationFromInput(
   const ws = workspace
   if (!ws) {
     throw new ChatbotXException("Workspace not found", "notFound", 404)
+  }
+
+  // A fresh guest id is one page load away, so creation has its own budget
+  // (s217); a returning guest above never touches it.
+  const createLimit = await checkGuestCreateRateLimit({
+    webchatId: parsedInput.webchatId,
+    clientIp,
+  })
+  if (createLimit.limited) {
+    const t = await getTranslations("webchat")
+    throw new ChatbotXException(
+      t("rateLimitExceeded"),
+      "rateLimitExceeded",
+      429,
+    )
   }
 
   const result = await quotaEnforcementService.createNewContactWithMac({
