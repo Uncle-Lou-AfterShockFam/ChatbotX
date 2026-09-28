@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import {
+  extractHttpHrefs,
   htmlToPlainText,
   renderDynamicEmailText,
   rewriteHtmlLinks,
@@ -14,7 +15,9 @@ describe("htmlToPlainText", () => {
       htmlToPlainText(
         '<p>Hi &amp; welcome</p><p>Read <a href="https://x.test/a">this</a><br>now</p><ul><li>one</li><li>two</li></ul>',
       ),
-    ).toBe("Hi & welcome\nRead this (https://x.test/a)\nnow\n- one\n- two")
+    ).toBe(
+      "Hi & welcome\n\nRead this [https://x.test/a]\nnow\n\n * one\n * two",
+    )
   })
 
   test("a bare link whose label is the URL prints once", () => {
@@ -58,7 +61,7 @@ describe("rewriteHtmlLinks", () => {
     const out = await rewriteHtmlLinks(
       html,
       track,
-      new Set(["https://hub.test/unsubscribe?token=T"]),
+      new Set(extractHttpHrefs(html).filter((h) => !h.includes("unsubscribe"))),
     )
     expect(out).toBe(
       '<a href="https://hub.test/c?u=https%3A%2F%2Fx.test%2Fa%3Fb%3D1%26c%3D2">a</a> <a href="mailto:x@y.test">m</a> <a href="tel:+1555">t</a> <a class="k" href="https://hub.test/unsubscribe?token=T">u</a>',
@@ -67,19 +70,25 @@ describe("rewriteHtmlLinks", () => {
 
   test("javascript: and relative hrefs are never rewritten", async () => {
     const html = '<a href="javascript:alert(1)">x</a><a href="/p">y</a>'
-    expect(await rewriteHtmlLinks(html, track)).toBe(html)
+    expect(await rewriteHtmlLinks(html, track, new Set(["/p"]))).toBe(html)
   })
 
   test("html without links is returned unchanged; empty input gives empty", async () => {
-    expect(await rewriteHtmlLinks("<p>plain</p>", track)).toBe("<p>plain</p>")
-    expect(await rewriteHtmlLinks("", track)).toBe("")
-    expect(await rewriteHtmlLinks(null as unknown as string, track)).toBe("")
+    const any = new Set(["https://x.test"])
+    expect(await rewriteHtmlLinks("<p>plain</p>", track, any)).toBe(
+      "<p>plain</p>",
+    )
+    expect(await rewriteHtmlLinks("", track, any)).toBe("")
+    expect(await rewriteHtmlLinks(null as unknown as string, track, any)).toBe(
+      "",
+    )
   })
 
   test("a rewritten URL with quotes or ampersands cannot break out of the attribute", async () => {
     const out = await rewriteHtmlLinks(
       '<a href="https://x.test">x</a>',
       async () => 'https://e.test/?a=1&b="><script>',
+      new Set(["https://x.test"]),
     )
     expect(out).toBe(
       '<a href="https://e.test/?a=1&amp;b=&quot;><script>">x</a>',
@@ -109,16 +118,71 @@ describe("rewriteHtmlLinks", () => {
         }
       }
       let calls = 0
-      const out = await rewriteHtmlLinks(parts.join(""), (url) => {
-        calls += 1
-        return Promise.resolve(
-          `https://hub.test/c?u=${encodeURIComponent(url)}`,
-        )
-      })
+      const html = parts.join("")
+      const out = await rewriteHtmlLinks(
+        html,
+        (url) => {
+          calls += 1
+          return Promise.resolve(
+            `https://hub.test/c?u=${encodeURIComponent(url)}`,
+          )
+        },
+        new Set(extractHttpHrefs(html)),
+      )
       expect(calls).toBe(expected)
       expect(out.match(/https:\/\/hub\.test\/c\?u=/g)?.length ?? 0).toBe(
         expected,
       )
     }
+  })
+})
+
+describe("rewriteHtmlLinks: only template links are signed (s220b skeptic CRITICAL)", () => {
+  test("a link injected through a merge field is left untracked", async () => {
+    const template =
+      '<p>Hi {{first_name}}, see <a href="https://ours.test/offer">offer</a></p>'
+    const merged = template.replace(
+      "{{first_name}}",
+      '<a href="https://phish.test/steal">Verify now</a>',
+    )
+    const out = await rewriteHtmlLinks(
+      merged,
+      track,
+      new Set(extractHttpHrefs(template)),
+    )
+    expect(out).toContain('href="https://phish.test/steal"')
+    expect(out).toContain(
+      'href="https://hub.test/c?u=https%3A%2F%2Fours.test%2Foffer"',
+    )
+  })
+
+  test("an empty allow-set rewrites nothing", async () => {
+    const html = '<a href="https://x.test">x</a>'
+    expect(await rewriteHtmlLinks(html, track, new Set())).toBe(html)
+  })
+
+  test("past the anchor cap the fragment is returned unchanged", async () => {
+    const html = '<a href="https://x.test">x</a>'.repeat(201)
+    expect(
+      await rewriteHtmlLinks(html, track, new Set(["https://x.test"])),
+    ).toBe(html)
+  })
+
+  test("past the size cap the fragment is returned unchanged", async () => {
+    const html = `<a href="https://x.test">x</a>${"y".repeat(200_001)}`
+    expect(
+      await rewriteHtmlLinks(html, track, new Set(["https://x.test"])),
+    ).toBe(html)
+  })
+})
+
+describe("extractHttpHrefs", () => {
+  test("returns decoded http(s) hrefs only; bad input gives []", () => {
+    expect(
+      extractHttpHrefs(
+        '<a href="https://a.test/?x=1&amp;y=2">a</a><a href="mailto:m@x.test">m</a><a href="{{url}}">v</a>',
+      ),
+    ).toEqual(["https://a.test/?x=1&y=2"])
+    expect(extractHttpHrefs(null as unknown as string)).toEqual([])
   })
 })

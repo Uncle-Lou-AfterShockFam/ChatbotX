@@ -1,51 +1,27 @@
+import { htmlToText } from "html-to-text"
 import type { MailElementSchema } from "./emails/dynamic-template"
 
 /** Longest element text the plain-text part carries (the HTML is unbounded). */
 const MAX_TEXT_LENGTH = 200_000
 
-const ANCHOR_WITH_LABEL =
-  /<a\b[^>]*\bhref\s*=\s*"([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi
 const ANCHOR_HREF = /(<a\b[^>]*\bhref\s*=\s*")([^"]*)(")/gi
 const HTTP_URL = /^https?:\/\//i
-const TAG = /<[^>]*>/g
-const BR = /<br\s*\/?>/gi
-const BLOCK_END = /<\/(p|div|h[1-6]|li|ul|ol|blockquote)>/gi
-const LI_START = /<li\b[^>]*>/gi
-const ENTITY = /&(amp|lt|gt|quot|#39|nbsp);/g
-const TRAILING_SPACE = /[ \t]+\n/g
-const EXTRA_BREAKS = /\n{3,}/g
 const AMP_ENTITY = /&amp;/g
 const AMP = /&/g
 const QUOTE = /"/g
 
-const ENTITIES: Record<string, string> = {
-  "&amp;": "&",
-  "&lt;": "<",
-  "&gt;": ">",
-  "&quot;": '"',
-  "&#39;": "'",
-  "&nbsp;": " ",
-}
-
-/** Tiptap HTML -> readable text: block tags become line breaks, links keep their URL. */
+/** Tiptap HTML -> readable text (html-to-text, as the rest of the repo). */
 export function htmlToPlainText(html: string): string {
   if (typeof html !== "string" || html.length === 0) {
     return ""
   }
-  return html
-    .slice(0, MAX_TEXT_LENGTH)
-    .replace(ANCHOR_WITH_LABEL, (_m, href: string, label: string) => {
-      const text = label.replace(TAG, "").trim()
-      return text && text !== href ? `${text} (${href})` : href
-    })
-    .replace(BR, "\n")
-    .replace(BLOCK_END, "\n")
-    .replace(LI_START, "- ")
-    .replace(TAG, "")
-    .replace(ENTITY, (entity) => ENTITIES[entity] ?? entity)
-    .replace(TRAILING_SPACE, "\n")
-    .replace(EXTRA_BREAKS, "\n\n")
-    .trim()
+  return htmlToText(html.slice(0, MAX_TEXT_LENGTH), {
+    wordwrap: false,
+    selectors: [
+      { selector: "img", format: "skip" },
+      { selector: "a", options: { hideLinkHrefIfSameAsText: true } },
+    ],
+  }).trim()
 }
 
 /**
@@ -85,21 +61,41 @@ export function renderDynamicEmailText(elements: MailElementSchema[]): string {
   return parts.join("\n\n")
 }
 
+/** Rewriting stops (the fragment is returned as is) past these caps. */
+const MAX_REWRITE_HTML_LENGTH = 200_000
+const MAX_REWRITE_ANCHORS = 200
+
+/** The http(s) hrefs of an HTML fragment, decoded, in order. */
+export function extractHttpHrefs(html: string): string[] {
+  if (typeof html !== "string" || html.length === 0) {
+    return []
+  }
+  return [...html.slice(0, MAX_REWRITE_HTML_LENGTH).matchAll(ANCHOR_HREF)]
+    .map((match) => decodeHtmlAttr(match[2] ?? ""))
+    .filter((href) => HTTP_URL.test(href))
+}
+
 /**
- * Rewrites every http(s) `href` in an HTML fragment through `rewrite`
- * (click tracking). `keep` URLs (the unsubscribe link) and non-http schemes
- * (mailto:, tel:) are left alone. `rewrite` must return an absolute URL.
+ * Rewrites the http(s) `href`s of an HTML fragment through `rewrite` (click
+ * tracking), but ONLY those in `allowed`. Callers pass the hrefs the
+ * operator typed into the template BEFORE merge fields were filled in, so a
+ * link injected through a contact's field value is never signed by the hub.
+ * Non-http schemes are never rewritten. A fragment over the size or anchor
+ * cap is returned unchanged (untracked, never truncated).
  */
 export async function rewriteHtmlLinks(
   html: string,
   rewrite: (url: string) => Promise<string>,
-  keep: ReadonlySet<string> = new Set(),
+  allowed: ReadonlySet<string>,
 ): Promise<string> {
   if (typeof html !== "string" || html.length === 0) {
     return ""
   }
+  if (html.length > MAX_REWRITE_HTML_LENGTH || allowed.size === 0) {
+    return html
+  }
   const matches = [...html.matchAll(ANCHOR_HREF)]
-  if (matches.length === 0) {
+  if (matches.length === 0 || matches.length > MAX_REWRITE_ANCHORS) {
     return html
   }
   let out = ""
@@ -109,7 +105,7 @@ export async function rewriteHtmlLinks(
     const index = match.index ?? 0
     const href = decodeHtmlAttr(rawHref ?? "")
     out += html.slice(last, index)
-    if (HTTP_URL.test(href) && !keep.has(href)) {
+    if (HTTP_URL.test(href) && allowed.has(href)) {
       out += `${open}${encodeHtmlAttr(await rewrite(href))}${close}`
     } else {
       out += whole

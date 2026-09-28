@@ -25,6 +25,7 @@ import type {
 } from "@chatbotx.io/mail/dynamic"
 import { renderDynamicEmailHtml } from "@chatbotx.io/mail/dynamic"
 import {
+  extractHttpHrefs,
   renderDynamicEmailText,
   rewriteHtmlLinks,
 } from "@chatbotx.io/mail/extras"
@@ -53,11 +54,11 @@ async function resolveElements({
   workspaceId: string
 }): Promise<MailElementSchema[]> {
   const resolved: MailElementSchema[] = []
-  // Links typed into text are tracked like buttons (s220b); the unsubscribe
-  // link never is.
+  // Links the operator typed into text are tracked like buttons (s220b). Only
+  // hrefs present in the template BEFORE merge fields are filled in: a link
+  // arriving inside a contact's field value is never signed by the hub.
   const trackUrl = async (url: string) =>
     `${appUrl}/email-topic/click?r=${token}&u=${await signEmailClickUrl(url, workspaceId)}`
-  const keepUntracked = new Set([unsubscribeUrl])
 
   for (const el of rawElements) {
     switch (el.type) {
@@ -76,7 +77,11 @@ async function resolveElements({
           type: el.type,
           text:
             token && el.type !== "code"
-              ? await rewriteHtmlLinks(text, trackUrl, keepUntracked)
+              ? await rewriteHtmlLinks(
+                  text,
+                  trackUrl,
+                  new Set(extractHttpHrefs(el.text)),
+                )
               : text,
         })
         break

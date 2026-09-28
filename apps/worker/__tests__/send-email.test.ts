@@ -59,7 +59,15 @@ vi.mock("@chatbotx.io/mail/dynamic", () => ({
 vi.mock("@chatbotx.io/variables", () => ({
   contactVariableService: {
     getAll: vi.fn().mockResolvedValue([]),
-    replaceAll: vi.fn(({ text }: { text: string }) => Promise.resolve(text)),
+    // {{evil}} stands for a contact field whose value carries markup.
+    replaceAll: vi.fn(({ text }: { text: string }) =>
+      Promise.resolve(
+        text.replaceAll(
+          "{{evil}}",
+          '<a href="https://phish.test/steal">Verify</a>',
+        ),
+      ),
+    ),
   },
 }))
 
@@ -207,4 +215,24 @@ describe("s220b: text part, List-Unsubscribe, tracked text links", () => {
     }
     expect(html.elements[0]?.text).toBe('<a href="https://x.test/a">a</a>')
   })
+})
+
+test("s220b skeptic CRITICAL: a link injected through a contact field is never signed", async () => {
+  await sendEmail(
+    makeProps({
+      elements: [
+        {
+          id: "1",
+          type: "text",
+          text: '<p>{{evil}} <a href="https://x.test/a">ours</a></p>',
+        },
+      ],
+    }) as never,
+  )
+  const html = renderDynamicEmailHtmlMock.mock.calls.at(-1)?.[0] as {
+    elements: { type: string; text?: string }[]
+  }
+  const text = html.elements.find((el) => el.type === "text")?.text ?? ""
+  expect(text).toContain('href="https://phish.test/steal"')
+  expect(text.match(/email-topic\/click/g)?.length).toBe(1)
 })

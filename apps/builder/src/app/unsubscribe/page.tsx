@@ -19,16 +19,9 @@ export default async function UnsubscribePage(props: UnsubscribePageProps) {
   const { token, result } = await props.searchParams
   const t = await getTranslations("unsubscribePage")
 
-  if (result === "done") {
-    return (
-      <UnsubscribeMessage description={t("description")} title={t("title")} />
-    )
-  }
-
-  const checked =
-    result === "unavailable"
-      ? { status: "unavailable" as const }
-      : await checkUnsubscribeToken(token)
+  // `result` is only a hint from the POST redirect: the token is always
+  // verified, and "done" shows only for a contact that IS opted out.
+  const checked = await checkUnsubscribeToken(token)
 
   if (checked.status === "unavailable") {
     return (
@@ -44,6 +37,11 @@ export default async function UnsubscribePage(props: UnsubscribePageProps) {
         description={t("invalidDescription")}
         title={t("invalidTitle")}
       />
+    )
+  }
+  if (result === "done" && checked.emailOptIn === false) {
+    return (
+      <UnsubscribeMessage description={t("description")} title={t("title")} />
     )
   }
 

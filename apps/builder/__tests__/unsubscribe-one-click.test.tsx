@@ -1,16 +1,19 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, test, vi } from "vitest"
 
-const { mockUnsubscribeEmail, mockVerify, mockLoadServable } = vi.hoisted(
-  () => ({
+const { mockUnsubscribeEmail, mockVerify, mockLoadServable, mockFindById } =
+  vi.hoisted(() => ({
     mockUnsubscribeEmail: vi.fn(),
     mockVerify: vi.fn(),
     mockLoadServable: vi.fn(),
-  }),
-)
+    mockFindById: vi.fn(),
+  }))
 
 vi.mock("@chatbotx.io/business", () => ({
-  contactService: { unsubscribeEmail: mockUnsubscribeEmail },
+  contactService: {
+    unsubscribeEmail: mockUnsubscribeEmail,
+    findById: mockFindById,
+  },
   verifyUnsubscribeToken: mockVerify,
 }))
 vi.mock("@/lib/workspace/load-servable-workspace", () => ({
@@ -42,6 +45,7 @@ beforeEach(() => {
   mockVerify.mockResolvedValue({ cid: "c-1", wid: "ws-1" })
   mockLoadServable.mockResolvedValue({ servable: true })
   mockUnsubscribeEmail.mockResolvedValue(undefined)
+  mockFindById.mockResolvedValue({ id: "c-1", emailOptIn: true })
 })
 
 describe("POST /unsubscribe/one-click", () => {
@@ -105,13 +109,36 @@ describe("/unsubscribe page", () => {
     expect(mockUnsubscribeEmail).not.toHaveBeenCalled()
   })
 
-  test("result=done shows the success copy without verifying or mutating", async () => {
+  test("result=done shows success only for a verified, opted-out contact", async () => {
+    mockFindById.mockResolvedValue({ id: "c-1", emailOptIn: false })
     const page = await UnsubscribePage({
       searchParams: Promise.resolve({ token: "tok", result: "done" }),
     })
-    expect(JSON.stringify(page)).toContain('"title"')
-    expect(mockVerify).not.toHaveBeenCalled()
+    const html = JSON.stringify(page)
+    expect(html).toContain('"title"')
+    expect(html).not.toContain("confirmTitle")
     expect(mockUnsubscribeEmail).not.toHaveBeenCalled()
+  })
+
+  test("a forged result=done for a still-subscribed contact shows the confirm form", async () => {
+    const page = await UnsubscribePage({
+      searchParams: Promise.resolve({ token: "tok", result: "done" }),
+    })
+    expect(JSON.stringify(page)).toContain("confirmTitle")
+  })
+
+  test("result=done without a valid token is the invalid page", async () => {
+    const page = await UnsubscribePage({
+      searchParams: Promise.resolve({ result: "done" }),
+    })
+    expect(JSON.stringify(page)).toContain("invalidTitle")
+  })
+
+  test("result=unavailable cannot hide the confirm form for a valid token", async () => {
+    const page = await UnsubscribePage({
+      searchParams: Promise.resolve({ token: "tok", result: "unavailable" }),
+    })
+    expect(JSON.stringify(page)).toContain("confirmTitle")
   })
 
   test("a missing or bad token renders the invalid copy", async () => {

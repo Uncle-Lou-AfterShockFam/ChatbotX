@@ -3,10 +3,17 @@ import { loadServableWorkspace } from "@/lib/workspace/load-servable-workspace"
 
 export type UnsubscribeTokenStatus = "valid" | "invalid" | "unavailable"
 
-/** Verifies an unsubscribe token WITHOUT acting on it (the GET page). */
+/**
+ * Verifies an unsubscribe token WITHOUT acting on it (the GET page).
+ * `emailOptIn` is the contact's current state (undefined when not found).
+ */
 export async function checkUnsubscribeToken(
   token: string | null | undefined,
-): Promise<{ status: UnsubscribeTokenStatus; contactId?: string }> {
+): Promise<{
+  status: UnsubscribeTokenStatus
+  contactId?: string
+  emailOptIn?: boolean
+}> {
   if (typeof token !== "string" || token.length === 0 || token.length > 4096) {
     return { status: "invalid" }
   }
@@ -20,7 +27,15 @@ export async function checkUnsubscribeToken(
   if (!servable) {
     return { status: "unavailable" }
   }
-  return { status: "valid", contactId: payload.cid }
+  const contact = await contactService.findById({
+    workspaceId: payload.wid,
+    id: payload.cid,
+  })
+  return {
+    status: "valid",
+    contactId: payload.cid,
+    emailOptIn: contact?.emailOptIn,
+  }
 }
 
 /** Verifies the token and opts the contact out of email (the POST routes). */
