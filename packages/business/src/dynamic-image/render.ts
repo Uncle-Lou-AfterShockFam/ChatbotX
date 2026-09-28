@@ -4,11 +4,11 @@ import type {
   DynamicImageFontFamily,
 } from "@chatbotx.io/database/partials"
 import { createCanvas, loadImage, type SKRSContext2D } from "@napi-rs/canvas"
-import { fetchPublicUrl } from "../net/safe-fetch"
 import {
   ensureDynamicImageFontsRegistered,
   resolveDynamicImageFontFamily,
 } from "./fonts"
+import { fetchImageBytes } from "./pinned-fetch"
 import { renderQrCodeBuffer } from "./qr"
 
 const VARIABLE_RE = /\{\{[^}]+\}\}/
@@ -44,19 +44,13 @@ export function elementHasVariable(text: string): boolean {
  * redirects, so it rejects outright on the 307/308 a storage provider (S3,
  * RustFS, CDNs) commonly issues for object URLs. So the URL is fetched here
  * and `loadImage` gets the buffer. The URL (an operator-set element, a QR
- * logo, a contact's custom field) and every redirect hop pass the SSRF guard
- * first (s215): the render runs inside the hub network.
+ * logo, a contact's custom field) and every redirect hop go through the
+ * connection-pinned SSRF guard (s215): the render runs inside the hub network.
  */
 export async function loadRemoteImage(
   url: string,
 ): ReturnType<typeof loadImage> {
-  const response = await fetchPublicUrl(url)
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch image from ${url}: ${response.status} ${response.statusText}`,
-    )
-  }
-  return loadImage(Buffer.from(await response.arrayBuffer()))
+  return loadImage(await fetchImageBytes(url))
 }
 
 /** Static elements are baked once into the background image at save time. */

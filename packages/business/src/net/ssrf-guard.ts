@@ -108,7 +108,12 @@ const isBlockedIpv6 = (ip: string): boolean => {
   return false
 }
 
-const isBlockedIp = (ip: string): boolean => {
+/**
+ * True for any address an outbound request must not reach (private, loopback,
+ * link-local, reserved, mapped/NAT64 forms of those) and for anything that is
+ * not an IP literal at all (fail closed).
+ */
+export const isBlockedIp = (ip: string): boolean => {
   if (isIpv4Literal(ip)) {
     return isBlockedIpv4(ip)
   }
@@ -121,10 +126,13 @@ const isBlockedIp = (ip: string): boolean => {
 type DohAnswer = { type: number; data: string }
 type DohResponse = { Answer?: DohAnswer[] }
 
-const resolveHostname = async (hostname: string): Promise<string[]> => {
+const resolveRecords = async (
+  hostname: string,
+  type: "A" | "AAAA",
+): Promise<string[]> => {
   const url = new URL(DOH_ENDPOINT)
   url.searchParams.set("name", hostname)
-  url.searchParams.set("type", "A")
+  url.searchParams.set("type", type)
 
   const response = await fetch(url, {
     headers: { accept: "application/dns-json" },
@@ -144,6 +152,16 @@ const resolveHostname = async (hostname: string): Promise<string[]> => {
     )
     .map((answer) => answer.data)
 }
+
+// A and AAAA both (s215): a name with a public A and a private AAAA passed an
+// A-only check, and a dual-stack client may connect over either.
+const resolveHostname = async (hostname: string): Promise<string[]> =>
+  (
+    await Promise.all([
+      resolveRecords(hostname, "A"),
+      resolveRecords(hostname, "AAAA"),
+    ])
+  ).flat()
 
 export type SsrfCheckResult =
   | { unsafe: true }

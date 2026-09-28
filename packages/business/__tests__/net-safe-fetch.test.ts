@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import {
   fetchFollowingSafeRedirects,
-  fetchPublicUrl,
   SsrfFetchError,
 } from "../src/net/safe-fetch"
 
@@ -25,29 +24,10 @@ const stubFetch = (...responses: Response[]) => {
   return fetchMock
 }
 
-describe("fetchPublicUrl (s215)", () => {
-  test.each([
-    "http://127.0.0.1/x",
-    "http://169.254.169.254/latest/meta-data/",
-    "http://[::1]/x",
-    "http://[::ffff:127.0.0.1]/x",
-    "http://10.0.0.5/x",
-    "http://localhost/x",
-    "file:///etc/passwd",
-    "ftp://93.184.216.34/x",
-    "not a url",
-  ])("refuses %s before any fetch", async (url) => {
-    const fetchMock = stubFetch()
-    await expect(fetchPublicUrl(url)).rejects.toMatchObject({
-      name: "SsrfFetchError",
-      reason: "unsafeUrl",
-    })
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
-
+describe("fetchFollowingSafeRedirects (s215)", () => {
   test("fetches a public URL with redirect: manual", async () => {
     const fetchMock = stubFetch(new Response("png", { status: 200 }))
-    const response = await fetchPublicUrl(PUBLIC)
+    const response = await fetchFollowingSafeRedirects(PUBLIC)
     expect(await response.text()).toBe("png")
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ redirect: "manual" })
   })
@@ -60,7 +40,9 @@ describe("fetchPublicUrl (s215)", () => {
     ["a non-http scheme", "file:///etc/passwd"],
   ])("refuses a redirect to %s and never fetches it", async (_, target) => {
     const fetchMock = stubFetch(redirectTo(target, 307))
-    const error = await fetchPublicUrl(PUBLIC).catch((e: unknown) => e)
+    const error = await fetchFollowingSafeRedirects(PUBLIC).catch(
+      (e: unknown) => e,
+    )
     expect(error).toBeInstanceOf(SsrfFetchError)
     expect((error as SsrfFetchError).reason).toBe("unsafeRedirect")
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -71,7 +53,7 @@ describe("fetchPublicUrl (s215)", () => {
       redirectTo("/next.png", 308),
       new Response("ok", { status: 200 }),
     )
-    await fetchPublicUrl(PUBLIC)
+    await fetchFollowingSafeRedirects(PUBLIC)
     expect(fetchMock.mock.calls[1]?.[0]).toBe("http://93.184.216.34/next.png")
   })
 
@@ -80,7 +62,7 @@ describe("fetchPublicUrl (s215)", () => {
       redirectTo("http://93.184.216.35/b.png"),
       redirectTo("http://127.0.0.1/c.png"),
     )
-    await expect(fetchPublicUrl(PUBLIC)).rejects.toMatchObject({
+    await expect(fetchFollowingSafeRedirects(PUBLIC)).rejects.toMatchObject({
       reason: "unsafeRedirect",
     })
     expect(fetchMock).toHaveBeenCalledTimes(2)
@@ -88,7 +70,7 @@ describe("fetchPublicUrl (s215)", () => {
 
   test("a redirect with no Location is refused", async () => {
     stubFetch(new Response(null, { status: 302 }))
-    await expect(fetchPublicUrl(PUBLIC)).rejects.toMatchObject({
+    await expect(fetchFollowingSafeRedirects(PUBLIC)).rejects.toMatchObject({
       reason: "unsafeRedirect",
     })
   })
@@ -96,7 +78,9 @@ describe("fetchPublicUrl (s215)", () => {
   test("the hop cap fires past maxRedirects", async () => {
     const loop = () => redirectTo(PUBLIC)
     const fetchMock = stubFetch(loop(), loop(), loop(), loop())
-    await expect(fetchPublicUrl(PUBLIC, {}, 2)).rejects.toMatchObject({
+    await expect(
+      fetchFollowingSafeRedirects(PUBLIC, {}, 2),
+    ).rejects.toMatchObject({
       reason: "tooManyRedirects",
     })
     // The first fetch plus two followed hops; the third redirect is refused.
@@ -105,7 +89,7 @@ describe("fetchPublicUrl (s215)", () => {
 
   test("non-redirect error statuses come back to the caller unchanged", async () => {
     stubFetch(new Response("nope", { status: 404 }))
-    const response = await fetchPublicUrl(PUBLIC)
+    const response = await fetchFollowingSafeRedirects(PUBLIC)
     expect(response.status).toBe(404)
   })
 

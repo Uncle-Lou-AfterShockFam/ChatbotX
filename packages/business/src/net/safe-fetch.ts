@@ -3,10 +3,7 @@ import { checkSsrfSafety } from "./ssrf-guard"
 /** Hop cap for {@link fetchFollowingSafeRedirects} when a caller names none. */
 export const DEFAULT_MAX_REDIRECTS = 5
 
-export type SsrfFetchRefusal =
-  | "unsafeUrl"
-  | "unsafeRedirect"
-  | "tooManyRedirects"
+export type SsrfFetchRefusal = "unsafeRedirect" | "tooManyRedirects"
 
 /** An outbound fetch the SSRF guard refused; `reason` says which check. */
 export class SsrfFetchError extends Error {
@@ -50,18 +47,6 @@ export const fetchFollowingSafeRedirects = async (
     }
     current = next
   }
-}
-
-/** {@link fetchFollowingSafeRedirects} for a URL nobody has checked yet. */
-export const fetchPublicUrl = async (
-  url: string,
-  init: RequestInit = {},
-  maxRedirects = DEFAULT_MAX_REDIRECTS,
-): Promise<Response> => {
-  if ((await checkSsrfSafety(url)).unsafe) {
-    throw new SsrfFetchError("unsafeUrl", url)
-  }
-  return await fetchFollowingSafeRedirects(url, init, maxRedirects)
 }
 
 const safeResolve = (location: string, base: string): string | null => {

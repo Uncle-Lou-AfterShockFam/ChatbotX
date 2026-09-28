@@ -11,6 +11,13 @@ const dohJsonResponse = (records: { type: number; data: string }[]) =>
   })
 
 const A_RECORD = 1
+
+// The guard asks for A and AAAA separately (s215): answer the A query with
+// `ip`, the AAAA query with nothing, and a fresh Response each time.
+const aOnly = (ip: string) => async (input: URL | string) =>
+  new URL(String(input)).searchParams.get("type") === "A"
+    ? dohJsonResponse([{ type: A_RECORD, data: ip }])
+    : dohJsonResponse([])
 const IMAGE_URL_CONTEXT_PATTERN = /image URL/
 
 let fetchMock: ReturnType<typeof vi.fn>
@@ -78,9 +85,7 @@ describe("isSsrfUnsafeUrl", () => {
   })
 
   test("allows a public IP resolved via DNS", async () => {
-    fetchMock.mockResolvedValue(
-      dohJsonResponse([{ type: A_RECORD, data: "93.184.216.34" }]),
-    )
+    fetchMock.mockImplementation(aOnly("93.184.216.34"))
     expect(await isSsrfUnsafeUrl("https://public.example.com/")).toBe(false)
   })
 
@@ -112,9 +117,7 @@ describe("isSsrfUnsafeUrl", () => {
 
 describe("checkSsrfSafety", () => {
   test("returns the resolved IPs alongside a safe verdict", async () => {
-    fetchMock.mockResolvedValue(
-      dohJsonResponse([{ type: A_RECORD, data: "93.184.216.34" }]),
-    )
+    fetchMock.mockImplementation(aOnly("93.184.216.34"))
     const result = await checkSsrfSafety("https://public.example.com/")
     expect(result).toEqual({ unsafe: false, resolvedIps: ["93.184.216.34"] })
   })
@@ -137,5 +140,36 @@ describe("assertPublicUrl", () => {
     await expect(
       assertPublicUrl("http://127.0.0.1/", "image URL"),
     ).rejects.toThrow(IMAGE_URL_CONTEXT_PATTERN)
+  })
+})
+
+describe("checkSsrfSafety queries A and AAAA (s215)", () => {
+  const byType = (a: string[], aaaa: string[]) =>
+    vi.fn(async (input: URL | string) => {
+      const type = new URL(String(input)).searchParams.get("type")
+      const data = type === "AAAA" ? aaaa : a
+      return new Response(
+        JSON.stringify({
+          Answer: data.map((ip) => ({
+            type: type === "AAAA" ? 28 : 1,
+            data: ip,
+          })),
+        }),
+      )
+    })
+
+  test("a public A with a private AAAA is unsafe", async () => {
+    vi.stubGlobal("fetch", byType(["93.184.216.34"], ["fd00::1"]))
+    expect(await isSsrfUnsafeUrl("https://dual.example.com/")).toBe(true)
+  })
+
+  test("a public A with no AAAA stays safe", async () => {
+    const fetchMock = byType(["93.184.216.34"], [])
+    vi.stubGlobal("fetch", fetchMock)
+    expect(await isSsrfUnsafeUrl("https://v4.example.com/")).toBe(false)
+    const types = fetchMock.mock.calls.map(([u]) =>
+      new URL(String(u)).searchParams.get("type"),
+    )
+    expect(types.sort()).toEqual(["A", "AAAA"])
   })
 })
