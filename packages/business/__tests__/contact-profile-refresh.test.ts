@@ -519,6 +519,20 @@ describe("contactProfileRefreshService.refresh", () => {
     expect(logProviderErrorForChannelMock).toHaveBeenCalled()
   })
 
+  test("a public-API contact avatar key is managed too: discarded on a write failure (s217)", async () => {
+    const fetchProfile = vi.fn(async () => ({
+      firstName: "Jane",
+      avatar: "public/space/ws-1/contacts/c-1/avatar/new",
+    }))
+    updateIfProfileNameEmptyMock.mockRejectedValueOnce(new Error("db down"))
+
+    await contactProfileRefreshService.refresh(refreshInput({ fetchProfile }))
+
+    expect(deleteObjectMock).toHaveBeenCalledWith(
+      "public/space/ws-1/contacts/c-1/avatar/new",
+    )
+  })
+
   test("uploader.deleteObject throws after a write failure → logged, result unchanged", async () => {
     const fetchProfile = vi.fn(async () => ({
       firstName: "Jane",

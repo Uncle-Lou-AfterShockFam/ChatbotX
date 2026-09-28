@@ -181,6 +181,47 @@ describe("contactService.upsertByIdentifier", () => {
     update.mockRestore()
   })
 
+  test("a storage-key avatar is kept only when it is this contact's own key (s217)", async () => {
+    contactFindFirst.mockResolvedValue({ id: "c-1" })
+    const update = vi
+      .spyOn(contactService, "update")
+      .mockResolvedValue(
+        {} as Awaited<ReturnType<typeof contactService.update>>,
+      )
+    const upsert = (avatar: string) =>
+      contactService.upsertByIdentifier({
+        workspaceId: "ws-1",
+        identifier: "email:ada@example.com",
+        source: contactSources.enum.api,
+        data: { firstName: "Ada" },
+        avatar,
+      })
+
+    await upsert("public/space/ws-1/contacts/c-1/avatar/k1")
+    expect(update).toHaveBeenLastCalledWith(
+      { workspaceId: "ws-1", id: "c-1" },
+      expect.objectContaining({
+        avatar: "public/space/ws-1/contacts/c-1/avatar/k1",
+      }),
+    )
+
+    // Another contact's key, another workspace's key, a channel key and a
+    // look-alike prefix are all aliases a later purge would break: skipped.
+    for (const alias of [
+      "public/space/ws-1/contacts/c-2/avatar/k1",
+      "public/space/ws-2/contacts/c-1/avatar/k1",
+      "public/space/ws-1/avatars/k1",
+      "public/space/ws-1/contacts/c-10/avatar/k1",
+    ]) {
+      update.mockClear()
+      await upsert(alias)
+      expect(update).toHaveBeenCalledTimes(1)
+      expect(update.mock.calls[0]?.[1]).not.toHaveProperty("avatar")
+    }
+    expect(uploadFileFromUrl).not.toHaveBeenCalled()
+    update.mockRestore()
+  })
+
   test("a storage outage while saving the avatar still fails loudly", async () => {
     const outage = new Error("connect ECONNREFUSED filesystem:9000")
     vi.mocked(uploadFileFromUrl).mockRejectedValue(outage)

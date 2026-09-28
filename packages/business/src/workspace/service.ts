@@ -24,6 +24,10 @@ import { notFoundException, workspaceLimitReachedException } from "../errors"
 import { isCommunity } from "../keys"
 import { logger } from "../logger"
 import { quotaEnforcementService } from "../quota-enforcement/service"
+import {
+  workspaceAvatarsPrefix,
+  workspaceContactFilesPrefix,
+} from "../storage/paths"
 import { purgeStoragePrefix } from "../storage/purge-prefix"
 import { userQuotaService } from "../user-quota/service"
 import {
@@ -385,11 +389,21 @@ class WorkspaceService extends BaseService {
           )
         })
 
-      // Contact documents (rendered + signed PDFs) are not rows: purge the
-      // workspace's storage prefix before the row goes, best-effort like the
-      // quota release above.
+      // Contact documents (rendered + signed PDFs) and contact / channel
+      // avatars (public-read) are not rows: purge their storage prefixes before the
+      // row goes, best-effort like the quota release above.
       await purgeStoragePrefix(
         workspaceDocumentsPrefix(workspace.id),
+        { workspaceId: workspace.id },
+        "workspace-purge",
+      )
+      await purgeStoragePrefix(
+        workspaceContactFilesPrefix(workspace.id),
+        { workspaceId: workspace.id },
+        "workspace-purge",
+      )
+      await purgeStoragePrefix(
+        workspaceAvatarsPrefix(workspace.id),
         { workspaceId: workspace.id },
         "workspace-purge",
       )
