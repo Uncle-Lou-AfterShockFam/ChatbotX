@@ -373,7 +373,7 @@ describe("WorkspaceService.teardownDueWorkspace — contact document files", () 
     logger.warn.mockClear()
   })
 
-  test("purges the workspace's documents and contact-files prefixes after the heavy-data drain and before the row delete", async () => {
+  test("purges the workspace's documents, contact-files and avatars prefixes after the heavy-data drain and before the row delete", async () => {
     const order: string[] = []
     workspaceLifecycleService.purgeWorkspaceHeavyData.mockImplementation(() => {
       order.push("heavy")
@@ -393,6 +393,7 @@ describe("WorkspaceService.teardownDueWorkspace — contact document files", () 
       "heavy",
       "purge:workspaces/ws-9/documents/",
       "purge:public/space/ws-9/contacts/",
+      "purge:public/space/ws-9/avatars/",
       "row",
     ])
     expect(deleteByPrefix).toHaveBeenCalledWith(
@@ -415,6 +416,10 @@ describe("WorkspaceService.teardownDueWorkspace — contact document files", () 
     )
     expect(logger.warn).toHaveBeenCalledWith(
       { workspaceId: "ws-9", prefix: "public/space/ws-9/contacts/", err },
+      "workspace-purge: failed to purge storage objects under prefix",
+    )
+    expect(logger.warn).toHaveBeenCalledWith(
+      { workspaceId: "ws-9", prefix: "public/space/ws-9/avatars/", err },
       "workspace-purge: failed to purge storage objects under prefix",
     )
   })

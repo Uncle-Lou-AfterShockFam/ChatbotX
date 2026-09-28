@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import {
   contactAvatarPrefix,
+  isContactAvatarKey,
   workspaceContactFilesPrefix,
 } from "../src/storage/paths"
 
@@ -24,5 +25,20 @@ describe("storage paths", () => {
         workspaceContactFilesPrefix("ws"),
       ),
     ).toBe(true)
+  })
+})
+
+describe("isContactAvatarKey", () => {
+  test("matches only a key directly under some contact's avatar prefix", () => {
+    expect(isContactAvatarKey(`${contactAvatarPrefix("1", "2")}k`)).toBe(true)
+    for (const key of [
+      "public/space/1/avatars/k",
+      "public/space/1/contacts/2/avatar/",
+      "public/space/1/contacts/2/avatar/a/b",
+      "https://x/public/space/1/contacts/2/avatar/k",
+      "workspaces/1/documents/2/k.pdf",
+    ]) {
+      expect(isContactAvatarKey(key)).toBe(false)
+    }
   })
 })

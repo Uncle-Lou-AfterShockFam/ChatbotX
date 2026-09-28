@@ -12,6 +12,7 @@ import {
 } from "../../contact-locale"
 import { logProviderErrorForChannel } from "../../error-log/service"
 import { logger } from "../../logger"
+import { isContactAvatarKey } from "../../storage/paths"
 import type { ContactAccessScope } from "../service"
 import { contactService } from "../service"
 import {
@@ -63,11 +64,13 @@ const EXTERNAL_URL_PATTERN = /^https?:\/\//
 
 /**
  * True when `avatar` is an object we uploaded to our own storage (an
- * `.../avatars/<id>` key), so it is safe to delete when superseded. External
- * URLs (http/https) and non-avatar paths are left untouched.
+ * `.../avatars/<id>` channel key, or a public-API `contactAvatarPrefix` key,
+ * s217), so it is safe to delete when superseded. External URLs
+ * (http/https) and non-avatar paths are left untouched.
  */
 const isManagedAvatarObject = (avatar: string): boolean =>
-  !EXTERNAL_URL_PATTERN.test(avatar) && avatar.includes("/avatars/")
+  !EXTERNAL_URL_PATTERN.test(avatar) &&
+  (avatar.includes("/avatars/") || isContactAvatarKey(avatar))
 
 /**
  * Best-effort deletion of a managed avatar object this attempt just uploaded

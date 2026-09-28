@@ -119,6 +119,46 @@ describe("contactService.delete", () => {
     expect(callOrder).toHaveLength(122)
   })
 
+  test("deletes a contact's own channel avatar key, never an external or foreign one, and a failure never fails the delete (s217)", async () => {
+    const contacts = [
+      { ...makeContact(0), avatar: "public/space/ws-1/avatars/own" },
+      { ...makeContact(1), avatar: "https://cdn.example.com/a.png" },
+      { ...makeContact(2), avatar: "public/space/ws-2/avatars/foreign" },
+      { ...makeContact(3), avatar: null },
+      { ...makeContact(4), avatar: "public/space/ws-1/avatars/fails" },
+    ]
+    vi.spyOn(db.query.contactModel, "findMany").mockResolvedValue(
+      contacts as never,
+    )
+    stubConversations([])
+    vi.spyOn(messageCleanupService, "record").mockResolvedValue()
+    vi.spyOn(contactService, "invalidate").mockResolvedValue()
+    vi.spyOn(workspaceService, "find").mockResolvedValue(null as never)
+    vi.spyOn(db, "transaction").mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        await fn({ delete: () => ({ where: () => Promise.resolve() }) })
+      },
+    )
+    const deleteObject = vi
+      .spyOn(uploader, "deleteObject")
+      .mockImplementation((key: string) =>
+        key.endsWith("/fails")
+          ? Promise.reject(new Error("S3 unreachable"))
+          : Promise.resolve(undefined as never),
+      )
+
+    const result = await contactService.delete({
+      workspaceId: "ws-1",
+      ids: contacts.map((c) => c.id),
+    })
+
+    expect(result).toHaveLength(5)
+    expect(deleteObject.mock.calls.map(([key]) => key).sort()).toEqual([
+      "public/space/ws-1/avatars/fails",
+      "public/space/ws-1/avatars/own",
+    ])
+  })
+
   test("chunks deletes and records tombstones atomically per chunk", async () => {
     const contacts = Array.from({ length: 120 }, (_, i) => makeContact(i))
     vi.spyOn(db.query.contactModel, "findMany").mockResolvedValue(

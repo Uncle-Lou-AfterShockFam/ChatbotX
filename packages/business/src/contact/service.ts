@@ -33,6 +33,7 @@ import { emit } from "@chatbotx.io/event-bus"
 import { emitContactCreated } from "@chatbotx.io/events"
 import {
   UploadValidationError,
+  uploader,
   uploadFileFromUrl,
 } from "@chatbotx.io/filesystem"
 import { invalidateCacheByTags, withCache } from "@chatbotx.io/redis"
@@ -46,7 +47,7 @@ import { logger } from "../logger"
 import { messageCleanupService } from "../message-cleanup/service"
 import { outboundDownload } from "../net/outbound-fetch"
 import { quotaEnforcementService } from "../quota-enforcement/service"
-import { contactAvatarPrefix } from "../storage/paths"
+import { contactAvatarPrefix, workspaceAvatarsPrefix } from "../storage/paths"
 import { purgeStoragePrefix } from "../storage/purge-prefix"
 import { userQuotaService } from "../user-quota/service"
 import { workspaceService } from "../workspace/service"
@@ -644,10 +645,7 @@ class ContactService extends BaseService {
       // per-contact prefixes. Purged only AFTER the chunk committed,
       // best-effort: a storage failure leaves an orphaned file, never a
       // half-deleted contact.
-      await this.purgeContactFiles({
-        workspaceId,
-        contactIds: chunk.map((c) => c.id),
-      })
+      await this.purgeContactFiles({ workspaceId, contacts: chunk })
     }
 
     await this.invalidate({
@@ -667,23 +665,36 @@ class ContactService extends BaseService {
    */
   private async purgeContactFiles(props: {
     workspaceId: string
-    contactIds: string[]
+    contacts: Pick<ContactModel, "id" | "avatar">[]
   }): Promise<void> {
+    const { workspaceId } = props
     await mapWithConcurrency(
-      props.contactIds,
+      props.contacts,
       CONTACT_FILE_PURGE_CONCURRENCY,
-      async (contactId) => {
-        const context = { workspaceId: props.workspaceId, contactId }
+      async ({ id: contactId, avatar }) => {
+        const context = { workspaceId, contactId }
         await purgeStoragePrefix(
-          contactDocumentsPrefix(props.workspaceId, contactId),
+          contactDocumentsPrefix(workspaceId, contactId),
           context,
           "contact-delete",
         )
         await purgeStoragePrefix(
-          contactAvatarPrefix(props.workspaceId, contactId),
+          contactAvatarPrefix(workspaceId, contactId),
           context,
           "contact-delete",
         )
+        // A channel profile picture is one flat key, not a prefix: delete it
+        // only when it is this workspace's own object (never an external URL
+        // or another workspace's key).
+        if (avatar?.startsWith(workspaceAvatarsPrefix(workspaceId))) {
+          await uploader.deleteObject(avatar).catch((error: unknown) => {
+            // Best-effort like the prefix purges: an orphan, never a failure.
+            logger.warn(
+              { ...context, err: error },
+              "contact-delete: failed to delete channel avatar object",
+            )
+          })
+        }
       },
     )
   }
@@ -932,7 +943,17 @@ class ContactService extends BaseService {
     contactId: string,
   ): Promise<string | undefined> {
     if (!avatar.startsWith("http")) {
-      return avatar
+      // A storage key is accepted only as this contact's own avatar: any other
+      // key would alias an object a later delete purges out from under this
+      // contact (s217). Skipped like a refused URL, never a failed upsert.
+      if (avatar.startsWith(contactAvatarPrefix(workspaceId, contactId))) {
+        return avatar
+      }
+      logger.warn(
+        { workspaceId, contactId },
+        "contact avatar skipped: storage key outside the contact's own prefix",
+      )
+      return
     }
     try {
       const uploaded = await uploadFileFromUrl(
