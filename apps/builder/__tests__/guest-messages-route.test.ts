@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import { signGuestSecret } from "@chatbotx.io/partysocket-config/guest-secret"
 import { NextRequest } from "next/server"
 import { beforeEach, describe, expect, test, vi } from "vitest"
 
@@ -7,6 +8,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 // only. A stranger's page relaying a server-minted token must get a 403 and
 // no CORS grant, whatever token and parentOrigin it presents.
 const HUB = "app.chatbotx.io"
+const BROADCAST = vi.hoisted(() => "s".repeat(32))
 const mocks = vi.hoisted(() => ({
   verify: vi.fn(async () => ({ authorized: true })),
   findWebchat: vi.fn(async () => ({
@@ -42,14 +44,19 @@ vi.mock("@/lib/rate-limit/guest-rate-limit", () => ({
   getGuestClientIp: () => "192.0.2.1",
 }))
 vi.mock("@/lib/errors/server-handler", () => ({
-  serverErrorHandler: (_e: unknown, headers: Headers) =>
-    new Response(null, { status: 500, headers }),
+  serverErrorHandler: (e: unknown, headers: Headers) =>
+    new Response(null, {
+      status: (e as { httpStatusCode?: number } | null)?.httpStatusCode ?? 500,
+      headers,
+    }),
 }))
+vi.mock("@/env", () => ({ env: { REALTIME_BROADCAST_SECRET: BROADCAST } }))
 
 const { GET, POST, OPTIONS } = await import(
   "../src/app/api/guest/messages/route"
 )
 const GUEST = "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f"
+const SECRET = await signGuestSecret(GUEST, BROADCAST)
 
 const query = new URLSearchParams({
   workspaceId: "1",
@@ -57,9 +64,12 @@ const query = new URLSearchParams({
   guestConversationId: GUEST,
   accessToken: "token",
 })
-const get = (origin?: string) =>
+const get = (origin?: string, secret: string | null = SECRET) =>
   new NextRequest(`https://${HUB}/api/guest/messages?${query}`, {
-    headers: origin ? { origin } : {},
+    headers: {
+      ...(origin ? { origin } : {}),
+      ...(secret === null ? {} : { "x-guest-secret": secret }),
+    },
   })
 const post = (origin: string | undefined, parentOrigin?: string) =>
   new NextRequest(`https://${HUB}/api/guest/messages`, {
@@ -157,6 +167,26 @@ describe("guest messages route: hub origin only, no CORS (s210)", () => {
     expect(res.status).not.toBe(200)
     expect(mocks.verify).not.toHaveBeenCalled()
     expect(mocks.handleCreate).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    ["no secret (the id alone, as the API and exports show it)", null],
+    ["an empty secret", ""],
+    ["another id's secret", "PLACEHOLDER"],
+    ["a well-formed guess", "0".repeat(64)],
+  ])("GET with %s is 401 before any rate-limit, token check or lookup (s215)", async (_, secret) => {
+    const value =
+      secret === "PLACEHOLDER"
+        ? await signGuestSecret(
+            "1:1f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+            BROADCAST,
+          )
+        : secret
+    const res = await GET(get(`https://${HUB}`, value))
+    expect(res.status).toBe(401)
+    expect(mocks.verify).not.toHaveBeenCalled()
+    expect(mocks.findWebchat).not.toHaveBeenCalled()
+    expect(mocks.findLatestBySource).not.toHaveBeenCalled()
   })
 
   test("OPTIONS grants no cross-origin access", () => {

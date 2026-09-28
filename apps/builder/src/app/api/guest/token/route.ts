@@ -24,6 +24,10 @@ const refreshRequest = z
   .strictObject({
     workspaceId: zodBigintAsString(),
     webchatId: zodBigintAsString(),
+    // Shape-checked only: no guest secret here (s215) because this route
+    // reads no conversation and returns only a session token, which alone
+    // opens nothing (every conversation route also needs the guest secret).
+    // Anything that ever keys off this id here must check the secret first.
     guestConversationId: zodGuestConversationId(),
     accessToken: z.string().min(1).max(2048),
     parentOrigin: z.string().max(2048).nullish(),

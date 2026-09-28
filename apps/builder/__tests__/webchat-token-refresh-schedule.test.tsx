@@ -68,6 +68,7 @@ const mount = () => {
         accessToken="token"
         config={{ id: "42", workspaceId: "1", persistentMenus: [] } as never}
         serverGuestConversationId="123:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f"
+        serverGuestSecret={"a".repeat(64)}
       >
         <Capture />
       </GuestSessionStoreProvider>,
