@@ -1,4 +1,5 @@
 import { outboundDownload } from "@chatbotx.io/business/outbound-fetch"
+import { workspaceAvatarsPrefix } from "@chatbotx.io/business/storage-paths"
 import type { IntegrationUserInfo } from "@chatbotx.io/database/partials"
 import { uploadFileFromUrl } from "@chatbotx.io/filesystem"
 import { createId } from "@chatbotx.io/utils"
@@ -31,7 +32,7 @@ export async function buildIntegrationUserInfo(props: {
     try {
       const uploaded = await uploadFileFromUrl(
         props.avatarUrl,
-        `public/space/${props.workspaceId}/avatars/${createId()}.jpg`,
+        `${workspaceAvatarsPrefix(props.workspaceId)}${createId()}.jpg`,
         { fetchImpl: outboundDownload },
       )
       avatar = uploaded.originPath

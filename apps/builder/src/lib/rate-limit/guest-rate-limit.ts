@@ -1,9 +1,6 @@
-import { distributedStore } from "@chatbotx.io/redis"
-import { assertTimeoutMs, withTimeout } from "@chatbotx.io/utils"
-import { logger } from "@/lib/log"
-import { STORE_TIMEOUT_MS } from "./api-rate-limit"
 import {
   checkFixedWindow,
+  type FixedWindowBucket,
   type FixedWindowResult,
   type FixedWindowStore,
   windowSuffix,
@@ -12,12 +9,6 @@ import {
 const WINDOW_SECONDS = 10
 const IP_LIMIT = 60
 const SESSION_LIMIT = 20
-const memoryCounters = new Map<string, { count: number; expiresAt: number }>()
-
-type RateLimitStore = Pick<
-  typeof distributedStore,
-  "incrementCounter" | "setNumberIfNotExists"
->
 
 type GuestRateLimitInput = {
   webchatId: string
@@ -29,147 +20,57 @@ type GuestRateLimitInput = {
    * message budget, keys unchanged.
    */
   scope?: "token-refresh"
-  store?: RateLimitStore
+  store?: FixedWindowStore
   now?: number
   /** Test seam; app code keeps the default `STORE_TIMEOUT_MS`. */
   storeTimeoutMs?: number
 }
 
-type GuestRateLimitResult = {
-  limited: boolean
-  retryAfter: number
-}
-
 const buildRateLimitKey = (...parts: string[]) =>
   ["guest-rate-limit", ...parts].join(":")
 
-// Fixed-window bucketing: fold the current window index into the key itself
-// instead of relying on `incrementCounter`'s per-hit TTL refresh (which would
-// produce a sliding window that a steady sender could keep alive
-// indefinitely). Each window gets its own key that naturally expires once —
-// no key ever has its TTL extended past one window's worth of time.
-const buildWindowSuffix = (now: number, windowSeconds: number) =>
-  String(Math.floor(now / (windowSeconds * 1000)))
-
-const secondsUntilNextWindow = (now: number, windowSeconds: number) => {
-  const windowMs = windowSeconds * 1000
-  const elapsed = now % windowMs
-  return Math.ceil((windowMs - elapsed) / 1000)
-}
-
-const incrementMemoryWindowCounter = (key: string, windowSeconds: number) => {
-  const now = Date.now()
-  const current = memoryCounters.get(key)
-  if (!current || current.expiresAt <= now) {
-    memoryCounters.set(key, {
-      count: 1,
-      expiresAt: now + windowSeconds * 1000,
-    })
-    return 1
-  }
-
-  const next = current.count + 1
-  memoryCounters.set(key, { ...current, count: next })
-  return next
-}
-
-const incrementWindowCounter = async (
-  store: RateLimitStore,
-  key: string,
-  windowSeconds: number,
-) => {
-  const created = await store.setNumberIfNotExists(key, 1, windowSeconds)
-  if (created) {
-    return 1
-  }
-
-  return (await store.incrementCounter(key, 1, windowSeconds)) ?? 1
-}
-
+/**
+ * Per-ip then per-session message budget on the shared fixed window
+ * (s218: was a hand-rolled copy of `checkFixedWindow`; the key strings are
+ * unchanged so an in-flight window survives the deploy).
+ */
 export const checkGuestRateLimit = async ({
   webchatId,
   clientIp,
   guestConversationId,
   scope,
-  store = distributedStore,
+  store,
   now = Date.now(),
-  storeTimeoutMs = STORE_TIMEOUT_MS,
-}: GuestRateLimitInput): Promise<GuestRateLimitResult> => {
-  // Outside the try: a bad seam value is a caller bug, never a fallback.
-  assertTimeoutMs(storeTimeoutMs)
-  const windowSuffix = buildWindowSuffix(now, WINDOW_SECONDS)
-  const retryAfter = secondsUntilNextWindow(now, WINDOW_SECONDS)
+  storeTimeoutMs,
+}: GuestRateLimitInput): Promise<FixedWindowResult> => {
+  const suffix = windowSuffix(now, WINDOW_SECONDS)
   const scoped = scope ? [scope] : []
-  const ipKey = buildRateLimitKey(
-    ...scoped,
-    "ip",
-    webchatId,
-    clientIp,
-    windowSuffix,
-  )
-  const sessionKey = guestConversationId
-    ? buildRateLimitKey(
+  const buckets: FixedWindowBucket[] = [
+    {
+      key: buildRateLimitKey(...scoped, "ip", webchatId, clientIp, suffix),
+      limit: IP_LIMIT,
+    },
+  ]
+  if (guestConversationId) {
+    buckets.push({
+      key: buildRateLimitKey(
         ...scoped,
         "session",
         webchatId,
         guestConversationId,
-        windowSuffix,
-      )
-    : null
-
-  // Up to four sequential round trips (set-if-absent + increment, per IP and
-  // per session). ONE budget covers all of them: bounding each call instead
-  // would let a slow-but-answering Redis hold a guest message ~4x
-  // STORE_TIMEOUT_MS (s201c skeptic). Past the budget the request takes the
-  // local fallback; the abandoned calls may still land (accepted over-count).
-  const checkStore = async (): Promise<GuestRateLimitResult> => {
-    const ipCount = await incrementWindowCounter(store, ipKey, WINDOW_SECONDS)
-    if (ipCount > IP_LIMIT) {
-      return { limited: true, retryAfter }
-    }
-
-    if (sessionKey) {
-      const sessionCount = await incrementWindowCounter(
-        store,
-        sessionKey,
-        WINDOW_SECONDS,
-      )
-      if (sessionCount > SESSION_LIMIT) {
-        return { limited: true, retryAfter }
-      }
-    }
-
-    return { limited: false, retryAfter }
+        suffix,
+      ),
+      limit: SESSION_LIMIT,
+    })
   }
-
-  try {
-    return await withTimeout(
-      checkStore(),
-      storeTimeoutMs,
-      "Guest rate limit store did not answer in time",
-    )
-  } catch (error) {
-    logger.warn(
-      { err: error, webchatId, clientIp },
-      "Guest rate limit store failed, using local fallback",
-    )
-    const ipCount = incrementMemoryWindowCounter(ipKey, WINDOW_SECONDS)
-    if (ipCount > IP_LIMIT) {
-      return { limited: true, retryAfter }
-    }
-
-    if (sessionKey) {
-      const sessionCount = incrementMemoryWindowCounter(
-        sessionKey,
-        WINDOW_SECONDS,
-      )
-      if (sessionCount > SESSION_LIMIT) {
-        return { limited: true, retryAfter }
-      }
-    }
-
-    return { limited: false, retryAfter }
-  }
+  return await checkFixedWindow({
+    buckets,
+    windowSeconds: WINDOW_SECONDS,
+    store,
+    now,
+    scope: scope ? `webchat-guest-${scope}` : "webchat-guest",
+    storeTimeoutMs,
+  })
 }
 
 // What `getGuestClientIp` returns when no proxy header identifies the caller

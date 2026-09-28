@@ -4506,8 +4506,8 @@
     "exportAllNotice": "Alle contacten die overeenkomen met het huidige filter worden geëxporteerd.",
     "exportTakingLong": "Het exporteren duurt langer dan verwacht",
     "exportTakingLongDescription": "De export wordt nog verwerkt. Je kunt dit dialoogvenster sluiten en over enkele minuten de exportgeschiedenis bekijken.",
-    "invalidFilterTitle": "Dit filter kan niet worden gelezen",
-    "invalidFilterDescription": "Het contactfilter in deze link kon niet worden gelezen, dus er worden geen contacten getoond. Wis het en maak het filter opnieuw.",
+    "invalidFilterTitle": "Deze filterlink is defect",
+    "invalidFilterDescription": "Het filter in deze link is beschadigd of verouderd, dus er worden geen contacten getoond. Wis het en maak het filter opnieuw.",
     "clearInvalidFilter": "Filter wissen",
     "excludedFilterDescription": "Dit filter gebruikt e-mail- of telefoonvelden die je niet mag gebruiken, dus er worden geen contacten getoond. Wis het en maak het filter opnieuw."
   },

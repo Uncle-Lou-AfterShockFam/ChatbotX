@@ -162,3 +162,80 @@ describe("checkGuestRateLimit scope (s210)", () => {
     ])
   })
 })
+
+describe("checkGuestRateLimit on the shared fixed window (s218)", () => {
+  const countingStore = () => {
+    const counts = new Map<string, number>()
+    const ttls: number[] = []
+    return {
+      counts,
+      ttls,
+      setNumberIfNotExists: vi.fn((key: string, _v: number, ttl: number) => {
+        ttls.push(ttl)
+        if (counts.has(key)) {
+          return Promise.resolve(false)
+        }
+        counts.set(key, 1)
+        return Promise.resolve(true)
+      }),
+      incrementCounter: vi.fn((key: string, by: number, ttl: number) => {
+        ttls.push(ttl)
+        const next = (counts.get(key) ?? 0) + by
+        counts.set(key, next)
+        return Promise.resolve(next)
+      }),
+    }
+  }
+
+  test("keys carry the 10 s window index and a 10 s TTL", async () => {
+    const store = countingStore()
+    // 25 s in = window 2, 5 s left.
+    const result = await checkGuestRateLimit({
+      webchatId: "42",
+      clientIp: "203.0.113.7",
+      guestConversationId: "c1",
+      store,
+      now: 25_000,
+    })
+    expect(result).toEqual({ limited: false, retryAfter: 5 })
+    expect([...store.counts.keys()]).toEqual([
+      "guest-rate-limit:ip:42:203.0.113.7:2",
+      "guest-rate-limit:session:42:c1:2",
+    ])
+    expect(new Set(store.ttls)).toEqual(new Set([10]))
+  })
+
+  test("no session key without a guest conversation id", async () => {
+    const store = countingStore()
+    await checkGuestRateLimit({
+      webchatId: "42",
+      clientIp: "203.0.113.7",
+      store,
+      now: 0,
+    })
+    expect([...store.counts.keys()]).toEqual([
+      "guest-rate-limit:ip:42:203.0.113.7:0",
+    ])
+  })
+
+  test("the session budget trips at 21 and the ip budget at 61", async () => {
+    const store = countingStore()
+    const hit = (guestConversationId: string) =>
+      checkGuestRateLimit({
+        webchatId: "42",
+        clientIp: "203.0.113.7",
+        guestConversationId,
+        store,
+        now: 0,
+      })
+    for (let i = 0; i < 20; i++) {
+      expect((await hit("a")).limited).toBe(false)
+    }
+    expect((await hit("a")).limited).toBe(true)
+    // ip count is 21; fresh sessions spend the ip budget up to 60.
+    for (let i = 0; i < 39; i++) {
+      expect((await hit(`s${i}`)).limited).toBe(false)
+    }
+    expect((await hit("z")).limited).toBe(true)
+  })
+})
