@@ -1,5 +1,11 @@
 import type { Context } from "@chatbotx.io/sdk"
-import { afterEach, describe, expect, test, vi } from "vitest"
+import {
+  OutboundFetchNotInstalledError,
+  registerOutboundFetch,
+  SsrfFetchError,
+  uninstallOutboundFetch,
+} from "@chatbotx.io/sdk/outbound-fetch"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { ActiveCampaignApiError } from "../src/error"
 import { integration } from "../src/integration"
 import {
@@ -26,14 +32,32 @@ const createContext = (
   },
 })
 
+/**
+ * Every ActiveCampaign request must go through the pinned outbound fetch
+ * (apiUrl is workspace-supplied, s219): the mock is reached only via the
+ * registry, and the global fetch throws if anything bypasses it.
+ */
+const routeOutbound = (fetchMock: (request: Request) => Promise<Response>) => {
+  registerOutboundFetch((input, init) =>
+    fetchMock(new Request(input, init as RequestInit)),
+  )
+}
+
+beforeEach(() => {
+  vi.stubGlobal("fetch", () => {
+    throw new Error("unpinned global fetch reached")
+  })
+})
+
 afterEach(() => {
+  uninstallOutboundFetch()
   vi.unstubAllGlobals()
 })
 
 describe("ActiveCampaign integration", () => {
   test("validates credentials with Api-Token and normalized API URL", async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ accounts: [] }))
-    vi.stubGlobal("fetch", fetchMock)
+    routeOutbound(fetchMock)
 
     const auth = await integration.runAction("validateCredentials", {
       props: {
@@ -65,7 +89,7 @@ describe("ActiveCampaign integration", () => {
       .mockResolvedValueOnce(
         jsonResponse({ fields: [{ id: "3", title: "Plan" }] }),
       )
-    vi.stubGlobal("fetch", fetchMock)
+    routeOutbound(fetchMock)
     const ctx = createContext(
       createActiveCampaignAuth({
         apiUrl: "https://example.api-us1.com",
@@ -92,7 +116,7 @@ describe("ActiveCampaign integration", () => {
         contact: { id: "123", email: "person@example.com" },
       })
     })
-    vi.stubGlobal("fetch", fetchMock)
+    routeOutbound(fetchMock)
     const ctx = createContext(
       createActiveCampaignAuth({
         apiUrl: "https://example.api-us1.com",
@@ -126,7 +150,7 @@ describe("ActiveCampaign integration", () => {
       requestBodies.push(await request.clone().json())
       return jsonResponse({})
     })
-    vi.stubGlobal("fetch", fetchMock)
+    routeOutbound(fetchMock)
     const ctx = createContext(
       createActiveCampaignAuth({
         apiUrl: "https://example.api-us1.com",
@@ -157,7 +181,7 @@ describe("ActiveCampaign integration", () => {
         ],
       }),
     )
-    vi.stubGlobal("fetch", fetchMock)
+    routeOutbound(fetchMock)
     const ctx = createContext(
       createActiveCampaignAuth({
         apiUrl: "https://example.api-us1.com",
@@ -197,7 +221,7 @@ describe("ActiveCampaign integration", () => {
 
       return jsonResponse({ contactAutomations: [] })
     })
-    vi.stubGlobal("fetch", fetchMock)
+    routeOutbound(fetchMock)
     const ctx = createContext(
       createActiveCampaignAuth({
         apiUrl: "https://example.api-us1.com",
@@ -224,7 +248,7 @@ describe("ActiveCampaign integration", () => {
     const fetchMock = vi.fn(async () =>
       jsonResponse({ message: "Invalid credentials" }, 401),
     )
-    vi.stubGlobal("fetch", fetchMock)
+    routeOutbound(fetchMock)
     const ctx = createContext(
       createActiveCampaignAuth({
         apiUrl: "https://example.api-us1.com",
@@ -242,5 +266,51 @@ describe("ActiveCampaign integration", () => {
       statusCode: 401,
     })
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  test("fails closed when the pinned fetch is not installed", async () => {
+    const ctx = createContext(
+      createActiveCampaignAuth({
+        apiUrl: "https://example.api-us1.com",
+        apiKey: "key",
+      }),
+    )
+
+    const error = await integration
+      .runAction("listTags", { ctx, props: {} })
+      .catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(OutboundFetchNotInstalledError)
+  })
+
+  test("a refused apiUrl surfaces the SSRF refusal and sends nothing", async () => {
+    const seen: string[] = []
+    registerOutboundFetch((input) => {
+      seen.push(String(input))
+      return Promise.reject(new SsrfFetchError("unsafeAddress", String(input)))
+    })
+
+    const error = await integration
+      .runAction("validateCredentials", {
+        props: { apiUrl: "http://169.254.169.254", apiKey: "key" },
+      })
+      .catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(SsrfFetchError)
+    expect(seen).toEqual(["http://169.254.169.254/api/3/accounts"])
+  })
+
+  test("refuses redirects, so the Api-Token never follows a hop", async () => {
+    const seen: Array<string | undefined> = []
+    registerOutboundFetch((_input, init) => {
+      seen.push(init?.redirect)
+      return Promise.resolve(jsonResponse({ accounts: [] }))
+    })
+
+    await integration.runAction("validateCredentials", {
+      props: { apiUrl: "https://example.api-us1.com", apiKey: "key" },
+    })
+
+    expect(seen).toEqual(["error"])
   })
 })

@@ -6,6 +6,7 @@ import {
 import { verifyDynamicImageToken } from "@chatbotx.io/encryption/dynamic-image-token"
 import { resolveContactVariablesDeep } from "@chatbotx.io/variables"
 import { type NextRequest, NextResponse } from "next/server"
+import { checkDynamicImageRateLimit } from "@/lib/rate-limit/dynamic-image-rate-limit"
 import { loadServableWorkspace } from "@/lib/workspace/load-servable-workspace"
 
 export const GET = async (request: NextRequest) => {
@@ -90,6 +91,19 @@ export const GET = async (request: NextRequest) => {
   })
   if (cachedUrl) {
     return NextResponse.redirect(cachedUrl, 302)
+  }
+
+  // A full render (storage get, canvas, storage put) is the expensive path:
+  // past the per-(image, contact) budget the link degrades to the static
+  // background (the same answer as an unsigned link), never to this
+  // contact's last render, which may not exist yet (a concurrent first
+  // burst, a render that failed, a save that cleared it).
+  const { limited } = await checkDynamicImageRateLimit({
+    dynamicImageId: dynamicImage.id,
+    contactId,
+  })
+  if (limited) {
+    return await redirectToBackground()
   }
 
   // Must be computed from `dynamicImage.data` (the raw, unresolved document)

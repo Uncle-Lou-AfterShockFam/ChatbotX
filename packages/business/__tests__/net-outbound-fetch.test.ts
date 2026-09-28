@@ -19,14 +19,10 @@ const {
   outboundDownload,
   outboundFetch,
   registerOutboundFetch,
+  uninstallOutboundFetch: uninstall,
 } = await import("../src/net/outbound-fetch")
 const { SsrfFetchError } = await import("../src/net/safe-fetch")
 const { installPinnedOutboundFetch } = await import("../src/net-node")
-
-const REGISTRY_KEY = Symbol.for("chatbotx.outboundFetch")
-const uninstall = () => {
-  delete (globalThis as Record<symbol, unknown>)[REGISTRY_KEY]
-}
 
 afterEach(() => {
   uninstall()

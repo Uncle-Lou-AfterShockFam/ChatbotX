@@ -1,3 +1,4 @@
+import { kyOutboundFetch } from "@chatbotx.io/sdk/outbound-fetch"
 import ky, { type Options } from "ky"
 import type { z } from "zod"
 import { ACTIVE_CAMPAIGN_HTTP_TIMEOUT_MS } from "./constants"
@@ -46,8 +47,14 @@ export const getActiveCampaignClient = (
   authValue: ActiveCampaignAuthValue | ActiveCampaignCredentialValue,
 ) => {
   const auth = activeCampaignCredentialSchema.parse(authValue)
+  // apiUrl is workspace-supplied: every request goes through the pinned
+  // outbound fetch, so it can never reach a private address, and a redirect
+  // is refused outright, so the Api-Token never follows a hop to another
+  // origin (the pinned fetch strips only Authorization / Cookie) (s219).
   return ky.create({
     baseUrl: auth.apiUrl,
+    fetch: kyOutboundFetch,
+    redirect: "error",
     headers: {
       Accept: "application/json",
       "Api-Token": auth.apiKey,

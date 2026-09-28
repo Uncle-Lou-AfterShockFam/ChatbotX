@@ -4,9 +4,9 @@ import {
   type IncomingAttachment,
 } from "@chatbotx.io/sdk"
 import { createId } from "@chatbotx.io/utils"
-import { fetch } from "cross-fetch"
 import imageSize from "image-size"
 import { ZALO_API_ENDPOINTS } from "../constants"
+import { readZaloDownload } from "../lib/download"
 import { handleZaloError, ZaloException } from "../lib/exception"
 import { ZaloHttpClient } from "../lib/http-client"
 import type { ZaloAuthValue } from "../schema/definition"
@@ -46,49 +46,43 @@ export const getMessageAttachmentEntity = ({
       throw new ZaloException("No attachment URL found")
     }
 
-    const response = await fetch(attachment.payload.url, {
-      headers: {
+    const { response, bytes } = await readZaloDownload(
+      attachment.payload.url,
+      {
         Authorization: `Bearer ${ctx.auth.tokens.accessToken}`,
         "User-Agent": "Mozilla/5.0 (compatible; ChatbotX/1.0)",
       },
-    })
-
-    if (!response.ok) {
-      throw new ZaloException(`Failed to fetch attachment: ${response.status}`)
-    }
-
-    if (!response.body) {
-      throw new ZaloException("No response body received")
-    }
+      "attachment",
+    )
 
     const originPath = `${ctx.storagePrefix}/${createId()}`
-    const bytes = await response.arrayBuffer()
     const mimeType = response.headers.get("content-type") ?? "image/png"
     const fileType = guessFileTypeFromMimeType(mimeType)
 
-    await ctx.uploader?.putObject(originPath, Buffer.from(bytes), {
-      ACL: "public-read",
-      ContentType: mimeType,
-    })
-
+    // Measure before storing: an unreadable image throws here and leaves no
+    // orphaned public object behind (s219).
     const imageProperties: {
       width?: number
       height?: number
     } = {}
 
     if (mimeType.startsWith("image/")) {
-      const arrayBytes = new Uint8Array(bytes)
-      const dimensions = imageSize(arrayBytes)
+      const dimensions = imageSize(bytes)
       imageProperties.width = dimensions.width
       imageProperties.height = dimensions.height
     }
+
+    await ctx.uploader?.putObject(originPath, Buffer.from(bytes), {
+      ACL: "public-read",
+      ContentType: mimeType,
+    })
 
     return {
       sourceId: createId(),
       originPath,
       fileType,
       mimeType,
-      size: Number.parseInt(response.headers.get("content-length") ?? "0", 10),
+      size: bytes.byteLength,
       ...imageProperties,
     }
   })
@@ -99,29 +93,25 @@ export const uploadAttachment = (
   url: string,
 ): Promise<UploadAttachmentResponse> =>
   handleZaloError("Upload attachment", async () => {
-    const response = await fetch(url)
-
-    if (!response.ok) {
-      throw new ZaloException(`Failed to fetch file: ${response.status}`)
-    }
+    const { response, bytes } = await readZaloDownload(url, undefined, "file")
 
     const contentType = response.headers.get("content-type")
     if (!contentType) {
       throw new ZaloException("No content-type header received")
     }
 
-    const buffer = await response.arrayBuffer()
     const imageProperties: { width?: number; height?: number } = {}
     if (contentType?.startsWith("image/")) {
-      const dimensions = imageSize(new Uint8Array(buffer))
+      const dimensions = imageSize(bytes)
       imageProperties.width = dimensions.width
       imageProperties.height = dimensions.height
     }
 
-    const uint8 = new Uint8Array(buffer)
-
     const form = new FormData()
-    form.append("file", new Blob([uint8], { type: contentType }))
+    form.append(
+      "file",
+      new Blob([new Uint8Array(bytes)], { type: contentType }),
+    )
 
     const client = ZaloHttpClient.createAuthenticatedClient(
       auth.tokens.accessToken,

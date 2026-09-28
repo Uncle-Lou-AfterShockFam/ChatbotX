@@ -1,4 +1,4 @@
-import { readCapped } from "../documents/gotenberg"
+import { readCapped } from "@chatbotx.io/sdk/outbound-fetch"
 import { isSsrfUnsafeUrl } from "../net/ssrf-guard"
 import { pinnedFetch } from "../net-node/pinned-fetch"
 
