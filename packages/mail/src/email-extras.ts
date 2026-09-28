@@ -3,6 +3,8 @@ import type { MailElementSchema } from "./emails/dynamic-template"
 
 /** Longest element text the plain-text part carries (the HTML is unbounded). */
 const MAX_TEXT_LENGTH = 200_000
+/** Deepest element nesting html-to-text walks (it recurses per level). */
+const MAX_TEXT_DEPTH = 100
 
 const ANCHOR_HREF = /(<a\b[^>]*\bhref\s*=\s*")([^"]*)(")/gi
 const HTTP_URL = /^https?:\/\//i
@@ -15,13 +17,20 @@ export function htmlToPlainText(html: string): string {
   if (typeof html !== "string" || html.length === 0) {
     return ""
   }
-  return htmlToText(html.slice(0, MAX_TEXT_LENGTH), {
-    wordwrap: false,
-    selectors: [
-      { selector: "img", format: "skip" },
-      { selector: "a", options: { hideLinkHrefIfSameAsText: true } },
-    ],
-  }).trim()
+  // Contact values are interpolated as raw HTML, so depth is attacker-shaped:
+  // cap it, and never let the OPTIONAL text part fail the send.
+  try {
+    return htmlToText(html.slice(0, MAX_TEXT_LENGTH), {
+      wordwrap: false,
+      limits: { maxDepth: MAX_TEXT_DEPTH },
+      selectors: [
+        { selector: "img", format: "skip" },
+        { selector: "a", options: { hideLinkHrefIfSameAsText: true } },
+      ],
+    }).trim()
+  } catch {
+    return ""
+  }
 }
 
 /**

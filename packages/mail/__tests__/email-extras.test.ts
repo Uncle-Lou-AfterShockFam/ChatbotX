@@ -26,6 +26,14 @@ describe("htmlToPlainText", () => {
     )
   })
 
+  test("hostile nesting (depth 10000) never throws (s220b probe)", () => {
+    const deep = `${"<b>".repeat(10_000)}x${"</b>".repeat(10_000)}`
+    expect(() => htmlToPlainText(deep)).not.toThrow()
+    expect(() =>
+      renderDynamicEmailText([{ type: "text", text: deep }]),
+    ).not.toThrow()
+  })
+
   test("empty, null and non-string input give an empty string", () => {
     expect(htmlToPlainText("")).toBe("")
     expect(htmlToPlainText(null as unknown as string)).toBe("")
