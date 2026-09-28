@@ -101,6 +101,8 @@ vi.mock("../src/workspace/service", () => ({
 }))
 
 const { contactService } = await import("../src/contact/service")
+const { uploadFileFromUrl } = await import("@chatbotx.io/filesystem")
+const { outboundDownload } = await import("../src/net/outbound-fetch")
 const { contactSources } = await import("@chatbotx.io/database/partials")
 const { emitContactCreated } = await import("@chatbotx.io/events")
 
@@ -127,6 +129,34 @@ describe("contactService.upsertByIdentifier", () => {
         source: "api",
       }),
     )
+  })
+
+  test("a URL avatar is downloaded only through the SSRF-pinned fetch (s216)", async () => {
+    vi.mocked(uploadFileFromUrl).mockResolvedValue({
+      name: "a.png",
+      originPath: "public/space/ws-1/contacts/generated-id/avatar/generated-id",
+      size: 1,
+    } as Awaited<ReturnType<typeof uploadFileFromUrl>>)
+    const update = vi
+      .spyOn(contactService, "update")
+      .mockResolvedValue(
+        {} as Awaited<ReturnType<typeof contactService.update>>,
+      )
+
+    await contactService.upsertByIdentifier({
+      workspaceId: "ws-1",
+      identifier: "email:ada@example.com",
+      source: contactSources.enum.api,
+      data: { firstName: "Ada" },
+      avatar: "https://cdn.example.com/a.png",
+    })
+
+    expect(uploadFileFromUrl).toHaveBeenCalledWith(
+      "https://cdn.example.com/a.png",
+      "public/space/ws-1/contacts/generated-id/avatar/generated-id",
+      { fetchImpl: outboundDownload },
+    )
+    update.mockRestore()
   })
 
   test("creates the contact via the no-MAC path, never the MAC-gated one", async () => {

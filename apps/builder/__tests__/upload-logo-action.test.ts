@@ -169,6 +169,7 @@ describe("updateWorkspaceLogo", () => {
     expect(uploadFileFromUrl).toHaveBeenCalledWith(
       "https://example.com/logo.jpg",
       "public/space/ws-1/logos/logo-id.jpg",
+      { fetchImpl: expect.any(Function) },
     )
     expect(updateBuilder.set).toHaveBeenCalledWith({
       logo: "public/space/ws-1/logos/logo-id.jpg",

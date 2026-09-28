@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 import { ChatbotXException } from "../src/errors"
 
 const {
-  mockAssertPublicUrl,
+  mockOutboundDownload,
   mockDeleteObject,
   mockFindByWorkspaceIdGemini,
   mockFindByWorkspaceIdOpenAI,
@@ -22,7 +22,7 @@ const {
   const mockInsert = vi.fn(() => ({ values: mockInsertValues }))
 
   return {
-    mockAssertPublicUrl: vi.fn(async () => undefined),
+    mockOutboundDownload: vi.fn(),
     mockDeleteObject: vi.fn(async () => undefined),
     mockFindByWorkspaceIdGemini: vi.fn(),
     mockFindByWorkspaceIdOpenAI: vi.fn(),
@@ -104,8 +104,8 @@ vi.mock("@chatbotx.io/logger", () => ({
 const dispatchAuditRecord = vi.fn()
 vi.mock("../src/audit/dispatcher", () => ({ dispatchAuditRecord }))
 
-vi.mock("../src/net/ssrf-guard", () => ({
-  assertPublicUrl: mockAssertPublicUrl,
+vi.mock("../src/net/outbound-fetch", () => ({
+  outboundDownload: mockOutboundDownload,
 }))
 
 vi.mock("../src/integration-openai/service", () => ({
@@ -191,7 +191,7 @@ describe("aiFileService.create", () => {
     expect(result.chunksCount).toBe(0)
   })
 
-  test("url mode checks SSRF safety before downloading", async () => {
+  test("url mode downloads through the SSRF-pinned fetch (s216)", async () => {
     mockUploadFileFromUrl.mockResolvedValue({
       name: "manual.pdf",
       mimeType: "application/pdf",
@@ -204,38 +204,24 @@ describe("aiFileService.create", () => {
       url: "https://example.com/manual.pdf",
     })
 
+    // The pinned fetch re-checks every redirect hop at connect, so the
+    // service hands it over instead of a per-hop DoH callback.
     expect(mockUploadFileFromUrl).toHaveBeenCalledWith(
       "https://example.com/manual.pdf",
       "workspaces/workspace-1/ai-files/file-1",
-      "private",
-      AI_FILE_MAX_UPLOAD_BYTES,
-      expect.any(Function),
-    )
-
-    // The guard runs inside uploadFileFromUrl (once per redirect hop), so
-    // assert the callback delegates rather than that the service called it
-    // directly.
-    const validate = mockUploadFileFromUrl.mock.calls[0][4]
-    await validate("https://example.com/redirected.pdf")
-    expect(mockAssertPublicUrl).toHaveBeenCalledWith(
-      "https://example.com/redirected.pdf",
-      "AI file URL",
+      {
+        acl: "private",
+        maxBytes: AI_FILE_MAX_UPLOAD_BYTES,
+        fetchImpl: mockOutboundDownload,
+      },
     )
   })
 
-  test("url mode surfaces an SSRF rejection as a businessError without fetching", async () => {
-    mockAssertPublicUrl.mockRejectedValueOnce(new Error("blocked host"))
-    mockUploadFileFromUrl.mockImplementation(
-      async (
-        url: string,
-        _path: string,
-        _visibility: string,
-        _maxBytes: number,
-        validate: (candidateUrl: string) => Promise<void>,
-      ) => {
-        await validate(url)
-        throw new Error("unreachable: validate should have thrown")
-      },
+  test("url mode surfaces an SSRF refusal as a businessError", async () => {
+    // uploadFileFromUrl maps the pinned fetch's refusal to this exact
+    // caller-fault error (packages/filesystem upload-from-url.test.ts).
+    mockUploadFileFromUrl.mockRejectedValueOnce(
+      new MockUploadValidationError("The provided URL is not allowed"),
     )
 
     const error = await aiFileService
@@ -244,8 +230,6 @@ describe("aiFileService.create", () => {
 
     expect(error).toBeInstanceOf(ChatbotXException)
     expect((error as ChatbotXException).code).toBe("businessError")
-    // The guard's own message (which echoes the submitted URL) must never
-    // reach the caller — it is replaced with a safe, generic message.
     expect((error as ChatbotXException).message).toBe(
       "The provided URL is not allowed",
     )

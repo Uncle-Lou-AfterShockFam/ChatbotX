@@ -1,4 +1,5 @@
 import { auditService } from "@chatbotx.io/business/audit"
+import { outboundDownload } from "@chatbotx.io/business/outbound-fetch"
 import {
   and,
   type DatabaseClient,
@@ -56,6 +57,7 @@ export async function updateWorkspaceLogo<A extends AuthValue>(props: {
     const uploaded = await uploadFileFromUrl(
       url,
       `public/space/${id}/logos/${createId()}.jpg`,
+      { fetchImpl: outboundDownload },
     )
     logo = uploaded.originPath
   } catch {

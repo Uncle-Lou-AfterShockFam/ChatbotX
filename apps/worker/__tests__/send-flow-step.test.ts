@@ -15,6 +15,7 @@ const {
   mockresolveTenantSettings,
   mockResolveContactVariables,
   mockUploadFileFromUrl,
+  mockOutboundDownload,
   mockSendFlowStepToChannel,
   mockSendMessageToChannel,
   mockProcessWhatsappTemplate,
@@ -83,6 +84,7 @@ const {
         (_contactId: string, step: unknown, _source: unknown) =>
           Promise.resolve(step),
       ),
+    mockOutboundDownload: vi.fn(),
     mockUploadFileFromUrl: vi.fn().mockResolvedValue({
       originPath: "public/space/ws-1/conversations/conv-1/file-id",
       fileType: "image/jpeg",
@@ -153,6 +155,7 @@ vi.mock("@chatbotx.io/database/schema", () => ({
 }))
 
 vi.mock("@chatbotx.io/business", () => ({
+  outboundDownload: mockOutboundDownload,
   appointmentCalendarService: {
     findByPublicLinkSlug: mockFindAppointmentCalendarBySlug,
   },
@@ -969,9 +972,11 @@ describe("sendFlowStep", () => {
   test("calls repository.createWithAttachments() for step with url (sendImage)", async () => {
     await sendFlowStep({ ...baseParams, step: sendImageStep })
 
+    // s216: always through the SSRF-pinned download, never a plain fetch.
     expect(mockUploadFileFromUrl).toHaveBeenCalledWith(
       "https://example.com/img.jpg",
       expect.stringContaining("public/space/ws-1/conversations/conv-1/"),
+      { fetchImpl: mockOutboundDownload },
     )
     expect(mockRepositoryCreateWithAttachments).toHaveBeenCalledTimes(1)
     expect(mockRepositoryCreate).not.toHaveBeenCalled()

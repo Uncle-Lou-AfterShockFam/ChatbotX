@@ -2486,9 +2486,6 @@ importers:
       image-size:
         specifier: ^2.0.2
         version: 2.0.2
-      probe-image-size:
-        specifier: ^7.2.3
-        version: 7.3.0
       zod:
         specifier: ^4.3.6
         version: 4.4.3
@@ -2502,9 +2499,6 @@ importers:
       '@types/node':
         specifier: 24.x
         version: 24.13.1
-      '@types/probe-image-size':
-        specifier: ^7.2.5
-        version: 7.2.5
       typescript:
         specifier: ^5
         version: 5.9.3

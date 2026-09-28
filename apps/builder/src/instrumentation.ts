@@ -17,6 +17,12 @@ export async function register() {
       "@chatbotx.io/business/license-startup"
     )
     await assertLicenseAtStartup()
+    // Barrel code (contact avatars, AI files, logos) fetches user URLs only
+    // through this pinned fetch; unregistered, it fails closed (s216).
+    const { installPinnedOutboundFetch } = await import(
+      "@chatbotx.io/business/net-node"
+    )
+    installPinnedOutboundFetch()
   }
 
   await import("./lib/orpc/orpc.server")

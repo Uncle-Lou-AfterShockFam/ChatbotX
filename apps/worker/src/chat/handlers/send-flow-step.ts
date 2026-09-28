@@ -10,6 +10,7 @@ import {
   broadcastToWorkspaceParty,
   contactInboxService,
   conversationService,
+  outboundDownload,
   resolveTenantSettings,
 } from "@chatbotx.io/business"
 import {
@@ -734,6 +735,7 @@ export async function sendFlowStep({
       const uploadedFile = await uploadFileFromUrl(
         stepWithSignedBookingLinks.url,
         `public/space/${conversation.workspaceId}/conversations/${conversation.id}/${createId()}`,
+        { fetchImpl: outboundDownload },
       )
       attachmentInputs.push({
         ...uploadedFile,
@@ -745,6 +747,7 @@ export async function sendFlowStep({
         const uploadedFile = await uploadFileFromUrl(
           image.url,
           `public/space/${conversation.workspaceId}/conversations/${conversation.id}/${createId()}`,
+          { fetchImpl: outboundDownload },
         )
         attachmentInputs.push({
           ...uploadedFile,
@@ -1035,6 +1038,7 @@ export const sendChatMessage = async (
         const uploadedFile = await uploadFileFromUrl(
           url,
           `public/space/${conversation.workspaceId}/conversations/${conversation.id}/${createId()}`,
+          { fetchImpl: outboundDownload },
         )
         attachmentInput = {
           ...uploadedFile,

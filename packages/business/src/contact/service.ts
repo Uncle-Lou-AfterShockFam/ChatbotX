@@ -41,6 +41,7 @@ import { contactDocumentsPrefix } from "../documents/paths"
 import { ChatbotXException, notFoundException } from "../errors"
 import { logger } from "../logger"
 import { messageCleanupService } from "../message-cleanup/service"
+import { outboundDownload } from "../net/outbound-fetch"
 import { quotaEnforcementService } from "../quota-enforcement/service"
 import { purgeStoragePrefix } from "../storage/purge-prefix"
 import { userQuotaService } from "../user-quota/service"
@@ -919,6 +920,7 @@ class ContactService extends BaseService {
     const uploaded = await uploadFileFromUrl(
       avatar,
       `public/space/${workspaceId}/contacts/${contactId}/avatar/${createId()}`,
+      { fetchImpl: outboundDownload },
     )
     return uploaded.originPath
   }

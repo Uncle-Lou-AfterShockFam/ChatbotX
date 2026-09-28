@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+import { beforeEach, describe, expect, test, vi } from "vitest"
 
 const mockPutObject = vi.fn(async () => undefined)
 
@@ -15,9 +15,11 @@ vi.mock("@chatbotx.io/logger", () => ({
   }),
 }))
 
-const { uploadFileFromUrl, UploadValidationError } = await import(
-  "../src/lib/upload"
-)
+const {
+  DEFAULT_MAX_URL_DOWNLOAD_BYTES,
+  uploadFileFromUrl,
+  UploadValidationError,
+} = await import("../src/lib/upload")
 
 function streamResponse(
   chunks: Uint8Array[],
@@ -37,133 +39,126 @@ function streamResponse(
   })
 }
 
-const originalFetch = globalThis.fetch
-
 beforeEach(() => {
   mockPutObject.mockClear()
 })
 
-afterEach(() => {
-  globalThis.fetch = originalFetch
-})
+const fetchReturning = (response: Response) => vi.fn(async () => response)
 
-describe("uploadFileFromUrl byte cap and redirect handling", () => {
+class SsrfFetchError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "SsrfFetchError"
+  }
+}
+
+describe("uploadFileFromUrl (s216: always through the injected pinned fetch)", () => {
   test("throws when the body exceeds maxBytes even though content-length lies small", async () => {
-    const bigChunk = new Uint8Array(20)
-    globalThis.fetch = vi.fn(async () =>
-      streamResponse([bigChunk], {
+    const fetchImpl = fetchReturning(
+      streamResponse([new Uint8Array(20)], {
         headers: { "content-length": "1", "content-type": "text/plain" },
       }),
-    ) as unknown as typeof fetch
-
+    )
     await expect(
-      uploadFileFromUrl(
-        "https://example.com/file.txt",
-        "path/to/file",
-        "private",
-        10,
-      ),
+      uploadFileFromUrl("https://example.com/file.txt", "path/to/file", {
+        acl: "private",
+        maxBytes: 10,
+        fetchImpl,
+      }),
     ).rejects.toThrow(UploadValidationError)
+    expect(mockPutObject).not.toHaveBeenCalled()
   })
 
-  test("records the real streamed byte count as size on the success path", async () => {
+  test("records the real streamed byte count and the final URL's name", async () => {
     const chunk = new TextEncoder().encode("hello world")
-    globalThis.fetch = vi.fn(async () =>
-      streamResponse([chunk], {
-        headers: {
-          "content-length": "1",
-          "content-type": "text/plain",
-        },
-      }),
-    ) as unknown as typeof fetch
+    const response = streamResponse([chunk], {
+      headers: { "content-length": "1", "content-type": "text/plain" },
+    })
+    Object.defineProperty(response, "url", {
+      value: "https://cdn.example.com/final-name.txt",
+    })
+    const fetchImpl = fetchReturning(response)
 
     const result = await uploadFileFromUrl(
       "https://example.com/file.txt",
       "path/to/file",
-      "private",
-      1000,
+      { acl: "private", maxBytes: 1000, fetchImpl },
     )
 
+    expect(fetchImpl).toHaveBeenCalledWith("https://example.com/file.txt")
     expect(result.size).toBe(chunk.byteLength)
+    expect(result.name).toBe("final-name.txt")
     expect(mockPutObject).toHaveBeenCalledWith(
       "path/to/file",
       expect.anything(),
-      expect.objectContaining({ ContentLength: chunk.byteLength }),
+      expect.objectContaining({
+        ContentLength: chunk.byteLength,
+        ACL: "private",
+      }),
     )
   })
 
-  test("re-invokes validateUrl on each redirect hop, including the final one", async () => {
-    const validateUrl = vi.fn(async () => undefined)
-    const hop1 = "https://example.com/hop1"
-    const hop2 = "https://example.com/hop2"
-    const final = "https://example.com/final"
-
-    let call = 0
-    globalThis.fetch = vi.fn(() => {
-      call += 1
-      if (call === 1) {
-        return Promise.resolve(
-          new Response(null, { status: 302, headers: { location: hop2 } }),
-        )
-      }
-      if (call === 2) {
-        return Promise.resolve(
-          new Response(null, { status: 302, headers: { location: final } }),
-        )
-      }
-      return Promise.resolve(
-        streamResponse([new TextEncoder().encode("ok")], {
-          headers: { "content-type": "text/plain" },
-        }),
-      )
-    }) as unknown as typeof fetch
-
-    await uploadFileFromUrl(hop1, "path/to/file", "private", 1000, validateUrl)
-
-    expect(validateUrl).toHaveBeenCalledTimes(3)
-    expect(validateUrl).toHaveBeenNthCalledWith(1, hop1)
-    expect(validateUrl).toHaveBeenNthCalledWith(2, hop2)
-    expect(validateUrl).toHaveBeenNthCalledWith(3, final)
+  test("a refused URL is a caller-fault UploadValidationError; nothing is stored", async () => {
+    const fetchImpl = vi.fn(() =>
+      Promise.reject(
+        new SsrfFetchError("[ssrf-guard] unsafeAddress: metadata.internal"),
+      ),
+    )
+    const error = await uploadFileFromUrl(
+      "http://metadata.internal/latest",
+      "path/to/file",
+      { fetchImpl },
+    ).then(
+      () => null,
+      (e: unknown) => e,
+    )
+    expect(error).toBeInstanceOf(UploadValidationError)
+    // The guard's message echoes the host; the caller-facing one does not.
+    expect((error as Error).message).toBe("The provided URL is not allowed")
+    expect(mockPutObject).not.toHaveBeenCalled()
   })
 
-  test("throws 'Too many redirects' past hop 6", async () => {
-    const validateUrl = vi.fn(async () => undefined)
-    let call = 0
-    globalThis.fetch = vi.fn(() => {
-      call += 1
-      return Promise.resolve(
-        new Response(null, {
-          status: 302,
-          headers: { location: `https://example.com/hop${call}` },
-        }),
-      )
-    }) as unknown as typeof fetch
-
+  test("any other fetch failure passes through as an infrastructure error", async () => {
+    const outage = new Error(
+      "[ssrf-guard] the pinned outbound fetch is not installed",
+    )
+    const fetchImpl = vi.fn(() => Promise.reject(outage))
     await expect(
-      uploadFileFromUrl(
-        "https://example.com/hop0",
-        "path/to/file",
-        "private",
-        1000,
-        validateUrl,
-      ),
-    ).rejects.toThrow("Too many redirects")
+      uploadFileFromUrl("https://example.com/x", "path/to/file", { fetchImpl }),
+    ).rejects.toBe(outage)
   })
 
-  test("throws when a redirect response has no Location header", async () => {
-    const validateUrl = vi.fn(async () => undefined)
-    globalThis.fetch = vi.fn(
-      async () => new Response(null, { status: 302 }),
-    ) as unknown as typeof fetch
-
+  test("a non-2xx answer is refused", async () => {
+    const fetchImpl = fetchReturning(new Response("nope", { status: 404 }))
     await expect(
-      uploadFileFromUrl(
-        "https://example.com/file",
-        "path/to/file",
-        "private",
-        1000,
-        validateUrl,
-      ),
-    ).rejects.toThrow("Redirect response has no Location header")
+      uploadFileFromUrl("https://example.com/x", "path/to/file", { fetchImpl }),
+    ).rejects.toThrow("Failed to download file: 404")
+  })
+
+  test("the default cap applies when the caller names none", async () => {
+    const fetchImpl = fetchReturning(
+      streamResponse([new Uint8Array(1)], {
+        headers: {
+          "content-length": String(DEFAULT_MAX_URL_DOWNLOAD_BYTES + 1),
+        },
+      }),
+    )
+    await expect(
+      uploadFileFromUrl("https://example.com/x", "path/to/file", { fetchImpl }),
+    ).rejects.toThrow("maximum allowed size")
+  })
+
+  test("public-read stays the default ACL", async () => {
+    const fetchImpl = fetchReturning(
+      streamResponse([new TextEncoder().encode("x")]),
+    )
+    await uploadFileFromUrl("https://example.com/x", "path/to/file", {
+      fetchImpl,
+    })
+    expect(mockPutObject).toHaveBeenCalledWith(
+      "path/to/file",
+      expect.anything(),
+      expect.objectContaining({ ACL: "public-read" }),
+    )
   })
 })

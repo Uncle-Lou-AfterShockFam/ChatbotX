@@ -1,7 +1,7 @@
 import type { ObjectCannedACL } from "@aws-sdk/client-s3"
 import { getChildLogger } from "@chatbotx.io/logger"
 import { createId } from "@chatbotx.io/utils"
-import { fetchFollowingSafeRedirects, readBodyWithLimit } from "./bounded-fetch"
+import { readBodyWithLimit } from "./bounded-fetch"
 import { getImageDimensions, pathJoin } from "./helper"
 import { DEFAULT_MIME_TYPE, type UploadedFile } from "./schema"
 import { uploader } from "./uploader"
@@ -55,38 +55,45 @@ export async function uploadMultipleFiles(
   )
 }
 
+/** Default cap on a URL download when the caller names none (s216). */
+export const DEFAULT_MAX_URL_DOWNLOAD_BYTES = 100 * 1024 * 1024
+
+export type UploadFromUrlOptions = {
+  acl?: string
+  maxBytes?: number
+  /**
+   * The SSRF-pinned fetch (`outboundDownload` from @chatbotx.io/business):
+   * it follows and re-checks redirects itself. There is deliberately no
+   * default: a plain `fetch` here stored any internal URL's body public-read
+   * (s216).
+   */
+  fetchImpl: (url: string) => Promise<Response>
+}
+
+/** The pinned fetch refused the URL: the caller's input, not an outage. */
+const isSsrfRefusal = (error: unknown): boolean =>
+  error instanceof Error && error.name === "SsrfFetchError"
+
 export async function uploadFileFromUrl(
   url: string,
   path: string,
-  acl = "public-read",
-  maxBytes?: number,
-  validateUrl?: (url: string) => Promise<void>,
+  options: UploadFromUrlOptions,
 ): Promise<UploadedFile> {
-  const { response, finalUrl } = validateUrl
-    ? await fetchFollowingSafeRedirects({
-        errors: {
-          tooManyRedirects: () =>
-            new UploadValidationError(
-              "Too many redirects while downloading file",
-            ),
-          noLocationHeader: () =>
-            new UploadValidationError(
-              "Redirect response has no Location header",
-            ),
-          invalidRedirectLocation: (location) =>
-            new UploadValidationError(
-              `Redirect response has an invalid Location header: ${location}`,
-            ),
-        },
-        fetchImpl: (candidateUrl) =>
-          fetch(candidateUrl, { redirect: "manual" as const }),
-        url,
-        validateUrl,
-      })
-    : {
-        response: await fetch(url, { redirect: "follow" as const }),
-        finalUrl: url,
-      }
+  const {
+    acl = "public-read",
+    maxBytes = DEFAULT_MAX_URL_DOWNLOAD_BYTES,
+    fetchImpl,
+  } = options
+  let response: Response
+  try {
+    response = await fetchImpl(url)
+  } catch (error) {
+    if (isSsrfRefusal(error)) {
+      throw new UploadValidationError("The provided URL is not allowed")
+    }
+    throw error
+  }
+  const finalUrl = response.url || url
   if (!response.ok) {
     throw new UploadValidationError(
       `Failed to download file: ${response.status}`,
@@ -100,7 +107,7 @@ export async function uploadFileFromUrl(
     response.headers.get("content-length") ?? "0",
     10,
   )
-  if (maxBytes !== undefined && headerLength > maxBytes) {
+  if (headerLength > maxBytes) {
     throw new UploadValidationError(
       `File exceeds the maximum allowed size of ${maxBytes} bytes`,
     )
@@ -117,17 +124,14 @@ export async function uploadFileFromUrl(
     logger.warn({ err: error }, "uploadFileFromUrl: invalid URL")
   }
 
-  const buffer =
-    maxBytes === undefined
-      ? Buffer.from(await response.arrayBuffer())
-      : await readBodyWithLimit(
-          response,
-          maxBytes,
-          (limit) =>
-            new UploadValidationError(
-              `File exceeds the maximum allowed size of ${limit} bytes`,
-            ),
-        )
+  const buffer = await readBodyWithLimit(
+    response,
+    maxBytes,
+    (limit) =>
+      new UploadValidationError(
+        `File exceeds the maximum allowed size of ${limit} bytes`,
+      ),
+  )
   // headerLength is the origin's self-reported content-length, used only as
   // an early-reject hint above — it can disagree with what was actually
   // streamed, and putObject's ContentLength must match the real buffer.
