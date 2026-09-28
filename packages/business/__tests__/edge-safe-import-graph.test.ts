@@ -54,8 +54,14 @@ const NODE_BUILTINS = new Set([
 
 const SCHEDULER_BARREL_IMPORT = /from "@chatbotx\.io\/sequence-scheduler"/
 
+// Node-only npm packages: undici backs net-node's pinnedFetch (s216) and must
+// stay behind the `./net-node` subpath, never the barrel.
+const NODE_ONLY_PACKAGES = new Set(["undici"])
+
 const isNodeBuiltin = (specifier: string): boolean =>
-  specifier.startsWith("node:") || NODE_BUILTINS.has(specifier)
+  specifier.startsWith("node:") ||
+  NODE_BUILTINS.has(specifier) ||
+  NODE_ONLY_PACKAGES.has(specifier)
 
 /** Static `from "x"` / `import "x"` specifiers. Dynamic import() is banned repo-wide. */
 const collectSpecifiers = (source: string): string[] => {

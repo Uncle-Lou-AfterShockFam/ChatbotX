@@ -15,11 +15,12 @@ import { uploader } from "@chatbotx.io/filesystem"
 import { createId } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
 import { contactCustomFieldService } from "../contact-custom-field/service"
-import { notFoundException } from "../errors"
+import { notFoundException, validationException } from "../errors"
 import { isSsrfUnsafeUrl } from "../net/ssrf-guard"
 import { resolveTenantSettings } from "../platform/settings"
 import { purgeStoragePrefix } from "../storage/purge-prefix"
 import { toPublicStorageUrl } from "../utils"
+import { ImageFetchRefusedError } from "./pinned-fetch"
 import { renderDynamicLayer, renderStaticLayer } from "./render"
 
 // Every save gets its own timestamped background file — never overwrite the
@@ -134,7 +135,20 @@ class DynamicImageService extends BaseService {
     id: string
     data: DynamicImageDocument
   }): Promise<string> {
-    const buffer = await renderStaticLayer(input.data)
+    const buffer = await renderStaticLayer(input.data).catch(
+      (error: unknown) => {
+        // The caller's own image URL was refused or unreachable: their input,
+        // so a 422 naming it, never a 500 (s216).
+        if (error instanceof ImageFetchRefusedError) {
+          throw validationException(
+            "data",
+            `An image element could not be loaded (${error.reason}): ${error.detail}`,
+            { reason: error.reason },
+          )
+        }
+        throw error
+      },
+    )
     const path = BACKGROUND_PATH(input.workspaceId, input.id, Date.now())
     await uploader.putObject(path, buffer, {
       ACL: "public-read",
