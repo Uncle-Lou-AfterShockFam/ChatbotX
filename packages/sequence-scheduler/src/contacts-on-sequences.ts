@@ -43,6 +43,16 @@ function activityMs(value: Date | string | null | undefined): number {
   return Number.isNaN(ms) ? Number.NEGATIVE_INFINITY : ms
 }
 
+/** Snowflake ids as strings: the higher id sorts first. */
+function compareIdsDesc(a: string, b: string): number {
+  const left = BigInt(a)
+  const right = BigInt(b)
+  if (left === right) {
+    return 0
+  }
+  return right > left ? 1 : -1
+}
+
 /**
  * The contact inbox a sequence step dispatches to: AT MOST ONE (owner
  * s220b). A step runs its flow once per contact; a flow that must reach
@@ -83,7 +93,7 @@ export async function getDispatchContactInboxes(
       activityMs(b.lastIncomingMessageAt) -
         activityMs(a.lastIncomingMessageAt) ||
       activityMs(b.updatedAt) - activityMs(a.updatedAt) ||
-      (BigInt(b.id) > BigInt(a.id) ? 1 : BigInt(b.id) < BigInt(a.id) ? -1 : 0),
+      compareIdsDesc(a.id, b.id),
   )
   return primary ? [primary] : []
 }
