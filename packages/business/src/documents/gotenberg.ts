@@ -1,3 +1,4 @@
+import { readCapped } from "@chatbotx.io/sdk/outbound-fetch"
 import { documentsEnv } from "./keys"
 
 /**
@@ -13,41 +14,9 @@ export type PdfResult =
   | { ok: true; pdf: Uint8Array; ms: number }
   | { ok: false; status: number | null; error: string }
 
-/** Anything with a body stream: a fetch Response or an incoming Request. */
-type BodySource = Pick<Response, "body" | "arrayBuffer">
-
-export const readCapped = async (
-  res: BodySource,
-  max: number,
-): Promise<Uint8Array | null> => {
-  const reader = res.body?.getReader()
-  if (!reader) {
-    const buf = new Uint8Array(await res.arrayBuffer())
-    return buf.length > max ? null : buf
-  }
-  const chunks: Uint8Array[] = []
-  let total = 0
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) {
-      break
-    }
-    total += value.length
-    if (total > max) {
-      // Over the cap: stop reading; the answer is already too-large.
-      await reader.cancel().catch(() => undefined)
-      return null
-    }
-    chunks.push(value)
-  }
-  const out = new Uint8Array(total)
-  let offset = 0
-  for (const chunk of chunks) {
-    out.set(chunk, offset)
-    offset += chunk.length
-  }
-  return out
-}
+// The capped body reader moved to the sdk (s219) so integration packages
+// share it; re-exported here for every existing import site.
+export { readCapped } from "@chatbotx.io/sdk/outbound-fetch"
 
 /** A thrown fetch as a failure value: `timeout` or `network: <code>`. */
 export const fetchFailure = (

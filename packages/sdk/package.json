@@ -6,6 +6,7 @@
     "@chatbotx.io/typescript-config": "workspace:*",
     "@chatbotx.io/vitest-config": "workspace:*",
     "@types/node": "24.x",
+    "ky": "^2.0.2",
     "typescript": "^5",
     "vitest": "^4.1.0"
   },
@@ -15,7 +16,8 @@
     "zod": "^4.3.6"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./outbound-fetch": "./src/outbound-fetch.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit",
