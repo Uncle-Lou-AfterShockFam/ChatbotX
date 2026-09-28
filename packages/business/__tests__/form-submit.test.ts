@@ -659,6 +659,98 @@ describe("formSubmitService.submit (s200)", () => {
     expect(m.setValuesInTransaction).not.toHaveBeenCalled()
   })
 
+  test("fill-blanks fullName tops up only the missing half of a stored name (s219)", async () => {
+    const def = {
+      steps: [
+        {
+          id: "s1",
+          fields: [
+            {
+              key: "name",
+              type: "text",
+              required: false,
+              label: "",
+              mapTo: { kind: "system", key: "fullName" },
+            },
+            {
+              key: "phone",
+              type: "phone",
+              required: false,
+              label: "",
+              mapTo: { kind: "system", key: "phoneNumber" },
+            },
+          ],
+        },
+      ],
+      rules: [],
+    }
+    m.findPublishedBySlug.mockResolvedValue(FORM({ publishedDefinition: def }))
+    queueClean()
+    m.findByPhone.mockResolvedValue({ id: "c-old" })
+    m.attachContactToInbox.mockResolvedValue({
+      contactInbox: { contactId: "c-old" },
+      ownedByAnotherContact: false,
+      created: false,
+    })
+    m.findById.mockResolvedValue({
+      id: "c-old",
+      firstName: "Adeline",
+      lastName: null,
+      phoneNumber: "+15550001234",
+    })
+    await submit({ name: "Ada King Lovelace", phone: "+15550001234" })
+    expect(m.setRichSystemFieldByKey).toHaveBeenCalledTimes(1)
+    expect(m.setRichSystemFieldByKey).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fieldName: "last_name",
+        value: "King Lovelace",
+      }),
+    )
+  })
+
+  test("fill-blanks fullName writes nothing when both halves are stored (s219)", async () => {
+    const def = {
+      steps: [
+        {
+          id: "s1",
+          fields: [
+            {
+              key: "name",
+              type: "text",
+              required: false,
+              label: "",
+              mapTo: { kind: "system", key: "fullName" },
+            },
+            {
+              key: "phone",
+              type: "phone",
+              required: false,
+              label: "",
+              mapTo: { kind: "system", key: "phoneNumber" },
+            },
+          ],
+        },
+      ],
+      rules: [],
+    }
+    m.findPublishedBySlug.mockResolvedValue(FORM({ publishedDefinition: def }))
+    queueClean()
+    m.findByPhone.mockResolvedValue({ id: "c-old" })
+    m.attachContactToInbox.mockResolvedValue({
+      contactInbox: { contactId: "c-old" },
+      ownedByAnotherContact: false,
+      created: false,
+    })
+    m.findById.mockResolvedValue({
+      id: "c-old",
+      firstName: "Adeline",
+      lastName: "Byron",
+      phoneNumber: "+15550001234",
+    })
+    await submit({ name: "Attacker Name", phone: "+15550001234" })
+    expect(m.setRichSystemFieldByKey).not.toHaveBeenCalled()
+  })
+
   test("with overwriteExisting on, an existing contact's values are replaced", async () => {
     m.findPublishedBySlug.mockResolvedValue(
       FORM({ settings: { ...FORM().settings, overwriteExisting: true } }),

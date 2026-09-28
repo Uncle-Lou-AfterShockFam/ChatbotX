@@ -366,7 +366,9 @@ function validateOne(
       return TIME_RE.test(value) ? null : "date"
     case "datetime":
       return DATETIME_RE.test(value) ? null : "date"
-    // A chat run stores the received photo / file and answers with its URL.
+    // A chat run stores the received photo / file and answers with its URL
+    // (http allowed for a local storage origin). Anything that later FETCHES
+    // such a value server-side goes through the pinned outbound fetch.
     case "image":
     case "file":
       return isHttpUrl(value) ? null : "url"

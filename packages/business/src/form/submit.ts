@@ -676,6 +676,26 @@ export class FormSubmitService {
         if (text === "") {
           continue
         }
+        if (stored && field.mapTo.key === "fullName") {
+          // Fill-blanks: write only the half the contact is missing, never
+          // replace a stored first or last name (s219).
+          const parts = splitFullName(text)
+          for (const [key, fieldName, part] of [
+            ["firstName", "first_name", parts.firstName],
+            ["lastName", "last_name", parts.lastName],
+          ] as const) {
+            if (part && !stored.system[key]) {
+              await contactService.setRichSystemFieldByKey({
+                workspaceId,
+                contactId,
+                fieldName,
+                value: part,
+                tx,
+              })
+            }
+          }
+          continue
+        }
         await contactService.setRichSystemFieldByKey({
           workspaceId,
           contactId,
@@ -789,8 +809,9 @@ export class FormSubmitService {
       lastName: filled(contact?.lastName),
       email: filled(contact?.email),
       phoneNumber: filled(contact?.phoneNumber),
-      // A full-name answer fills blanks only when the contact has no name.
-      fullName: filled(contact?.firstName) || filled(contact?.lastName),
+      // Skipped only when BOTH halves are stored; a half-known name is topped
+      // up part by part in writeMappedFields.
+      fullName: filled(contact?.firstName) && filled(contact?.lastName),
     }
     const ids = formInputFields(def)
       .map((f) => (f.mapTo?.kind === "custom" ? f.mapTo.customFieldId : null))

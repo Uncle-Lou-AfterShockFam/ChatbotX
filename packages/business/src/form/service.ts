@@ -266,8 +266,13 @@ export class FormService extends BaseService {
       return null
     }
     const form = this.normalize(row)
-    // A chat-only form has no public page (s219).
-    if (!form.settings.channels.includes("web")) {
+    // A chat-only form has no public page, and a live copy that still holds
+    // a chat-only field is never served on the web (fail closed, s219).
+    if (
+      !form.settings.channels.includes("web") ||
+      formChatOnlyFields(form.publishedDefinition ?? EMPTY_FORM_DEFINITION)
+        .length > 0
+    ) {
       return null
     }
     // A published form always has an input field (publish refuses an empty
@@ -398,6 +403,24 @@ export class FormService extends BaseService {
       }
       patch.settings = parsed.data
     }
+    const settings = patch.settings ?? current.settings
+    const onWeb = settings.channels.includes("web")
+    // A web form never carries a chat-only field, in its draft OR in its live
+    // copy: turning `web` on for a form published chat-only would otherwise
+    // put a photo / file / location question on the public page (s219).
+    const chatOnly = onWeb
+      ? (formChatOnlyFields(definition)[0] ??
+        (current.publishedDefinition
+          ? formChatOnlyFields(current.publishedDefinition)[0]
+          : undefined))
+      : undefined
+    if (chatOnly) {
+      throw validationException(
+        "settings.channels",
+        `Field "${chatOnly.key}" (${chatOnly.type}) can only be answered in chat; remove the field (and republish) before adding the web channel.`,
+        { reason: "chatOnlyField", fieldKey: chatOnly.key },
+      )
+    }
     const inboxId = data.inboxId === undefined ? current.inboxId : data.inboxId
     if (data.inboxId !== undefined) {
       if (inboxId !== null && !INT8_ID.test(inboxId)) {
@@ -408,7 +431,8 @@ export class FormService extends BaseService {
     if (inboxId !== null) {
       await this.assertApiInbox({ workspaceId, inboxId, tx })
     }
-    if (formMapsToContact(definition) && inboxId === null) {
+    // Only the anonymous web page needs an inbox; a chat run knows its contact.
+    if (onWeb && formMapsToContact(definition) && inboxId === null) {
       throw validationException(
         "inboxId",
         "Pick an API-channel inbox: a field on this form writes to the contact.",
