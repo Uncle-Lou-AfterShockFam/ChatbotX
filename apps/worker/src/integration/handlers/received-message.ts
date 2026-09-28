@@ -20,6 +20,7 @@ import {
   finalizeContactProfile,
   normalizeLanguage,
 } from "@chatbotx.io/business/contact-locale"
+import { workspaceAvatarsPrefix } from "@chatbotx.io/business/storage-paths"
 import { isUniqueViolationError } from "@chatbotx.io/database/client"
 import {
   type ChannelType,
@@ -955,7 +956,7 @@ async function downloadCommenterAvatar(props: {
     return
   }
 
-  const originPath = `public/space/${props.workspaceId}/avatars/${createId()}`
+  const originPath = `${workspaceAvatarsPrefix(props.workspaceId)}${createId()}`
   const bytes = await response.arrayBuffer()
   const mimeType = response.headers.get("content-type") ?? "image/jpeg"
 

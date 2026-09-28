@@ -4694,8 +4694,8 @@
     "exportAllNotice": "All contacts matching the current filter will be exported.",
     "exportTakingLong": "Export is taking longer than expected",
     "exportTakingLongDescription": "The export is still processing. You can close this dialog and check back in a few minutes from the export history.",
-    "invalidFilterTitle": "This filter can't be read",
-    "invalidFilterDescription": "The contact filter in this link could not be read, so no contacts are shown. Clear it and build the filter again.",
+    "invalidFilterTitle": "This filter link is broken",
+    "invalidFilterDescription": "This link's filter is damaged or out of date, so no contacts are shown. Clear it and build the filter again.",
     "clearInvalidFilter": "Clear filter",
     "excludedFilterDescription": "This filter uses email or phone fields you can't use, so no contacts are shown. Clear it and build the filter again."
   },

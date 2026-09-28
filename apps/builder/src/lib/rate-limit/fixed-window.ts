@@ -61,6 +61,8 @@ export async function checkFixedWindow(props: {
   now?: number
   /** Names the caller in the fallback log line. */
   scope: string
+  /** Extra non-PII ids for the fallback log line (never a client ip). */
+  logContext?: Record<string, string>
   /** Test seam; app code keeps the default `STORE_TIMEOUT_MS`. */
   storeTimeoutMs?: number
 }): Promise<FixedWindowResult> {
@@ -70,6 +72,7 @@ export async function checkFixedWindow(props: {
     store = distributedStore,
     now = Date.now(),
     scope,
+    logContext,
     storeTimeoutMs = STORE_TIMEOUT_MS,
   } = props
   // Outside the try: a bad seam value is a caller bug, never a fallback.
@@ -97,7 +100,7 @@ export async function checkFixedWindow(props: {
     )
   } catch (error) {
     logger.warn(
-      { err: error, scope },
+      { err: error, scope, ...logContext },
       "Rate limit store failed, using local fallback",
     )
     for (const bucket of buckets) {

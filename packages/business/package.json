@@ -52,6 +52,7 @@
     "./errors": "./src/errors.ts",
     "./referral": "./src/referral/index.ts",
     "./sequence": "./src/sequence/index.ts",
+    "./storage-paths": "./src/storage/paths.ts",
     "./system-field": "./src/system-field/index.ts",
     "./utils": "./src/utils.ts",
     "./workspace-api-token/credentials": "./src/workspace-api-token/credentials.ts",
