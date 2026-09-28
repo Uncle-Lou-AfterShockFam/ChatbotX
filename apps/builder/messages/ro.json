@@ -617,7 +617,8 @@
       "empty": "Nu au fost găsite câmpuri personalizate ActiveCampaign."
     },
     "errors": {
-      "invalidCredentials": "Adresa URL API sau cheia API ActiveCampaign nu este validă. Verificați datele de autentificare și încercați din nou."
+      "invalidCredentials": "Adresa URL API sau cheia API ActiveCampaign nu este validă. Verificați datele de autentificare și încercați din nou.",
+      "unreachableApiUrl": "This API URL cannot be reached from the hub (it points to a private address or redirects). Use your ActiveCampaign account URL, e.g. https://youraccount.api-us1.com."
     }
   },
   "getResponse": {

@@ -3228,7 +3228,8 @@
       "empty": "No ActiveCampaign custom fields found."
     },
     "errors": {
-      "invalidCredentials": "Invalid ActiveCampaign API URL or API Key. Please check your credentials and try again."
+      "invalidCredentials": "Invalid ActiveCampaign API URL or API Key. Please check your credentials and try again.",
+      "unreachableApiUrl": "This API URL cannot be reached from the hub (it points to a private address or redirects). Use your ActiveCampaign account URL, e.g. https://youraccount.api-us1.com."
     }
   },
   "getResponse": {

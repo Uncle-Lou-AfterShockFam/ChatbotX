@@ -2898,7 +2898,8 @@
       "empty": "ActiveCampaignのカスタムフィールドが見つかりません。"
     },
     "errors": {
-      "invalidCredentials": "ActiveCampaignのAPI URLまたはAPIキーが無効です。認証情報を確認して、もう一度お試しください。"
+      "invalidCredentials": "ActiveCampaignのAPI URLまたはAPIキーが無効です。認証情報を確認して、もう一度お試しください。",
+      "unreachableApiUrl": "This API URL cannot be reached from the hub (it points to a private address or redirects). Use your ActiveCampaign account URL, e.g. https://youraccount.api-us1.com."
     }
   },
   "getResponse": {

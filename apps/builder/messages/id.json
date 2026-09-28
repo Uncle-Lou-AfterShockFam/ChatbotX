@@ -2898,7 +2898,8 @@
       "empty": "Tidak ada kolom kustom ActiveCampaign yang ditemukan."
     },
     "errors": {
-      "invalidCredentials": "URL API atau Kunci API ActiveCampaign tidak valid. Periksa kredensial Anda lalu coba lagi."
+      "invalidCredentials": "URL API atau Kunci API ActiveCampaign tidak valid. Periksa kredensial Anda lalu coba lagi.",
+      "unreachableApiUrl": "This API URL cannot be reached from the hub (it points to a private address or redirects). Use your ActiveCampaign account URL, e.g. https://youraccount.api-us1.com."
     }
   },
   "getResponse": {

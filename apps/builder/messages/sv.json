@@ -177,7 +177,8 @@
       "description": "Ange API-URL och API-nyckel från inställningarna för ditt ActiveCampaign-konto."
     },
     "errors": {
-      "invalidCredentials": "Ogiltig API-URL eller API-nyckel för ActiveCampaign. Kontrollera dina inloggningsuppgifter och försök igen."
+      "invalidCredentials": "Ogiltig API-URL eller API-nyckel för ActiveCampaign. Kontrollera dina inloggningsuppgifter och försök igen.",
+      "unreachableApiUrl": "This API URL cannot be reached from the hub (it points to a private address or redirects). Use your ActiveCampaign account URL, e.g. https://youraccount.api-us1.com."
     },
     "fields": {
       "addCustomField": "Lägg till anpassat fält",

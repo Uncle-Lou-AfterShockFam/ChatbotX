@@ -909,7 +909,8 @@
       "empty": "לא נמצאו שדות מותאמים אישית של ActiveCampaign."
     },
     "errors": {
-      "invalidCredentials": "כתובת ה-API או מפתח ה-API של ActiveCampaign אינם תקינים. בדקו את פרטי הכניסה ונסו שוב."
+      "invalidCredentials": "כתובת ה-API או מפתח ה-API של ActiveCampaign אינם תקינים. בדקו את פרטי הכניסה ונסו שוב.",
+      "unreachableApiUrl": "This API URL cannot be reached from the hub (it points to a private address or redirects). Use your ActiveCampaign account URL, e.g. https://youraccount.api-us1.com."
     }
   },
   "getResponse": {
