@@ -111,40 +111,24 @@ describe("calculateBucket", () => {
 })
 
 describe("generateIdempotencyKey", () => {
-  test("produces the exact format workspaceId:enrollmentId:stepId:contactInboxId:runAt.toISOString()", async () => {
+  test("produces the exact format workspaceId:enrollmentId:stepId:runAt.toISOString()", async () => {
     const { generateIdempotencyKey } = await import("../src/dispatch-manager")
     const runAt = new Date("2024-06-01T10:30:00.000Z")
 
-    const key = generateIdempotencyKey(
-      "ws-1",
-      "enroll-1",
-      "step-1",
-      "ci-1",
-      runAt,
-    )
+    const key = generateIdempotencyKey("ws-1", "enroll-1", "step-1", runAt)
 
-    expect(key).toBe(`ws-1:enroll-1:step-1:ci-1:${runAt.toISOString()}`)
-  })
-
-  test("two inboxes of one contact get different keys (s220b)", async () => {
-    const { generateIdempotencyKey } = await import("../src/dispatch-manager")
-    const runAt = new Date("2026-09-28T20:52:23.699Z")
-
-    expect(generateIdempotencyKey("ws", "e", "s", "ci-gv", runAt)).not.toBe(
-      generateIdempotencyKey("ws", "e", "s", "ci-email", runAt),
-    )
+    expect(key).toBe(`ws-1:enroll-1:step-1:${runAt.toISOString()}`)
   })
 
   test("uses runAt.toISOString so the key is stable across calls with the same Date", async () => {
     const { generateIdempotencyKey } = await import("../src/dispatch-manager")
     const runAt = new Date("2025-01-15T08:00:00.000Z")
 
-    const keyA = generateIdempotencyKey("ws-x", "e-1", "s-1", "ci-1", runAt)
+    const keyA = generateIdempotencyKey("ws-x", "e-1", "s-1", runAt)
     const keyB = generateIdempotencyKey(
       "ws-x",
       "e-1",
       "s-1",
-      "ci-1",
       new Date(runAt.getTime()),
     )
 

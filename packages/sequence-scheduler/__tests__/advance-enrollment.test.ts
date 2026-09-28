@@ -11,7 +11,7 @@ const order: string[] = []
 
 // --- module mocks (hoisted) ---
 vi.mock("../src/contacts-on-sequences", () => ({
-  getContactInboxes: vi.fn(),
+  getDispatchContactInboxes: vi.fn(),
 }))
 
 vi.mock("../src/dispatch-manager", () => ({
@@ -92,7 +92,7 @@ import {
 } from "../src/advance-enrollment"
 // --- lazy imports after mocks ---
 import { calculateNextRunAtFromStep } from "../src/calculate-next-run-at"
-import { getContactInboxes } from "../src/contacts-on-sequences"
+import { getDispatchContactInboxes } from "../src/contacts-on-sequences"
 import { createDispatch } from "../src/dispatch-manager"
 import { calculateNextValidSendTime } from "../src/send-time-validator"
 
@@ -158,9 +158,9 @@ beforeEach(() => {
   // default: update resolves
   whereUpdateMock.mockResolvedValue(undefined)
   // default: one inbox
-  vi.mocked(getContactInboxes).mockResolvedValue([
+  vi.mocked(getDispatchContactInboxes).mockResolvedValue([
     { id: "inbox-1" },
-  ] as unknown as Awaited<ReturnType<typeof getContactInboxes>>)
+  ] as unknown as Awaited<ReturnType<typeof getDispatchContactInboxes>>)
   // default: dispatch created
   vi.mocked(createDispatch).mockResolvedValue(FAKE_DISPATCH)
   // default: calculateNextRunAtFromStep returns NEXT_RUN_AT
@@ -345,10 +345,10 @@ describe("advanceEnrollment", () => {
 
     test("creates a dispatch for each contact inbox inside the transaction", async () => {
       selectLimitMock.mockResolvedValue([NEXT_STEP])
-      vi.mocked(getContactInboxes).mockResolvedValue([
+      vi.mocked(getDispatchContactInboxes).mockResolvedValue([
         { id: "inbox-1" },
         { id: "inbox-2" },
-      ] as unknown as Awaited<ReturnType<typeof getContactInboxes>>)
+      ] as unknown as Awaited<ReturnType<typeof getDispatchContactInboxes>>)
       setUpTransactionWithTxMocks()
 
       await advanceEnrollment(makeParams())
@@ -382,10 +382,10 @@ describe("advanceEnrollment", () => {
 
     test("calls scheduler.addToSchedule for each dispatch created", async () => {
       selectLimitMock.mockResolvedValue([NEXT_STEP])
-      vi.mocked(getContactInboxes).mockResolvedValue([
+      vi.mocked(getDispatchContactInboxes).mockResolvedValue([
         { id: "inbox-1" },
         { id: "inbox-2" },
-      ] as unknown as Awaited<ReturnType<typeof getContactInboxes>>)
+      ] as unknown as Awaited<ReturnType<typeof getDispatchContactInboxes>>)
       vi.mocked(createDispatch).mockResolvedValue(FAKE_DISPATCH)
       setUpTransactionWithTxMocks()
 
@@ -432,7 +432,7 @@ describe("advanceEnrollment", () => {
 
     test("does not create dispatches when contact has no inboxes", async () => {
       selectLimitMock.mockResolvedValue([NEXT_STEP])
-      vi.mocked(getContactInboxes).mockResolvedValue([])
+      vi.mocked(getDispatchContactInboxes).mockResolvedValue([])
       setUpTransactionWithTxMocks()
 
       await advanceEnrollment(makeParams())

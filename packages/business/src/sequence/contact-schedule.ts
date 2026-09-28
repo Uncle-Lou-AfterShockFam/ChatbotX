@@ -12,7 +12,7 @@ import { sequenceConnections } from "@chatbotx.io/redis"
 import { SchedulerClient } from "@chatbotx.io/scheduler"
 import {
   createDispatch,
-  getContactInboxes,
+  getDispatchContactInboxes,
 } from "@chatbotx.io/sequence-scheduler"
 
 type SequenceStepForDelay = {
@@ -49,7 +49,7 @@ async function createAndScheduleDispatch(
   },
   client: DatabaseClient,
 ) {
-  const contactInboxes = await getContactInboxes(
+  const contactInboxes = await getDispatchContactInboxes(
     params.workspaceId,
     params.contactId,
   )

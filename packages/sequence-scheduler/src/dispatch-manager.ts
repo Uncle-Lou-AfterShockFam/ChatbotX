@@ -35,20 +35,13 @@ export function calculateBucket(
   return hash % 256
 }
 
-/**
- * One dispatch per (enrolment, step, inbox, runAt). The inbox is part of the
- * key (s220b): a step dispatches once per contact inbox, and without it the
- * second inbox's insert hit the unique index, which 500'd the subscribe API
- * and rolled back every multi-inbox advance.
- */
 export function generateIdempotencyKey(
   workspaceId: string,
   enrollmentId: string,
   stepId: string,
-  contactInboxId: string,
   runAt: Date,
 ): string {
-  return `${workspaceId}:${enrollmentId}:${stepId}:${contactInboxId}:${runAt.toISOString()}`
+  return `${workspaceId}:${enrollmentId}:${stepId}:${runAt.toISOString()}`
 }
 export interface CreateDispatchParams {
   client?: DrizzleClient
@@ -80,7 +73,6 @@ export async function createDispatch(
     workspaceId,
     enrollmentId,
     stepId,
-    contactInboxId,
     runAt,
   )
 

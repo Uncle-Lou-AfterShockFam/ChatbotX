@@ -169,37 +169,94 @@ describe("public API", () => {
   })
 })
 
-describe("getContactInboxes", () => {
+describe("getDispatchContactInboxes", () => {
   test("returns contact inboxes matching workspace inboxes", async () => {
-    const { getContactInboxes } = await import("../src/contacts-on-sequences")
+    const { getDispatchContactInboxes } = await import(
+      "../src/contacts-on-sequences"
+    )
     findManyInboxMock.mockResolvedValue([{ id: "inbox-1" }, { id: "inbox-2" }])
     const fakeContactInboxes = [
       { id: "ci-1", contactId: "contact-1", inboxId: "inbox-1" },
     ]
     findManyContactInboxMock.mockResolvedValue(fakeContactInboxes)
 
-    const result = await getContactInboxes("ws-1", "contact-1")
+    const result = await getDispatchContactInboxes("ws-1", "contact-1")
 
     expect(result).toEqual(fakeContactInboxes)
   })
 
   test("returns empty array when no inboxes exist in the workspace", async () => {
-    const { getContactInboxes } = await import("../src/contacts-on-sequences")
+    const { getDispatchContactInboxes } = await import(
+      "../src/contacts-on-sequences"
+    )
     findManyInboxMock.mockResolvedValue([])
     findManyContactInboxMock.mockResolvedValue([])
 
-    const result = await getContactInboxes("ws-1", "contact-1")
+    const result = await getDispatchContactInboxes("ws-1", "contact-1")
 
     expect(result).toEqual([])
     expect(findManyContactInboxMock).not.toHaveBeenCalled()
   })
 
+  test("returns at most ONE inbox: last written, then last updated, then highest id (owner s220b)", async () => {
+    const { getDispatchContactInboxes } = await import(
+      "../src/contacts-on-sequences"
+    )
+    findManyInboxMock.mockResolvedValue([{ id: "1" }])
+    findManyContactInboxMock.mockResolvedValue([
+      {
+        id: "10",
+        lastIncomingMessageAt: null,
+        updatedAt: new Date("2026-09-28"),
+      },
+      {
+        id: "11",
+        lastIncomingMessageAt: new Date("2026-09-27"),
+        updatedAt: null,
+      },
+      {
+        id: "12",
+        lastIncomingMessageAt: new Date("2026-09-26"),
+        updatedAt: null,
+      },
+    ])
+    expect(
+      (await getDispatchContactInboxes("ws", "c")).map((ci) => ci.id),
+    ).toEqual(["11"])
+
+    findManyContactInboxMock.mockResolvedValue([
+      {
+        id: "10",
+        lastIncomingMessageAt: null,
+        updatedAt: new Date("2026-09-20"),
+      },
+      {
+        id: "11",
+        lastIncomingMessageAt: null,
+        updatedAt: new Date("2026-09-21"),
+      },
+    ])
+    expect(
+      (await getDispatchContactInboxes("ws", "c")).map((ci) => ci.id),
+    ).toEqual(["11"])
+
+    findManyContactInboxMock.mockResolvedValue([
+      { id: "9", lastIncomingMessageAt: null, updatedAt: null },
+      { id: "100", lastIncomingMessageAt: null, updatedAt: null },
+    ])
+    expect(
+      (await getDispatchContactInboxes("ws", "c")).map((ci) => ci.id),
+    ).toEqual(["100"])
+  })
+
   test("queries inboxModel scoped by workspaceId", async () => {
-    const { getContactInboxes } = await import("../src/contacts-on-sequences")
+    const { getDispatchContactInboxes } = await import(
+      "../src/contacts-on-sequences"
+    )
     findManyInboxMock.mockResolvedValue([])
     findManyContactInboxMock.mockResolvedValue([])
 
-    await getContactInboxes("my-workspace", "contact-1")
+    await getDispatchContactInboxes("my-workspace", "contact-1")
 
     expect(findManyInboxMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -209,11 +266,13 @@ describe("getContactInboxes", () => {
   })
 
   test("queries contactInboxModel scoped by contactId", async () => {
-    const { getContactInboxes } = await import("../src/contacts-on-sequences")
+    const { getDispatchContactInboxes } = await import(
+      "../src/contacts-on-sequences"
+    )
     findManyInboxMock.mockResolvedValue([{ id: "inbox-99" }])
     findManyContactInboxMock.mockResolvedValue([])
 
-    await getContactInboxes("ws-1", "my-contact")
+    await getDispatchContactInboxes("ws-1", "my-contact")
 
     expect(findManyContactInboxMock).toHaveBeenCalledWith(
       expect.objectContaining({

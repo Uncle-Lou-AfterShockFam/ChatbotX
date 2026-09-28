@@ -12,7 +12,7 @@ const order: string[] = []
 
 // --- module mocks (hoisted) ---
 vi.mock("../src/contacts-on-sequences", () => ({
-  getContactInboxes: vi.fn(),
+  getDispatchContactInboxes: vi.fn(),
 }))
 
 vi.mock("../src/dispatch-manager", () => ({
@@ -103,7 +103,7 @@ vi.mock("@chatbotx.io/utils", async (importOriginal) => {
 })
 
 // --- lazy imports after mocks ---
-import { getContactInboxes } from "../src/contacts-on-sequences"
+import { getDispatchContactInboxes } from "../src/contacts-on-sequences"
 import { createDispatch } from "../src/dispatch-manager"
 import {
   enrollContactInSequence,
@@ -155,9 +155,9 @@ beforeEach(() => {
   // default: successful insert returns one row
   returningMock.mockResolvedValue([{ id: "enrollment-1" }])
   // default: one contact inbox
-  vi.mocked(getContactInboxes).mockResolvedValue([
+  vi.mocked(getDispatchContactInboxes).mockResolvedValue([
     { id: "inbox-1" },
-  ] as unknown as Awaited<ReturnType<typeof getContactInboxes>>)
+  ] as unknown as Awaited<ReturnType<typeof getDispatchContactInboxes>>)
   // default: dispatch created successfully
   vi.mocked(createDispatch).mockResolvedValue(FAKE_DISPATCH)
   addToScheduleMock.mockImplementation(() => {
@@ -227,10 +227,10 @@ describe("enrollContactInSequence", () => {
     })
 
     test("creates a dispatch for each contact inbox", async () => {
-      vi.mocked(getContactInboxes).mockResolvedValue([
+      vi.mocked(getDispatchContactInboxes).mockResolvedValue([
         { id: "inbox-1" },
         { id: "inbox-2" },
-      ] as unknown as Awaited<ReturnType<typeof getContactInboxes>>)
+      ] as unknown as Awaited<ReturnType<typeof getDispatchContactInboxes>>)
 
       await enrollContactInSequence(makeEnrollParams())
 
@@ -255,10 +255,10 @@ describe("enrollContactInSequence", () => {
     })
 
     test("schedules each created dispatch", async () => {
-      vi.mocked(getContactInboxes).mockResolvedValue([
+      vi.mocked(getDispatchContactInboxes).mockResolvedValue([
         { id: "inbox-1" },
         { id: "inbox-2" },
-      ] as unknown as Awaited<ReturnType<typeof getContactInboxes>>)
+      ] as unknown as Awaited<ReturnType<typeof getDispatchContactInboxes>>)
       vi.mocked(createDispatch).mockResolvedValue(FAKE_DISPATCH)
 
       await enrollContactInSequence(makeEnrollParams())
@@ -278,7 +278,7 @@ describe("enrollContactInSequence", () => {
     })
 
     test("does not create dispatches when contact has no inboxes", async () => {
-      vi.mocked(getContactInboxes).mockResolvedValue([])
+      vi.mocked(getDispatchContactInboxes).mockResolvedValue([])
 
       await enrollContactInSequence(makeEnrollParams())
 
@@ -389,10 +389,10 @@ describe("enrollContactsInSequenceBulk", () => {
         nextStepId: "step-1",
       },
     ])
-    vi.mocked(getContactInboxes).mockResolvedValue([
+    vi.mocked(getDispatchContactInboxes).mockResolvedValue([
       { id: "inbox-1" },
       { id: "inbox-2" },
-    ] as unknown as Awaited<ReturnType<typeof getContactInboxes>>)
+    ] as unknown as Awaited<ReturnType<typeof getDispatchContactInboxes>>)
     vi.mocked(createDispatch).mockResolvedValue(FAKE_DISPATCH)
 
     await enrollContactsInSequenceBulk(makeBulkParams())
@@ -426,9 +426,9 @@ describe("enrollContactsInSequenceBulk", () => {
         nextStepId: "step-1",
       },
     ])
-    vi.mocked(getContactInboxes).mockResolvedValue([
+    vi.mocked(getDispatchContactInboxes).mockResolvedValue([
       { id: "inbox-1" },
-    ] as unknown as Awaited<ReturnType<typeof getContactInboxes>>)
+    ] as unknown as Awaited<ReturnType<typeof getDispatchContactInboxes>>)
     vi.mocked(createDispatch).mockResolvedValue(FAKE_DISPATCH)
 
     await enrollContactsInSequenceBulk(makeBulkParams())
@@ -499,9 +499,9 @@ describe("enrollContactsInSequenceBulk", () => {
         nextStepId: "step-99",
       },
     ])
-    vi.mocked(getContactInboxes).mockResolvedValue([
+    vi.mocked(getDispatchContactInboxes).mockResolvedValue([
       { id: "inbox-X" },
-    ] as unknown as Awaited<ReturnType<typeof getContactInboxes>>)
+    ] as unknown as Awaited<ReturnType<typeof getDispatchContactInboxes>>)
     vi.mocked(createDispatch).mockResolvedValue(FAKE_DISPATCH)
 
     await enrollContactsInSequenceBulk(makeBulkParams())
