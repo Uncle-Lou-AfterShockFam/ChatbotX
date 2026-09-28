@@ -74,10 +74,13 @@ export const guardedLookup =
     )
   }
 
-const hostOf = (url: URL) => url.hostname.replace(/^\[|\]$/g, "")
+const IPV6_BRACKETS = /^\[|\]$/g
+const DOTTED_IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/
+
+const hostOf = (url: URL) => url.hostname.replace(IPV6_BRACKETS, "")
 
 const isIpLiteral = (host: string) =>
-  /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(":")
+  DOTTED_IPV4.test(host) || host.includes(":")
 
 const DECODERS: Record<
   string,

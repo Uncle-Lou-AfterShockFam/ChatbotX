@@ -14,10 +14,12 @@ const A_RECORD = 1
 
 // The guard asks for A and AAAA separately (s215): answer the A query with
 // `ip`, the AAAA query with nothing, and a fresh Response each time.
-const aOnly = (ip: string) => async (input: URL | string) =>
-  new URL(String(input)).searchParams.get("type") === "A"
-    ? dohJsonResponse([{ type: A_RECORD, data: ip }])
-    : dohJsonResponse([])
+const aOnly = (ip: string) => (input: URL | string) =>
+  Promise.resolve(
+    new URL(String(input)).searchParams.get("type") === "A"
+      ? dohJsonResponse([{ type: A_RECORD, data: ip }])
+      : dohJsonResponse([]),
+  )
 const IMAGE_URL_CONTEXT_PATTERN = /image URL/
 
 let fetchMock: ReturnType<typeof vi.fn>
@@ -145,11 +147,11 @@ describe("assertPublicUrl", () => {
 
 describe("checkSsrfSafety queries A and AAAA (s215)", () => {
   const byType = (a: string[], aaaa: string[]) =>
-    vi.fn(async (input: URL | string) => {
+    vi.fn((input: URL | string) => {
       const type = new URL(String(input)).searchParams.get("type")
       const data = type === "AAAA" ? aaaa : a
-      return new Response(
-        JSON.stringify({
+      return Promise.resolve(
+        Response.json({
           Answer: data.map((ip) => ({
             type: type === "AAAA" ? 28 : 1,
             data: ip,

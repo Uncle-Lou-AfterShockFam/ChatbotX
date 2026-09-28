@@ -86,14 +86,14 @@ beforeEach(() => {
 })
 
 // img.test -> the local server; evil.test -> a private address (10/8).
-const resolver = async (hostname: string) => {
+const resolver = (hostname: string) => {
   if (hostname === "img.test") {
-    return [{ address: "127.0.0.1", family: 4 }]
+    return Promise.resolve([{ address: "127.0.0.1", family: 4 }])
   }
   if (hostname === "evil.test") {
-    return [{ address: "10.9.9.9", family: 4 }]
+    return Promise.resolve([{ address: "10.9.9.9", family: 4 }])
   }
-  throw new Error(`ENOTFOUND ${hostname}`)
+  return Promise.reject(new Error(`ENOTFOUND ${hostname}`))
 }
 // Everything the real guard blocks, except the local server's loopback.
 const isBlocked = (ip: string) => ip !== "127.0.0.1" && isBlockedIp(ip)
