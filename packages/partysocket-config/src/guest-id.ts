@@ -1,7 +1,7 @@
-// The webchat guest conversation id is the only thing that proves a visitor
-// owns a conversation: the guest token does not bind it, and the realtime
-// `guests` room is named after it. So only the minted, unguessable form
-// `<workspaceId>:<uuidv4>` is accepted anywhere. The legacy digits-only
+// The webchat guest conversation id names a conversation and its realtime
+// `guests` room. Ownership is proved by the guest secret minted beside it
+// (guest-secret.ts, s215); the id is still accepted only in the minted,
+// unguessable form `<workspaceId>:<uuidv4>`. The legacy digits-only
 // Snowflake (sequential, guessable) is refused; production held none when the
 // legacy form was retired (s213: 9 webchat ContactInbox rows, 0 digits-only).
 export const GUEST_CONVERSATION_ID_REGEX =

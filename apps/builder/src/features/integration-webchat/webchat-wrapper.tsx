@@ -13,8 +13,13 @@ export const WebchatWrapper = ({ referral }: { referral?: string }) => {
   // `parentOrigin` comes from the store, frozen at mount beside the token it
   // was minted with: a later server re-render (TimezoneSync's refresh on a
   // top-level open) carries the hub as Referer and must not change it (s209).
-  const { guestConversationId, accessToken, config, parentOrigin } =
-    useGuestSessionStore((state) => state)
+  const {
+    guestConversationId,
+    guestSecret,
+    accessToken,
+    config,
+    parentOrigin,
+  } = useGuestSessionStore((state) => state)
 
   const brandColorStyle = {
     "--primary": config.brandColor,
@@ -37,12 +42,18 @@ export const WebchatWrapper = ({ referral }: { referral?: string }) => {
       <WebchatRef
         accessToken={accessToken}
         guestConversationId={guestConversationId ?? ""}
+        guestSecret={guestSecret ?? ""}
         parentOrigin={parentOrigin}
         webchatId={config.id}
         workspaceId={config.workspaceId}
       />
-      {!!guestConversationId && (
-        <WebchatRealtime guestConversationId={guestConversationId} />
+      {!!(guestConversationId && guestSecret) && (
+        // Keyed so a restarted session (s215) opens a new socket.
+        <WebchatRealtime
+          guestConversationId={guestConversationId}
+          guestSecret={guestSecret}
+          key={guestConversationId}
+        />
       )}
     </div>
   )

@@ -48,6 +48,7 @@ import { headers } from "next/headers"
 import { getTranslations } from "next-intl/server"
 import { randomString } from "remeda"
 import { isGuestOriginAllowed } from "@/features/integration-webchat/lib/authorized-domain"
+import { assertGuestSecret } from "@/features/integration-webchat/lib/guest-secret"
 import { verifyWebchatAccessToken } from "@/features/integration-webchat/lib/webchat-access-token"
 import { getDomainFromHeader } from "@/lib/domain"
 import { logger } from "@/lib/log"
@@ -92,6 +93,14 @@ export async function handleCreateWebchatMessage({
       400,
     )
   }
+  // The id is an identifier the API and exports show; the secret minted with
+  // it is the credential (s215). Checked before any lookup, create or
+  // rate-limit write.
+  await assertGuestSecret({
+    guestConversationId: parsedInput.guestConversationId,
+    guestSecret: parsedInput.guestSecret,
+    workspaceId: parsedInput.workspaceId,
+  })
 
   setWebhookExecutionContext({ source: "webhook" })
 
@@ -481,8 +490,8 @@ async function getConversationFromInput(
         .values({
           id: createId(),
           workspaceId: parsedInput.workspaceId,
-          // Never the guest id (s213): it is the conversation's only
-          // credential, and email reaches exports, flow tokens and sends.
+          // Never the guest id (s213): it is not an email, and email
+          // reaches exports, flow tokens and sends.
           email: null,
           gender: "unknown",
           firstName: "Guest",

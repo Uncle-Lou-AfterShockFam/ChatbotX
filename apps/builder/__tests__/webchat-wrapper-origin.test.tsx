@@ -47,6 +47,7 @@ const tree = (parentOrigin: string | null) => (
     config={{ id: "webchat-1", workspaceId: "workspace-1" } as never}
     parentOrigin={parentOrigin}
     serverGuestConversationId="workspace-1:guest"
+    serverGuestSecret={"a".repeat(64)}
   >
     <WebchatWrapper />
   </GuestSessionStoreProvider>

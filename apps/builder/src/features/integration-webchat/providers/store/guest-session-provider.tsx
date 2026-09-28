@@ -35,6 +35,8 @@ export type GuestSessionStoreProviderProps = {
   /** The server-seen embedding origin; see GuestSessionState.parentOrigin. */
   parentOrigin?: string | null
   serverGuestConversationId: string
+  /** Minted with `serverGuestConversationId`; the visitor's credential (s215). */
+  serverGuestSecret: string
   /** Resolved server-side; see GuestSessionState.workspaceLogoUrl. */
   workspaceLogoUrl?: string
 }
@@ -45,6 +47,7 @@ export const GuestSessionStoreProvider = ({
   accessToken = null,
   parentOrigin = null,
   serverGuestConversationId,
+  serverGuestSecret,
   workspaceLogoUrl,
 }: GuestSessionStoreProviderProps) => {
   const storeRef = useRef<GuestSessionStoreApi>(null)
@@ -58,8 +61,11 @@ export const GuestSessionStoreProvider = ({
   }
 
   useEffect(() => {
-    storeRef.current?.getState().initGuestSession(serverGuestConversationId)
-  }, [serverGuestConversationId])
+    storeRef.current?.getState().initGuestSession({
+      guestConversationId: serverGuestConversationId,
+      guestSecret: serverGuestSecret,
+    })
+  }, [serverGuestConversationId, serverGuestSecret])
 
   // Keep the 30-minute guest token fresh while the widget stays open (s210):
   // refresh shortly before it lapses (timed from when it arrived, so client

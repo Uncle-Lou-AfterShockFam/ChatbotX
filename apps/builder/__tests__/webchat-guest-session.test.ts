@@ -14,6 +14,7 @@ import {
 } from "@/features/integration-webchat/lib/webchat-access-token"
 import { createGuestSessionStore } from "@/features/integration-webchat/providers/store/guest-sesssion-store"
 import {
+  buildGuestSessionKey,
   buildGuestStorageKey,
   LEGACY_GLOBAL_KEY,
   safeStorageGet,
@@ -65,17 +66,19 @@ describe("webchat guest session helpers", () => {
     vi.clearAllMocks()
   })
 
-  test("builds a storage key scoped to workspace and webchat", () => {
+  test("builds storage keys scoped to workspace and webchat", () => {
+    expect(buildGuestSessionKey("workspace-1", "webchat-1")).toBe(
+      "x-guest-session:workspace-1:webchat-1",
+    )
+    // The pre-s215 key, only ever removed.
     expect(buildGuestStorageKey("workspace-1", "webchat-1")).toBe(
       "x-conversation-id:workspace-1:webchat-1",
     )
   })
 
   test("creates a guest conversation id scoped to the workspace with an unguessable suffix", () => {
-    // Must be a cryptographically random id, not a sequential/enumerable one
-    // (e.g. the Snowflake createId()) — the webchat access token no longer
-    // binds to this id, so a guessable id would let anyone mint a valid
-    // token for a stranger's conversation. See guest-conversation-id.ts.
+    // A cryptographically random id, not a sequential/enumerable one (the
+    // Snowflake createId()). See guest-conversation-id.ts.
     const first = createGuestConversationId("workspace-1")
     const second = createGuestConversationId("workspace-1")
 
@@ -106,81 +109,131 @@ describe("webchat guest session store", () => {
     vi.clearAllMocks()
   })
 
-  test("creates a new scoped session on first initialization", () => {
+  // s215: the stored value is the id AND its secret, as JSON, under the
+  // `x-guest-session` key; a bare id (any pre-s215 key) is never adopted.
+  const WS = "7"
+  const SECRET = "a".repeat(64)
+  const SERVER_SECRET = "b".repeat(64)
+  const MINTED = `${WS}:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f`
+  const SERVER = `${WS}:1f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f`
+  const SERVER_SESSION = {
+    guestConversationId: SERVER,
+    guestSecret: SERVER_SECRET,
+  }
+  const sessionKey = buildGuestSessionKey(WS, "webchat-1")
+  const stored = (id: unknown, secret: unknown) =>
+    JSON.stringify({ guestConversationId: id, guestSecret: secret })
+  const newStore = () =>
+    createGuestSessionStore(createWebchatConfig({ workspaceId: WS }))
+
+  test("creates a new scoped session (id + secret) on first initialization", () => {
     const localStorageMock = createLocalStorageMock()
     vi.stubGlobal("localStorage", localStorageMock)
 
-    const store = createGuestSessionStore(createWebchatConfig())
-
-    store.getState().initGuestSession("workspace-1:server-guest")
+    const store = newStore()
+    store.getState().initGuestSession(SERVER_SESSION)
 
     const state = store.getState()
-    const scopedKey = buildGuestStorageKey("workspace-1", "webchat-1")
-    expect(state.guestConversationId).toBe("workspace-1:server-guest")
+    expect(state.guestConversationId).toBe(SERVER)
+    expect(state.guestSecret).toBe(SERVER_SECRET)
     expect(state.isNewGuestSession).toBe(true)
-    expect(localStorageMock.items.get(scopedKey)).toBe(
-      "workspace-1:server-guest",
+    expect(JSON.parse(localStorageMock.items.get(sessionKey) ?? "")).toEqual(
+      SERVER_SESSION,
     )
   })
 
-  // s213: only the minted `<workspaceId>:<uuid>` form for THIS workspace is
-  // kept; the legacy digits-only global id is deleted and never adopted.
-  const WS = "7"
-  const MINTED = `${WS}:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f`
-  const SERVER = `${WS}:1f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f`
-
-  test("reuses an existing minted scoped session without marking it new", () => {
-    const scopedKey = buildGuestStorageKey(WS, "webchat-1")
+  test("reuses a stored minted pair without marking it new", () => {
     vi.stubGlobal(
       "localStorage",
-      createLocalStorageMock({ [scopedKey]: MINTED }),
+      createLocalStorageMock({ [sessionKey]: stored(MINTED, SECRET) }),
     )
 
-    const store = createGuestSessionStore(
-      createWebchatConfig({ workspaceId: WS }),
-    )
-    store.getState().initGuestSession(SERVER)
+    const store = newStore()
+    store.getState().initGuestSession(SERVER_SESSION)
 
     const state = store.getState()
     expect(state.guestConversationId).toBe(MINTED)
+    expect(state.guestSecret).toBe(SECRET)
     expect(state.isNewGuestSession).toBe(false)
   })
 
   test.each([
-    ["a legacy digits-only id", "11616773281153025"],
-    ["another workspace's minted id", "9:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f"],
-    ["a non-uuid suffix", `${WS}:existing-guest`],
+    ["a bare id (not JSON)", MINTED],
+    ["an id with no secret", stored(MINTED, undefined)],
+    ["a malformed secret", stored(MINTED, "zz")],
+    ["an upper-case secret", stored(MINTED, SECRET.toUpperCase())],
+    ["a legacy digits-only id", stored("11616773281153025", SECRET)],
+    [
+      "another workspace's minted id",
+      stored("9:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f", SECRET),
+    ],
+    ["a JSON array", JSON.stringify([MINTED, SECRET])],
+    ["JSON null", "null"],
     ["an empty string", ""],
-  ])("replaces a stored %s with the server-minted id", (_, stored) => {
-    const scopedKey = buildGuestStorageKey(WS, "webchat-1")
-    const localStorageMock = createLocalStorageMock({ [scopedKey]: stored })
+  ])("replaces a stored %s with the server pair", (_, value) => {
+    const localStorageMock = createLocalStorageMock({ [sessionKey]: value })
     vi.stubGlobal("localStorage", localStorageMock)
 
-    const store = createGuestSessionStore(
-      createWebchatConfig({ workspaceId: WS }),
-    )
-    store.getState().initGuestSession(SERVER)
+    const store = newStore()
+    store.getState().initGuestSession(SERVER_SESSION)
 
     const state = store.getState()
     expect(state.guestConversationId).toBe(SERVER)
+    expect(state.guestSecret).toBe(SERVER_SECRET)
     expect(state.isNewGuestSession).toBe(true)
-    expect(localStorageMock.items.get(scopedKey)).toBe(SERVER)
+    expect(JSON.parse(localStorageMock.items.get(sessionKey) ?? "")).toEqual(
+      SERVER_SESSION,
+    )
   })
 
-  test("deletes the legacy global key and never adopts its id", () => {
+  test("a pre-s215 guest (bare id under the old keys) starts fresh and the keys go (owner s215)", () => {
+    const legacyScopedKey = buildGuestStorageKey(WS, "webchat-1")
     const localStorageMock = createLocalStorageMock({
       [LEGACY_GLOBAL_KEY]: "11616773281153025",
+      [legacyScopedKey]: MINTED,
     })
     vi.stubGlobal("localStorage", localStorageMock)
 
-    const store = createGuestSessionStore(
-      createWebchatConfig({ workspaceId: WS }),
-    )
-    store.getState().initGuestSession(SERVER)
+    const store = newStore()
+    store.getState().initGuestSession(SERVER_SESSION)
 
     expect(store.getState().guestConversationId).toBe(SERVER)
     expect(store.getState().isNewGuestSession).toBe(true)
     expect(localStorageMock.items.has(LEGACY_GLOBAL_KEY)).toBe(false)
+    expect(localStorageMock.items.has(legacyScopedKey)).toBe(false)
+  })
+
+  test("restartGuestSession swaps in the server pair once and clears the thread", () => {
+    const localStorageMock = createLocalStorageMock({
+      [sessionKey]: stored(MINTED, SECRET),
+    })
+    vi.stubGlobal("localStorage", localStorageMock)
+
+    const store = newStore()
+    store.getState().initGuestSession(SERVER_SESSION)
+    store.getState().appendMessage({ text: "old thread" })
+    store.getState().restartGuestSession()
+
+    const state = store.getState()
+    expect(state.guestConversationId).toBe(SERVER)
+    expect(state.guestSecret).toBe(SERVER_SECRET)
+    expect(state.isNewGuestSession).toBe(true)
+    expect(state.messages).toEqual([])
+    expect(JSON.parse(localStorageMock.items.get(sessionKey) ?? "")).toEqual(
+      SERVER_SESSION,
+    )
+
+    // Already the server pair: a second refusal does not loop.
+    store.getState().appendMessage({ text: "new thread" })
+    store.getState().restartGuestSession()
+    expect(store.getState().messages).toHaveLength(1)
+  })
+
+  test("restartGuestSession before init is a no-op", () => {
+    vi.stubGlobal("localStorage", createLocalStorageMock())
+    const store = newStore()
+    store.getState().restartGuestSession()
+    expect(store.getState().guestConversationId).toBeNull()
   })
 
   test("keeps guest sessions isolated across webchat ids", () => {
@@ -194,17 +247,23 @@ describe("webchat guest session store", () => {
       createWebchatConfig({ id: "webchat-2" }),
     )
 
-    firstStore.getState().initGuestSession("workspace-1:server-guest-1")
-    secondStore.getState().initGuestSession("workspace-1:server-guest-2")
+    firstStore.getState().initGuestSession({
+      guestConversationId: "workspace-1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+      guestSecret: SECRET,
+    })
+    secondStore.getState().initGuestSession({
+      guestConversationId: "workspace-1:1f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+      guestSecret: SERVER_SECRET,
+    })
 
     expect(
       localStorageMock.items.has(
-        buildGuestStorageKey("workspace-1", "webchat-1"),
+        buildGuestSessionKey("workspace-1", "webchat-1"),
       ),
     ).toBe(true)
     expect(
       localStorageMock.items.has(
-        buildGuestStorageKey("workspace-1", "webchat-2"),
+        buildGuestSessionKey("workspace-1", "webchat-2"),
       ),
     ).toBe(true)
   })
@@ -279,6 +338,92 @@ describe("webchat guest requests carry the server's embedding origin (s209)", ()
       json: { parentOrigin?: string }
     }
     expect(options.json.parentOrigin).toBe(SERVER_ORIGIN)
+  })
+})
+
+describe("webchat guest requests carry the guest secret (s215)", () => {
+  const WS = "7"
+  const STORED = {
+    guestConversationId: `${WS}:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f`,
+    guestSecret: "a".repeat(64),
+  }
+  const SERVER = {
+    guestConversationId: `${WS}:1f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f`,
+    guestSecret: "b".repeat(64),
+  }
+
+  beforeEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+    vi.stubGlobal(
+      "localStorage",
+      createLocalStorageMock({
+        [buildGuestSessionKey(WS, "webchat-1")]: JSON.stringify(STORED),
+      }),
+    )
+  })
+
+  const initedStore = () => {
+    const store = createGuestSessionStore(
+      createWebchatConfig({ workspaceId: WS }),
+      "token",
+    )
+    store.getState().initGuestSession(SERVER)
+    return store
+  }
+
+  test("history GET sends the secret in a header, never the URL", async () => {
+    const get = vi.spyOn(ky, "get").mockReturnValue({
+      json: async () => ({ data: [], nextCursor: null }),
+    } as never)
+    const store = initedStore()
+
+    await store.getState().loadMoreMessages(STORED.guestConversationId, 20)
+
+    const [url, options] = get.mock.calls[0] as [
+      string,
+      { headers: Record<string, string> },
+    ]
+    expect(options.headers["x-guest-secret"]).toBe(STORED.guestSecret)
+    expect(url).not.toContain(STORED.guestSecret)
+  })
+
+  test("a postback sends the secret in the body", async () => {
+    const post = vi.spyOn(ky, "post").mockResolvedValue({} as never)
+    const store = initedStore()
+
+    await store.getState().sendPostback({
+      buttonType: "postback",
+      label: "Yes",
+      postback: "YES",
+    } as never)
+
+    const options = post.mock.calls[0]?.[1] as {
+      json: { guestSecret?: string; guestConversationId?: string }
+    }
+    expect(options.json.guestSecret).toBe(STORED.guestSecret)
+    expect(options.json.guestConversationId).toBe(STORED.guestConversationId)
+  })
+
+  test("a 401 (refused secret) restarts as the server pair, with no token refresh", async () => {
+    const refused = Object.assign(new Error("401"), {
+      response: { status: 401 },
+    })
+    vi.spyOn(ky, "get").mockReturnValue({
+      json: () => Promise.reject(refused),
+    } as never)
+    const post = vi.spyOn(ky, "post")
+    const store = initedStore()
+
+    await expect(
+      store.getState().loadMoreMessages(STORED.guestConversationId, 20),
+    ).rejects.toBe(refused)
+
+    expect(store.getState().guestConversationId).toBe(
+      SERVER.guestConversationId,
+    )
+    expect(store.getState().guestSecret).toBe(SERVER.guestSecret)
+    expect(post).not.toHaveBeenCalled()
   })
 })
 

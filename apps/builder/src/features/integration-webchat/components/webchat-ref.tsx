@@ -9,6 +9,7 @@ type WebchatRefProps = {
   workspaceId: string
   webchatId: string
   guestConversationId: string
+  guestSecret: string
   parentOrigin?: string | null
   accessToken?: string | null
 }
@@ -17,6 +18,7 @@ export default function WebchatRef({
   workspaceId,
   webchatId,
   guestConversationId,
+  guestSecret,
   parentOrigin,
   accessToken,
 }: WebchatRefProps) {
@@ -26,7 +28,7 @@ export default function WebchatRef({
   const { execute } = useAction(createWebchatMessageAction)
 
   useEffect(() => {
-    if (initialized || !guestConversationId) {
+    if (initialized || !(guestConversationId && guestSecret)) {
       return
     }
 
@@ -37,6 +39,7 @@ export default function WebchatRef({
       workspaceId,
       webchatId,
       guestConversationId,
+      guestSecret,
       ...(ref ? { initRef: ref } : { init: true }),
       ...getWebchatProfileFields(),
       accessToken: accessToken ?? undefined,
@@ -49,6 +52,7 @@ export default function WebchatRef({
     workspaceId,
     webchatId,
     guestConversationId,
+    guestSecret,
     parentOrigin,
     accessToken,
   ])

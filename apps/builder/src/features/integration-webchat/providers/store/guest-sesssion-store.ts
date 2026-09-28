@@ -1,5 +1,4 @@
 import type { WebchatPersistentMenu } from "@chatbotx.io/database/partials"
-import { isMintedGuestConversationId } from "@chatbotx.io/partysocket-config/guest-id"
 import type { MessageButtonTemplate } from "@chatbotx.io/sdk"
 import { createId } from "@chatbotx.io/utils"
 import ky from "ky"
@@ -9,21 +8,29 @@ import type { ListMessagesResponse } from "@/features/messages/schema/query"
 import type { MessageResource } from "@/features/messages/schema/resource"
 import type { UserResource } from "@/features/users/schema/resource"
 import { getWebchatProfileFields } from "../../browser-profile-fields"
+import { GUEST_SECRET_HEADER } from "../../lib/guest-conversation-id"
 import { isWebchatTokenDue } from "../../lib/webchat-token-expiry"
 import {
+  buildGuestSessionKey,
   buildGuestStorageKey,
+  type GuestSessionCredentials,
   LEGACY_GLOBAL_KEY,
-  safeStorageGet,
+  readGuestSession,
   safeStorageRemove,
-  safeStorageSet,
+  writeGuestSession,
 } from "./lib/guest-session"
 import type { WebchatClientConfig } from "./lib/webchat-client-config"
-
-export { GUEST_CONVERSATION_ID_KEY } from "./lib/guest-session"
 
 export type GuestSessionState = {
   // default state
   guestConversationId: string | null
+  /** The visitor's credential, minted with the id (s215); sent on every call. */
+  guestSecret: string | null
+  /**
+   * The pair this page load minted, kept to start over when the stored one is
+   * refused (a secret from before a key rotation).
+   */
+  serverGuestSession: GuestSessionCredentials | null
   isNewGuestSession: boolean
   accessToken: string | null
   /** Client clock (ms) when `accessToken` arrived; refreshes are timed from it. */
@@ -55,7 +62,12 @@ export type GuestSessionState = {
 
 export type GuestSessionActions = {
   setGuestUser: (user: UserResource) => void
-  initGuestSession: (serverGuestConversationId: string) => void
+  initGuestSession: (serverSession: GuestSessionCredentials) => void
+  /**
+   * The guest routes refused the stored secret: drop it and continue as the
+   * pair this page load minted, a fresh conversation. At most once per load.
+   */
+  restartGuestSession: () => void
 
   // messages
   appendMessage: (message: Partial<MessageResource>) => MessageResource
@@ -126,7 +138,11 @@ export const createGuestSessionStore = (
   let refreshInFlight: Promise<TokenRefreshOutcome> | null = null
 
   return createStore<GuestSessionStore>((set, get) => {
-    /** One guest call, retried once with a refreshed token after a 403. */
+    /**
+     * One guest call, retried once with a refreshed token after a 403. A 401
+     * is a refused guest secret (s215): the widget starts over as the pair
+     * this page load minted, and the call still fails.
+     */
     const withFreshToken = async <T>(
       call: (accessToken: string | null) => Promise<T>,
     ): Promise<T> => {
@@ -135,6 +151,10 @@ export const createGuestSessionStore = (
       } catch (error) {
         const status = (error as { response?: { status?: number } } | null)
           ?.response?.status
+        if (status === 401) {
+          get().restartGuestSession()
+          throw error
+        }
         if (
           status !== 403 ||
           (await get().refreshAccessToken()) !== "refreshed"
@@ -148,6 +168,8 @@ export const createGuestSessionStore = (
     return {
       // default state
       guestConversationId: null,
+      guestSecret: null,
+      serverGuestSession: null,
       isNewGuestSession: false,
       accessToken,
       accessTokenReceivedAt: Date.now(),
@@ -164,30 +186,51 @@ export const createGuestSessionStore = (
 
       isTyping: false,
 
-      initGuestSession: (serverGuestConversationId: string) => {
+      initGuestSession: (serverSession: GuestSessionCredentials) => {
         const { guestConversationId, config } = get()
         if (guestConversationId) {
           return
         }
+        set({ serverGuestSession: serverSession })
 
-        // The pre-s213 global key held a digits-only id that was copied into
-        // every webchat on the hub origin; it is never read again.
+        // The pre-s213 global key and the pre-s215 per-webchat key held a
+        // bare id with no secret. Every guest route refuses such a visitor
+        // (owner s215: the server cannot tell the owner from someone who read
+        // the id off an export), so they start fresh and the keys go.
         safeStorageRemove(LEGACY_GLOBAL_KEY)
+        safeStorageRemove(buildGuestStorageKey(config.workspaceId, config.id))
 
-        // A stored id is kept only in the minted form for THIS workspace; a
-        // legacy digits-only or foreign id would be refused by every guest
-        // route, so it is replaced by the server-minted one.
-        const scopedKey = buildGuestStorageKey(config.workspaceId, config.id)
-        const scopedGuestId = safeStorageGet(scopedKey)
-        if (isMintedGuestConversationId(scopedGuestId, config.workspaceId)) {
-          set({ guestConversationId: scopedGuestId, isNewGuestSession: false })
+        // A stored pair is kept only with a minted id of THIS workspace and a
+        // well-formed secret; anything else is replaced by the server pair.
+        const sessionKey = buildGuestSessionKey(config.workspaceId, config.id)
+        const stored = readGuestSession(sessionKey, config.workspaceId)
+        if (stored) {
+          set({ ...stored, isNewGuestSession: false })
           return
         }
 
-        safeStorageSet(scopedKey, serverGuestConversationId)
+        writeGuestSession(sessionKey, serverSession)
+        set({ ...serverSession, isNewGuestSession: true })
+      },
+
+      restartGuestSession: () => {
+        const { serverGuestSession, guestConversationId, config } = get()
+        if (
+          !serverGuestSession ||
+          guestConversationId === serverGuestSession.guestConversationId
+        ) {
+          return
+        }
+        writeGuestSession(
+          buildGuestSessionKey(config.workspaceId, config.id),
+          serverGuestSession,
+        )
         set({
-          guestConversationId: serverGuestConversationId,
+          ...serverGuestSession,
           isNewGuestSession: true,
+          messages: [],
+          nextCursorMessage: null,
+          hasNextMessagePage: true,
         })
       },
 
@@ -226,14 +269,20 @@ export const createGuestSessionStore = (
             params.set("parentOrigin", parentOrigin)
           }
 
+          const { guestSecret } = get()
           const { data, nextCursor } = await withFreshToken((accessToken) =>
             ky
               .get<ListMessagesResponse>(
                 `/api/guest/messages?${params.toString()}`,
                 {
-                  headers: accessToken
-                    ? { Authorization: `Bearer ${accessToken}` }
-                    : undefined,
+                  headers: {
+                    ...(accessToken
+                      ? { Authorization: `Bearer ${accessToken}` }
+                      : {}),
+                    ...(guestSecret
+                      ? { [GUEST_SECRET_HEADER]: guestSecret }
+                      : {}),
+                  },
                 },
               )
               .json(),
@@ -291,8 +340,13 @@ export const createGuestSessionStore = (
       },
 
       sendPostback: async (button: MessageButtonTemplate) => {
-        const { appendMessage, config, guestConversationId, parentOrigin } =
-          get()
+        const {
+          appendMessage,
+          config,
+          guestConversationId,
+          guestSecret,
+          parentOrigin,
+        } = get()
 
         const newMessage = appendMessage({
           text: button.label,
@@ -309,6 +363,7 @@ export const createGuestSessionStore = (
                   postback: button.postback,
                   workspaceId: config.workspaceId,
                   guestConversationId,
+                  guestSecret: guestSecret ?? undefined,
                   clientId: newMessage.clientId,
                   webchatId: config.id,
                   ...getWebchatProfileFields(),
