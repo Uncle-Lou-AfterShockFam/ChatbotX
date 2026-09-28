@@ -12,7 +12,7 @@ import {
 } from "@chatbotx.io/database/schema"
 import type { SchedulerClient } from "@chatbotx.io/scheduler"
 import { calculateNextRunAtFromStep } from "./calculate-next-run-at"
-import { getContactInboxes } from "./contacts-on-sequences"
+import { getDispatchContactInboxes } from "./contacts-on-sequences"
 import { createDispatch } from "./dispatch-manager"
 import { calculateNextValidSendTime } from "./send-time-validator"
 
@@ -157,7 +157,10 @@ export async function advanceEnrollment(
           ),
         )
 
-      const contactInboxes = await getContactInboxes(workspaceId, contactId)
+      const contactInboxes = await getDispatchContactInboxes(
+        workspaceId,
+        contactId,
+      )
       const nextDispatches: DispatchToSchedule[] = []
 
       for (const contactInbox of contactInboxes) {

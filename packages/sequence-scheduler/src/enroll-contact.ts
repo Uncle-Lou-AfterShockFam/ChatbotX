@@ -7,7 +7,7 @@ import { contactsOnSequenceModel } from "@chatbotx.io/database/schema"
 import { sequenceConnections } from "@chatbotx.io/redis"
 import { SchedulerClient } from "@chatbotx.io/scheduler"
 import { createId } from "@chatbotx.io/utils"
-import { getContactInboxes } from "./contacts-on-sequences"
+import { getDispatchContactInboxes } from "./contacts-on-sequences"
 import { createDispatch } from "./dispatch-manager"
 
 type DrizzleClient = typeof db | Transaction
@@ -70,7 +70,10 @@ export async function enrollContactInSequence(params: EnrollContactParams) {
       return []
     }
 
-    const contactInboxes = await getContactInboxes(workspaceId, contactId)
+    const contactInboxes = await getDispatchContactInboxes(
+      workspaceId,
+      contactId,
+    )
     const dispatches: DispatchToSchedule[] = []
 
     for (const contactInbox of contactInboxes) {
@@ -153,7 +156,7 @@ export async function enrollContactsInSequenceBulk(
       continue
     }
 
-    const contactInboxes = await getContactInboxes(
+    const contactInboxes = await getDispatchContactInboxes(
       workspaceId,
       enrollment.contactId,
     )

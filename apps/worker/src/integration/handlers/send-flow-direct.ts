@@ -1,10 +1,18 @@
 import { contactInboxService, conversationService } from "@chatbotx.io/business"
 import type { MetadataPayload } from "@chatbotx.io/flow-config"
+import { getDispatchContactInboxes } from "@chatbotx.io/sequence-scheduler"
 import { COMPANY_STOPPED } from "./company-stop-guard"
 import { runFlowNode } from "./flow"
 
 export interface SendFlowDirectParams {
   contactId: string
+  /**
+   * The inbox the dispatch was scheduled on. The flow runs on THAT inbox
+   * only (owner s220b: one run per sequence step; a flow that must reach
+   * several channels says so in its own steps). When it no longer belongs to
+   * the contact, the contact's current dispatch inbox is used instead.
+   */
+  contactInboxId: string
   flowExecutionKey?: string
   flowId: string
   metadata?: MetadataPayload
@@ -24,6 +32,7 @@ export async function sendFlowDirect(
     contactId,
     metadata,
     startedAt,
+    contactInboxId,
   } = params
 
   const conversation = await conversationService.findBy({
@@ -38,9 +47,13 @@ export async function sendFlowDirect(
     workspaceId,
     contactId,
   })
+  const pinned = allContactInboxes.find((ci) => ci.id === contactInboxId)
+  const targets = pinned
+    ? [pinned]
+    : await getDispatchContactInboxes(workspaceId, contactId)
 
   const outcomes = await Promise.all(
-    allContactInboxes.map(
+    targets.map(
       async (contactInbox) =>
         await runFlowNode(
           {

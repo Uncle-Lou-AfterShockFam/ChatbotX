@@ -126,6 +126,7 @@ function makeDispatch(overrides: Record<string, unknown> = {}) {
     workspaceId: "ws-1",
     status: "pending",
     completedAt: null,
+    contactInboxId: "ci-pinned",
     ...overrides,
   }
 }
@@ -233,6 +234,8 @@ describe("handleSendSequenceFlow", () => {
           flowId: "flow-1",
           workspaceId: "ws-1",
           contactId: "contact-1",
+          // One run per step, on the dispatch's own inbox (owner s220b).
+          contactInboxId: "ci-pinned",
           // The sequence job opens the run: the stop guard's start.
           startedAt: new Date(JOB_TIMESTAMP),
         }),
