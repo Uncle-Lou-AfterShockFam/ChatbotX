@@ -28,7 +28,7 @@ import { ChatbotXException } from "../errors"
 import { integrationGeminiService } from "../integration-gemini/service"
 import { integrationOpenAIService } from "../integration-openai/service"
 import { logger } from "../logger"
-import { assertPublicUrl } from "../net/ssrf-guard"
+import { outboundDownload } from "../net/outbound-fetch"
 import type { PaginatedResult } from "../types"
 
 export const AI_FILE_MAX_UPLOAD_BYTES = 100 * 1000 * 1000
@@ -190,21 +190,13 @@ class AiFileService extends BaseService {
         size: uploaded.size,
       }
     }
-    const uploaded = await uploadFileFromUrl(
-      input.url,
-      path,
-      "private",
-      AI_FILE_MAX_UPLOAD_BYTES,
-      async (candidateUrl) => {
-        try {
-          await assertPublicUrl(candidateUrl, "AI file URL")
-        } catch {
-          // The guard's own message echoes the submitted URL; replace it with
-          // a safe, caller-fault message before it can reach the API response.
-          throw new UploadValidationError("The provided URL is not allowed")
-        }
-      },
-    )
+    // The pinned fetch re-checks every hop at connect; a refusal surfaces as
+    // UploadValidationError("The provided URL is not allowed") (s216).
+    const uploaded = await uploadFileFromUrl(input.url, path, {
+      acl: "private",
+      maxBytes: AI_FILE_MAX_UPLOAD_BYTES,
+      fetchImpl: outboundDownload,
+    })
     return {
       name: input.name ?? uploaded.name,
       path,

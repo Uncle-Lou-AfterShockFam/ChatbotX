@@ -1,4 +1,10 @@
 import { Agent, fetch as undiciFetch } from "undici"
+import {
+  type OutboundBody,
+  type OutboundFetchOptions,
+  type OutboundRequestInit,
+  registerOutboundFetch,
+} from "../net/outbound-fetch"
 import { SsrfFetchError } from "../net/safe-fetch"
 import { isBlockedIp } from "../net/ssrf-guard"
 import {
@@ -30,28 +36,13 @@ const BODY_HEADERS = [
   "content-location",
 ]
 
-/** A body a redirect can safely replay (never a one-shot stream). */
-export type PinnedBody = string | Uint8Array | URLSearchParams
-
-export type PinnedRequestInit = {
-  method?: string
-  headers?: HeadersInit
-  body?: PinnedBody | null
-  signal?: AbortSignal | null
-  /**
-   * "follow" (default) follows at most `maxRedirects` hops, each re-checked;
-   * "manual" returns the 3xx as the answer; "error" throws on a 3xx.
-   */
-  redirect?: "follow" | "manual" | "error"
-}
+export type PinnedBody = OutboundBody
+export type PinnedRequestInit = OutboundRequestInit
 
 /** `resolver` / `isBlocked` are test seams; production callers pass neither. */
-export type PinnedFetchOptions = {
+export type PinnedFetchOptions = OutboundFetchOptions & {
   resolver?: Resolver
   isBlocked?: (ip: string) => boolean
-  maxRedirects?: number
-  /** One deadline for the whole redirect chain, on top of `init.signal`. */
-  timeoutMs?: number
 }
 
 const refuse = (hostname: string) =>
@@ -233,4 +224,17 @@ export const pinnedFetch = async (
     ))
     url = next
   }
+}
+
+/**
+ * Installs `pinnedFetch` as the barrel's `outboundFetch` for this process.
+ * Call once at Node startup (builder instrumentation, worker bootstrap).
+ */
+export const installPinnedOutboundFetch = (): void => {
+  registerOutboundFetch((input, init, options) =>
+    pinnedFetch(input, init, {
+      maxRedirects: options?.maxRedirects,
+      timeoutMs: options?.timeoutMs,
+    }),
+  )
 }

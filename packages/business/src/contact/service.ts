@@ -31,7 +31,10 @@ import type {
 } from "@chatbotx.io/database/types"
 import { emit } from "@chatbotx.io/event-bus"
 import { emitContactCreated } from "@chatbotx.io/events"
-import { uploadFileFromUrl } from "@chatbotx.io/filesystem"
+import {
+  UploadValidationError,
+  uploadFileFromUrl,
+} from "@chatbotx.io/filesystem"
 import { invalidateCacheByTags, withCache } from "@chatbotx.io/redis"
 import { createId, mapWithConcurrency } from "@chatbotx.io/utils"
 import { dispatchAuditRecord } from "../audit/dispatcher"
@@ -41,6 +44,7 @@ import { contactDocumentsPrefix } from "../documents/paths"
 import { ChatbotXException, notFoundException } from "../errors"
 import { logger } from "../logger"
 import { messageCleanupService } from "../message-cleanup/service"
+import { outboundDownload } from "../net/outbound-fetch"
 import { quotaEnforcementService } from "../quota-enforcement/service"
 import { purgeStoragePrefix } from "../storage/purge-prefix"
 import { userQuotaService } from "../user-quota/service"
@@ -876,7 +880,12 @@ class ContactService extends BaseService {
         workspaceId,
         contact.id,
       )
-      await this.update({ workspaceId, id: contact.id }, { avatar: avatarPath })
+      if (avatarPath !== undefined) {
+        await this.update(
+          { workspaceId, id: contact.id },
+          { avatar: avatarPath },
+        )
+      }
     }
 
     await emitContactCreated(
@@ -912,15 +921,29 @@ class ContactService extends BaseService {
     avatar: string,
     workspaceId: string,
     contactId: string,
-  ): Promise<string> {
+  ): Promise<string | undefined> {
     if (!avatar.startsWith("http")) {
       return avatar
     }
-    const uploaded = await uploadFileFromUrl(
-      avatar,
-      `public/space/${workspaceId}/contacts/${contactId}/avatar/${createId()}`,
-    )
-    return uploaded.originPath
+    try {
+      const uploaded = await uploadFileFromUrl(
+        avatar,
+        `public/space/${workspaceId}/contacts/${contactId}/avatar/${createId()}`,
+        { fetchImpl: outboundDownload },
+      )
+      return uploaded.originPath
+    } catch (error) {
+      // A refused (SSRF), missing or oversized avatar is the caller's input:
+      // skip the avatar, never fail the contact upsert over it (s216).
+      if (error instanceof UploadValidationError) {
+        logger.warn(
+          { workspaceId, contactId, reason: error.message },
+          "contact avatar skipped",
+        )
+        return
+      }
+      throw error
+    }
   }
 
   async unsubscribeEmail(cid: string) {
