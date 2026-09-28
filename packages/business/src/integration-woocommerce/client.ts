@@ -1,5 +1,6 @@
 import { readCapped } from "../documents/gotenberg"
 import { isSsrfUnsafeUrl } from "../net/ssrf-guard"
+import { pinnedFetch } from "../net-node/pinned-fetch"
 
 /** One call to a site; a slow WordPress must not hold a flow step for long. */
 export const SITE_REQUEST_TIMEOUT_MS = 20_000
@@ -60,9 +61,9 @@ export const siteActionUrl = (siteUrl: string, action: string): string =>
  * POST one hub-connector action to a linked site. The URL is re-checked
  * against the SSRF guard on every call (a site's DNS can change after
  * connect) and redirects are never followed: a 3xx is returned as the answer.
- * Known limit, shared with `external-request`: the guard and fetch resolve
- * DNS separately, so a rebinding window between them remains (no portable way
- * to pin the checked address in fetch); the URL is a workspace admin's input.
+ * The fetch is pinned (net-node): the socket connects only to an address the
+ * guard validated at connect, so a rebinding name cannot slip in (s216). This
+ * subpath is Node-only already, so it imports the pinned fetch directly.
  */
 export async function postSiteAction(props: {
   siteUrl: string
@@ -87,13 +88,16 @@ export async function postSiteAction(props: {
   }
   let response: Response
   try {
-    response = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(props.body),
-      redirect: "manual",
-      signal: AbortSignal.timeout(SITE_REQUEST_TIMEOUT_MS),
-    })
+    response = await pinnedFetch(
+      url,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify(props.body),
+        redirect: "manual",
+      },
+      { timeoutMs: SITE_REQUEST_TIMEOUT_MS },
+    )
   } catch (error) {
     throw new SiteUnreachableError(
       `${props.siteUrl} did not answer: ${error instanceof Error ? error.message : "request failed"}`,

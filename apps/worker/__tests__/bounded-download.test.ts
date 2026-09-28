@@ -1,4 +1,3 @@
-import ky from "ky"
 import { beforeEach, describe, expect, test, vi } from "vitest"
 
 const mocks = vi.hoisted(() => ({
@@ -6,12 +5,15 @@ const mocks = vi.hoisted(() => ({
   kyGet: vi.fn(),
 }))
 
+// s216: the download goes through the SSRF-pinned outboundFetch (mocked here
+// as kyGet so the existing cases keep their shape).
+class SsrfFetchError extends Error {}
+
 vi.mock("@chatbotx.io/business", () => ({
   assertPublicUrl: mocks.assertPublicUrl,
-}))
-
-vi.mock("ky", () => ({
-  default: { get: mocks.kyGet },
+  DOWNLOAD_TIMEOUT_MS: 120_000,
+  outboundFetch: mocks.kyGet,
+  SsrfFetchError,
 }))
 
 const { downloadWithByteLimit } = await import(
@@ -141,12 +143,10 @@ describe("downloadWithByteLimit", () => {
       url: "https://cdn.example.com/audio.mp3",
     })
 
-    expect(ky.get).toHaveBeenCalledWith(
+    expect(mocks.kyGet).toHaveBeenCalledWith(
       "https://cdn.example.com/audio.mp3",
-      expect.objectContaining({
-        redirect: "manual",
-        throwHttpErrors: false,
-      }),
+      expect.objectContaining({ redirect: "manual" }),
+      { timeoutMs: 120_000 },
     )
     expect(result.buffer).toEqual(Buffer.from([1, 2, 3]))
     expect(result.contentType).toBe("audio/mpeg")
@@ -216,5 +216,64 @@ describe("downloadWithByteLimit", () => {
     ).rejects.toBeInstanceOf(ExpectedHeavyStepError)
 
     expect(mocks.kyGet).not.toHaveBeenCalled()
+  })
+
+  test("a connect-time SSRF refusal is an expected step error (s216)", async () => {
+    mocks.kyGet.mockRejectedValueOnce(new SsrfFetchError("unsafeAddress"))
+
+    await expect(
+      downloadWithByteLimit({
+        label: "audio",
+        maxBytes: 10,
+        signal: new AbortController().signal,
+        url: "https://rebinding.example.com/audio.mp3",
+      }),
+    ).rejects.toThrow(new ExpectedHeavyStepError("Unsafe audio URL"))
+  })
+
+  // s216 Codex: `timeout` bounds the wait for headers only (ky's meaning); a
+  // slow body after prompt headers runs under the caller's signal instead.
+  test("the header timeout does not abort a body still arriving", async () => {
+    let hopSignal: AbortSignal | undefined
+    mocks.kyGet.mockImplementationOnce(
+      (_url: string, init: { signal: AbortSignal }) => {
+        hopSignal = init.signal
+        return Promise.resolve(
+          responseWithBody({
+            body: new Uint8Array([1]),
+            contentType: "audio/mpeg",
+          }),
+        )
+      },
+    )
+    await downloadWithByteLimit({
+      label: "audio",
+      maxBytes: 10,
+      signal: new AbortController().signal,
+      timeout: 20,
+      url: "https://cdn.example.com/audio.mp3",
+    })
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    expect(hopSignal?.aborted).toBe(false)
+  })
+
+  test("headers slower than the timeout abort the hop", async () => {
+    mocks.kyGet.mockImplementationOnce(
+      (_url: string, init: { signal: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener("abort", () =>
+            reject(init.signal.reason),
+          )
+        }),
+    )
+    await expect(
+      downloadWithByteLimit({
+        label: "audio",
+        maxBytes: 10,
+        signal: new AbortController().signal,
+        timeout: 20,
+        url: "https://cdn.example.com/audio.mp3",
+      }),
+    ).rejects.toMatchObject({ name: "TimeoutError" })
   })
 })
