@@ -522,6 +522,7 @@ class WorkspaceService extends BaseService {
           newOrder: true,
           taskAssigned: true,
           dealMentioned: true,
+          formSubmitted: true,
         },
         notificationChannels: {
           messenger: true,

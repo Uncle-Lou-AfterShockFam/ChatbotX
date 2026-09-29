@@ -44,6 +44,7 @@ import {
   notFoundException,
   validationException,
 } from "../errors"
+import { assertFormActionRefs } from "./action-refs"
 
 const FORM_NOT_FOUND = "Form not found"
 const SUBMISSION_NOT_FOUND = "Submission not found"
@@ -445,6 +446,24 @@ export class FormService extends BaseService {
       patch.settings = parsed.data
     }
     const settings = patch.settings ?? current.settings
+    if (
+      settings.actions.length > 0 &&
+      (patch.settings !== undefined || patch.definition !== undefined)
+    ) {
+      await assertFormActionRefs({
+        tx,
+        workspaceId,
+        actions: settings.actions,
+        mappedCustomFieldIds: [
+          definition,
+          ...(current.publishedDefinition ? [current.publishedDefinition] : []),
+        ].flatMap((def) =>
+          formInputFields(def).flatMap((f) =>
+            f.mapTo?.kind === "custom" ? [f.mapTo.customFieldId] : [],
+          ),
+        ),
+      })
+    }
     const onWeb = settings.channels.includes("web")
     // A web form never carries a chat-only field, in its draft OR in its live
     // copy: turning `web` on for a form published chat-only would otherwise

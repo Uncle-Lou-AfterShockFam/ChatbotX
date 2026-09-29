@@ -295,9 +295,10 @@ export type RealtimeEventNotificationCreated = {
   data: {
     id: string
     type: string
-    dealId: string
+    dealId: string | null
     taskId: string | null
     commentId: string | null
+    formSubmissionId?: string | null
     payload: Record<string, unknown>
     createdAt: string
   }

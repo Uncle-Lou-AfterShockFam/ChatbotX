@@ -1,4 +1,8 @@
-import type { ContentType } from "@chatbotx.io/database/partials"
+import type {
+  ContentType,
+  FormNotificationPayload,
+  NotificationPayload,
+} from "@chatbotx.io/database/partials"
 import type { NotificationJobData } from "@chatbotx.io/worker-config"
 import { t } from "./strings"
 
@@ -28,6 +32,15 @@ const resolveIncomingMessageBody = (
   return ""
 }
 
+/**
+ * A form-submission payload (s220). Local and type-only on purpose: a value
+ * import of the partials here loads the id generator into the push worker's
+ * module graph (a second Snowflake in tests that reset modules).
+ */
+export const isFormPayload = (
+  payload: NotificationPayload,
+): payload is FormNotificationPayload => "submissionId" in payload
+
 export const buildNotificationContent = (props: {
   job: NotificationJobData
   contactFullName: string | null | undefined
@@ -38,6 +51,13 @@ export const buildNotificationContent = (props: {
 
   if (job.type === "notifyUser") {
     const { notificationType, payload } = job.data
+    if (isFormPayload(payload)) {
+      // s220: "<form title>" / "<contact> submitted it" (or the generic line)
+      return {
+        title: payload.formTitle || strings.formSubmitted,
+        body: payload.contactName ?? strings.formSubmitted,
+      }
+    }
     if (notificationType === "taskAssigned") {
       return {
         title: payload.taskTitle || payload.dealTitle || strings.assignedTask,

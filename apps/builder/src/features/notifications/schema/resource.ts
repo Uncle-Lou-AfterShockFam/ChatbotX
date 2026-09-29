@@ -12,9 +12,10 @@ export const notificationResource = createSelectSchema(notificationModel, {
   id: z.string(),
   workspaceId: z.string(),
   userId: z.string(),
-  dealId: z.string(),
+  dealId: z.string().nullable(),
   taskId: z.string().nullable(),
   commentId: z.string().nullable(),
+  formSubmissionId: z.string().nullable(),
   type: notificationTypes,
   payload: notificationPayloadSchema,
 })

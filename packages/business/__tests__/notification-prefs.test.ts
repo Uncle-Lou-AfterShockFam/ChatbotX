@@ -18,6 +18,7 @@ describe("resolveMemberNotificationPrefs", () => {
         newOrder: false,
         taskAssigned: true,
         dealMentioned: true,
+        formSubmitted: true,
       },
       channels: {
         messenger: false,

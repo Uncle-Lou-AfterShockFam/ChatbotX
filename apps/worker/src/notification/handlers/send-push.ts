@@ -11,7 +11,10 @@ import type {
 } from "@chatbotx.io/worker-config"
 import type { Expo } from "expo-server-sdk"
 import { logger } from "../../lib/logger"
-import { buildNotificationContent } from "../lib/build-notification-content"
+import {
+  buildNotificationContent,
+  isFormPayload,
+} from "../lib/build-notification-content"
 import { deliverPushToUsers } from "../lib/deliver-push"
 import { getExpoClient } from "../lib/expo"
 
@@ -66,7 +69,8 @@ const resolveNotificationContent = async (
 /**
  * A per-user job (s194): no conversation, the ONE recipient is in the
  * payload. `data` is the deep link: the builder opens
- * `/space/{workspaceId}/deals?dealId=...`.
+ * `/space/{workspaceId}/deals?dealId=...`, or for a form submission (s220)
+ * `/space/{workspaceId}/forms/{formId}/submissions`.
  */
 const sendUserPush = async (
   expo: Expo,
@@ -74,6 +78,10 @@ const sendUserPush = async (
 ): Promise<void> => {
   const { workspaceId, userId, notificationType, dealId, taskId, commentId } =
     job.data
+  const formSubmissionId = job.data.formSubmissionId ?? null
+  const formId = isFormPayload(job.data.payload)
+    ? job.data.payload.formId
+    : null
   const workspace = await workspaceService.find({ where: { id: workspaceId } })
   const { title, body } = buildNotificationContent({
     job,
@@ -91,6 +99,9 @@ const sendUserPush = async (
       dealId,
       taskId,
       commentId,
+      // s220: a form notification deep-links to /forms/{formId}/submissions
+      formId,
+      formSubmissionId,
       notificationId: job.data.notificationId,
     },
   })

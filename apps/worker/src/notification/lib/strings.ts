@@ -8,6 +8,7 @@ const strings = {
     assignedConversation: "You were assigned a conversation",
     assignedTask: "You were assigned a task",
     mentionedInDeal: "You were mentioned on a deal",
+    formSubmitted: "New form submission",
   },
   vi: {
     newMessage: "Tin nhắn mới",
@@ -18,6 +19,7 @@ const strings = {
     assignedConversation: "Bạn đã được gán một cuộc trò chuyện",
     assignedTask: "Bạn đã được giao một công việc",
     mentionedInDeal: "Bạn đã được nhắc đến trong một giao dịch",
+    formSubmitted: "New form submission",
   },
   ar: {
     newMessage: "رسالة جديدة",
@@ -28,6 +30,7 @@ const strings = {
     assignedConversation: "تم تعيين محادثة لك",
     assignedTask: "تم تعيين مهمة لك",
     mentionedInDeal: "تم ذكرك في صفقة",
+    formSubmitted: "New form submission",
   },
   da: {
     newMessage: "Ny besked",
@@ -38,6 +41,7 @@ const strings = {
     assignedConversation: "Du blev tildelt en samtale",
     assignedTask: "Du blev tildelt en opgave",
     mentionedInDeal: "Du blev nævnt på en aftale",
+    formSubmitted: "New form submission",
   },
   de: {
     newMessage: "Neue Nachricht",
@@ -48,6 +52,7 @@ const strings = {
     assignedConversation: "Dir wurde eine Unterhaltung zugewiesen",
     assignedTask: "Dir wurde eine Aufgabe zugewiesen",
     mentionedInDeal: "Du wurdest bei einem Deal erwähnt",
+    formSubmitted: "New form submission",
   },
   es: {
     newMessage: "Nuevo mensaje",
@@ -58,6 +63,7 @@ const strings = {
     assignedConversation: "Se te asignó una conversación",
     assignedTask: "Se te asignó una tarea",
     mentionedInDeal: "Te mencionaron en una oportunidad",
+    formSubmitted: "New form submission",
   },
   fi: {
     newMessage: "Uusi viesti",
@@ -68,6 +74,7 @@ const strings = {
     assignedConversation: "Sinulle osoitettiin keskustelu",
     assignedTask: "Sinulle osoitettiin tehtävä",
     mentionedInDeal: "Sinut mainittiin kaupassa",
+    formSubmitted: "New form submission",
   },
   fr: {
     newMessage: "Nouveau message",
@@ -78,6 +85,7 @@ const strings = {
     assignedConversation: "Une conversation vous a été assignée",
     assignedTask: "Une tâche vous a été assignée",
     mentionedInDeal: "Vous avez été mentionné sur une affaire",
+    formSubmitted: "New form submission",
   },
   he: {
     newMessage: "הודעה חדשה",
@@ -88,6 +96,7 @@ const strings = {
     assignedConversation: "הוקצתה לך שיחה",
     assignedTask: "הוקצתה לך משימה",
     mentionedInDeal: "הוזכרת בעסקה",
+    formSubmitted: "New form submission",
   },
   id: {
     newMessage: "Pesan baru",
@@ -98,6 +107,7 @@ const strings = {
     assignedConversation: "Anda ditugaskan sebuah percakapan",
     assignedTask: "Anda ditugaskan sebuah tugas",
     mentionedInDeal: "Anda disebut pada sebuah transaksi",
+    formSubmitted: "New form submission",
   },
   it: {
     newMessage: "Nuovo messaggio",
@@ -108,6 +118,7 @@ const strings = {
     assignedConversation: "Ti è stata assegnata una conversazione",
     assignedTask: "Ti è stata assegnata un'attività",
     mentionedInDeal: "Sei stato menzionato in una trattativa",
+    formSubmitted: "New form submission",
   },
   ja: {
     newMessage: "新しいメッセージ",
@@ -119,6 +130,7 @@ const strings = {
     assignedConversation: "会話が割り当てられました",
     assignedTask: "タスクが割り当てられました",
     mentionedInDeal: "取引でメンションされました",
+    formSubmitted: "New form submission",
   },
   nl: {
     newMessage: "Nieuw bericht",
@@ -129,6 +141,7 @@ const strings = {
     assignedConversation: "Er is een gesprek aan je toegewezen",
     assignedTask: "Er is een taak aan je toegewezen",
     mentionedInDeal: "Je bent genoemd bij een deal",
+    formSubmitted: "New form submission",
   },
   "pt-BR": {
     newMessage: "Nova mensagem",
@@ -139,6 +152,7 @@ const strings = {
     assignedConversation: "Uma conversa foi atribuída a você",
     assignedTask: "Uma tarefa foi atribuída a você",
     mentionedInDeal: "Você foi mencionado em um negócio",
+    formSubmitted: "New form submission",
   },
   "pt-PT": {
     newMessage: "Nova mensagem",
@@ -149,6 +163,7 @@ const strings = {
     assignedConversation: "Foi-lhe atribuída uma conversa",
     assignedTask: "Foi-lhe atribuída uma tarefa",
     mentionedInDeal: "Foi mencionado num negócio",
+    formSubmitted: "New form submission",
   },
   ro: {
     newMessage: "Mesaj nou",
@@ -159,6 +174,7 @@ const strings = {
     assignedConversation: "Ți-a fost atribuită o conversație",
     assignedTask: "Ți-a fost atribuită o sarcină",
     mentionedInDeal: "Ai fost menționat într-o oportunitate",
+    formSubmitted: "New form submission",
   },
   sv: {
     newMessage: "Nytt meddelande",
@@ -169,6 +185,7 @@ const strings = {
     assignedConversation: "Du tilldelades en konversation",
     assignedTask: "Du tilldelades en uppgift",
     mentionedInDeal: "Du nämndes i en affär",
+    formSubmitted: "New form submission",
   },
   tr: {
     newMessage: "Yeni mesaj",
@@ -179,6 +196,7 @@ const strings = {
     assignedConversation: "Size bir görüşme atandı",
     assignedTask: "Size bir görev atandı",
     mentionedInDeal: "Bir fırsatta sizden bahsedildi",
+    formSubmitted: "New form submission",
   },
   "zh-CN": {
     newMessage: "新消息",
@@ -189,6 +207,7 @@ const strings = {
     assignedConversation: "已为您分配一个对话",
     assignedTask: "已为您分配一个任务",
     mentionedInDeal: "您在一个商机中被提及",
+    formSubmitted: "New form submission",
   },
   "zh-TW": {
     newMessage: "新訊息",
@@ -199,6 +218,7 @@ const strings = {
     assignedConversation: "已為您指派一個對話",
     assignedTask: "已為您指派一個任務",
     mentionedInDeal: "您在一個商機中被提及",
+    formSubmitted: "New form submission",
   },
 } as const
 

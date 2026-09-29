@@ -55,6 +55,8 @@ export const workspaceMemberNotificationTypesSchema = z.object({
   newOrder: z.boolean(),
   taskAssigned: z.boolean().optional(),
   dealMentioned: z.boolean().optional(),
+  // s220: a form's notifyUsers action; optional like the deal keys
+  formSubmitted: z.boolean().optional(),
 })
 export type WorkspaceMemberNotificationTypes = z.infer<
   typeof workspaceMemberNotificationTypesSchema

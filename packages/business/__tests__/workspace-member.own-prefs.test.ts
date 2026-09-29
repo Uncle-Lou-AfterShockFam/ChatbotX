@@ -93,9 +93,9 @@ describe("updateOwnNotificationPrefs", () => {
         { eq: ["workspaceMember.userId", "user-1"] },
       ],
     })
-    // the answer is narrowed to the four self-service keys
+    // the answer is narrowed to the five self-service keys
     expect(out).toEqual({
-      types: { taskAssigned: false, dealMentioned: true },
+      types: { taskAssigned: false, dealMentioned: true, formSubmitted: true },
       channels: { inApp: true, push: true },
     })
     expect(mocks.invalidateCacheByTags).toHaveBeenCalled()

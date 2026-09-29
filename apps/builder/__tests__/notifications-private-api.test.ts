@@ -55,7 +55,7 @@ const notificationService = {
 }
 vi.mock("@chatbotx.io/business/notification", () => ({ notificationService }))
 const PREFS = {
-  types: { taskAssigned: true, dealMentioned: false },
+  types: { taskAssigned: true, dealMentioned: false, formSubmitted: true },
   channels: { inApp: true, push: true },
 }
 const workspaceMemberService = {

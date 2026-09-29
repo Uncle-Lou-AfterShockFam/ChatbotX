@@ -87,6 +87,7 @@ export const acceptInvitationAction = authActionClient
           newOrder: true,
           taskAssigned: true,
           dealMentioned: true,
+          formSubmitted: true,
         },
         notificationChannels: {
           messenger: true,

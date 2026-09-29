@@ -52,6 +52,7 @@ import { ChatbotXException } from "../errors"
 import { logger } from "../logger"
 import { tagService } from "../tag/service"
 import { workspaceService } from "../workspace/service"
+import { runFormActions } from "./actions"
 import { formService, type NormalizedForm } from "./service"
 
 /**
@@ -853,7 +854,7 @@ export class FormSubmitService {
   async afterCommit(props: {
     workspaceId: string
     contactId: string
-    form: Pick<NormalizedForm, "id" | "slug" | "settings">
+    form: Pick<NormalizedForm, "id" | "slug" | "title" | "settings">
     submission: FormSubmissionModel
     values: FormValues
     pending: PendingChanges
@@ -887,6 +888,20 @@ export class FormSubmitService {
       score: submission.score ?? null,
       occurredAt: submission.createdAt.toISOString(),
     }).catch(warn("formSubmitted event"))
+    // s220 A2-3: the form's action catalogue (points, fields, tags, notify).
+    await runFormActions({
+      db,
+      workspaceId,
+      contactId,
+      form: { id: form.id, title: form.title, actions: form.settings.actions },
+      submission,
+      notify: async (input) => {
+        // lazy: the notification service's import graph (members, realtime,
+        // queues) must not load with every form submit's module
+        const { notificationService } = await import("../notification/service")
+        await notificationService.notifyFormSubmission(input)
+      },
+    }).catch(warn("form actions"))
   }
 }
 

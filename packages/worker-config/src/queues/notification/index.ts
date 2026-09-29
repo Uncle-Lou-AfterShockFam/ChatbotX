@@ -57,9 +57,11 @@ export type NotificationJobNotifyUser = {
     workspaceId: string
     userId: string
     notificationType: NotificationType
-    dealId: string
+    // exactly one subject: a deal (s194) or a form submission (s220)
+    dealId: string | null
     taskId: string | null
     commentId: string | null
+    formSubmissionId?: string | null
     notificationId: string | null
     payload: NotificationPayload
   }

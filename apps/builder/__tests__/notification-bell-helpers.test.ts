@@ -19,6 +19,20 @@ describe("notification bell helpers (s194)", () => {
     ).toBe("/space/ws 1/deals?pipelineId=p%261&status=all&dealId=d%2F1")
   })
 
+  test("s220: a form submission links to that form's submissions", () => {
+    expect(
+      notificationHref("ws-1", {
+        dealId: null,
+        payload: {
+          formId: "f/1",
+          formTitle: "Intake",
+          submissionId: "sub-1",
+          contactName: null,
+        },
+      }),
+    ).toBe("/space/ws-1/forms/f%2F1/submissions")
+  })
+
   test("the badge caps at 99+", () => {
     expect(badgeLabel(1)).toBe("1")
     expect(badgeLabel(99)).toBe("99")

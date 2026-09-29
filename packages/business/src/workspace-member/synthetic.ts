@@ -48,6 +48,7 @@ export function buildSupportMembership(props: {
       newOrder: false,
       taskAssigned: false,
       dealMentioned: false,
+      formSubmitted: false,
     },
     permissions: FULL_WORKSPACE_MEMBER_PERMISSIONS,
     // No real row exists to update, so this stamp stays null; live online
