@@ -59,7 +59,7 @@ vi.mock("@/features/email-templates/components/rich-text-field", () => ({
   RichTextField: () => <div data-testid="richtext" />,
 }))
 
-const { EmailDocumentEditor } = await import(
+const { EmailDocumentEditor, containerDropId, dropTarget } = await import(
   "@/features/email-templates/components/email-document-editor"
 )
 const { emptyDocument } = await import(
@@ -313,5 +313,45 @@ describe("EmailDocumentEditor (B2 phase 3)", () => {
     }
     mount(doc)
     expect(validity.at(-1)).toBe(false)
+  })
+})
+
+describe("s223b: drop targets across containers", () => {
+  const doc = {
+    version: 1,
+    settings: {},
+    blocks: [
+      { id: "t", type: "text", text: "<p>a</p>" },
+      {
+        id: "c",
+        type: "columns",
+        columns: [{ blocks: [{ id: "d", type: "divider" }] }, { blocks: [] }],
+      },
+    ],
+  } as unknown as EmailDocument
+  const col = (column: number) => ({
+    kind: "column" as const,
+    columnsId: "c",
+    column,
+  })
+
+  test("a block is its own position; a list is its end", () => {
+    expect(dropTarget(doc, "t")).toEqual({ at: { kind: "root" }, index: 0 })
+    expect(dropTarget(doc, "d")).toEqual({ at: col(0), index: 0 })
+    expect(dropTarget(doc, containerDropId({ kind: "root" }))).toEqual({
+      at: { kind: "root" },
+      index: 2,
+    })
+    expect(dropTarget(doc, containerDropId(col(1)))).toEqual({
+      at: col(1),
+      index: 0,
+    })
+  })
+
+  test("an unknown block, columns block or column is no target", () => {
+    expect(dropTarget(doc, "nope")).toBeUndefined()
+    expect(dropTarget(doc, "container:gone:0")).toBeUndefined()
+    expect(dropTarget(doc, containerDropId(col(5)))).toBeUndefined()
+    expect(dropTarget(doc, "container:t:0")).toBeUndefined()
   })
 })

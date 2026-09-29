@@ -172,6 +172,48 @@ export function moveBlock(
   })
 }
 
+function sameContainer(a: Container, b: Container): boolean {
+  return a.kind === "root"
+    ? b.kind === "root"
+    : b.kind === "column" &&
+        a.columnsId === b.columnsId &&
+        a.column === b.column
+}
+
+/**
+ * s223b: move block `id` into `to` at `index` (its position AFTER the move,
+ * clamped to the list), across containers: top level <-> a column, column
+ * <-> column. A `columns` block never goes into a column (not even its own),
+ * and an unknown block or container is a no-op, like the other operations.
+ */
+export function moveBlockTo(
+  doc: EmailDocument,
+  id: string,
+  to: Container,
+  index: number,
+): EmailDocument {
+  const found = findBlock(doc, id)
+  const target = blocksAt(doc, to)
+  if (!(found && target)) {
+    return doc
+  }
+  if (to.kind === "column" && found.block.type === "columns") {
+    return doc
+  }
+  if (sameContainer(found.at, to)) {
+    const last = target.length - 1
+    return moveBlock(doc, to, found.index, Math.max(0, Math.min(index, last)))
+  }
+  const removed = removeBlock(doc, id)
+  const size = blocksAt(removed, to)?.length ?? 0
+  return insertBlock(
+    removed,
+    to,
+    found.block,
+    Math.max(0, Math.min(index, size)),
+  )
+}
+
 /** Remove a block wherever it is (root or inside columns). */
 export function removeBlock(doc: EmailDocument, id: string): EmailDocument {
   return {

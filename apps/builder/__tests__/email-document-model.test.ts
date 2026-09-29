@@ -14,6 +14,7 @@ import {
   insertBlock,
   LEAF_TYPES,
   moveBlock,
+  moveBlockTo,
   newBlock,
   ROOT,
   removeBlock,
@@ -180,6 +181,69 @@ describe("email document model (B2 phase 3)", () => {
     }
   })
 
+  test("s223b: moveBlockTo moves across containers and keeps every block", () => {
+    const text = make("text")
+    const divider = make("divider")
+    const cols = make("columns")
+    let doc = [text, cols, divider].reduce(
+      (d, b) => insertBlock(d, ROOT, b),
+      emptyDocument(),
+    )
+    const col0 = { kind: "column" as const, columnsId: cols.id, column: 0 }
+    const col1 = { kind: "column" as const, columnsId: cols.id, column: 1 }
+    // root -> an EMPTY column
+    doc = moveBlockTo(doc, text.id, col0, 0)
+    expect(doc.blocks.map((b) => b.id)).toEqual([cols.id, divider.id])
+    expect(blocksAt(doc, col0)?.map((b) => b.id)).toEqual([text.id])
+    // column -> column, index clamped to the end
+    doc = moveBlockTo(doc, divider.id, col1, 0)
+    doc = moveBlockTo(doc, text.id, col1, 99)
+    expect(blocksAt(doc, col0)).toEqual([])
+    expect(blocksAt(doc, col1)?.map((b) => b.id)).toEqual([divider.id, text.id])
+    // column -> root at the front
+    doc = moveBlockTo(doc, text.id, ROOT, 0)
+    expect(doc.blocks.map((b) => b.id)).toEqual([text.id, cols.id])
+    expect(findBlock(doc, text.id)?.at).toEqual(ROOT)
+    expect(() => parseDocument(doc)).not.toThrow()
+  })
+
+  test("s223b: moveBlockTo inside one container matches moveBlock", () => {
+    const blocks = ["text", "divider", "spacer"].map((t) =>
+      make(t as Block["type"]),
+    )
+    const doc = blocks.reduce(
+      (d, b) => insertBlock(d, ROOT, b),
+      emptyDocument(),
+    )
+    expect(moveBlockTo(doc, blocks[0]?.id as string, ROOT, 2)).toEqual(
+      moveBlock(doc, ROOT, 0, 2),
+    )
+    expect(moveBlockTo(doc, blocks[2]?.id as string, ROOT, -5)).toEqual(
+      moveBlock(doc, ROOT, 2, 0),
+    )
+  })
+
+  test("s223b: moveBlockTo refuses a columns block into a column and ignores unknown ids or containers", () => {
+    const cols = make("columns")
+    const other = make("columns")
+    const doc = [cols, other].reduce(
+      (d, b) => insertBlock(d, ROOT, b),
+      emptyDocument(),
+    )
+    const into = (columnsId: string) => ({
+      kind: "column" as const,
+      columnsId,
+      column: 0,
+    })
+    expect(moveBlockTo(doc, cols.id, into(cols.id), 0)).toBe(doc)
+    expect(moveBlockTo(doc, cols.id, into(other.id), 0)).toBe(doc)
+    expect(moveBlockTo(doc, "nope", ROOT, 0)).toBe(doc)
+    expect(moveBlockTo(doc, cols.id, into("gone"), 0)).toBe(doc)
+    expect(moveBlockTo(doc, cols.id, { ...into(other.id), column: 7 }, 0)).toBe(
+      doc,
+    )
+  })
+
   test("property: any sequence of edits yields a document that parses (when non-empty)", () => {
     let seed = 5
     const rand = (n: number) => {
@@ -208,9 +272,34 @@ describe("email document model (B2 phase 3)", () => {
             doc = insertBlock(doc, target, make(type))
             break
           }
-          case 2:
-            doc = moveBlock(doc, ROOT, rand(ids.length + 1), rand(ids.length))
+          case 2: {
+            const all = [
+              ...ids,
+              ...doc.blocks.flatMap((b) =>
+                b.type === "columns"
+                  ? b.columns.flatMap((c) => c.blocks.map((l) => l.id))
+                  : [],
+              ),
+            ]
+            const to =
+              columnsIds.length > 0 && rand(2) === 0
+                ? {
+                    kind: "column" as const,
+                    columnsId: columnsIds[rand(columnsIds.length)] as string,
+                    column: rand(3),
+                  }
+                : ROOT
+            doc =
+              rand(2) === 0 || all.length === 0
+                ? moveBlock(doc, ROOT, rand(ids.length + 1), rand(ids.length))
+                : moveBlockTo(
+                    doc,
+                    all[rand(all.length)] as string,
+                    to,
+                    rand(6) - 1,
+                  )
             break
+          }
           case 3:
             if (ids.length > 0) {
               doc = removeBlock(doc, ids[rand(ids.length)] as string)
