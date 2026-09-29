@@ -309,7 +309,15 @@ export class FormSessionService {
             expiresAt: addMinutes(now, timeoutMinutes),
           })
           .returning()
-        return await this.advance(tx, session, {}, [], now)
+        return await this.advance(
+          tx,
+          session,
+          // hidden fields are never asked: their defaults are the run's
+          // starting values (the answer path re-applies them per reply)
+          applyHiddenDefaults(this.definitionOf(session), {}),
+          [],
+          now,
+        )
       })
     } catch (error) {
       // Two starts racing for one contact: the partial unique index lets one
@@ -879,15 +887,12 @@ export class FormSessionService {
   private async advance(
     tx: DatabaseClient,
     session: FormSessionModel,
-    answers: FormValues,
+    values: FormValues,
     asked: string[],
     now: Date,
     messageId: string | null = null,
   ): Promise<Step> {
     const def = this.definitionOf(session)
-    // Hidden fields are never asked in chat: their defaults ride with the
-    // answers, so rules can read them and the submission stores them.
-    const values = applyHiddenDefaults(def, answers)
     const profile = readProfile(session.profile)
     const plan = planFormChat(def, values, new Set(asked), {
       known: new Set(profile.known),

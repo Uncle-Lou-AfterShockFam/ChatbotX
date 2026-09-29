@@ -428,6 +428,40 @@ describe("applyHiddenDefaults", () => {
     expect(issues).toEqual([{ key: "name", code: "required" }])
   })
 
+  test("a hidden field that identifies the contact cannot carry a default (every submitter would collapse onto one contact)", () => {
+    const hiddenIdentity = (
+      key: "email" | "phoneNumber",
+      defaultValue?: string,
+    ) =>
+      formDefinition.safeParse({
+        steps: [
+          {
+            id: "s1",
+            fields: [
+              {
+                key: "who",
+                type: "hidden",
+                label: "",
+                mapTo: { kind: "system", key },
+                defaultValue,
+              },
+            ],
+          },
+        ],
+        rules: [],
+      })
+    for (const key of ["email", "phoneNumber"] as const) {
+      const r = hiddenIdentity(key, "fixed@example.com")
+      expect(r.success).toBe(false)
+      expect(r.error?.issues.map((i) => i.path.at(-1))).toContain(
+        "defaultValue",
+      )
+      // without a default (a link fills it) it stays valid
+      expect(hiddenIdentity(key).success).toBe(true)
+      expect(hiddenIdentity(key, "").success).toBe(true)
+    }
+  })
+
   test("hostile shapes: an array / object sent for a hidden key is replaced, never thrown on", () => {
     const hostile = { source: ["a", "b"], campaign: { $ne: 1 } } as never
     expect(applyHiddenDefaults(hd, hostile)).toEqual({
