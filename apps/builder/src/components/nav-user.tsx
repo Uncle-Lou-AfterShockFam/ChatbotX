@@ -21,7 +21,7 @@ import {
   useSidebar,
 } from "@chatbotx.io/ui/components/ui/sidebar"
 import { nameInitials } from "@chatbotx.io/utils/initials"
-import { CreditCard, Crown, Settings2, ShieldCheck } from "lucide-react"
+import { CreditCard, Crown, LogOut, Settings2, ShieldCheck } from "lucide-react"
 import Link from "next/link"
 import { useTranslations } from "next-intl"
 import { useState } from "react"
@@ -52,6 +52,7 @@ export function NavUser({
   const { isMobile } = useSidebar()
   const t = useTranslations()
   const [upgradeOpen, setUpgradeOpen] = useState(false)
+  const [signOutOpen, setSignOutOpen] = useState(false)
   const avatarUrl = useUserAvatarUrl(user.avatar)
 
   return (
@@ -60,6 +61,8 @@ export function NavUser({
         {isCloud() && (
           <UpgradePlanDialog onOpenChange={setUpgradeOpen} open={upgradeOpen} />
         )}
+        {/* Outside the menu: a dialog inside it unmounts when the menu closes. */}
+        <SignOut onOpenChange={setSignOutOpen} open={signOutOpen} />
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -203,7 +206,10 @@ export function NavUser({
               </>
             )}
             <DropdownMenuItem render={<RefreshAllChannelTokensButton />} />
-            <DropdownMenuItem render={<SignOut />} />
+            <DropdownMenuItem onClick={() => setSignOutOpen(true)}>
+              <LogOut className="h-4 w-4" />
+              {t("actions.signOut")}
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
