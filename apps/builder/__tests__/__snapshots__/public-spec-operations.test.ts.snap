@@ -1234,6 +1234,36 @@ exports[`public API spec — operation naming guard > operation list (operationI
   },
   {
     "method": "POST",
+    "operationId": "emailTemplates.create",
+    "path": "/v1/email-templates",
+  },
+  {
+    "method": "DELETE",
+    "operationId": "emailTemplates.delete",
+    "path": "/v1/email-templates/{id}",
+  },
+  {
+    "method": "GET",
+    "operationId": "emailTemplates.get",
+    "path": "/v1/email-templates/{id}",
+  },
+  {
+    "method": "GET",
+    "operationId": "emailTemplates.list",
+    "path": "/v1/email-templates",
+  },
+  {
+    "method": "POST",
+    "operationId": "emailTemplates.setStatus",
+    "path": "/v1/email-templates/{id}/status",
+  },
+  {
+    "method": "PUT",
+    "operationId": "emailTemplates.update",
+    "path": "/v1/email-templates/{id}",
+  },
+  {
+    "method": "POST",
     "operationId": "emailTopics.create",
     "path": "/v1/email-topics",
   },

@@ -75,6 +75,11 @@ export const router = {
       default: m.dealsAPI,
     })),
   ),
+  emailTemplatesAPI: lazy(() =>
+    import("@/features/email-templates/api").then((m) => ({
+      default: m.emailTemplatesAPI,
+    })),
+  ),
   documentsAPI: lazy(() =>
     import("@/features/documents/api").then((m) => ({
       default: m.documentsAPI,
