@@ -87,4 +87,11 @@ describe("sanitizeUploadFileName", () => {
     expect(sanitizeUploadFileName({ a: 1 }, "pdf")).toBe("upload.pdf")
     expect(sanitizeUploadFileName("x".repeat(500), "pdf")).toHaveLength(200)
   })
+
+  test("truncation never splits a surrogate pair, so the name always encodes (Codex probe s225a)", () => {
+    const name = sanitizeUploadFileName(`${"a".repeat(199)}\u{1F600}b`, "png")
+    expect(Array.from(name)).toHaveLength(200)
+    expect(name.endsWith("\u{1F600}")).toBe(true)
+    expect(() => encodeURIComponent(name)).not.toThrow()
+  })
 })

@@ -402,24 +402,11 @@ export class FormSubmitService {
       return { kind: "invalid", issues }
     }
     const pruned = pruneFormValues(def, values, evaluation)
-    // s225a: every upload the answers name must be this page load's own,
-    // unclaimed one (read here so a refused submit creates no contact; the
-    // claim in the transaction below is the authoritative check).
     const uploads = formUploadRefs(def, pruned)
     const uploadIssue = (): SubmitFormResult => ({
       kind: "invalid",
       issues: uploads.map((u) => ({ key: u.fieldKey, code: "upload" })),
     })
-    if (
-      !(await formUploadService.claimable({
-        formId: form.id,
-        interactionId: input.interactionId,
-        refs: uploads,
-        now,
-      }))
-    ) {
-      return uploadIssue()
-    }
     const visibility: FormSubmissionVisibility = {
       steps: [...evaluation.visibleSteps],
       fields: [...evaluation.visibleFields],
@@ -452,6 +439,21 @@ export class FormSubmitService {
         successMessage: settings.successMessage,
         redirectUrl: settings.redirectUrl,
       }
+    }
+
+    // s225a: every upload the answers name must be this page load's own,
+    // unclaimed one. Read AFTER the duplicate lookup (a retried submit whose
+    // uploads its first copy claimed is that duplicate, Codex probe s225a)
+    // and before any contact is created; the claim in the transaction below
+    // is the authoritative check.
+    if (
+      !(await formUploadService.claimable({
+        formId: form.id,
+        interactionId: input.interactionId,
+        refs: uploads,
+      }))
+    ) {
+      return uploadIssue()
     }
 
     const used = await this.countRecentByIp({ form, ipHash, now })
@@ -592,7 +594,6 @@ export class FormSubmitService {
             submissionId: row.id,
             interactionId: input.interactionId,
             refs: uploads,
-            now,
           }))
         ) {
           throw new FormUploadClaimError()
@@ -612,9 +613,18 @@ export class FormSubmitService {
       if (error instanceof FormUploadClaimError) {
         // Another submit claimed an upload between the read and here (a
         // double submit with different answers), or the sweep took it.
+        // A contact this submit created committed on its own and stays;
+        // name it like the sibling branches do (skeptic s225a).
         logger.warn(
-          { workspaceId: input.workspaceId, formId: form.id, contactId },
-          "form submit: an upload could not be claimed, rolled back",
+          {
+            workspaceId: input.workspaceId,
+            formId: form.id,
+            contactId,
+            contactCreated,
+          },
+          contactCreated
+            ? "form submit: an upload could not be claimed after creating the contact, rolled back"
+            : "form submit: an upload could not be claimed, rolled back",
         )
         return uploadIssue()
       }

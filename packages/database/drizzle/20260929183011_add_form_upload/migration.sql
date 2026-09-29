@@ -12,12 +12,13 @@ CREATE TABLE "FormUpload" (
 	"mimeType" text NOT NULL,
 	"sizeBytes" integer NOT NULL,
 	"fileName" text NOT NULL,
-	"ipHash" text NOT NULL
+	"ipHash" text NOT NULL,
+	"deletingAt" timestamp(6) with time zone
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX "FormUpload_uploadId_key" ON "FormUpload" ("uploadId");--> statement-breakpoint
 CREATE UNIQUE INDEX "FormUpload_path_key" ON "FormUpload" ("path");--> statement-breakpoint
-CREATE INDEX "FormUpload_createdAt_pending_idx" ON "FormUpload" ("createdAt") WHERE "submissionId" is null;--> statement-breakpoint
+CREATE INDEX "FormUpload_cleanup_pending_idx" ON "FormUpload" (coalesce("deletingAt", "createdAt")) WHERE "submissionId" is null;--> statement-breakpoint
 CREATE INDEX "FormUpload_formId_ipHash_createdAt_idx" ON "FormUpload" ("formId","ipHash","createdAt");--> statement-breakpoint
 CREATE INDEX "FormUpload_submissionId_idx" ON "FormUpload" ("submissionId");--> statement-breakpoint
 ALTER TABLE "FormUpload" ADD CONSTRAINT "FormUpload_workspaceId_Workspace_id_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint

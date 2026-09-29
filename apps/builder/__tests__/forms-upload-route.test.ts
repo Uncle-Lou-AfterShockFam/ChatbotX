@@ -46,7 +46,7 @@ vi.mock("@/lib/log", () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }))
 
-const { POST, uploadFormQuery } = await import(
+const { POST, uploadFormQuery, MAX_UPLOADS_IN_FLIGHT } = await import(
   "../src/app/api/forms/[workspaceId]/[slug]/upload/route"
 )
 
@@ -185,6 +185,45 @@ describe("POST /api/forms/{ws}/{slug}/upload", () => {
     expect((await post({ field: "photo", v: V })).status).toBe(413)
     m.store.mockResolvedValueOnce({ kind: "rateLimited" })
     expect((await post({ field: "photo", v: V })).status).toBe(429)
+    m.store.mockResolvedValueOnce({ kind: "gone" })
+    expect((await post({ field: "photo", v: V })).status).toBe(404)
+  })
+
+  test("bodies in flight are capped: the next upload is a 429 before it reads, and slots free up (Codex probe s225a)", async () => {
+    const controllers: ReadableStreamDefaultController<Uint8Array>[] = []
+    const slow = () =>
+      POST(
+        new NextRequest(
+          `https://chat.example/api/forms/${WS}/demo-intake/upload?field=photo&v=${V}`,
+          {
+            method: "POST",
+            body: new ReadableStream<Uint8Array>({
+              start: (c) => {
+                controllers.push(c)
+                c.enqueue(new Uint8Array([1]))
+              },
+            }),
+            duplex: "half",
+          } as ConstructorParameters<typeof NextRequest>[1] & {
+            duplex: "half"
+          },
+        ),
+        params(),
+      )
+    const pending = Array.from({ length: MAX_UPLOADS_IN_FLIGHT }, slow)
+    await vi.waitFor(() =>
+      expect(controllers).toHaveLength(MAX_UPLOADS_IN_FLIGHT),
+    )
+    const refused = await post({ field: "photo", v: V })
+    expect(refused.status).toBe(429)
+    expect(refused.headers.get("retry-after")).toBe("5")
+    for (const c of controllers) {
+      c.close()
+    }
+    expect((await Promise.all(pending)).map((r) => r.status)).toEqual(
+      new Array(MAX_UPLOADS_IN_FLIGHT).fill(200),
+    )
+    expect((await post({ field: "photo", v: V })).status).toBe(200)
   })
 
   test("CORS: a stranger origin is 403 before any store", async () => {

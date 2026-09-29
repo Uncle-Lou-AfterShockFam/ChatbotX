@@ -5,10 +5,10 @@ import {
   type DatabaseClient,
   db,
   eq,
-  gt,
   inArray,
+  isNotNull,
   isNull,
-  lt,
+  or,
   sql,
 } from "@chatbotx.io/database/client"
 import {
@@ -44,10 +44,13 @@ import type { NormalizedForm } from "./service"
 /** An unclaimed upload older than this is swept (row + object). */
 export const FORM_UPLOAD_PENDING_TTL_MS = 24 * 60 * 60_000
 /**
- * A submit claims only uploads younger than this: an hour short of the
- * sweep's age, so a claim can never race the sweep deleting the object.
+ * A submit claims only uploads younger than this, an hour short of the
+ * sweep's age. Safety does not rest on the margin: the sweep's committed
+ * `deletingAt` mark is what a claim refuses.
  */
 export const FORM_UPLOAD_CLAIM_TTL_MS = FORM_UPLOAD_PENDING_TTL_MS - 60 * 60_000
+/** A marked row whose object delete failed is retried after this long. */
+export const FORM_UPLOAD_RETRY_BACKOFF_MS = 60 * 60_000
 /** Unclaimed uploads one visitor ip may hold per form in the last hour. */
 export const FORM_UPLOAD_PENDING_PER_IP = 20
 /** Unclaimed uploads one form may hold in total (a storage sink cap). */
@@ -58,8 +61,15 @@ export type StoreFormUploadResult =
   | { kind: "ok"; uploadId: string; fileName: string; sizeBytes: number }
   | { kind: "invalid"; code: "field" | "uploadType" | "uploadSize" }
   | { kind: "rateLimited" }
+  /** The form was deleted while the object was being written. */
+  | { kind: "gone" }
 
 export type FormUploadRef = { fieldKey: string; uploadId: string }
+type CleanupRow = { id: string; path: string }
+
+/** At most `max` code points: never splits a surrogate pair. */
+const truncateCodePoints = (value: string, max: number): string =>
+  Array.from(value).slice(0, max).join("")
 
 const PATH_SEPARATORS = /[/\\]/
 const UNSAFE_NAME_CHARS =
@@ -76,10 +86,12 @@ export function sanitizeUploadFileName(
 ): string {
   const base =
     typeof raw === "string"
-      ? (raw.split(PATH_SEPARATORS).pop() ?? "")
-          .replace(UNSAFE_NAME_CHARS, "")
-          .trim()
-          .slice(0, FORM_UPLOAD_FILE_NAME_MAX)
+      ? truncateCodePoints(
+          (raw.split(PATH_SEPARATORS).pop() ?? "")
+            .replace(UNSAFE_NAME_CHARS, "")
+            .trim(),
+          FORM_UPLOAD_FILE_NAME_MAX,
+        )
       : ""
   return base.length > 0 && base !== "." && base !== ".."
     ? base
@@ -122,20 +134,14 @@ export function formUploadRefs(
 
 const newUploadId = () => `fu_${randomBytes(32).toString("base64url")}`
 
-export class FormUploadError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = "FormUploadError"
-  }
-}
-
 export class FormUploadService {
   /**
    * Store one upload for `fieldKey` of a published web form. `bytes` is
    * already capped at the hard limit by the route; the field's own limit,
    * the sniffed type and the pending caps are checked here. The pending
    * caps are counted under a per-form lock, so parallel uploads cannot all
-   * pass the same count.
+   * pass the same count. Every age is the DATABASE clock (`now()`), so app
+   * processes with skewed clocks agree (Codex probe s225a).
    */
   async store(input: {
     form: NormalizedForm
@@ -144,9 +150,7 @@ export class FormUploadService {
     clientIp: string
     bytes: Uint8Array
     fileName: unknown
-    now?: Date
   }): Promise<StoreFormUploadResult> {
-    const now = input.now ?? new Date()
     const { form } = input
     const field = formUploadField(
       form.publishedDefinition ?? EMPTY_FORM_DEFINITION,
@@ -187,10 +191,7 @@ export class FormUploadService {
           and(
             pending,
             eq(formUploadModel.ipHash, ipHash),
-            gt(
-              formUploadModel.createdAt,
-              new Date(now.getTime() - 60 * 60_000),
-            ),
+            sql`${formUploadModel.createdAt} > now() - interval '1 hour'`,
           ),
         )
       if ((perIp?.n ?? 0) >= FORM_UPLOAD_PENDING_PER_IP) {
@@ -215,7 +216,6 @@ export class FormUploadService {
         sizeBytes: input.bytes.byteLength,
         fileName,
         ipHash,
-        createdAt: now,
       })
       return true
     })
@@ -223,23 +223,25 @@ export class FormUploadService {
       return { kind: "rateLimited" }
     }
 
-    // Row first, object second: a crash in between leaves a row the sweep
-    // deletes (with a no-op object delete), never an object nothing names.
-    try {
-      await uploader.putObject(path, input.bytes, {
-        ContentType: sniffed.mimeType,
-      })
-    } catch (error) {
-      await db
-        .delete(formUploadModel)
-        .where(eq(formUploadModel.uploadId, uploadId))
-        .catch((err) =>
-          logger.warn(
-            { err, formId: form.id, uploadId },
-            "form upload: row cleanup after a failed put failed (the sweep takes it)",
-          ),
-        )
-      throw error
+    // Row first, object second, and a failed put KEEPS the row: a rejected
+    // PUT does not prove the store did not commit it (Codex probe s225a), so
+    // the row stays counted against the pending caps and the sweep deletes
+    // the object (a no-op if absent) with it. Its id never reached the
+    // caller, so nothing can claim it.
+    await uploader.putObject(path, input.bytes, {
+      ContentType: sniffed.mimeType,
+    })
+    // A form (or workspace) delete that committed while the object was in
+    // flight took the row and purged the prefix BEFORE this object landed:
+    // nothing would ever name it, so remove it here (Codex probe s225a).
+    const [still] = await db
+      .select({ id: formUploadModel.id })
+      .from(formUploadModel)
+      .where(eq(formUploadModel.uploadId, uploadId))
+      .limit(1)
+    if (!still) {
+      await this.deleteObject(path, { formId: form.id })
+      return { kind: "gone" }
     }
     return {
       kind: "ok",
@@ -259,8 +261,6 @@ export class FormUploadService {
     formId: string
     interactionId: string | undefined
     refs: FormUploadRef[]
-    now: Date
-    tx?: DatabaseClient
   }): Promise<boolean> {
     if (input.refs.length === 0) {
       return true
@@ -268,7 +268,7 @@ export class FormUploadService {
     if (input.interactionId === undefined) {
       return false
     }
-    const rows = await (input.tx ?? db)
+    const rows = await db
       .select({
         uploadId: formUploadModel.uploadId,
         fieldKey: formUploadModel.fieldKey,
@@ -283,8 +283,10 @@ export class FormUploadService {
   /**
    * Attach the refs to `submissionId` inside the submit's transaction. One
    * conditional UPDATE: a row another submission claimed first, the sweep
-   * deleted, or that belongs to another field / page load is not updated,
-   * and a short count means the caller must roll back.
+   * marked for deletion, or that belongs to another field / page load is
+   * not updated, and a short count means the caller must roll back. A row
+   * the sweep is marking is locked by it; this UPDATE waits and re-checks
+   * `deletingAt`, so a claim never lands on an object being deleted.
    */
   async claim(
     tx: DatabaseClient,
@@ -293,7 +295,6 @@ export class FormUploadService {
       submissionId: string
       interactionId: string | undefined
       refs: FormUploadRef[]
-      now: Date
     },
   ): Promise<boolean> {
     if (input.refs.length === 0) {
@@ -304,7 +305,7 @@ export class FormUploadService {
     }
     const rows = await tx
       .update(formUploadModel)
-      .set({ submissionId: input.submissionId, updatedAt: input.now })
+      .set({ submissionId: input.submissionId, updatedAt: sql`now()` })
       .where(
         this.claimableWhere({ ...input, interactionId: input.interactionId }),
       )
@@ -319,7 +320,6 @@ export class FormUploadService {
     formId: string
     interactionId: string
     refs: FormUploadRef[]
-    now: Date
   }) {
     return and(
       eq(formUploadModel.formId, input.formId),
@@ -329,10 +329,8 @@ export class FormUploadService {
         input.refs.map((r) => r.uploadId),
       ),
       isNull(formUploadModel.submissionId),
-      gt(
-        formUploadModel.createdAt,
-        new Date(input.now.getTime() - FORM_UPLOAD_CLAIM_TTL_MS),
-      ),
+      isNull(formUploadModel.deletingAt),
+      sql`${formUploadModel.createdAt} > now() - ${`${FORM_UPLOAD_CLAIM_TTL_MS} milliseconds`}::interval`,
     )
   }
 
@@ -375,86 +373,128 @@ export class FormUploadService {
   }
 
   /**
-   * The object keys of one submission's uploads, read BEFORE its row is
-   * deleted (the rows cascade away with it); the caller removes the objects
-   * after its delete commits.
+   * Inside a submission delete's transaction: detach its uploads and mark
+   * them for deletion (eligible at once), so they outlive the submission row
+   * as durable cleanup records instead of cascading away with it (Codex
+   * probe s225a). Returns them for an immediate best-effort `retire`; the
+   * sweep retries whatever that leaves.
    */
-  async pathsOfSubmission(
-    submissionId: string,
-    tx: DatabaseClient = db,
-  ): Promise<string[]> {
-    const rows = await tx
-      .select({ path: formUploadModel.path })
-      .from(formUploadModel)
-      .where(eq(formUploadModel.submissionId, submissionId))
-    return rows.map((r) => r.path)
+  async detachForDeletion(
+    tx: DatabaseClient,
+    scope: { workspaceId: string; formId: string; submissionId: string },
+  ): Promise<CleanupRow[]> {
+    return await tx
+      .update(formUploadModel)
+      .set({
+        submissionId: null,
+        deletingAt: sql`now() - ${`${FORM_UPLOAD_RETRY_BACKOFF_MS} milliseconds`}::interval`,
+        updatedAt: sql`now()`,
+      })
+      .where(
+        and(
+          eq(formUploadModel.workspaceId, scope.workspaceId),
+          eq(formUploadModel.formId, scope.formId),
+          eq(formUploadModel.submissionId, scope.submissionId),
+        ),
+      )
+      .returning({ id: formUploadModel.id, path: formUploadModel.path })
   }
 
-  /** Best-effort object removal after a committed row delete. */
-  async removeObjects(
-    paths: string[],
+  /**
+   * Delete each marked row's object, then the rows whose delete the store
+   * confirmed. One key at a time, so a key that keeps failing holds back only
+   * its own row (it stays marked and is retried after the backoff), never
+   * the batch. Returns how many rows went.
+   */
+  async retire(
+    rows: CleanupRow[],
     context: Record<string, unknown>,
-  ): Promise<void> {
-    if (paths.length === 0) {
-      return
-    }
-    try {
-      const { deleted, firstFailure } = await uploader.deleteObjects(paths)
-      if (deleted < paths.length) {
-        logger.warn(
-          { ...context, deleted, total: paths.length, err: firstFailure },
-          "form upload: some objects were not deleted",
-        )
+  ): Promise<number> {
+    const done: string[] = []
+    for (const row of rows) {
+      if (await this.deleteObject(row.path, context)) {
+        done.push(row.id)
       }
+    }
+    if (done.length > 0) {
+      await db
+        .delete(formUploadModel)
+        .where(
+          and(
+            inArray(formUploadModel.id, done),
+            isNull(formUploadModel.submissionId),
+            isNotNull(formUploadModel.deletingAt),
+          ),
+        )
+    }
+    return done.length
+  }
+
+  private async deleteObject(
+    path: string,
+    context: Record<string, unknown>,
+  ): Promise<boolean> {
+    try {
+      await uploader.deleteObject(path)
+      return true
     } catch (err) {
-      logger.warn({ ...context, err }, "form upload: object delete failed")
+      logger.warn(
+        { ...context, path, err },
+        "form upload: object delete failed",
+      )
+      return false
     }
   }
 
   /**
-   * Delete up to `limit` uploads no submission claimed within the TTL: lock
-   * the rows (SKIP LOCKED: a submit claiming one keeps it), delete their
-   * objects, then the rows, in one transaction. A failed object delete keeps
-   * every row of the batch for the next pass; the store confirms per key, so
-   * a retried key that is already gone is not an error.
+   * One sweep batch. First MARK (and commit) up to `limit` rows: unclaimed
+   * uploads past their TTL, plus marked rows whose last attempt is older
+   * than the backoff, oldest first (SKIP LOCKED: a submit holding a row
+   * keeps it). Then `retire` them outside the transaction. The mark is what
+   * makes a claim impossible before any object is touched, so a crash or a
+   * failed delete can never leave a claimable row without its object.
    */
-  async sweepExpired(input: { limit: number; now?: Date }): Promise<number> {
-    const now = input.now ?? new Date()
-    return await db.transaction(async (tx) => {
-      const rows = await tx
-        .select({ id: formUploadModel.id, path: formUploadModel.path })
+  async sweepExpired(input: { limit: number }): Promise<{
+    marked: number
+    deleted: number
+  }> {
+    const rows = await db.transaction(async (tx) => {
+      const due = await tx
+        .select({ id: formUploadModel.id })
         .from(formUploadModel)
         .where(
           and(
             isNull(formUploadModel.submissionId),
-            lt(
-              formUploadModel.createdAt,
-              new Date(now.getTime() - FORM_UPLOAD_PENDING_TTL_MS),
+            or(
+              and(
+                isNull(formUploadModel.deletingAt),
+                sql`${formUploadModel.createdAt} < now() - ${`${FORM_UPLOAD_PENDING_TTL_MS} milliseconds`}::interval`,
+              ),
+              sql`${formUploadModel.deletingAt} < now() - ${`${FORM_UPLOAD_RETRY_BACKOFF_MS} milliseconds`}::interval`,
             ),
           ),
         )
-        .orderBy(formUploadModel.createdAt)
+        .orderBy(
+          sql`coalesce(${formUploadModel.deletingAt}, ${formUploadModel.createdAt})`,
+        )
         .limit(input.limit)
         .for("update", { skipLocked: true })
-      if (rows.length === 0) {
-        return 0
+      if (due.length === 0) {
+        return []
       }
-      const { deleted, firstFailure } = await uploader.deleteObjects(
-        rows.map((r) => r.path),
-      )
-      if (deleted < rows.length) {
-        throw new FormUploadError(
-          `form upload sweep: ${rows.length - deleted} of ${rows.length} objects not deleted (${String(firstFailure)})`,
+      return await tx
+        .update(formUploadModel)
+        .set({ deletingAt: sql`now()`, updatedAt: sql`now()` })
+        .where(
+          inArray(
+            formUploadModel.id,
+            due.map((r) => r.id),
+          ),
         )
-      }
-      await tx.delete(formUploadModel).where(
-        inArray(
-          formUploadModel.id,
-          rows.map((r) => r.id),
-        ),
-      )
-      return rows.length
+        .returning({ id: formUploadModel.id, path: formUploadModel.path })
     })
+    const deleted = await this.retire(rows, { job: "form-upload-sweep" })
+    return { marked: rows.length, deleted }
   }
 }
 

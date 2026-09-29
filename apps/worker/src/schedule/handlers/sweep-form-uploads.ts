@@ -9,9 +9,9 @@ const MAX_BATCHES_PER_RUN = 50
 
 /**
  * Hourly (s225a A2-4 PR 5): delete the web form uploads no submission
- * claimed within their TTL, object first, then row (see
- * `formUploadService.sweepExpired`). A batch whose object delete fails is
- * kept whole and this run stops; the next run retries it.
+ * claimed within their TTL, and retry marked rows whose object delete
+ * failed (see `formUploadService.sweepExpired`: mark and commit first, then
+ * one object at a time, so a failing key holds back only its own row).
  */
 export async function sweepFormUploads() {
   return await distributedLock.runExclusive({
@@ -21,9 +21,11 @@ export async function sweepFormUploads() {
       let deleted = 0
       try {
         for (let batch = 0; batch < MAX_BATCHES_PER_RUN; batch++) {
-          const n = await formUploadService.sweepExpired({ limit: BATCH_SIZE })
-          deleted += n
-          if (n < BATCH_SIZE) {
+          const batchResult = await formUploadService.sweepExpired({
+            limit: BATCH_SIZE,
+          })
+          deleted += batchResult.deleted
+          if (batchResult.marked < BATCH_SIZE) {
             break
           }
         }

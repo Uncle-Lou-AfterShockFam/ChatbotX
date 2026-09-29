@@ -21,6 +21,7 @@ const storage = vi.hoisted(() => ({
   deleteObjects: vi.fn(async (keys: string[]) => ({
     deleted: new Set(keys).size,
   })),
+  deleteObject: vi.fn().mockResolvedValue({}),
   deleteByPrefix: vi.fn().mockResolvedValue({ deleted: 0 }),
 }))
 vi.mock("@chatbotx.io/filesystem", async (importOriginal) => ({
@@ -129,7 +130,6 @@ const store = (
     v?: string
     ip?: string
     name?: unknown
-    now?: Date
   } = {},
 ) =>
   formUploadService.store({
@@ -139,7 +139,6 @@ const store = (
     clientIp: opts.ip ?? "198.51.100.50",
     bytes: opts.bytes ?? PNG,
     fileName: opts.name ?? "me.png",
-    now: opts.now,
   })
 
 const uploadId = async (
@@ -191,6 +190,8 @@ afterEach(async () => {
   storage.putObject.mockClear()
   storage.putObject.mockResolvedValue({})
   storage.deleteObjects.mockClear()
+  storage.deleteObject.mockReset()
+  storage.deleteObject.mockResolvedValue({})
   storage.deleteByPrefix.mockClear()
   if (!databaseUrl) {
     return
@@ -289,11 +290,32 @@ describe.skipIf(!databaseUrl)("web form uploads (real Postgres)", () => {
     })
   })
 
-  test("a failed object write removes its row and rethrows", async () => {
+  test("a failed object write rethrows and KEEPS its row for the sweep (the store may have committed it)", async () => {
     const w = await seed()
     storage.putObject.mockRejectedValueOnce(new Error("store down"))
     await expect(store(w)).rejects.toThrow("store down")
+    const [row] = await uploads(w.formId)
+    expect(row?.submissionId).toBeNull()
+    await age(w, FORM_UPLOAD_PENDING_TTL_MS + 60_000)
+    expect(await formUploadService.sweepExpired({ limit: 100 })).toEqual({
+      marked: 1,
+      deleted: 1,
+    })
+    expect(storage.deleteObject).toHaveBeenCalledWith(row?.path)
     expect(await uploads(w.formId)).toHaveLength(0)
+  })
+
+  test("a form deleted while the object was being written: the late object is removed, the caller told gone", async () => {
+    const w = await seed()
+    storage.putObject.mockImplementationOnce(async () => {
+      await asReplica(
+        sql`DELETE FROM "FormUpload" WHERE "formId" = ${w.formId}`,
+      )
+      return {}
+    })
+    expect(await store(w)).toEqual({ kind: "gone" })
+    const path = storage.putObject.mock.calls[0]?.[0]
+    expect(storage.deleteObject).toHaveBeenCalledWith(path)
   })
 
   test("a submit claims its page load's upload; the row names the submission", async () => {
@@ -363,7 +385,10 @@ describe.skipIf(!databaseUrl)("web form uploads (real Postgres)", () => {
     await age(w, FORM_UPLOAD_CLAIM_TTL_MS + 60_000)
     expect(await submit(w, { photo }, v)).toMatchObject({ kind: "invalid" })
     // not yet the sweep's
-    expect(await formUploadService.sweepExpired({ limit: 100 })).toBe(0)
+    expect(await formUploadService.sweepExpired({ limit: 100 })).toEqual({
+      marked: 0,
+      deleted: 0,
+    })
     expect(await uploads(w.formId)).toHaveLength(1)
   })
 
@@ -376,26 +401,89 @@ describe.skipIf(!databaseUrl)("web form uploads (real Postgres)", () => {
     await age(w, FORM_UPLOAD_PENDING_TTL_MS + 60_000)
     const rows = await uploads(w.formId)
     const pendingPath = rows.find((r) => r.submissionId === null)?.path
-    expect(await formUploadService.sweepExpired({ limit: 100 })).toBe(1)
-    expect(storage.deleteObjects).toHaveBeenCalledWith([pendingPath])
+    expect(await formUploadService.sweepExpired({ limit: 100 })).toEqual({
+      marked: 1,
+      deleted: 1,
+    })
+    expect(storage.deleteObject).toHaveBeenCalledWith(pendingPath)
     const left = await uploads(w.formId)
     expect(left.map((r) => r.uploadId)).toEqual([kept])
   })
 
-  test("a failed object delete keeps the rows for the next pass", async () => {
+  test("a key that fails to delete holds back only its own row, stays marked and unclaimable, and is retried after the backoff", async () => {
     const w = await seed()
+    const v = randomUUID()
+    const poison = await uploadId(w, { v })
     await uploadId(w)
     await age(w, FORM_UPLOAD_PENDING_TTL_MS + 60_000)
-    storage.deleteObjects.mockResolvedValueOnce({
-      deleted: 0,
-      firstFailure: new Error("s3"),
+    const poisonPath = (await uploads(w.formId)).find(
+      (r) => r.uploadId === poison,
+    )?.path
+    storage.deleteObject.mockImplementation((key: string) =>
+      key === poisonPath
+        ? Promise.reject(new Error("s3"))
+        : Promise.resolve({}),
+    )
+    expect(await formUploadService.sweepExpired({ limit: 100 })).toEqual({
+      marked: 2,
+      deleted: 1,
     })
-    await expect(
-      formUploadService.sweepExpired({ limit: 100 }),
-    ).rejects.toThrow("not deleted")
-    expect(await uploads(w.formId)).toHaveLength(1)
-    expect(await formUploadService.sweepExpired({ limit: 100 })).toBe(1)
+    const left = await db.execute<{
+      uploadId: string
+      deletingAt: Date | null
+    }>(
+      sql`SELECT "uploadId", "deletingAt" FROM "FormUpload" WHERE "formId" = ${w.formId}`,
+    )
+    expect(left.rows.map((r) => r.uploadId)).toEqual([poison])
+    expect(left.rows[0]?.deletingAt).not.toBeNull()
+    // marked: never claimable again, even inside the claim window
+    await asReplica(
+      sql`UPDATE "FormUpload" SET "createdAt" = now() WHERE "formId" = ${w.formId}`,
+    )
+    expect(await submit(w, { photo: poison }, v)).toMatchObject({
+      kind: "invalid",
+    })
+    // within the backoff it is not retried; after it, it is
+    expect(await formUploadService.sweepExpired({ limit: 100 })).toEqual({
+      marked: 0,
+      deleted: 0,
+    })
+    await asReplica(sql`UPDATE "FormUpload" SET "deletingAt" = now() - interval '2 hours'
+                         WHERE "formId" = ${w.formId}`)
+    storage.deleteObject.mockResolvedValue({})
+    expect(await formUploadService.sweepExpired({ limit: 100 })).toEqual({
+      marked: 1,
+      deleted: 1,
+    })
     expect(await uploads(w.formId)).toHaveLength(0)
+  })
+
+  test("a claim racing the sweep's mark: whichever commits first wins, never both", async () => {
+    for (let round = 0; round < 10; round++) {
+      const w = await seed()
+      const v = randomUUID()
+      const photo = await uploadId(w, { v })
+      await age(w, FORM_UPLOAD_CLAIM_TTL_MS - 60_000)
+      // make it the sweep's too (past the TTL for the sweep, still inside
+      // the claim window: only the mark decides)
+      const [claimed, swept] = await Promise.all([
+        submit(w, { photo, note: `r${round}` }, v),
+        (async () => {
+          await asReplica(sql`UPDATE "FormUpload" SET "deletingAt" = now() - interval '2 hours'
+                               WHERE "formId" = ${w.formId} AND "submissionId" IS NULL`)
+          return formUploadService.sweepExpired({ limit: 100 })
+        })(),
+      ])
+      const rows = await uploads(w.formId)
+      if (claimed.kind === "ok") {
+        expect(rows[0]?.submissionId).not.toBeNull()
+        expect(storage.deleteObject).not.toHaveBeenCalledWith(rows[0]?.path)
+      } else {
+        expect(rows).toHaveLength(0)
+        expect(swept.deleted).toBeGreaterThanOrEqual(0)
+      }
+      storage.deleteObject.mockClear()
+    }
   })
 
   test("the sweep skips a row another transaction holds", async () => {
@@ -418,7 +506,10 @@ describe.skipIf(!databaseUrl)("web form uploads (real Postgres)", () => {
       await held
     })
     await isLocked
-    expect(await formUploadService.sweepExpired({ limit: 100 })).toBe(0)
+    expect(await formUploadService.sweepExpired({ limit: 100 })).toEqual({
+      marked: 0,
+      deleted: 0,
+    })
     release()
     await holder
     expect(await uploads(w.formId)).toHaveLength(1)
@@ -452,7 +543,7 @@ describe.skipIf(!databaseUrl)("web form uploads (real Postgres)", () => {
       formId: w.formId,
       id: res.kind === "ok" ? (res.submissionId ?? "") : "",
     })
-    expect(storage.deleteObjects).toHaveBeenCalledWith([path])
+    expect(storage.deleteObject).toHaveBeenCalledWith(path)
     expect(await uploads(w.formId)).toHaveLength(0)
 
     await formService.delete({ workspaceId: w.workspaceId, id: w.formId })
@@ -532,5 +623,63 @@ describe.skipIf(!databaseUrl)("web form uploads (real Postgres)", () => {
     expect(await stored()).toEqual([])
     await write("https://storage.example/public/ws/a.png")
     expect(await stored()).toEqual(["https://storage.example/public/ws/a.png"])
+  })
+
+  test("a submission delete whose object delete fails leaves a durable, unclaimable record the sweep retires", async () => {
+    const w = await seed()
+    const v = randomUUID()
+    const photo = await uploadId(w, { v })
+    const res = await submit(w, { photo }, v)
+    storage.deleteObject.mockRejectedValueOnce(new Error("s3"))
+    await formService.deleteSubmission({
+      workspaceId: w.workspaceId,
+      formId: w.formId,
+      id: res.kind === "ok" ? (res.submissionId ?? "") : "",
+    })
+    const [row] = await uploads(w.formId)
+    expect(row?.submissionId).toBeNull()
+    expect(
+      await formUploadService.findClaimed({
+        workspaceId: w.workspaceId,
+        formId: w.formId,
+        uploadId: photo,
+      }),
+    ).toBeNull()
+    // eligible at once for the sweep (its mark is already past the backoff)
+    expect(await formUploadService.sweepExpired({ limit: 100 })).toEqual({
+      marked: 1,
+      deleted: 1,
+    })
+    expect(await uploads(w.formId)).toHaveLength(0)
+  })
+
+  test("a submission delete of another form's id detaches nothing", async () => {
+    const w = await seed()
+    const other = await seed()
+    const v = randomUUID()
+    const photo = await uploadId(w, { v })
+    const res = await submit(w, { photo }, v)
+    await expect(
+      formService.deleteSubmission({
+        workspaceId: other.workspaceId,
+        formId: other.formId,
+        id: res.kind === "ok" ? (res.submissionId ?? "") : "",
+      }),
+    ).rejects.toMatchObject({ httpStatusCode: 404 })
+    expect((await uploads(w.formId))[0]?.submissionId).not.toBeNull()
+  })
+
+  test("a retried identical submit whose uploads its first copy claimed is that duplicate, not an upload error", async () => {
+    const w = await seed()
+    const v = randomUUID()
+    const photo = await uploadId(w, { v })
+    const first = await submit(w, { photo }, v)
+    const again = await submit(w, { photo }, v)
+    expect(first).toMatchObject({ kind: "ok", duplicate: false })
+    expect(again).toMatchObject({
+      kind: "ok",
+      duplicate: true,
+      submissionId: first.kind === "ok" ? first.submissionId : "",
+    })
   })
 })

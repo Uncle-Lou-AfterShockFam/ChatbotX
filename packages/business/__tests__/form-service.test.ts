@@ -86,7 +86,10 @@ const m = vi.hoisted(() => {
       }),
     }),
   }
-  return { state, tx }
+  const client = Object.assign(tx, {
+    transaction: <T>(fn: (t: typeof tx) => Promise<T>) => fn(tx),
+  })
+  return { state, tx: client }
 })
 
 vi.mock("@chatbotx.io/database/client", () => {
@@ -128,14 +131,14 @@ vi.mock("@chatbotx.io/database/schema", () => ({
   customFieldModel: { id: "id", workspaceId: "ws" },
 }))
 const uploads = vi.hoisted(() => ({
-  pathsOfSubmission: vi.fn().mockResolvedValue([]),
-  removeObjects: vi.fn().mockResolvedValue(undefined),
+  detachForDeletion: vi.fn().mockResolvedValue([]),
+  retire: vi.fn().mockResolvedValue(0),
   purgeStoragePrefix: vi.fn().mockResolvedValue(0),
 }))
 vi.mock("../src/form/upload", () => ({
   formUploadService: {
-    pathsOfSubmission: uploads.pathsOfSubmission,
-    removeObjects: uploads.removeObjects,
+    detachForDeletion: uploads.detachForDeletion,
+    retire: uploads.retire,
   },
 }))
 vi.mock("../src/storage/purge-prefix", () => ({
@@ -985,27 +988,37 @@ describe("submissions", () => {
     expect(e.httpStatusCode).toBe(404)
   })
 
-  test("a deleted submission's upload objects go AFTER its row (s225a)", async () => {
-    uploads.pathsOfSubmission.mockResolvedValueOnce(["workspaces/1/forms/f1/a"])
+  test("a deleted submission's uploads are detached in its transaction, then retired (s225a)", async () => {
+    const rows = [{ id: "u1", path: "workspaces/1/forms/f1/a" }]
+    uploads.detachForDeletion.mockResolvedValueOnce(rows)
     m.state.deletes.push([{ id: "9" }])
     await formService.deleteSubmission({
       workspaceId: WS,
       formId: "f1",
       id: "9",
     })
-    expect(uploads.removeObjects).toHaveBeenCalledWith(
-      ["workspaces/1/forms/f1/a"],
-      { workspaceId: WS, formId: "f1", submissionId: "9" },
-    )
+    expect(uploads.detachForDeletion).toHaveBeenCalledWith(expect.anything(), {
+      workspaceId: WS,
+      formId: "f1",
+      submissionId: "9",
+    })
+    expect(uploads.retire).toHaveBeenCalledWith(rows, {
+      workspaceId: WS,
+      formId: "f1",
+      submissionId: "9",
+    })
   })
 
-  test("an unknown submission removes no objects (s225a)", async () => {
-    uploads.removeObjects.mockClear()
-    uploads.pathsOfSubmission.mockResolvedValueOnce(["workspaces/1/forms/f1/a"])
+  test("an unknown submission retires nothing (the detach rolls back with it) (s225a)", async () => {
+    uploads.retire.mockClear()
+    uploads.detachForDeletion.mockResolvedValueOnce([
+      { id: "u1", path: "workspaces/1/forms/f1/a" },
+    ])
     m.state.deletes.push([])
-    await field(
+    const e = await field(
       formService.deleteSubmission({ workspaceId: WS, formId: "f1", id: "9" }),
     )
-    expect(uploads.removeObjects).not.toHaveBeenCalled()
+    expect(e.httpStatusCode).toBe(404)
+    expect(uploads.retire).not.toHaveBeenCalled()
   })
 })

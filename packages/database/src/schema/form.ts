@@ -346,9 +346,12 @@ export const formVisitModel = pgTable(
  * (`workspaces/<ws>/forms/<formId>/<uuid>`, never under `public/`); the
  * field's value is the opaque `uploadId`. A submit claims its uploads by
  * setting `submissionId` (conditional on NULL, so exactly one submission
- * owns a row); a row still unclaimed after the sweep's age is deleted with
- * its object. `interactionId` binds the upload to the page load that sent
- * it: another page (or a replayed id) cannot claim it. `mimeType` is the
+ * owns a row). `deletingAt` is the durable cleanup mark: set (and
+ * committed) BEFORE its object is deleted, never claimable again, and the
+ * row goes only once the store confirmed the delete; the sweep marks the
+ * unclaimed rows past their age, a submission delete detaches and marks its
+ * own. `interactionId` binds the upload to the page load that sent it:
+ * another page (or a replayed id) cannot claim it. `mimeType` is the
  * sniffed type, never the client's.
  */
 export const formUploadModel = pgTable(
@@ -379,12 +382,13 @@ export const formUploadModel = pgTable(
     sizeBytes: integer().notNull(),
     fileName: text().notNull(),
     ipHash: text().notNull(),
+    deletingAt: timestamp(timestampConfig),
   },
   (table) => [
     uniqueIndex("FormUpload_uploadId_key").on(table.uploadId),
     uniqueIndex("FormUpload_path_key").on(table.path),
-    index("FormUpload_createdAt_pending_idx")
-      .on(table.createdAt)
+    index("FormUpload_cleanup_pending_idx")
+      .on(sql`coalesce(${table.deletingAt}, ${table.createdAt})`)
       .where(sql`${table.submissionId} is null`),
     index("FormUpload_formId_ipHash_createdAt_idx").on(
       table.formId,

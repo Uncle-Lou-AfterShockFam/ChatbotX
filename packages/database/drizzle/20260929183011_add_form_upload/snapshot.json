@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "c8cfd495-1319-43b5-a224-c80700ac9c2d",
+  "id": "5ab88287-86ca-4d0e-ae4a-f738684f16c9",
   "prevIds": [
     "f28cd3a2-1d13-4668-bc1f-337018f98b8e"
   ],
@@ -17771,6 +17771,19 @@
       "generated": null,
       "identity": null,
       "name": "ipHash",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "FormUpload"
+    },
+    {
+      "type": "timestamp(6) with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "deletingAt",
       "entityType": "columns",
       "schema": "public",
       "table": "FormUpload"
@@ -40464,8 +40477,8 @@
       "nameExplicit": true,
       "columns": [
         {
-          "value": "createdAt",
-          "isExpression": false,
+          "value": "coalesce(\"deletingAt\", \"createdAt\")",
+          "isExpression": true,
           "asc": true,
           "nullsFirst": false,
           "opclass": null
@@ -40476,7 +40489,7 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "FormUpload_createdAt_pending_idx",
+      "name": "FormUpload_cleanup_pending_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "FormUpload"
