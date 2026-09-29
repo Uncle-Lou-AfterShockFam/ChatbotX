@@ -1,16 +1,25 @@
 import { mediaLibraryService, signEmailClickUrl } from "@chatbotx.io/business"
 import { emailTemplateService } from "@chatbotx.io/business/email-templates"
+import { ChatbotXException } from "@chatbotx.io/business/errors"
 import type { InboxWithIntegrations } from "@chatbotx.io/database/types"
 import {
   collectRenderInputs,
+  DocumentTooLargeError,
+  DocumentValidationError,
   type EmailDocument,
+  type LeafBlock,
+  leafBlocks,
   parseDocument,
   type RenderAsset,
 } from "@chatbotx.io/email-document"
 import { renderEmail } from "@chatbotx.io/email-document/render-email"
-import type {
-  EmailStepSchema,
-  PageElementSchema,
+import {
+  type EmailStepSchema,
+  openWebsiteStepSchema,
+  type PageElementSchema,
+  startAnotherNodeStepSchema,
+  startExternalFlowStepSchema,
+  startExternalNodeStepSchema,
 } from "@chatbotx.io/flow-config"
 import { contactVariableService } from "@chatbotx.io/variables"
 import { resolveButtonUrl } from "../../lib/convert-button"
@@ -18,37 +27,96 @@ import { logger } from "../../lib/logger"
 
 /** Media files looked up per send (images + attachments of one document). */
 const MAX_ASSETS = 50
+/** Template links signed per send (a link-dense document stays bounded). */
+const MAX_LINKS = 100
 
-/** beforeStep.stepType -> the legacy buttonType resolveButtonUrl reads. */
-const BUTTON_TYPE_BY_STEP: Record<string, string> = {
-  openWebsite: "openWebsite",
-  startExternalFlow: "startExternalFlow",
-  startExternalNode: "startExternalNode",
-  startAnotherNode: "startAnotherNode",
+/**
+ * The step's CONTENT is unusable (template gone, invalid document): the send
+ * is failed closed and not retried. Every other error propagates to the
+ * queue's retry, exactly as the legacy path always did.
+ */
+export class EmailContentError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options)
+    this.name = "EmailContentError"
+  }
 }
+
+/**
+ * A document flow button's beforeStep, validated by the SAME flow-config
+ * schema a legacy button uses, per its stepType; anything else is dropped.
+ */
+const BUTTON_STEPS = {
+  openWebsite: openWebsiteStepSchema,
+  startExternalFlow: startExternalFlowStepSchema,
+  startExternalNode: startExternalNodeStepSchema,
+  startAnotherNode: startAnotherNodeStepSchema,
+} as const
 
 type Variables = Awaited<ReturnType<typeof contactVariableService.getAll>>
 
-/** The step's document: a saved template, else the inline document. */
 async function loadDocument(
   step: EmailStepSchema,
   workspaceId: string,
 ): Promise<EmailDocument> {
-  if (step.templateId) {
-    return await emailTemplateService.getDocument({
-      workspaceId,
-      id: step.templateId,
-    })
+  try {
+    if (step.templateId) {
+      return await emailTemplateService.getDocument({
+        workspaceId,
+        id: step.templateId,
+      })
+    }
+    return parseDocument(step.document)
+  } catch (error) {
+    const notFound =
+      error instanceof ChatbotXException && error.httpStatusCode === 404
+    if (
+      notFound ||
+      error instanceof DocumentValidationError ||
+      error instanceof DocumentTooLargeError
+    ) {
+      throw new EmailContentError(
+        step.templateId
+          ? `email template ${step.templateId} is missing or invalid`
+          : "the step's email document is invalid",
+        { cause: error },
+      )
+    }
+    throw error
   }
-  return parseDocument(step.document)
+}
+
+function legacyButton(
+  leaf: Extract<LeafBlock, { type: "button" }>,
+): Extract<PageElementSchema, { type: "button" }> | undefined {
+  if (leaf.action.kind !== "flow") {
+    return
+  }
+  const stepType = String(leaf.action.beforeStep.stepType ?? "")
+  if (!Object.hasOwn(BUTTON_STEPS, stepType)) {
+    return
+  }
+  const buttonType = stepType as keyof typeof BUTTON_STEPS
+  const parsed = BUTTON_STEPS[buttonType].safeParse(leaf.action.beforeStep)
+  if (!parsed.success) {
+    return
+  }
+  return {
+    id: leaf.id,
+    type: "button",
+    label: leaf.label,
+    buttonType,
+    beforeStep: parsed.data,
+    steps: [],
+  } as Extract<PageElementSchema, { type: "button" }>
 }
 
 /**
  * B2 phase 2b: render a template / inline document for one recipient. The
  * package renders synchronously, so everything asynchronous is resolved
  * first from `collectRenderInputs`: merge values (the contact variable
- * resolvers), tracked template links (signed click URLs, only when the step
- * has a topic), flow-button URLs and media files.
+ * resolvers), tracked template links and flow-button URLs (signed click
+ * URLs, only when the step has a topic), and media files.
  */
 export async function renderStepDocument(props: {
   step: EmailStepSchema
@@ -77,38 +145,31 @@ export async function renderStepDocument(props: {
       ? `${appUrl}/email-topic/click?r=${token}&u=${await signEmailClickUrl(url, workspaceId)}`
       : url
 
-  const links = new Map<string, string>()
-  for (const { blockId, url } of inputs.links) {
-    links.set(`${blockId} ${url}`, await track(url))
-  }
+  const links = new Map(
+    await Promise.all(
+      inputs.links
+        .slice(0, MAX_LINKS)
+        .map(
+          async ({ blockId, url }) =>
+            [`${blockId} ${url}`, await track(url)] as const,
+        ),
+    ),
+  )
 
   const buttons = new Map<string, string>()
-  for (const leaf of doc.blocks.flatMap((block) =>
-    block.type === "columns"
-      ? block.columns.flatMap((column) => column.blocks)
-      : [block],
-  )) {
-    if (leaf.type !== "button" || leaf.action.kind !== "flow") {
+  for (const leaf of leafBlocks(doc)) {
+    if (leaf.type !== "button") {
       continue
     }
-    const stepType = String(leaf.action.beforeStep.stepType ?? "")
-    const buttonType = BUTTON_TYPE_BY_STEP[stepType]
-    if (!buttonType) {
-      continue
-    }
-    const url = resolveButtonUrl({
-      appUrl,
-      button: {
-        id: leaf.id,
-        type: "button",
-        label: leaf.label,
-        buttonType,
-        beforeStep: leaf.action.beforeStep,
-        steps: leaf.action.steps,
-      } as unknown as Extract<PageElementSchema, { type: "button" }>,
-      inbox: props.inbox,
-      flowId: props.flowId,
-    })
+    const button = legacyButton(leaf)
+    const url = button
+      ? resolveButtonUrl({
+          appUrl,
+          button,
+          inbox: props.inbox,
+          flowId: props.flowId,
+        })
+      : undefined
     if (url) {
       buttons.set(leaf.id, await track(url))
     }
@@ -124,8 +185,14 @@ export async function renderStepDocument(props: {
         size: Number(file.size ?? 0),
         mimeType: file.mimeType ?? "application/octet-stream",
       }
-    } catch {
-      // Reported by the renderer as `asset:<id>` in `missing`.
+    } catch (error) {
+      // A deleted file is reported by the renderer as `asset:<id>`; anything
+      // else (DB, storage) is a real failure and retries.
+      if (
+        !(error instanceof ChatbotXException && error.httpStatusCode === 404)
+      ) {
+        throw error
+      }
     }
   }
 

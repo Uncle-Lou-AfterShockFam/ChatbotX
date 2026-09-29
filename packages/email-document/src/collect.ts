@@ -6,7 +6,8 @@ const HAS_TOKEN = /\{\{/
 const HTTP_HREF = /\shref="(https?:\/\/[^"]*)"/gi
 const AMP_ENTITY = /&amp;/g
 
-function leaves(doc: EmailDocument): LeafBlock[] {
+/** Every leaf block in document order (columns expanded; they never nest). */
+export function leafBlocks(doc: EmailDocument): LeafBlock[] {
   return doc.blocks.flatMap((block: Block) =>
     block.type === "columns"
       ? block.columns.flatMap((column) => column.blocks)
@@ -44,7 +45,7 @@ export function collectRenderInputs(doc: EmailDocument): {
     }
   }
   addNames(doc.settings.preheader)
-  for (const leaf of leaves(doc)) {
+  for (const leaf of leafBlocks(doc)) {
     switch (leaf.type) {
       case "heading":
       case "text":

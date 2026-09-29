@@ -80,7 +80,11 @@ vi.mock("../../src/lib/logger", () => ({
 }))
 
 const renderStepDocumentMock = vi.fn()
+const { ContentError } = vi.hoisted(() => ({
+  ContentError: class extends Error {},
+}))
 vi.mock("../src/integration/handlers/send-email-document", () => ({
+  EmailContentError: ContentError,
   renderStepDocument: (...args: unknown[]) => renderStepDocumentMock(...args),
 }))
 
@@ -304,11 +308,20 @@ describe("s220b phase 2b: template / document steps", () => {
 
   test("an unrenderable template fails closed: nothing is sent, the topic row is marked failed", async () => {
     renderStepDocumentMock.mockRejectedValueOnce(
-      new Error("Email template not found"),
+      new ContentError("Email template not found"),
     )
     runAction.mockClear()
     await sendEmail(makeProps({ templateId: "404", elements: [] }) as never)
     expect(runAction).not.toHaveBeenCalled()
     expect(markFailed).toHaveBeenCalledWith("test-token-xyz")
   })
+})
+
+test("s220b review: a transient render error propagates (queue retry), nothing sent", async () => {
+  renderStepDocumentMock.mockRejectedValueOnce(new Error("connection reset"))
+  runAction.mockClear()
+  await expect(
+    sendEmail(makeProps({ templateId: "77", elements: [] }) as never),
+  ).rejects.toThrow("connection reset")
+  expect(runAction).not.toHaveBeenCalled()
 })

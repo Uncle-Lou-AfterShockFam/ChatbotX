@@ -2,7 +2,7 @@
 //   import { renderWeb } from "@chatbotx.io/email-document/render-web"
 //   import { renderEmail } from "@chatbotx.io/email-document/render-email"
 
-export { collectRenderInputs } from "./collect"
+export { collectRenderInputs, leafBlocks } from "./collect"
 export type { RenderAsset, RenderContext } from "./context"
 export { UNSUBSCRIBE_PLACEHOLDER } from "./context"
 export * from "./errors"

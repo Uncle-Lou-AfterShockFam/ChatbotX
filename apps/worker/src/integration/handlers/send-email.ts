@@ -36,7 +36,7 @@ import { contactVariableService } from "@chatbotx.io/variables"
 import { resolveButtonUrl } from "../../lib/convert-button"
 import { logger } from "../../lib/logger"
 import type { ExecuteStepProps } from "./flow"
-import { renderStepDocument } from "./send-email-document"
+import { EmailContentError, renderStepDocument } from "./send-email-document"
 
 async function resolveElements({
   appUrl,
@@ -261,48 +261,54 @@ export async function sendEmail({
   }
 
   // B2 (s220b): a template or inline document renders through
-  // @chatbotx.io/email-document; legacy `elements` keep the original path.
+  // @chatbotx.io/email-document; legacy `elements` keep the original path
+  // (no try: its errors propagate to the queue's retry, as they always did).
   let body: { html: string; text: string }
-  try {
-    body =
-      step.templateId || step.document
-        ? await renderStepDocument({
-            step,
-            workspaceId: conversation.workspaceId,
-            appUrl,
-            variables,
-            inbox,
-            flowId: flowVersion.flowId,
-            unsubscribeUrl,
-            token,
-          })
-        : await renderLegacyElements({
-            appUrl,
-            step,
-            variables,
-            inbox,
-            flowId: flowVersion.flowId,
-            unsubscribeUrl,
-            token,
-            workspaceId: conversation.workspaceId,
-            brandName: workspace.name ?? smtpIntegration.name,
-            subject,
-            preheader,
-          })
-  } catch (err) {
-    // A missing / invalid template never sends a broken mail.
-    logger.error(
-      {
-        err,
+  if (step.templateId || step.document) {
+    try {
+      body = await renderStepDocument({
+        step,
         workspaceId: conversation.workspaceId,
-        templateId: step.templateId,
-      },
-      "handleSendEmail: email content could not be rendered",
-    )
-    if (token) {
-      await emailTopicAnalyticsService.markFailed(token)
+        appUrl,
+        variables,
+        inbox,
+        flowId: flowVersion.flowId,
+        unsubscribeUrl,
+        token,
+      })
+    } catch (err) {
+      // Only unusable CONTENT (template gone, invalid document) fails the
+      // send closed; a transient error propagates to the retry.
+      if (!(err instanceof EmailContentError)) {
+        throw err
+      }
+      logger.error(
+        {
+          err,
+          workspaceId: conversation.workspaceId,
+          templateId: step.templateId,
+        },
+        "handleSendEmail: email content could not be rendered",
+      )
+      if (token) {
+        await emailTopicAnalyticsService.markFailed(token)
+      }
+      return
     }
-    return
+  } else {
+    body = await renderLegacyElements({
+      appUrl,
+      step,
+      variables,
+      inbox,
+      flowId: flowVersion.flowId,
+      unsubscribeUrl,
+      token,
+      workspaceId: conversation.workspaceId,
+      brandName: workspace.name ?? smtpIntegration.name,
+      subject,
+      preheader,
+    })
   }
 
   const botContext = await buildContext({
