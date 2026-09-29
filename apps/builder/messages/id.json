@@ -7709,6 +7709,19 @@
       "noLines": "Belum ada kotak masuk kanal API."
     }
   },
+  "emailSuppression": {
+    "title": "Penekanan email",
+    "description": "Langkah email tidak pernah mengirim ke alamat atau domain ini. Pengiriman yang terpental ditambahkan otomatis. Entri domain hanya cocok dengan domain yang persis itu.",
+    "placeholder": "nama@example.com atau @example.com",
+    "add": "Tambah",
+    "empty": "Tidak ada alamat atau domain yang ditekan.",
+    "remove": "Hapus",
+    "removeConfirm": "Email ke entri ini akan dikirim lagi.",
+    "reasonManual": "Ditambahkan manual",
+    "reasonUnreachable": "Terpental",
+    "added": "Penekanan ditambahkan",
+    "loadMore": "Muat lagi"
+  },
   "emailFlowPage": {
     "confirmTitle": "Lanjutkan",
     "confirmDescription": "Ketuk tombol untuk melanjutkan.",

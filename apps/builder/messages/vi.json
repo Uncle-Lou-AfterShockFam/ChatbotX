@@ -7709,6 +7709,19 @@
       "noLines": "Chưa có hộp thư kênh API nào."
     }
   },
+  "emailSuppression": {
+    "title": "Chặn email",
+    "description": "Bước email không bao giờ gửi tới các địa chỉ hoặc tên miền này. Các lượt gửi bị trả lại được thêm tự động. Mục tên miền chỉ khớp đúng tên miền đó.",
+    "placeholder": "ten@example.com hoặc @example.com",
+    "add": "Thêm",
+    "empty": "Không có địa chỉ hoặc tên miền nào bị chặn.",
+    "remove": "Xóa",
+    "removeConfirm": "Email tới mục này sẽ được gửi lại.",
+    "reasonManual": "Thêm thủ công",
+    "reasonUnreachable": "Bị trả lại",
+    "added": "Đã thêm mục chặn",
+    "loadMore": "Tải thêm"
+  },
   "emailFlowPage": {
     "confirmTitle": "Tiếp tục",
     "confirmDescription": "Nhấn nút để tiếp tục.",

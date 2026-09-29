@@ -7709,6 +7709,19 @@
       "noLines": "Henüz API kanalı gelen kutusu yok."
     }
   },
+  "emailSuppression": {
+    "title": "E-posta engelleme",
+    "description": "E-posta adımı bu adreslere veya alan adlarına asla gönderim yapmaz. Geri dönen gönderimler otomatik eklenir. Alan adı girişi yalnızca tam olarak o alan adıyla eşleşir.",
+    "placeholder": "ad@example.com veya @example.com",
+    "add": "Ekle",
+    "empty": "Engellenmiş adres veya alan adı yok.",
+    "remove": "Kaldır",
+    "removeConfirm": "Bu girişe yeniden e-posta gönderilecek.",
+    "reasonManual": "Elle eklendi",
+    "reasonUnreachable": "Geri döndü",
+    "added": "Engelleme eklendi",
+    "loadMore": "Daha fazla yükle"
+  },
   "emailFlowPage": {
     "confirmTitle": "Devam et",
     "confirmDescription": "Devam etmek için düğmeye dokunun.",

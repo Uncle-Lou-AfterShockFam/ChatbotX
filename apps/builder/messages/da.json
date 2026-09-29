@@ -7709,6 +7709,19 @@
       "noLines": "Ingen API-kanalindbakker endnu."
     }
   },
+  "emailSuppression": {
+    "title": "E-mailspærring",
+    "description": "E-mailtrinnet sender aldrig til disse adresser eller domæner. Afviste afsendelser tilføjes automatisk. En domænepost matcher kun netop det domæne.",
+    "placeholder": "navn@example.com eller @example.com",
+    "add": "Tilføj",
+    "empty": "Ingen spærrede adresser eller domæner.",
+    "remove": "Fjern",
+    "removeConfirm": "Mail til denne post bliver sendt igen.",
+    "reasonManual": "Tilføjet manuelt",
+    "reasonUnreachable": "Afvist",
+    "added": "Spærring tilføjet",
+    "loadMore": "Indlæs flere"
+  },
   "emailFlowPage": {
     "confirmTitle": "Fortsæt",
     "confirmDescription": "Tryk på knappen for at fortsætte.",

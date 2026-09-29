@@ -105,6 +105,14 @@ vi.mock("../src/services/integrations", () => ({
     resolveLineContext(...args),
 }))
 
+// s224b: send-time suppression; the real isSendSuppressed runs over this lookup.
+const isSuppressedMock = vi.fn()
+vi.mock("@chatbotx.io/business/email-suppression", () => ({
+  emailSuppressionService: {
+    isSuppressed: (...args: unknown[]) => isSuppressedMock(...args),
+  },
+}))
+
 const { sendEmail, isContactsOwnAddress } = await import(
   "../../src/integration/handlers/send-email"
 )
@@ -135,6 +143,8 @@ function makeProps(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  isSuppressedMock.mockReset()
+  isSuppressedMock.mockResolvedValue(false)
   createRecipient.mockResolvedValue({ token: "test-token-xyz" })
   runAction.mockResolvedValue(undefined)
   prepareStepDocumentMock.mockResolvedValue({ prepared: true })
@@ -660,5 +670,97 @@ describe("personal form links in email (s220c)", () => {
       )?.[0] as { variables: { personalLinks?: boolean } }
       expect(subjectCall.variables.personalLinks).toBe(expected)
     }
+  })
+})
+
+describe("s224b outreach B-1: a suppressed recipient is never handed off", () => {
+  const lineStep = { lineInboxId: "line-1", templateId: "77", elements: [] }
+
+  beforeEach(() => {
+    runAction.mockClear()
+    lineRunAction.mockClear()
+    createRecipient.mockClear()
+    markFailed.mockClear()
+    markDelivered.mockClear()
+    prepareStepDocumentMock.mockClear()
+    renderStepDocumentMock.mockResolvedValue({
+      html: "<p>doc</p>",
+      text: "doc",
+      attachments: [],
+    })
+  })
+
+  test("SMTP: a listed recipient is counted, marked failed as suppressed, and never sent", async () => {
+    isSuppressedMock.mockResolvedValue(true)
+    await sendEmail(makeProps() as never)
+    expect(isSuppressedMock).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      address: "user@example.com",
+    })
+    expect(createRecipient).toHaveBeenCalledOnce()
+    expect(markFailed).toHaveBeenCalledWith("test-token-xyz", "suppressed")
+    expect(runAction).not.toHaveBeenCalled()
+    expect(markDelivered).not.toHaveBeenCalled()
+  })
+
+  test("line: the check runs on the LINE address, before any content is read or sent", async () => {
+    isSuppressedMock.mockImplementation(
+      async ({ address }: { address: string }) =>
+        address === "jane@example.com",
+    )
+    await sendEmail(makeProps(lineStep) as never)
+    expect(isSuppressedMock).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      address: "jane@example.com",
+    })
+    expect(prepareStepDocumentMock).not.toHaveBeenCalled()
+    expect(lineRunAction).not.toHaveBeenCalled()
+    expect(markFailed).toHaveBeenCalledWith("test-token-xyz", "suppressed")
+  })
+
+  test("an untracked (no topic) suppressed send writes nothing and sends nothing", async () => {
+    isSuppressedMock.mockResolvedValue(true)
+    await sendEmail(makeProps({ topicId: undefined }) as never)
+    expect(createRecipient).not.toHaveBeenCalled()
+    expect(markFailed).not.toHaveBeenCalled()
+    expect(runAction).not.toHaveBeenCalled()
+  })
+
+  test("one listed address in a multi-address `to` (with display names) refuses the whole send", async () => {
+    isSuppressedMock.mockImplementation(
+      async ({ address }: { address: string }) => address === "b@blocked.com",
+    )
+    await sendEmail(
+      makeProps({ to: "a@ok.com, Bee <b@blocked.com>; c@ok.com" }) as never,
+    )
+    expect(isSuppressedMock).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      address: "b@blocked.com",
+    })
+    expect(runAction).not.toHaveBeenCalled()
+    expect(markFailed).toHaveBeenCalledWith("test-token-xyz", "suppressed")
+  })
+
+  test("an empty or unusable `to` fails closed (no lookup needed, nothing sent)", async () => {
+    for (const to of ["", " , ; ", new Array(51).fill("a@b.com").join(",")]) {
+      runAction.mockClear()
+      isSuppressedMock.mockClear()
+      await sendEmail(makeProps({ to }) as never)
+      expect(isSuppressedMock).not.toHaveBeenCalled()
+      expect(runAction).not.toHaveBeenCalled()
+    }
+  })
+
+  test("a failed suppression lookup propagates (the job retries): no tracking row, no send", async () => {
+    isSuppressedMock.mockRejectedValue(new Error("db down"))
+    await expect(sendEmail(makeProps() as never)).rejects.toThrow("db down")
+    expect(createRecipient).not.toHaveBeenCalled()
+    expect(runAction).not.toHaveBeenCalled()
+  })
+
+  test("an unlisted recipient still sends (the check does not change the happy path)", async () => {
+    await sendEmail(makeProps() as never)
+    expect(runAction).toHaveBeenCalledOnce()
+    expect(markDelivered).toHaveBeenCalledWith("test-token-xyz")
   })
 })

@@ -7709,6 +7709,19 @@
       "noLines": "API チャネルの受信箱がまだありません。"
     }
   },
+  "emailSuppression": {
+    "title": "メール配信停止リスト",
+    "description": "メールステップはこれらのアドレスやドメインには送信しません。バウンスした送信は自動で追加されます。ドメインのエントリーはそのドメインにのみ一致します。",
+    "placeholder": "name@example.com または @example.com",
+    "add": "追加",
+    "empty": "停止中のアドレスやドメインはありません。",
+    "remove": "削除",
+    "removeConfirm": "このエントリーへのメールが再び送信されます。",
+    "reasonManual": "手動で追加",
+    "reasonUnreachable": "バウンス",
+    "added": "停止リストに追加しました",
+    "loadMore": "さらに読み込む"
+  },
   "emailFlowPage": {
     "confirmTitle": "続行",
     "confirmDescription": "ボタンをタップして続行してください。",
