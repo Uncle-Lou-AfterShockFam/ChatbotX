@@ -83,7 +83,8 @@ export const useEmailTemplatePreview = (
 export const useFlowOptions = (workspaceId: string) =>
   useQuery(
     orpc.flowsAPI.privateListFlowsAPI.queryOptions({
-      input: { workspaceId, page: 1, perPage: 100 },
+      // The list-page cap (s205): one call never asks for more than 50 rows.
+      input: { workspaceId, page: 1, perPage: 50 },
       select: (res) =>
         res.data.map((flow) => ({ value: String(flow.id), label: flow.name })),
     }),
