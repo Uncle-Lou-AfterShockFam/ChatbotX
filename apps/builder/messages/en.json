@@ -7638,5 +7638,16 @@
       "lineNone": "None (send over SMTP)",
       "noLines": "No API-channel inboxes yet."
     }
+  },
+  "emailFlowPage": {
+    "confirmTitle": "Continue",
+    "confirmDescription": "Tap the button to continue.",
+    "confirmButton": "Continue",
+    "startedTitle": "Done",
+    "startedDescription": "You're all set: we've taken it from here.",
+    "invalidTitle": "Link not valid",
+    "invalidDescription": "This link is invalid or has expired.",
+    "unavailableTitle": "Not available",
+    "unavailableDescription": "This link is no longer available."
   }
 }

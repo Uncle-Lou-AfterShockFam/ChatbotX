@@ -7638,5 +7638,16 @@
       "lineNone": "Niciuna (trimite prin SMTP)",
       "noLines": "Nu există încă inboxuri de canal API."
     }
+  },
+  "emailFlowPage": {
+    "confirmTitle": "Continuă",
+    "confirmDescription": "Apasă butonul pentru a continua.",
+    "confirmButton": "Continuă",
+    "startedTitle": "Gata",
+    "startedDescription": "Totul este pregătit: ne ocupăm noi de restul.",
+    "invalidTitle": "Link nevalid",
+    "invalidDescription": "Acest link nu este valid sau a expirat.",
+    "unavailableTitle": "Indisponibil",
+    "unavailableDescription": "Acest link nu mai este disponibil."
   }
 }

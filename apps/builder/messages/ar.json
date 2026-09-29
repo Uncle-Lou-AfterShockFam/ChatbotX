@@ -7638,5 +7638,16 @@
       "lineNone": "لا شيء (الإرسال عبر SMTP)",
       "noLines": "لا توجد صناديق وارد لقناة API بعد."
     }
+  },
+  "emailFlowPage": {
+    "confirmTitle": "متابعة",
+    "confirmDescription": "اضغط على الزر للمتابعة.",
+    "confirmButton": "متابعة",
+    "startedTitle": "تم",
+    "startedDescription": "كل شيء جاهز: سنتولى الأمر من هنا.",
+    "invalidTitle": "رابط غير صالح",
+    "invalidDescription": "هذا الرابط غير صالح أو منتهي الصلاحية.",
+    "unavailableTitle": "غير متاح",
+    "unavailableDescription": "هذا الرابط لم يعد متاحًا."
   }
 }

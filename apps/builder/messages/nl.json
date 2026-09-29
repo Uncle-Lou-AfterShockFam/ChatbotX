@@ -7638,5 +7638,16 @@
       "lineNone": "Geen (via SMTP versturen)",
       "noLines": "Nog geen API-kanaalinboxen."
     }
+  },
+  "emailFlowPage": {
+    "confirmTitle": "Doorgaan",
+    "confirmDescription": "Tik op de knop om door te gaan.",
+    "confirmButton": "Doorgaan",
+    "startedTitle": "Klaar",
+    "startedDescription": "Alles is geregeld: wij nemen het vanaf hier over.",
+    "invalidTitle": "Link ongeldig",
+    "invalidDescription": "Deze link is ongeldig of verlopen.",
+    "unavailableTitle": "Niet beschikbaar",
+    "unavailableDescription": "Deze link is niet meer beschikbaar."
   }
 }

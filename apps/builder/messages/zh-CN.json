@@ -7638,5 +7638,16 @@
       "lineNone": "无（通过 SMTP 发送）",
       "noLines": "还没有 API 渠道收件箱。"
     }
+  },
+  "emailFlowPage": {
+    "confirmTitle": "继续",
+    "confirmDescription": "点击按钮继续。",
+    "confirmButton": "继续",
+    "startedTitle": "完成",
+    "startedDescription": "一切就绪：接下来交给我们。",
+    "invalidTitle": "链接无效",
+    "invalidDescription": "此链接无效或已过期。",
+    "unavailableTitle": "不可用",
+    "unavailableDescription": "此链接已不可用。"
   }
 }

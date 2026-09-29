@@ -6,6 +6,7 @@ const mockUpdateTracking = vi.fn()
 const mockRepositoryCreate = vi.fn()
 const mockCreateMessageRepository = vi.fn()
 const mockChatQueueAdd = vi.fn()
+const mockIntegrationQueueAdd = vi.fn()
 const mockResolveTenantSettings = vi.fn()
 
 vi.mock("@chatbotx.io/database/repositories", () => ({
@@ -37,7 +38,7 @@ vi.mock("@chatbotx.io/worker-config", () => ({
   },
   chatQueue: { add: mockChatQueueAdd },
   IntegrationJobAction: { sendFlow: "sendFlow" },
-  integrationQueue: { add: vi.fn() },
+  integrationQueue: { add: mockIntegrationQueueAdd },
 }))
 
 vi.mock("../src/contact-inbox/service", () => ({
@@ -181,5 +182,29 @@ describe("messageService.createOutgoing", () => {
       }),
     )
     expect(mockChatQueueAdd.mock.calls[1]).toHaveLength(2)
+  })
+})
+
+describe("createOutgoing flow start (s222b)", () => {
+  test("a caller's jobId dedupes the sendFlow enqueue; without one no job options are passed", async () => {
+    mockIntegrationQueueAdd.mockClear()
+    await createOutgoing({
+      conversation: conversation as never,
+      contactInbox: contactInbox as never,
+      input: { flowId: "700", inboxId: "55", jobId: "email-flow-start:abc" },
+    })
+    expect(mockIntegrationQueueAdd).toHaveBeenLastCalledWith(
+      "sendFlow",
+      expect.objectContaining({
+        data: expect.objectContaining({ flowId: "700", sendFrom: "inbox" }),
+      }),
+      { jobId: "email-flow-start:abc" },
+    )
+    await createOutgoing({
+      conversation: conversation as never,
+      contactInbox: contactInbox as never,
+      input: { flowId: "700" },
+    })
+    expect(mockIntegrationQueueAdd.mock.lastCall?.[2]).toBeUndefined()
   })
 })

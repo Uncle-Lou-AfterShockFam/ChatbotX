@@ -7638,5 +7638,16 @@
       "lineNone": "Ingen (send via SMTP)",
       "noLines": "Ingen API-kanalindbakker endnu."
     }
+  },
+  "emailFlowPage": {
+    "confirmTitle": "Fortsæt",
+    "confirmDescription": "Tryk på knappen for at fortsætte.",
+    "confirmButton": "Fortsæt",
+    "startedTitle": "Færdig",
+    "startedDescription": "Alt er klar: vi tager den herfra.",
+    "invalidTitle": "Ugyldigt link",
+    "invalidDescription": "Linket er ugyldigt eller udløbet.",
+    "unavailableTitle": "Ikke tilgængelig",
+    "unavailableDescription": "Linket er ikke længere tilgængeligt."
   }
 }

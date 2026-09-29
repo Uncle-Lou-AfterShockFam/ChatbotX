@@ -461,6 +461,10 @@ export async function sendEmail({
         flowId: flowVersion.flowId,
         unsubscribeUrl,
         token,
+        contact: {
+          id: conversation.contactId,
+          contactInboxId: lineContactInbox?.id ?? contactInbox.id,
+        },
       })
     } catch (err) {
       // Only unusable CONTENT (template gone, invalid document, a bad

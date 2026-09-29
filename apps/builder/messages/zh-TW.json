@@ -7638,5 +7638,16 @@
       "lineNone": "無（透過 SMTP 傳送）",
       "noLines": "尚無 API 頻道收件匣。"
     }
+  },
+  "emailFlowPage": {
+    "confirmTitle": "繼續",
+    "confirmDescription": "點按按鈕以繼續。",
+    "confirmButton": "繼續",
+    "startedTitle": "完成",
+    "startedDescription": "一切就緒：接下來交給我們。",
+    "invalidTitle": "連結無效",
+    "invalidDescription": "此連結無效或已過期。",
+    "unavailableTitle": "無法使用",
+    "unavailableDescription": "此連結已無法使用。"
   }
 }

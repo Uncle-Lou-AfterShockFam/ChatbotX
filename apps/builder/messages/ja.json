@@ -7638,5 +7638,16 @@
       "lineNone": "なし (SMTP で送信)",
       "noLines": "API チャネルの受信箱がまだありません。"
     }
+  },
+  "emailFlowPage": {
+    "confirmTitle": "続行",
+    "confirmDescription": "ボタンをタップして続行してください。",
+    "confirmButton": "続行",
+    "startedTitle": "完了",
+    "startedDescription": "準備が整いました。この後はこちらで対応します。",
+    "invalidTitle": "無効なリンク",
+    "invalidDescription": "このリンクは無効か、期限切れです。",
+    "unavailableTitle": "利用できません",
+    "unavailableDescription": "このリンクは現在利用できません。"
   }
 }

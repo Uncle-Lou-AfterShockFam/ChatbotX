@@ -1,4 +1,8 @@
-import { mediaLibraryService, signEmailClickUrl } from "@chatbotx.io/business"
+import {
+  mediaLibraryService,
+  signEmailClickUrl,
+  signEmailFlowToken,
+} from "@chatbotx.io/business"
 import { emailTemplateService } from "@chatbotx.io/business/email-templates"
 import { ChatbotXException } from "@chatbotx.io/business/errors"
 import type { InboxWithIntegrations } from "@chatbotx.io/database/types"
@@ -242,6 +246,43 @@ function legacyButton(
   } as Extract<PageElementSchema, { type: "button" }>
 }
 
+/**
+ * B2 phase 4 (s222b): a start-flow button whose inbox has no chat to open (an
+ * SMTP or API-channel email line: `buildInboxLink` has no link for them).
+ * The button opens /email-topic/flow with a sealed token naming this exact
+ * contact + contact inbox; its confirm POST starts the flow (a scanner's GET
+ * never does) and counts the click, so it is not wrapped in the click tracker.
+ */
+async function startFlowUrl(props: {
+  appUrl: string
+  button: NonNullable<ReturnType<typeof legacyButton>>
+  workspaceId: string
+  contact: { id: string; contactInboxId: string }
+  token: string | undefined
+}): Promise<string | undefined> {
+  const { button } = props
+  if (
+    button.buttonType !== "startExternalFlow" &&
+    button.buttonType !== "startExternalNode"
+  ) {
+    return
+  }
+  const sealed = await signEmailFlowToken({
+    workspaceId: props.workspaceId,
+    flowId: button.beforeStep.flowId,
+    ...(button.buttonType === "startExternalNode"
+      ? { nodeId: button.beforeStep.nodeId }
+      : {}),
+    contactId: props.contact.id,
+    contactInboxId: props.contact.contactInboxId,
+  })
+  const query = new URLSearchParams({ t: sealed })
+  if (props.token) {
+    query.set("r", props.token)
+  }
+  return `${props.appUrl}/email-topic/flow?${query.toString()}`
+}
+
 /** Everything a document send needs that does NOT depend on the tracking token. */
 export type PreparedDocument = {
   doc: EmailDocument
@@ -348,6 +389,8 @@ export async function renderStepDocument(props: {
   flowId: string | undefined
   unsubscribeUrl: string
   token: string | undefined
+  /** The recipient, for a start-flow button on an email-only inbox (s222b). */
+  contact: { id: string; contactInboxId: string }
 }): Promise<{ html: string; text: string; attachments: MailAttachment[] }> {
   const { prepared, workspaceId, appUrl, token } = props
   const { doc, inputs } = prepared
@@ -384,6 +427,19 @@ export async function renderStepDocument(props: {
       : undefined
     if (url) {
       buttons.set(leaf.id, await track(url))
+      continue
+    }
+    const emailFlowUrl = button
+      ? await startFlowUrl({
+          appUrl,
+          button,
+          workspaceId,
+          contact: props.contact,
+          token,
+        })
+      : undefined
+    if (emailFlowUrl) {
+      buttons.set(leaf.id, emailFlowUrl)
     }
   }
 

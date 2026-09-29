@@ -7638,5 +7638,16 @@
       "lineNone": "Không (gửi qua SMTP)",
       "noLines": "Chưa có hộp thư kênh API nào."
     }
+  },
+  "emailFlowPage": {
+    "confirmTitle": "Tiếp tục",
+    "confirmDescription": "Nhấn nút để tiếp tục.",
+    "confirmButton": "Tiếp tục",
+    "startedTitle": "Xong",
+    "startedDescription": "Mọi thứ đã sẵn sàng: chúng tôi sẽ lo phần còn lại.",
+    "invalidTitle": "Liên kết không hợp lệ",
+    "invalidDescription": "Liên kết này không hợp lệ hoặc đã hết hạn.",
+    "unavailableTitle": "Không khả dụng",
+    "unavailableDescription": "Liên kết này không còn khả dụng."
   }
 }
