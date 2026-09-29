@@ -26,6 +26,7 @@ import { logger } from "../../lib/logger"
 import { syncActiveCampaignContact } from "./active-campaign-handler"
 import { handleAIAnalyzeImage } from "./analyze-image"
 import { appointmentScheduling } from "./appointment-scheduling"
+import { askForm } from "./ask-form"
 import { handleCondition } from "./condition"
 import {
   addContactNotes,
@@ -540,6 +541,7 @@ export const flowStepHandlers: Record<
   [stepTypes.enum.unassignConversation]: stepUnassignConversation,
   [stepTypes.enum.unfollowConversation]: stepUnfollowConversation,
   [stepTypes.enum.getUserData]: getUserData,
+  [stepTypes.enum.askForm]: askForm,
   [stepTypes.enum.wait]: handleWait,
   [stepTypes.enum.followUp]: handleFollowUp,
   [stepTypes.enum.startExternalFlow]: startExternalFlow,

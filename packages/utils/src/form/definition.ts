@@ -281,7 +281,11 @@ export const formFieldProfile = z
       .min(0)
       .max(MAX_FORM_PROFILE_SUBMISSIONS)
       .optional(),
-    /** Always asked, and counted first against `profilingLimit`. */
+    /**
+     * Never cut by the `profilingLimit` budget (counted against it first).
+     * The two rules above still apply: this bypasses the budget only
+     * (Mautic DisplayManager semantics).
+     */
     alwaysDisplay: z.boolean().optional(),
   })
   .strict()
@@ -433,7 +437,8 @@ export const formRule = z
   .strict()
 export type FormRule = z.infer<typeof formRule>
 
-const collectRuleKeys = (
+/** Every field key a condition group reads, depth-first (duplicates kept). */
+export const collectRuleKeys = (
   group: FormConditionGroup,
   into: string[],
 ): string[] => {

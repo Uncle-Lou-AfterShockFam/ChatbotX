@@ -99,6 +99,31 @@ describe("evaluateForm: a skipped step is never reached (s219 A2-2)", () => {
     })
   })
 
+  test("a skip decided by a field ON the jumped step never jumps, so its answer is never erased (skeptic)", () => {
+    const def = parse({
+      steps: [
+        { id: "s1", fields: [{ key: "a", type: "text" }] },
+        { id: "s2", fields: [{ key: "b", type: "text" }] },
+        { id: "s3", fields: [{ key: "c", type: "text" }] },
+      ],
+      rules: [
+        {
+          id: "r1",
+          when: {
+            logic: "AND",
+            rules: [{ fieldKey: "b", op: "eq", value: "hidden" }],
+          },
+          action: { type: "skip_to_step", fromStepId: "s1", toStepId: "s3" },
+        },
+      ],
+    })
+    const values = { a: "x", b: "hidden", c: "y" }
+    const e = evaluateForm(def, values)
+    expect(e.skipMap.size).toBe(0)
+    expect([...e.visibleFields]).toEqual(["a", "b", "c"])
+    expect(pruneFormValues(def, values, e)).toEqual(values)
+  })
+
   test("without the jump every step stays reached", () => {
     const e = evaluateForm(intake(), { name: "Ann", color: "blue" })
     expect([...e.visibleSteps]).toEqual(["s1", "s2", "s3"])

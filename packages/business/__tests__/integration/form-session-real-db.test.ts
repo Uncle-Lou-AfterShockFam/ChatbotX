@@ -32,7 +32,10 @@ vi.mock("@chatbotx.io/redis", async (importOriginal) => ({
   withCache: <T>(_key: string, fn: () => Promise<T>) => fn(),
 }))
 
-const { formSessionService } = await import("../../src/form/session")
+const { formSessionService, FORM_ASK_PENDING_MARKER } = await import(
+  "../../src/form/session"
+)
+type Action = Awaited<ReturnType<typeof formSessionService.answer>>
 
 const databaseUrl = requireRealDatabaseUrl()
 
@@ -48,6 +51,7 @@ const seeded: Record<string, string[]> = {
   FormSession: [],
   Form: [],
   Conversation: [],
+  ContactInbox: [],
   Flow: [],
   Contact: [],
   Workspace: [],
@@ -103,16 +107,41 @@ type World = {
   workspaceId: string
   contactId: string
   conversationId: string
+  contactInboxId: string
   flowId: string
   formId: string
 }
 
+const PHONE_FORM = {
+  steps: [
+    {
+      id: "s1",
+      title: "",
+      fields: [
+        {
+          key: "phone",
+          type: "phone",
+          label: "Phone?",
+          required: true,
+          mapTo: { kind: "system", key: "phoneNumber" },
+        },
+      ],
+    },
+  ],
+  rules: [],
+}
+
 async function seedWorld(
-  props: { contactEmail?: string; channels?: string[] } = {},
+  props: {
+    contactEmail?: string
+    channels?: string[]
+    definition?: unknown
+  } = {},
 ): Promise<World> {
   const workspaceId = mintId()
   const contactId = mintId()
   const conversationId = mintId()
+  const contactInboxId = mintId()
   const flowId = mintId()
   const formId = mintId()
   await asReplica(sql`
@@ -127,17 +156,30 @@ async function seedWorld(
     VALUES (${conversationId}, ${workspaceId}, ${contactId})`)
   seeded.Conversation?.push(conversationId)
   await asReplica(sql`
+    INSERT INTO "ContactInbox" (id, "contactId", "originalContactId", "inboxId",
+                                "sourceId", channel, source)
+    VALUES (${contactInboxId}, ${contactId}, ${contactId}, 1,
+            ${`src-${contactInboxId}`}, 'webchat', 'webchat')`)
+  seeded.ContactInbox?.push(contactInboxId)
+  await asReplica(sql`
     INSERT INTO "Flow" (id, name, "workspaceId") VALUES (${flowId}, 'a2-2', ${workspaceId})`)
   seeded.Flow?.push(flowId)
   const settings = JSON.stringify({ channels: props.channels ?? ["chat"] })
-  const def = JSON.stringify(DEFINITION)
+  const def = JSON.stringify(props.definition ?? DEFINITION)
   await asReplica(sql`
     INSERT INTO "Form" (id, title, slug, status, definition, "publishedDefinition",
                         "definitionVersion", settings, "workspaceId")
     VALUES (${formId}, 'Chat intake', ${`chat-${formId}`}, 'published',
             ${def}::jsonb, ${def}::jsonb, 1, ${settings}::jsonb, ${workspaceId})`)
   seeded.Form?.push(formId)
-  return { workspaceId, contactId, conversationId, flowId, formId }
+  return {
+    workspaceId,
+    contactId,
+    conversationId,
+    contactInboxId,
+    flowId,
+    formId,
+  }
 }
 
 const startInput = (w: World, stepId = "step-1") => ({
@@ -145,6 +187,7 @@ const startInput = (w: World, stepId = "step-1") => ({
   formId: w.formId,
   contactId: w.contactId,
   conversationId: w.conversationId,
+  contactInboxId: w.contactInboxId,
   flowId: w.flowId,
   flowVersionId: null,
   nodeId: "node-1",
@@ -152,14 +195,31 @@ const startInput = (w: World, stepId = "step-1") => ({
   maxAttempts: 2,
 })
 
+/** The worker confirms delivery of every question it asks (markAsked). */
+async function delivered(action: Action): Promise<Action> {
+  if (action.kind === "ask" && action.session.challengeId) {
+    await formSessionService.markAsked({
+      workspaceId: action.session.workspaceId,
+      sessionId: action.session.id,
+      challengeId: action.session.challengeId,
+    })
+  }
+  return action
+}
+
+const start = async (w: World, stepId = "step-1") =>
+  await delivered(await formSessionService.start(startInput(w, stepId)))
+
 /** A reply as the inbound pipeline would store it: a fresh snowflake id. */
-const answer = (w: World, text: string | null, messageId = createId()) =>
-  formSessionService.answer({
-    workspaceId: w.workspaceId,
-    contactId: w.contactId,
-    stepId: "step-1",
-    reply: { messageId, text },
-  })
+const answer = async (w: World, text: string | null, messageId = createId()) =>
+  await delivered(
+    await formSessionService.answer({
+      workspaceId: w.workspaceId,
+      contactId: w.contactId,
+      stepId: "step-1",
+      reply: { messageId, read: () => text },
+    }),
+  )
 
 async function track(w: World): Promise<void> {
   const rows = await db.execute<{ id: string; kind: string }>(sql`
@@ -231,7 +291,7 @@ afterAll(async () => {
 describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
   test("a full run: preface once, every question in order, ONE chat submission, fields filled, one event", async () => {
     const w = await seedWorld()
-    const first = await formSessionService.start(startInput(w))
+    const first = await start(w)
     expect(first.kind).toBe("ask")
     if (first.kind !== "ask") {
       return
@@ -272,7 +332,7 @@ describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
   test("a redelivered message and a reply older than the question are ignored", async () => {
     const w = await seedWorld()
     const early = createId() // sent before the question existed
-    await formSessionService.start(startInput(w))
+    await start(w)
     const messageId = createId()
     const ok = await answer(w, "Ada", messageId)
     expect(ok.kind === "ask" && ok.field.key).toBe("color")
@@ -293,7 +353,7 @@ describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
 
   test("two replies racing for one question: exactly one advances, the other is stale", async () => {
     const w = await seedWorld()
-    await formSessionService.start(startInput(w))
+    await start(w)
     const a = createId()
     const b = createId()
     const results = await Promise.all([answer(w, "Ada", a), answer(w, "Bo", b)])
@@ -306,7 +366,7 @@ describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
 
   test("two final replies racing: one completion, one submission, one event", async () => {
     const w = await seedWorld({ contactEmail: "known@example.com" })
-    await formSessionService.start(startInput(w))
+    await start(w)
     await answer(w, "Ada")
     await answer(w, "1")
     // email is known -> not asked; notes is last
@@ -322,7 +382,7 @@ describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
 
   test("progressive profiling: a known email is never asked and never required", async () => {
     const w = await seedWorld({ contactEmail: "known@example.com" })
-    await formSessionService.start(startInput(w))
+    await start(w)
     await answer(w, "Ada")
     const next = await answer(w, "red")
     expect(next.kind === "ask" && next.field.key).toBe("notes")
@@ -334,7 +394,7 @@ describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
 
   test("exhausting the attempts ends the run skipped; no submission", async () => {
     const w = await seedWorld()
-    await formSessionService.start(startInput(w))
+    await start(w)
     await answer(w, "Ada")
     const retry = await answer(w, "green")
     expect(retry.kind === "ask" && retry.retry).toBe(true)
@@ -350,7 +410,7 @@ describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
 
   test("a required question cannot be skipped", async () => {
     const w = await seedWorld()
-    await formSessionService.start(startInput(w))
+    await start(w)
     const r = await answer(w, "skip")
     // "skip" is a valid NAME answer (text); the required rule is about the
     // skip word only on optional fields, so this stores "skip" as the name.
@@ -367,7 +427,7 @@ describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
       INSERT INTO "Contact" (id, "workspaceId", email)
       VALUES (${other}, ${w.workspaceId}, 'taken@example.com')`)
     seeded.Contact?.push(other)
-    await formSessionService.start(startInput(w))
+    await start(w)
     await answer(w, "Ada")
     await answer(w, "1")
     await answer(w, "taken@example.com")
@@ -381,14 +441,14 @@ describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
 
   test("one run per contact: the same step resumes, another step cancels and replaces", async () => {
     const w = await seedWorld()
-    const a = await formSessionService.start(startInput(w))
-    const again = await formSessionService.start(startInput(w))
+    const a = await start(w)
+    const again = await start(w)
     expect(a.kind === "ask" && again.kind === "ask").toBe(true)
     if (a.kind !== "ask" || again.kind !== "ask") {
       return
     }
     expect(again.session.id).toBe(a.session.id)
-    const replaced = await formSessionService.start(startInput(w, "step-2"))
+    const replaced = await start(w, "step-2")
     expect(replaced.kind === "ask" && replaced.session.id).not.toBe(
       a.session.id,
     )
@@ -400,10 +460,7 @@ describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
 
   test("two starts racing for one contact: one run, the loser is busy", async () => {
     const w = await seedWorld()
-    const results = await Promise.all([
-      formSessionService.start(startInput(w, "step-a")),
-      formSessionService.start(startInput(w, "step-b")),
-    ])
+    const results = await Promise.all([start(w, "step-a"), start(w, "step-b")])
     await track(w)
     const active = await db.execute<{ n: number }>(sql`
       SELECT count(*)::int AS n FROM "FormSession"
@@ -412,34 +469,124 @@ describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
     expect(results.some((r) => r.kind === "ask")).toBe(true)
   })
 
-  test("the expiry sweep racing an answer: exactly one ends or advances the run", async () => {
+  test("the expiry sweep racing an answer: the answer never revives the run, which ends expired once", async () => {
     const w = await seedWorld()
-    const started = await formSessionService.start(startInput(w))
+    const started = await start(w)
     if (started.kind !== "ask") {
       throw new Error("expected ask")
     }
     await db.execute(sql`
       UPDATE "FormSession" SET "expiresAt" = now() - interval '1 minute'
        WHERE id = ${started.session.id}`)
-    const [expired, answered] = await Promise.all([
+    const [first, answered] = await Promise.all([
       formSessionService.expireDue(),
       answer(w, "Ada"),
     ])
-    const mine = expired.filter((s) => s.id === started.session.id)
-    const advanced = answered.kind === "ask"
-    // XOR: either the sweep ended it (and the answer found no run) or the
-    // answer advanced it (and the sweep skipped the locked / refreshed row).
-    expect(mine.length === 1).toBe(!advanced)
-    if (mine.length === 1) {
-      expect(mine[0]?.challengeId).toBe(started.session.challengeId)
-      expect(answered).toEqual({ kind: "ignored", reason: "noSession" })
-    }
+    expect(answered.kind).toBe("ignored")
+    // A pass that met the row locked by the answer skips it; the next ends it.
+    const second = await formSessionService.expireDue()
+    const mine = [...first, ...second].filter(
+      (s) => s.id === started.session.id,
+    )
+    expect(mine).toHaveLength(1)
+    expect(mine[0]?.challengeId).toBe(started.session.challengeId)
     await track(w)
   })
 
+  test("a reply stored before the question was delivered never answers it", async () => {
+    const w = await seedWorld()
+    const raw = await formSessionService.start(startInput(w))
+    if (raw.kind !== "ask") {
+      throw new Error("expected ask")
+    }
+    expect(raw.session.askMarker).toBe(FORM_ASK_PENDING_MARKER)
+    expect(await answer(w, "too early")).toEqual({
+      kind: "ignored",
+      reason: "stale",
+    })
+    await delivered(raw)
+    const ok = await answer(w, "Ada")
+    expect(ok.kind === "ask" && ok.field.key).toBe("color")
+    // A second confirmation of the OLD question never reopens it.
+    expect(
+      await formSessionService.markAsked({
+        workspaceId: w.workspaceId,
+        sessionId: raw.session.id,
+        challengeId: raw.session.challengeId ?? "",
+      }),
+    ).toBe(false)
+    await track(w)
+  })
+
+  test("a retry retires the previous challenge id (a late picker submit is stale)", async () => {
+    const w = await seedWorld()
+    const first = await start(w)
+    await answer(w, "Ada")
+    const asked = await answer(w, "green")
+    if (first.kind !== "ask" || asked.kind !== "ask") {
+      throw new Error("expected ask")
+    }
+    const colorAsk = await formSessionService.findActive({
+      workspaceId: w.workspaceId,
+      contactId: w.contactId,
+    })
+    expect(colorAsk?.challengeId).not.toBe(first.session.challengeId)
+    expect(
+      await formSessionService.answer({
+        workspaceId: w.workspaceId,
+        contactId: w.contactId,
+        stepId: "step-1",
+        reply: { challengeId: first.session.challengeId ?? "", text: "red" },
+      }),
+    ).toEqual({ kind: "ignored", reason: "stale" })
+    await track(w)
+  })
+
+  test("a reply after the timeout is ignored even before the sweep ran", async () => {
+    const w = await seedWorld()
+    await start(w)
+    await db.execute(sql`
+      UPDATE "FormSession" SET "expiresAt" = now() - interval '1 minute'
+       WHERE "contactId" = ${w.contactId}`)
+    expect(await answer(w, "Ada")).toEqual({
+      kind: "ignored",
+      reason: "expired",
+    })
+    await track(w)
+  })
+
+  test("an id past int8 is stale, never a database error", async () => {
+    const w = await seedWorld()
+    await start(w)
+    expect(await answer(w, "Ada", "9999999999999999999")).toEqual({
+      kind: "ignored",
+      reason: "stale",
+    })
+    await track(w)
+  })
+
+  test("pool: more concurrent phone-mapped completions than pool connections all complete", async () => {
+    const worlds = await Promise.all(
+      Array.from({ length: 12 }, () => seedWorld({ definition: PHONE_FORM })),
+    )
+    for (const w of worlds) {
+      expect((await start(w)).kind).toBe("ask")
+    }
+    const t0 = Date.now()
+    const results = await Promise.all(
+      worlds.map((w, i) => answer(w, `+1215555${String(1000 + i)}`)),
+    )
+    expect(results.map((r) => r.kind)).toEqual(worlds.map(() => "completed"))
+    // The probe's deadlock waited out the 10 s connection timeout.
+    expect(Date.now() - t0).toBeLessThan(5000)
+    for (const w of worlds) {
+      await track(w)
+    }
+  }, 60_000)
+
   test("a form that is not published for chat is unavailable", async () => {
     const w = await seedWorld({ channels: ["web"] })
-    expect(await formSessionService.start(startInput(w))).toEqual({
+    expect(await start(w)).toEqual({
       kind: "unavailable",
       reason: "formNotFound",
     })

@@ -205,6 +205,20 @@ export const registerSchedules = async () => {
   )
 
   await scheduleQueue.upsertJobScheduler(
+    ScheduleJobData.sweepFormSessions,
+    {
+      pattern: "* * * * *",
+    },
+    {
+      name: ScheduleJobData.sweepFormSessions,
+      data: {
+        type: ScheduleJobData.sweepFormSessions,
+        data: {},
+      },
+    },
+  )
+
+  await scheduleQueue.upsertJobScheduler(
     ScheduleJobData.scanAppointmentReminders,
     {
       pattern: "*/5 * * * *",

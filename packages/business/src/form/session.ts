@@ -11,6 +11,7 @@ import {
 } from "@chatbotx.io/database/client"
 import {
   evaluateForm,
+  type FormChatPlan,
   type FormDefinition,
   type FormField,
   type FormSessionProfile,
@@ -76,7 +77,7 @@ export type FormChatAction =
   | { kind: "unavailable"; reason: "formNotFound" | "busy" }
   | {
       kind: "ignored"
-      reason: "noSession" | "duplicate" | "stale" | "otherStep"
+      reason: "noSession" | "duplicate" | "stale" | "otherStep" | "expired"
     }
 
 export type StartFormSessionInput = {
@@ -84,18 +85,29 @@ export type StartFormSessionInput = {
   formId: string
   contactId: string
   conversationId: string
+  contactInboxId: string
   flowId: string
   flowVersionId: string | null
   nodeId: string
   stepId: string
+  /** When the flow run began; the sweep re-enters the flow with it. */
+  runStartedAt?: Date | null
   timeoutMinutes?: number
   maxAttempts?: number
   now?: Date
 }
 
-/** The reply being answered: a stored message, or a picker's challenge id. */
+/**
+ * The reply being answered: a stored message, or a picker's challenge id.
+ * A message is read UNDER the row lock, against the question it actually
+ * answers (a photo, a location and a date each read differently), so a reply
+ * that raced the previous answer is never parsed as the wrong field.
+ */
 export type FormChatReply =
-  | { messageId: string; text: string | null }
+  | {
+      messageId: string
+      read: (field: FormField) => Promise<string | null> | string | null
+    }
   | { challengeId: string; text: string | null }
 
 export type AnswerFormSessionInput = {
@@ -130,10 +142,23 @@ const addMinutes = (at: Date, minutes: number): Date =>
   new Date(at.getTime() + minutes * 60_000)
 
 const SNOWFLAKE_RE = /^\d{1,19}$/
+const INT8_MAX = 2n ** 63n - 1n
+
+/**
+ * `askMarker` while the question is not yet delivered: no message id is
+ * above it, so nothing answers a question the contact has not seen. The
+ * worker swaps in a real marker once the send completed (`markAsked`).
+ */
+export const FORM_ASK_PENDING_MARKER = INT8_MAX.toString()
 
 /** Snowflake ids only; anything else can never be compared to the marker. */
-const toSnowflake = (value: string): bigint | null =>
-  SNOWFLAKE_RE.test(value) ? BigInt(value) : null
+const toSnowflake = (value: string): bigint | null => {
+  if (!SNOWFLAKE_RE.test(value)) {
+    return null
+  }
+  const id = BigInt(value)
+  return id <= INT8_MAX ? id : null
+}
 
 const readValues = (raw: unknown): FormValues =>
   isPlainRecord(raw) ? (raw as FormValues) : {}
@@ -218,6 +243,8 @@ export class FormSessionService {
             formId: form.id,
             contactId: input.contactId,
             conversationId: input.conversationId,
+            contactInboxId: input.contactInboxId,
+            runStartedAt: input.runStartedAt ?? null,
             flowId: input.flowId,
             flowVersionId: input.flowVersionId,
             nodeId: input.nodeId,
@@ -262,6 +289,11 @@ export class FormSessionService {
       if (session.stepId !== input.stepId) {
         return { action: { kind: "ignored", reason: "otherStep" } }
       }
+      if (session.expiresAt.getTime() <= now.getTime()) {
+        // Past its timeout: the sweep ends it and routes skip; a late reply
+        // must not revive it in between.
+        return { action: { kind: "ignored", reason: "expired" } }
+      }
       const verdict = this.acceptReply(session, input.reply)
       if (verdict) {
         return { action: { kind: "ignored", reason: verdict } }
@@ -277,7 +309,10 @@ export class FormSessionService {
       const asked = readAsked(session.asked)
       const messageId =
         "messageId" in input.reply ? input.reply.messageId : null
-      const text = input.reply.text
+      const text =
+        "messageId" in input.reply
+          ? await input.reply.read(field)
+          : input.reply.text
       const required = evaluateForm(
         this.definitionOf(session),
         values,
@@ -317,9 +352,11 @@ export class FormSessionService {
           .update(formSessionModel)
           .set({
             attempts,
-            // A fresh marker: the retry is a new question, so a reply sent
-            // before it (a second bad answer in flight) cannot answer it.
-            askMarker: createId(),
+            // The retry is a new question: nothing answers it until it is
+            // delivered (a second bad answer in flight is stale), and a new
+            // challenge id retires the previous picker link (skeptic, s219).
+            askMarker: FORM_ASK_PENDING_MARKER,
+            challengeId: createId(),
             lastAnsweredMessageId: messageId ?? session.lastAnsweredMessageId,
             expiresAt: addMinutes(now, session.timeoutMinutes),
           })
@@ -422,6 +459,53 @@ export class FormSessionService {
         ),
       )
       .returning()
+  }
+
+  /**
+   * The question was delivered: from now on a NEWER message may answer it.
+   * Compare-and-set on the pending marker + challengeId, so a stale send
+   * confirmation never reopens a question another reply already moved past.
+   */
+  async markAsked(props: {
+    workspaceId: string
+    sessionId: string
+    challengeId: string
+  }): Promise<boolean> {
+    const rows = await db
+      .update(formSessionModel)
+      .set({ askMarker: createId() })
+      .where(
+        and(
+          eq(formSessionModel.workspaceId, props.workspaceId),
+          eq(formSessionModel.id, props.sessionId),
+          eq(formSessionModel.status, "inProgress"),
+          eq(formSessionModel.challengeId, props.challengeId),
+          eq(formSessionModel.askMarker, FORM_ASK_PENDING_MARKER),
+        ),
+      )
+      .returning({ id: formSessionModel.id })
+    return rows.length > 0
+  }
+
+  /** One run by id, any status (no lock; the expiry re-entry checks it). */
+  async findById(props: {
+    workspaceId: string
+    id: string
+  }): Promise<FormSessionModel | undefined> {
+    if (!SNOWFLAKE_RE.test(props.id)) {
+      return
+    }
+    const [row] = await db
+      .select()
+      .from(formSessionModel)
+      .where(
+        and(
+          eq(formSessionModel.workspaceId, props.workspaceId),
+          eq(formSessionModel.id, props.id),
+        ),
+      )
+      .limit(1)
+    return row
   }
 
   /** The contact's running form, if any (no lock; for routing only). */
@@ -527,32 +611,56 @@ export class FormSessionService {
       limit: profile.limit,
     })
     const nextAsked = [...asked, ...plan.preface.map((f) => f.key)]
-    if (plan.next) {
-      const [updated] = await tx
-        .update(formSessionModel)
-        .set({
-          values,
-          asked: nextAsked,
-          currentFieldKey: plan.next.key,
-          askMarker: createId(),
-          challengeId: createId(),
-          attempts: 0,
-          lastAnsweredMessageId: messageId ?? session.lastAnsweredMessageId,
-          expiresAt: addMinutes(now, session.timeoutMinutes),
-        })
-        .where(eq(formSessionModel.id, session.id))
-        .returning()
-      return {
-        action: {
-          kind: "ask",
-          session: updated,
-          field: plan.next,
-          preface: plan.preface,
-          retry: false,
-        },
-      }
+    if (!plan.next) {
+      return await this.finishRun(tx, session, {
+        def,
+        plan,
+        values,
+        asked: nextAsked,
+        now,
+        messageId,
+      })
     }
+    const [updated] = await tx
+      .update(formSessionModel)
+      .set({
+        values,
+        asked: nextAsked,
+        currentFieldKey: plan.next.key,
+        askMarker: FORM_ASK_PENDING_MARKER,
+        challengeId: createId(),
+        attempts: 0,
+        lastAnsweredMessageId: messageId ?? session.lastAnsweredMessageId,
+        expiresAt: addMinutes(now, session.timeoutMinutes),
+      })
+      .where(eq(formSessionModel.id, session.id))
+      .returning()
+    return {
+      action: {
+        kind: "ask",
+        session: updated,
+        field: plan.next,
+        preface: plan.preface,
+        retry: false,
+      },
+    }
+  }
 
+  /** Nothing left to ask: validate, write the contact, insert the ONE submission. */
+  private async finishRun(
+    tx: DatabaseClient,
+    session: FormSessionModel,
+    run: {
+      def: FormDefinition
+      plan: FormChatPlan
+      values: FormValues
+      asked: string[]
+      now: Date
+      messageId: string | null
+    },
+  ): Promise<Step> {
+    const { def, plan, values, now, messageId } = run
+    const nextAsked = run.asked
     const issues = validateFormSubmission(def, values, plan.evaluation, {
       suppressed: plan.suppressed,
     })
@@ -668,6 +776,7 @@ export class FormSessionService {
       workspaceId: session.workspaceId,
       def,
       values,
+      tx,
     })
     if ("issue" in found) {
       // The phone answer passed the field check but not libphonenumber: it

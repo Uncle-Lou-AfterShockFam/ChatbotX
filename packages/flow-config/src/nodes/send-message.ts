@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { actionSteps } from "../shared"
+import { askFormStepSchema } from "../steps/ask-form"
 import { bulktextSendStepSchema } from "../steps/bulktext-send"
 import { buttonStepSchema } from "../steps/button"
 import {
@@ -47,6 +48,7 @@ export const sendMessageNodeSchema = baseNodeSchema.extend({
           // sendCardStepSchema,
           sendCarouselStepSchema,
           getUserDataStepSchema,
+          askFormStepSchema,
           sendGifStepSchema,
           typingStepSchema,
           sendWaTemplateMessageStepSchema,
@@ -95,6 +97,7 @@ export const APPOINTMENT_AVAILABILITY_RANGE_SKIPPED_PAYLOAD_TYPE =
   "appointmentAvailabilityRangeSkipped"
 export const GET_USER_DATA_WEBVIEW_SELECTION_PAYLOAD_TYPE =
   "getUserDataWebviewSelection"
+export const ASK_FORM_EXPIRED_PAYLOAD_TYPE = "askFormExpired"
 
 export const baseMetadataPayload = z.object({
   stepId: z.string().optional(),
@@ -171,6 +174,18 @@ export const getUserDataWebviewSelectionPayload = baseMetadataPayload.extend({
   selectedValue: z.iso.datetime(),
 })
 
+/**
+ * The form-run expiry sweep re-enters the flow at the askForm step with this
+ * marker, so the step routes its `skip` state through the normal machinery
+ * (s219 A2-2). The step acts on it only while that run is still `expired`.
+ */
+export const askFormExpiredPayload = baseMetadataPayload.extend({
+  type: z.literal(ASK_FORM_EXPIRED_PAYLOAD_TYPE),
+  stepId: z.string(),
+  formSessionId: z.string(),
+})
+export type AskFormExpiredPayload = z.infer<typeof askFormExpiredPayload>
+
 export type BroadcastMetadataPayload = z.infer<typeof broadcastMetadataPayload>
 
 export type SequenceScheduleMetadataPayload = z.infer<
@@ -190,6 +205,7 @@ export const metadataSchema = z.discriminatedUnion("type", [
   appointmentAvailabilityRangeSelectionPayload,
   appointmentAvailabilityRangeSkippedPayload,
   getUserDataWebviewSelectionPayload,
+  askFormExpiredPayload,
 ])
 
 export type MetadataPayload = z.infer<typeof metadataSchema>

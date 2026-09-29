@@ -47,7 +47,7 @@ const questionText = (question: QuestionnaireQuestionModel): string => {
 // channels (WhatsApp, Zalo, TikTok, ...) keep the numbered-text fallback.
 // ContactInboxModel.channel is a plain text column (not the ChannelType
 // pgEnum), so this is checked against the raw string value.
-const QUICK_REPLY_CHANNELS = new Set([
+export const QUICK_REPLY_CHANNELS: ReadonlySet<string> = new Set([
   "messenger",
   "instagram",
   "telegram",

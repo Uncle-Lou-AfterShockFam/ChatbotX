@@ -1,3 +1,4 @@
+import { askFormStep } from "./ask-form"
 import { type StepType, stepTypes } from "@chatbotx.io/flow-config"
 import { memo } from "react"
 import { activeCampaignSyncContactStep } from "./active-campaign-sync-contact"
@@ -108,6 +109,7 @@ export const allSteps: Record<StepType, StepDefinition<any> | undefined> = {
   [stepTypes.enum.sendCard]: sendCarouselStep,
   [stepTypes.enum.sendCarousel]: sendCarouselStep,
   [stepTypes.enum.getUserData]: getUserDataStep,
+  [stepTypes.enum.askForm]: askFormStep,
   [stepTypes.enum.sendVideo]: sendVideoStep,
   [stepTypes.enum.sendWaTemplateMessage]: sendWaTemplateMessageStep,
   [stepTypes.enum.sendGif]: sendGifStep,

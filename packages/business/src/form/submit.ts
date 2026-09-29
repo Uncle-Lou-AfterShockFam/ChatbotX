@@ -449,16 +449,18 @@ export class FormSubmitService {
     return out
   }
 
-  /** The phone / email answers mapped to the contact, normalised. */
+  /** The phone / email answers mapped to the contact, normalised. Shared with FormSessionService (s219 A2-2). */
   async identityOf(props: {
     workspaceId: string
     def: FormDefinition
     values: FormValues
+    /** Inside a transaction, the workspace read MUST use it (one pool connection per tx). */
+    tx?: DatabaseClient
   }): Promise<
     | { identity: Identity; keys: { phone?: string; email?: string } }
     | { issue: FormValidationIssue }
   > {
-    const { workspaceId, def, values } = props
+    const { workspaceId, def, values, tx } = props
     let phoneKey: string | undefined
     let emailKey: string | undefined
     for (const field of formInputFields(def)) {
@@ -477,6 +479,7 @@ export class FormSubmitService {
     if (typeof rawPhone === "string" && rawPhone.trim() !== "") {
       const workspace = await workspaceService.find({
         where: { id: workspaceId },
+        tx,
       })
       const parsed = parsePhoneNumberFromString(
         rawPhone,
@@ -631,7 +634,7 @@ export class FormSubmitService {
     return out
   }
 
-  /** Non-blank mapped answers -> system fields and custom fields, inside `tx`. */
+  /** Non-blank mapped answers -> system fields and custom fields, inside `tx`. Shared with FormSessionService (s219 A2-2). */
   async writeMappedFields(props: {
     workspaceId: string
     contactId: string
@@ -790,7 +793,7 @@ export class FormSubmitService {
     )
   }
 
-  /** What the contact already holds for the mapped fields (blank = absent). */
+  /** What the contact already holds for the mapped fields (blank = absent). Shared with FormSessionService (s219 A2-2). */
   async storedValues(props: {
     workspaceId: string
     contactId: string

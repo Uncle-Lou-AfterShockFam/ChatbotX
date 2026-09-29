@@ -32,6 +32,7 @@ import {
 } from "../partials/shared"
 import { userModel } from "./auth-user"
 import { contactModel } from "./contact"
+import { contactInboxModel } from "./contact-inbox"
 import { conversationModel } from "./conversation"
 import { flowModel } from "./flow"
 import { inboxModel } from "./inbox"
@@ -212,6 +213,13 @@ export const formSessionModel = pgTable(
         onDelete: "cascade",
         onUpdate: "cascade",
       }),
+    /** The channel identity the run asks on (the sweep re-enters the flow with it). */
+    contactInboxId: bigintAsString()
+      .notNull()
+      .references(() => contactInboxModel.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
     flowId: bigintAsString()
       .notNull()
       .references(() => flowModel.id, {
@@ -219,6 +227,8 @@ export const formSessionModel = pgTable(
         onUpdate: "cascade",
       }),
     flowVersionId: bigintAsString(),
+    /** When the flow run that started this form began (company-stop guard). */
+    runStartedAt: timestamp(timestampConfig),
     nodeId: text().notNull(),
     stepId: text().notNull(),
     status: formSessionStatus().notNull().default("inProgress"),

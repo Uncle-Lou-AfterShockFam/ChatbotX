@@ -8,8 +8,10 @@ CREATE TABLE "FormSession" (
 	"formId" bigint NOT NULL,
 	"contactId" bigint NOT NULL,
 	"conversationId" bigint NOT NULL,
+	"contactInboxId" bigint NOT NULL,
 	"flowId" bigint NOT NULL,
 	"flowVersionId" bigint,
+	"runStartedAt" timestamp(6) with time zone,
 	"nodeId" text NOT NULL,
 	"stepId" text NOT NULL,
 	"status" "formSessionStatus" DEFAULT 'inProgress'::"formSessionStatus" NOT NULL,
@@ -45,6 +47,7 @@ ALTER TABLE "FormSession" ADD CONSTRAINT "FormSession_workspaceId_Workspace_id_f
 ALTER TABLE "FormSession" ADD CONSTRAINT "FormSession_formId_Form_id_fkey" FOREIGN KEY ("formId") REFERENCES "Form"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
 ALTER TABLE "FormSession" ADD CONSTRAINT "FormSession_contactId_Contact_id_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
 ALTER TABLE "FormSession" ADD CONSTRAINT "FormSession_conversationId_Conversation_id_fkey" FOREIGN KEY ("conversationId") REFERENCES "Conversation"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
+ALTER TABLE "FormSession" ADD CONSTRAINT "FormSession_contactInboxId_ContactInbox_id_fkey" FOREIGN KEY ("contactInboxId") REFERENCES "ContactInbox"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
 ALTER TABLE "FormSession" ADD CONSTRAINT "FormSession_flowId_Flow_id_fkey" FOREIGN KEY ("flowId") REFERENCES "Flow"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
 ALTER TABLE "FormSubmission" ADD CONSTRAINT "FormSubmission_conversationId_Conversation_id_fkey" FOREIGN KEY ("conversationId") REFERENCES "Conversation"("id") ON DELETE SET NULL ON UPDATE CASCADE;--> statement-breakpoint
 ALTER TABLE "FormSubmission" ADD CONSTRAINT "FormSubmission_formSessionId_FormSession_id_fkey" FOREIGN KEY ("formSessionId") REFERENCES "FormSession"("id") ON DELETE SET NULL ON UPDATE CASCADE;--> statement-breakpoint

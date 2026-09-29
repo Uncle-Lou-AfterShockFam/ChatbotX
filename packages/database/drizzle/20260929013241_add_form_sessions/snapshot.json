@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "a0a63942-8473-4b73-8be3-84ce89bcfddc",
+  "id": "ac0a8a46-3de4-41a6-86e6-0e865d3eb917",
   "prevIds": [
     "de58d776-c876-404b-906f-bf9a37edad48"
   ],
@@ -16901,6 +16901,19 @@
       "default": null,
       "generated": null,
       "identity": null,
+      "name": "contactInboxId",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "FormSession"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
       "name": "flowId",
       "entityType": "columns",
       "schema": "public",
@@ -16915,6 +16928,19 @@
       "generated": null,
       "identity": null,
       "name": "flowVersionId",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "FormSession"
+    },
+    {
+      "type": "timestamp(6) with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "runStartedAt",
       "entityType": "columns",
       "schema": "public",
       "table": "FormSession"
@@ -49550,6 +49576,23 @@
       "onUpdate": "CASCADE",
       "onDelete": "CASCADE",
       "name": "FormSession_conversationId_Conversation_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "FormSession"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "contactInboxId"
+      ],
+      "schemaTo": "public",
+      "tableTo": "ContactInbox",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "CASCADE",
+      "onDelete": "CASCADE",
+      "name": "FormSession_contactInboxId_ContactInbox_id_fkey",
       "entityType": "fks",
       "schema": "public",
       "table": "FormSession"

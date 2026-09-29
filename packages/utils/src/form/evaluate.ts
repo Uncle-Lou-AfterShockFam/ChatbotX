@@ -1,4 +1,5 @@
 import {
+  collectRuleKeys,
   FORM_LIST_FIELD_TYPES,
   FORM_OPTION_FIELD_TYPES,
   type FormConditionGroup,
@@ -210,10 +211,24 @@ export function evaluateForm(
   const requires = new Set<string>()
   const optionals = new Set<string>()
   const fieldStep = new Map<string, string>()
-  for (const step of def.steps) {
+  const stepIndex = new Map<string, number>()
+  for (const [index, step] of def.steps.entries()) {
+    stepIndex.set(step.id, index)
     for (const field of step.fields) {
       fieldStep.set(field.key, step.id)
     }
+  }
+  // A jump may only be decided by answers the contact gave BEFORE leaving
+  // its source step. A rule that reads a field on a step it would jump over
+  // would, once answered, erase its own answer (skeptic, s219 A2-2): such a
+  // rule never jumps.
+  const decidedBeforeJump = (when: FormConditionGroup, fromStepId: string) => {
+    const from = stepIndex.get(fromStepId) ?? -1
+    return collectRuleKeys(when, []).every(
+      (key) =>
+        (stepIndex.get(fieldStep.get(key) ?? "") ?? Number.POSITIVE_INFINITY) <=
+        from,
+    )
   }
   for (const rule of def.rules) {
     if (!evaluateFormCondition(rule.when, read)) {
@@ -234,7 +249,10 @@ export function evaluateForm(
         optionals.add(action.fieldKey)
         break
       case "skip_to_step":
-        if (!skipMap.has(action.fromStepId)) {
+        if (
+          !skipMap.has(action.fromStepId) &&
+          decidedBeforeJump(rule.when, action.fromStepId)
+        ) {
           skipMap.set(action.fromStepId, action.toStepId)
         }
         break

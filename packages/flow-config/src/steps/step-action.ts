@@ -26,6 +26,7 @@ export const stepTypes = z.enum([
   "wait",
   "followUp",
   "getUserData",
+  "askForm",
   "typing",
 
   // Contact Operations (C_)
