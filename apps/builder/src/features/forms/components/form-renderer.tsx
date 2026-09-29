@@ -309,8 +309,9 @@ const numericValue = (value: FormValue): number | null => {
 
 /**
  * s220c A2-4: a native range input (keyboard + screen readers for free). It
- * has no "empty" position, so until the visitor moves it the value reads
- * "-" and a required slider stays unanswered.
+ * has no "empty" position: until the visitor clicks or keys it the THUMB is
+ * hidden (a knob sitting mid-track looked answered; skeptic s220c), the
+ * value reads "-", and a required slider stays unanswered.
  */
 function SliderInput(props: {
   field: FormField
@@ -328,15 +329,24 @@ function SliderInput(props: {
       <input
         aria-invalid={invalid}
         aria-valuetext={current === null ? "-" : String(current)}
-        className="h-2 min-w-0 flex-1 cursor-pointer accent-primary disabled:cursor-not-allowed"
+        className={cn(
+          "h-2 min-w-0 flex-1 cursor-pointer accent-primary disabled:cursor-not-allowed",
+          current === null &&
+            "[&::-moz-range-thumb]:opacity-0 [&::-webkit-slider-thumb]:opacity-0",
+        )}
+        data-unanswered={current === null ? "true" : undefined}
         disabled={disabled}
         id={id}
         max={max}
         min={min}
         onChange={(e) => onChange(Number(e.target.value))}
+        // a click or key on the hidden thumb's own spot (min, or Home at min)
+        // fires no change event: commit what the control shows
+        onKeyUp={(e) => onChange(Number(e.currentTarget.value))}
+        onPointerUp={(e) => onChange(Number(e.currentTarget.value))}
         step={step}
         type="range"
-        value={current ?? (min + max) / 2}
+        value={current ?? min}
       />
       <output
         className="w-12 shrink-0 text-right text-sm tabular-nums"

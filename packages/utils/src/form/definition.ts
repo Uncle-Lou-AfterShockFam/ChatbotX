@@ -110,6 +110,11 @@ export const FORM_LIST_FIELD_TYPES: ReadonlySet<WebFormFieldType> = new Set([
  */
 export const FORM_CHAT_ONLY_FIELD_TYPES: ReadonlySet<WebFormFieldType> =
   new Set(["image", "file", "location"])
+/** s220c A2-4: answered with a number on a bounded scale (slider, rating). */
+export const FORM_SCALE_FIELD_TYPES: ReadonlySet<WebFormFieldType> = new Set([
+  "slider",
+  "rating",
+])
 /** Field types that must carry `options`. */
 export const FORM_OPTION_FIELD_TYPES: ReadonlySet<WebFormFieldType> = new Set([
   "select",
@@ -383,7 +388,7 @@ export const formField = z
       }
     }
     if (
-      (field.type === "slider" || field.type === "rating") &&
+      FORM_SCALE_FIELD_TYPES.has(field.type) &&
       field.mapTo?.kind === "system"
     ) {
       ctx.addIssue({

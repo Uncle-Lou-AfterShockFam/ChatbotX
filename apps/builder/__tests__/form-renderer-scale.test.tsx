@@ -69,6 +69,14 @@ describe("slider + rating inputs (s220c A2-4)", () => {
     expect(el.querySelector('[data-testid="t-mood-value"]')?.textContent).toBe(
       "-",
     )
+    // unanswered: the thumb is hidden and parked at min, never mid-track
+    expect(range?.dataset.unanswered).toBe("true")
+    expect(range?.value).toBe("0")
+    act(() => {
+      range?.dispatchEvent(new Event("pointerup", { bubbles: true }))
+    })
+    // a click on the parked spot answers min (no change event fires there)
+    expect(onChange).toHaveBeenCalledWith("mood", 0)
     act(() => {
       const setter = Object.getOwnPropertyDescriptor(
         HTMLInputElement.prototype,

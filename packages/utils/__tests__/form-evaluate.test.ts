@@ -750,6 +750,18 @@ describe("slider + rating", () => {
     expect(validateFormField(slider, -0.1)).toBe("min")
     expect(validateFormField(slider, 1.1)).toBe("max")
     expect(validateFormField(slider, "abc")).toBe("number")
+    // a wide range with a fractional step: rounding noise is not "off step"
+    const wide = {
+      key: "w",
+      type: "slider",
+      label: "W",
+      required: false,
+      min: 0,
+      max: 1e12,
+      step: 0.3,
+    } as never
+    expect(validateFormField(wide, 0.3 * 3_000_000_001)).toBeNull()
+    expect(validateFormField(wide, 0.3 * 3_000_000_001 + 0.15)).toBe("number")
     const rating = {
       key: "r",
       type: "rating",

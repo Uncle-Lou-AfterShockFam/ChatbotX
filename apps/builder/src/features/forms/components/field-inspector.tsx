@@ -23,9 +23,11 @@ import {
   FORM_RATING_DEFAULT_STARS,
   FORM_RATING_MAX_STARS,
   FORM_RATING_MIN_STARS,
+  FORM_SCALE_FIELD_TYPES,
   formMappingIssue,
   formSystemFieldKeys,
   isFormInputFieldType,
+  MAX_FORM_OPTION_POINTS,
   MAX_FORM_OPTIONS,
 } from "@chatbotx.io/utils/form"
 import { PlusIcon, Trash2Icon } from "lucide-react"
@@ -74,7 +76,7 @@ export function FieldInspector(props: {
   const customFields = useCustomFieldStore((s) => s.customFields)
   const [keyDraft, setKeyDraft] = useState(field.key)
   const isInput = isFormInputFieldType(field.type)
-  const isScale = field.type === "slider" || field.type === "rating"
+  const isScale = FORM_SCALE_FIELD_TYPES.has(field.type)
   const sources = conditionSourcesBefore(definition, field.key)
   const patch = (p: Partial<Omit<FormField, "key">>) =>
     onChange(updateField(definition, field.key, p))
@@ -432,8 +434,8 @@ function OptionsEditor(props: {
           <Input
             aria-label={t("forms.editor.optionPoints")}
             className="h-8 w-20 shrink-0"
-            max={1000}
-            min={-1000}
+            max={MAX_FORM_OPTION_POINTS}
+            min={-MAX_FORM_OPTION_POINTS}
             onChange={(e) => {
               const n = Number.parseInt(e.target.value, 10)
               const next = { ...o }
@@ -441,7 +443,10 @@ function OptionsEditor(props: {
                 // biome-ignore lint/performance/noDelete: an unscored option carries no key
                 delete next.points
               } else {
-                next.points = Math.max(-1000, Math.min(1000, n))
+                next.points = Math.max(
+                  -MAX_FORM_OPTION_POINTS,
+                  Math.min(MAX_FORM_OPTION_POINTS, n),
+                )
               }
               props.onChange(options.map((x, j) => (j === i ? next : x)))
             }}

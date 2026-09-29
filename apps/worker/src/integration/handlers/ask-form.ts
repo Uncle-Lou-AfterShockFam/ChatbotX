@@ -38,6 +38,7 @@ import {
 } from "@chatbotx.io/sdk"
 import {
   FORM_CHAT_SKIP_WORD,
+  FORM_SCALE_FIELD_TYPES,
   formChatPayload,
   formOptionsNumbered,
   formScaleBounds,
@@ -328,10 +329,9 @@ function questionText(field: FormField): string {
   const prompt = field.chat?.prompt ?? (field.label || field.key)
   // s220c A2-4: a slider / rating is answered with a number; the range is
   // language-neutral ("(1-5)"), the reply is checked against it and its step.
-  const base =
-    field.type === "slider" || field.type === "rating"
-      ? scalePrompt(prompt, formScaleBounds(field))
-      : prompt
+  const base = FORM_SCALE_FIELD_TYPES.has(field.type)
+    ? scalePrompt(prompt, formScaleBounds(field))
+    : prompt
   return field.helpText ? `${base}\n${field.helpText}` : base
 }
 
