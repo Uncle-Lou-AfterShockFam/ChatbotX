@@ -32,3 +32,26 @@ describe("emailStepSchema.lineInboxId", () => {
     expect(REFERENCE_FIELD_ENTITY_KIND.lineInboxId).toBe("inbox")
   })
 })
+
+describe("emailStepSchema.format (s225b outreach B-1)", () => {
+  test("absent is fine (every saved version before s225b) and means html", () => {
+    expect(emailStepSchema.parse(emailStepDefaultFn()).format).toBeUndefined()
+  })
+
+  test("html and text are kept", () => {
+    for (const format of ["html", "text"] as const) {
+      expect(emailStepSchema.parse(emailStepDefaultFn({ format })).format).toBe(
+        format,
+      )
+    }
+  })
+
+  test("anything else is refused", () => {
+    for (const format of ["TEXT", "markdown", "", 1, null]) {
+      expect(
+        emailStepSchema.safeParse(emailStepDefaultFn({ format } as never))
+          .success,
+      ).toBe(false)
+    }
+  })
+})

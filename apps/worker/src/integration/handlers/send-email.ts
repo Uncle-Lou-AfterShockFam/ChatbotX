@@ -10,6 +10,7 @@ import {
   signEmailClickUrl,
   workspaceService,
 } from "@chatbotx.io/business"
+import { emailThreadService } from "@chatbotx.io/business/email-thread"
 import type { InboxWithIntegrations } from "@chatbotx.io/database/types"
 import type {
   EmailStepSchema,
@@ -48,6 +49,12 @@ import {
 } from "./send-email-document"
 import { buildLineEmail, resolveEmailLine } from "./send-email-line"
 import { isSendSuppressed, SUPPRESSED_ERROR } from "./send-email-suppression"
+import {
+  planThread,
+  sequenceIdOf,
+  sequenceSendIdOf,
+  type ThreadPlan,
+} from "./send-email-thread"
 
 async function resolveElements({
   appUrl,
@@ -252,6 +259,9 @@ async function sendViaLine(props: {
   body: RenderedMail
   headers: Record<string, string>
   ref: string
+  /** s225b: `text` drops the html part; the thread keys travel as-is. */
+  format: "html" | "text"
+  thread?: ThreadPlan
 }): Promise<boolean> {
   const { lineContactInbox } = props
   const log = {
@@ -263,10 +273,13 @@ async function sendViaLine(props: {
     email = await buildLineEmail({
       appUrl: props.appUrl,
       subject: props.subject,
-      html: props.body.html,
+      html: props.format === "text" ? undefined : props.body.html,
       text: props.body.text,
       headers: props.headers,
       attachments: props.body.attachments ?? [],
+      format: props.format,
+      messageKey: props.thread?.messageKey,
+      threadKeys: props.thread?.threadKeys,
     })
   } catch (err) {
     if (!(err instanceof EmailContentError)) {
@@ -294,6 +307,31 @@ async function sendViaLine(props: {
   } catch (err) {
     logger.error({ err, ...log }, "handleSendEmail: the email line send failed")
     return false
+  }
+}
+
+/**
+ * s225b: the queued mail joins its thread. Outside the send's result: the
+ * mail is already queued, so a failed write only costs the NEXT step its
+ * References (it still goes out as `Re: <subject>` if the thread exists, or
+ * starts one), never a second send.
+ */
+async function recordThreadSend(
+  props: Parameters<typeof emailThreadService.recordSent>[0],
+) {
+  try {
+    const row = await emailThreadService.recordSent(props)
+    if (!row) {
+      logger.warn(
+        { workspaceId: props.workspaceId, sequenceId: props.sequenceId },
+        "handleSendEmail: the thread belongs to another line, key not recorded",
+      )
+    }
+  } catch (err) {
+    logger.warn(
+      { err, workspaceId: props.workspaceId, sequenceId: props.sequenceId },
+      "handleSendEmail: recording the thread key failed",
+    )
   }
 }
 
@@ -438,6 +476,29 @@ export async function sendEmail({
     contactVariableService.replaceAll({ text: step.subject, variables }),
     contactVariableService.replaceAll({ text: step.preheader, variables }),
   ])
+  // Outreach B-1 (s225b): a `text` step on a line goes out text/plain only,
+  // with no open pixel or signed links; inside a sequence it replies under
+  // the contact's first mail of that sequence. SMTP sends stay html.
+  const format = lineContactInbox && step.format === "text" ? "text" : "html"
+  const sequenceId = format === "text" ? sequenceIdOf(metadata) : undefined
+  let thread: ThreadPlan | undefined
+  if (sequenceId && lineContactInbox && !contentError && !suppressed) {
+    try {
+      thread = await planThread({
+        workspaceId: conversation.workspaceId,
+        contactId: conversation.contactId,
+        sequenceId,
+        lineInboxId: lineContactInbox.inboxId,
+        subject,
+        sendId: sequenceSendIdOf(metadata, step.id),
+      })
+    } catch (err) {
+      if (!(err instanceof EmailContentError)) {
+        throw err
+      }
+      contentError = err
+    }
+  }
   if (isDocument && !contentError && !suppressed) {
     try {
       prepared = await prepareStepDocument({
@@ -524,7 +585,7 @@ export async function sendEmail({
         inbox,
         flowId: flowVersion.flowId,
         unsubscribeUrl,
-        token,
+        token: format === "text" ? undefined : token,
         contact: {
           id: conversation.contactId,
           contactInboxId: lineContactInbox?.id ?? contactInbox.id,
@@ -557,7 +618,7 @@ export async function sendEmail({
       inbox,
       flowId: flowVersion.flowId,
       unsubscribeUrl,
-      token,
+      token: format === "text" ? undefined : token,
       workspaceId: conversation.workspaceId,
       brandName: workspace.name ?? smtpIntegration?.name ?? "",
       subject,
@@ -579,10 +640,12 @@ export async function sendEmail({
         workspaceId: conversation.workspaceId,
         appUrl,
         lineContactInbox,
-        subject,
+        subject: thread?.subject ?? subject,
         body,
         headers,
         ref: lineEmailRef(token, randomUUID()),
+        format,
+        thread,
       })
     : await sendViaSmtp({
         workspaceId: workspace.id,
@@ -603,6 +666,17 @@ export async function sendEmail({
   // The line only QUEUED it: its own delivered / failed status settles the
   // row (line-email-status.ts), since failed never overrides delivered.
   if (lineContactInbox) {
+    // A claimed root is already stored; only follow-ups are recorded.
+    if (thread && !thread.root && sequenceId) {
+      await recordThreadSend({
+        workspaceId: conversation.workspaceId,
+        contactId: conversation.contactId,
+        sequenceId,
+        lineInboxId: lineContactInbox.inboxId,
+        subject,
+        key: thread.messageKey,
+      })
+    }
     return
   }
 

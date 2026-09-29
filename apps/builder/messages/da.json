@@ -7708,7 +7708,11 @@
       "line": "E-maillinje (bulktext)",
       "lineHint": "Send via denne linje i stedet for SMTP. Linjen mailer kontaktens adresse på linjen fra sin egen adresse.",
       "lineNone": "Ingen (send via SMTP)",
-      "noLines": "Ingen API-kanalindbakker endnu."
+      "noLines": "Ingen API-kanalindbakker endnu.",
+      "format": "Format",
+      "formatHtml": "HTML (nyhedsbrev)",
+      "formatText": "Almindelig tekst (personlig besked)",
+      "formatHint": "Almindelig tekst har ingen åbningspixel eller sporede links; i en sekvens svarer hvert teksttrin i én tråd under det første."
     }
   },
   "emailSuppression": {

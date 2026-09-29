@@ -7708,7 +7708,11 @@
       "line": "Ligne e-mail (bulktext)",
       "lineHint": "Envoyer via cette ligne au lieu du SMTP. La ligne écrit à l'adresse du contact sur celle-ci, depuis sa propre adresse.",
       "lineNone": "Aucune (envoi par SMTP)",
-      "noLines": "Aucune boîte de réception de canal API."
+      "noLines": "Aucune boîte de réception de canal API.",
+      "format": "Format",
+      "formatHtml": "HTML (newsletter)",
+      "formatText": "Texte brut (message personnel)",
+      "formatHint": "Le texte brut n'a ni pixel d'ouverture ni liens suivis ; dans une séquence, chaque étape en texte brut répond dans un seul fil sous la première."
     }
   },
   "emailSuppression": {

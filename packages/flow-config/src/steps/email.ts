@@ -133,6 +133,14 @@ export const emailStepSchema = z.object({
    * versions are re-parsed on publish.
    */
   lineInboxId: zodBigintAsString().optional(),
+  /**
+   * Outreach B-1 (s225b): `text` sends a line mail as text/plain only (no open
+   * pixel, no signed links, no line marker) and, inside a sequence, threads
+   * each step under the first one (`Re: <first subject>`). Honored only with
+   * `lineInboxId`; an SMTP send is always `html`. Optional: saved versions are
+   * re-parsed on publish.
+   */
+  format: z.enum(["html", "text"]).optional(),
 })
 export type EmailStepSchema = z.infer<typeof emailStepSchema>
 

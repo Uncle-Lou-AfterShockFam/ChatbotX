@@ -179,3 +179,79 @@ describe("buildLineEmail (s222b): the line's caps enforced before enqueue", () =
     expect(getPresignedDownload).not.toHaveBeenCalled()
   })
 })
+
+describe("buildLineEmail (s225b): text format and hub thread keys", () => {
+  const base = {
+    appUrl: "https://app.test/",
+    subject: "Hello",
+    text: "Hi",
+    headers: {},
+    attachments: [],
+  }
+
+  test("an html mail keeps its old shape exactly (no format / key fields)", async () => {
+    const r = await buildLineEmail({ ...base, html: "<p>Hi</p>" })
+    expect(Object.keys(r).sort()).toEqual([
+      "attachments",
+      "headers",
+      "html",
+      "subject",
+      "text",
+    ])
+    expect(r).toEqual({
+      subject: "Hello",
+      html: "<p>Hi</p>",
+      text: "Hi",
+      headers: {},
+      attachments: [],
+    })
+  })
+
+  test("a text mail has no html key at all, and carries its keys", async () => {
+    const r = await buildLineEmail({
+      ...base,
+      html: "<p>ignored</p>",
+      format: "text",
+      messageKey: "bt.key-000002",
+      threadKeys: ["bt.key-000001"],
+    })
+    expect(r).toEqual({
+      format: "text",
+      subject: "Hello",
+      text: "Hi",
+      headers: {},
+      messageKey: "bt.key-000002",
+      threadKeys: ["bt.key-000001"],
+      attachments: [],
+    })
+    expect("html" in r).toBe(false)
+  })
+
+  test("unusable: text without a body, html without html, keys without a messageKey, more than 20 ancestors", async () => {
+    await expect(
+      buildLineEmail({ ...base, format: "text", text: "  " }),
+    ).rejects.toBeInstanceOf(ContentError)
+    await expect(buildLineEmail({ ...base })).rejects.toBeInstanceOf(
+      ContentError,
+    )
+    await expect(
+      buildLineEmail({
+        ...base,
+        format: "text",
+        threadKeys: ["bt.key-000001"],
+      }),
+    ).rejects.toBeInstanceOf(ContentError)
+    const many = Array.from(
+      { length: LINE_EMAIL_LIMITS.threadKeys + 1 },
+      (_, i) => `bt.k-${String(i).padStart(6, "0")}`,
+    )
+    await expect(
+      buildLineEmail({
+        ...base,
+        format: "text",
+        messageKey: "bt.key-000099",
+        threadKeys: many,
+      }),
+    ).rejects.toBeInstanceOf(ContentError)
+  })
+})
