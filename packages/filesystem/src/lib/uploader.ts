@@ -169,13 +169,18 @@ export class Uploader {
 
   async getObjectStream(
     path: string,
+    options?: { abortSignal?: AbortSignal },
   ): Promise<{ stream: Readable; contentLength?: number }> {
     const command = new GetObjectCommand({
       Bucket: env.S3_BUCKET,
       Key: path,
     })
 
-    const response = await this.#client.send(command)
+    // The S3 client sets no socket/request timeout by default: a caller that
+    // must not hang passes a signal (it also aborts a body mid-read).
+    const response = await this.#client.send(command, {
+      abortSignal: options?.abortSignal,
+    })
     if (!response.Body) {
       throw new Error(`No body found for object: ${path}`)
     }

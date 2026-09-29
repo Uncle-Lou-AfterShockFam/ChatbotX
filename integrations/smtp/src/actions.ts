@@ -1,6 +1,6 @@
 import type { Context } from "@chatbotx.io/sdk"
 import nodemailer from "nodemailer"
-import type { SmtpAuthValue } from "./schema"
+import type { SmtpAttachment, SmtpAuthValue } from "./schema"
 
 export const sendMail = async (props: {
   from: string
@@ -9,6 +9,7 @@ export const sendMail = async (props: {
   html: string
   text?: string
   headers?: Record<string, string>
+  attachments?: SmtpAttachment[]
   ctx: Context<SmtpAuthValue>
 }): Promise<void> => {
   const { ctx, ...mailOptions } = props

@@ -46,6 +46,44 @@ async function seedWorkspace(): Promise<string> {
   return id
 }
 
+async function seedMediaFile(workspaceId: string): Promise<string> {
+  const id = mintId()
+  await asReplica(sql`
+    INSERT INTO "MediaLibraryFile" (id, name, path, "mimeType", size, "workspaceId")
+    VALUES (${id}, 'a.pdf', ${`public/space/${workspaceId}/media/${id}`},
+            'application/pdf', 4, ${workspaceId})`)
+  return id
+}
+
+const withAssets = (attachmentId: string, imageId: string) => ({
+  version: 1,
+  settings: {},
+  blocks: [
+    {
+      id: "1",
+      type: "attachment",
+      asset: { kind: "media", fileId: attachmentId },
+    },
+    {
+      id: "2",
+      type: "columns",
+      columns: [
+        {
+          blocks: [
+            {
+              id: "3",
+              type: "image",
+              src: { kind: "media", fileId: imageId },
+              alt: "x",
+            },
+          ],
+        },
+        { blocks: [] },
+      ],
+    },
+  ],
+})
+
 const DOCUMENT = {
   version: 1,
   settings: {},
@@ -63,6 +101,9 @@ afterEach(async () => {
   for (const id of workspaces.splice(0)) {
     await asReplica(
       sql`DELETE FROM "EmailTemplate" WHERE "workspaceId" = ${id}`,
+    )
+    await asReplica(
+      sql`DELETE FROM "MediaLibraryFile" WHERE "workspaceId" = ${id}`,
     )
     await asReplica(sql`DELETE FROM "Workspace" WHERE id = ${id}`)
   }
@@ -219,5 +260,37 @@ describe.skipIf(!databaseUrl)("emailTemplateService", () => {
     await expect(
       emailTemplateService.getDocument({ workspaceId, id }),
     ).rejects.toBeInstanceOf(DocumentValidationError)
+  })
+
+  test("s221b: every referenced media file must be this workspace's; a foreign, deleted or out-of-range id is a 422", async () => {
+    const workspaceId = await seedWorkspace()
+    const other = await seedWorkspace()
+    const mine = await seedMediaFile(workspaceId)
+    const mine2 = await seedMediaFile(workspaceId)
+    const theirs = await seedMediaFile(other)
+
+    const row = await emailTemplateService.create({
+      workspaceId,
+      data: { name: "Assets", document: withAssets(mine, mine2) },
+    })
+    for (const document of [
+      withAssets(theirs, mine),
+      withAssets(mine, theirs),
+      withAssets(mine, "1"),
+      withAssets("99999999999999999999", mine),
+    ]) {
+      const created = await emailTemplateService
+        .create({ workspaceId, data: { name: "Bad assets", document } })
+        .catch((e: unknown) => e)
+      expectValidation(created, "document")
+      const updated = await emailTemplateService
+        .update({ workspaceId, id: row.id, data: { name: "Assets", document } })
+        .catch((e: unknown) => e)
+      expectValidation(updated, "document")
+    }
+    expect(
+      (await emailTemplateService.getDocument({ workspaceId, id: row.id }))
+        .blocks[0],
+    ).toMatchObject({ asset: { fileId: mine } })
   })
 })

@@ -36,7 +36,13 @@ import { contactVariableService } from "@chatbotx.io/variables"
 import { resolveButtonUrl } from "../../lib/convert-button"
 import { logger } from "../../lib/logger"
 import type { ExecuteStepProps } from "./flow"
-import { EmailContentError, renderStepDocument } from "./send-email-document"
+import {
+  EmailContentError,
+  type MailAttachment,
+  type PreparedDocument,
+  prepareStepDocument,
+  renderStepDocument,
+} from "./send-email-document"
 
 async function resolveElements({
   appUrl,
@@ -240,6 +246,27 @@ export async function sendEmail({
     conversation.workspaceId,
   )
 
+  // B2 (s220b/s221b): a template or inline document is READ before the
+  // tracking row is written (a transient read error retries with nothing
+  // written); unusable content is still counted, then marked failed.
+  const isDocument = Boolean(step.templateId || step.document)
+  let prepared: PreparedDocument | undefined
+  let contentError: EmailContentError | undefined
+  if (isDocument) {
+    try {
+      prepared = await prepareStepDocument({
+        step,
+        workspaceId: conversation.workspaceId,
+        variables,
+      })
+    } catch (err) {
+      if (!(err instanceof EmailContentError)) {
+        throw err
+      }
+      contentError = err
+    }
+  }
+
   // Create per-recipient tracking row before building URLs so the token is available.
   let token: string | undefined
   if (step.topicId) {
@@ -260,25 +287,26 @@ export async function sendEmail({
     token = result.token
   }
 
-  // B2 (s220b): a template or inline document renders through
-  // @chatbotx.io/email-document; legacy `elements` keep the original path
-  // (no try: its errors propagate to the queue's retry, as they always did).
-  let body: { html: string; text: string }
-  if (step.templateId || step.document) {
+  // Legacy `elements` keep the original path (no try: its errors propagate
+  // to the queue's retry, as they always did).
+  let body: { html: string; text: string; attachments?: MailAttachment[] }
+  if (isDocument) {
     try {
+      if (contentError) {
+        throw contentError
+      }
       body = await renderStepDocument({
-        step,
+        prepared: prepared as PreparedDocument,
         workspaceId: conversation.workspaceId,
         appUrl,
-        variables,
         inbox,
         flowId: flowVersion.flowId,
         unsubscribeUrl,
         token,
       })
     } catch (err) {
-      // Only unusable CONTENT (template gone, invalid document) fails the
-      // send closed; a transient error propagates to the retry.
+      // Only unusable CONTENT (template gone, invalid document, a bad
+      // attachment) fails the send closed; a transient error retries.
       if (!(err instanceof EmailContentError)) {
         throw err
       }
@@ -330,6 +358,7 @@ export async function sendEmail({
       subject,
       html: body.html,
       text: body.text,
+      attachments: body.attachments,
       headers: {
         "List-Unsubscribe": `<${oneClickUrl.toString()}>`,
         "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",

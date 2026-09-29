@@ -114,6 +114,23 @@ describe("generic upload handler — privileged-prefix guard", () => {
     expect(result.ok).toBe(false)
   })
 
+  test("s221b: REJECTS a dot segment that climbs out of the workspace prefix", () => {
+    for (const path of [
+      "workspaces/1/../2/documents/x.pdf",
+      "public/space/1/a/../../2/x",
+      "public/space/1/./x",
+    ]) {
+      const result = handler({
+        workspaceId: "1",
+        fileName: "photo.png",
+        mimeType: "image/png",
+        subType: "generic",
+        path,
+      })
+      expect(result.ok).toBe(false)
+    }
+  })
+
   test("REJECTS the privileged prefix regardless of letter case", () => {
     const result = handler({
       workspaceId: "1",
