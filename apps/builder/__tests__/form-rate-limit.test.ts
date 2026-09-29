@@ -9,7 +9,8 @@ vi.mock("@/lib/log", () => ({
 
 const {
   checkFormRateLimit,
-  checkFormStartRateLimit,
+  checkFormStartFormRateLimit,
+  checkFormStartIpRateLimit,
   resetFormRateLimitMemory,
 } = await import("../src/lib/rate-limit/form-rate-limit")
 
@@ -132,8 +133,7 @@ describe("form start beacon rate limit (s224a A2-4)", () => {
     for (let i = 0; i < 30; i++) {
       expect(
         (
-          await checkFormStartRateLimit({
-            formId: "f1",
+          await checkFormStartIpRateLimit({
             clientIp: "203.0.113.1",
             store,
             now,
@@ -143,8 +143,7 @@ describe("form start beacon rate limit (s224a A2-4)", () => {
     }
     expect(
       (
-        await checkFormStartRateLimit({
-          formId: "f1",
+        await checkFormStartIpRateLimit({
           clientIp: "203.0.113.1",
           store,
           now,
@@ -171,18 +170,16 @@ describe("form start beacon rate limit (s224a A2-4)", () => {
     const store = makeStore()
     const now = 1_758_800_000_000
     for (let i = 0; i < 300; i++) {
-      await checkFormStartRateLimit({
+      await checkFormStartFormRateLimit({
         formId: "f2",
-        clientIp: `198.51.100.${i % 250}-${i}`,
         store,
         now,
       })
     }
     expect(
       (
-        await checkFormStartRateLimit({
+        await checkFormStartFormRateLimit({
           formId: "f2",
-          clientIp: "192.0.2.77",
           store,
           now,
         })

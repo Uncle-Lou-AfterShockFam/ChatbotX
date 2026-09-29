@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "c929b858-d9aa-4c82-acd8-26c486718050",
+  "id": "b7528237-f141-4300-bc45-fa4bf0f2fa36",
   "prevIds": [
     "48340c8b-6e60-4f29-ba6c-b576f4752263"
   ],
@@ -17520,6 +17520,19 @@
       "generated": null,
       "identity": null,
       "name": "contactId",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "FormVisit"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "interactionId",
       "entityType": "columns",
       "schema": "public",
       "table": "FormVisit"
@@ -40072,6 +40085,41 @@
       "method": "btree",
       "concurrently": false,
       "name": "FormVisit_formId_contactId_open_key",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "FormVisit"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "formId",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "contactId",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "interactionId",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "FormVisit_formId_contactId_interactionId_key",
       "entityType": "indexes",
       "schema": "public",
       "table": "FormVisit"

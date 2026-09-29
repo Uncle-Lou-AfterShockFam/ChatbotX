@@ -42,6 +42,8 @@ export const submitFormRequest = z
     website: z.string().max(200).optional(),
     /** s220c A2-4: the signed form link's `k`, verified by the pipeline. */
     k: z.string().max(4096).optional(),
+    /** s224a A2-4: the page load's id (the start beacon's `v`). */
+    v: z.uuid().optional(),
     timezone: z.string().max(64).optional(),
   })
   .strict()
@@ -103,6 +105,7 @@ export async function POST(req: NextRequest, ctx: FormRouteParams) {
       userAgent: req.headers.get("user-agent"),
       sourceTimezone: parsed.data.timezone,
       formLinkToken: parsed.data.k,
+      interactionId: parsed.data.v,
     })
     switch (result.kind) {
       case "notFound":

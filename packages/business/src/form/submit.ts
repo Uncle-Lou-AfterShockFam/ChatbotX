@@ -100,6 +100,8 @@ export type SubmitFormInput = {
    * Verified HERE for this form; the submission then lands on that contact.
    */
   formLinkToken?: string
+  /** s224a A2-4: the page load's id, also sent by its start beacon. */
+  interactionId?: string
   now?: Date
 }
 
@@ -269,11 +271,20 @@ const closedResult = (
  * The contact answered the form (web or chat): its open web visit is done
  * and must never read as abandoned (s224a A2-4). Conditional on the visit
  * still being open, so it serialises with the sweep's claim on the row:
- * exactly one of the two closes it.
+ * exactly one of the two closes it. A web submit also names its page load
+ * (`interactionId`): that interaction is recorded as submitted even when its
+ * beacon has not arrived yet, so the late beacon opens nothing (Codex probe
+ * s224a).
  */
 export async function closeFormVisits(
   tx: DatabaseClient,
-  props: { formId: string; contactId: string; now: Date },
+  props: {
+    workspaceId: string
+    formId: string
+    contactId: string
+    now: Date
+    interactionId?: string
+  },
 ): Promise<void> {
   await tx
     .update(formVisitModel)
@@ -286,6 +297,23 @@ export async function closeFormVisits(
         isNull(formVisitModel.abandonEmittedAt),
       ),
     )
+  if (props.interactionId === undefined) {
+    return
+  }
+  await tx
+    .insert(formVisitModel)
+    .values({
+      id: createId(),
+      workspaceId: props.workspaceId,
+      formId: props.formId,
+      contactId: props.contactId,
+      interactionId: props.interactionId,
+      startedAt: props.now,
+      lastActivityAt: props.now,
+      abandonAt: props.now,
+      submittedAt: props.now,
+    })
+    .onConflictDoNothing()
 }
 
 export class FormSubmitService {
@@ -327,6 +355,10 @@ export class FormSubmitService {
     // then hides (and never requires) what that contact already answered,
     // recomputed here, never taken from the page.
     const linkedContactId = await this.linkedContact(input, form.id)
+    // Only a linked submit records its page load: an anonymous caller must
+    // not be able to write interaction rows (s224a).
+    const linkedInteraction =
+      linkedContactId === null ? undefined : input.interactionId
     const suppressed =
       linkedContactId === null
         ? undefined
@@ -364,9 +396,11 @@ export class FormSubmitService {
       if (duplicate.contactId !== null) {
         // A visit opened after the first copy went in is answered by it too.
         await closeFormVisits(db, {
+          workspaceId: input.workspaceId,
           formId: form.id,
           contactId: duplicate.contactId,
           now,
+          interactionId: linkedInteraction,
         })
       }
       return {
@@ -459,9 +493,11 @@ export class FormSubmitService {
         if (duplicateOf) {
           if (duplicateOf.contactId !== null) {
             await closeFormVisits(tx, {
+              workspaceId: input.workspaceId,
               formId: form.id,
               contactId: duplicateOf.contactId,
               now,
+              interactionId: linkedInteraction,
             })
           }
           return { row: duplicateOf, pending: [], duplicateOf }
@@ -510,7 +546,13 @@ export class FormSubmitService {
           })
           .returning()
         if (contactId !== null) {
-          await closeFormVisits(tx, { formId: form.id, contactId, now })
+          await closeFormVisits(tx, {
+            workspaceId: input.workspaceId,
+            formId: form.id,
+            contactId,
+            now,
+            interactionId: linkedInteraction,
+          })
         }
         return { row, pending, duplicateOf: null }
       }, ADMISSION_ISOLATION)

@@ -7,12 +7,16 @@ import {
   isNull,
   lt,
   lte,
+  notExists,
   or,
+  sql,
 } from "@chatbotx.io/database/client"
+import { FORM_MAX_ABANDON_MINUTES } from "@chatbotx.io/database/partials"
 import { formModel, formVisitModel } from "@chatbotx.io/database/schema"
 import type { FormVisitModel } from "@chatbotx.io/database/types"
 import { emitFormAbandoned } from "@chatbotx.io/events"
 import { createId } from "@chatbotx.io/utils"
+import { alias } from "drizzle-orm/pg-core"
 import { logger } from "../logger"
 import { formService, type NormalizedForm } from "./service"
 import { FORM_ABANDON_CATCHUP_MS } from "./session"
@@ -31,6 +35,9 @@ import { formSubmitService } from "./submit"
 /** Closed visits are kept this long for support, then pruned by the sweep. */
 export const FORM_VISIT_RETENTION_MS = 30 * 24 * 60 * 60_000
 
+/** The same table under another name, for the interaction lookup. */
+const interaction = alias(formVisitModel, "interaction")
+
 const openVisit = () =>
   and(
     isNull(formVisitModel.submittedAt),
@@ -43,15 +50,19 @@ export type StartFormVisitResult =
 
 export class FormVisitService {
   /**
-   * Open (or refresh) the linked contact's visit of a published web form.
-   * Ignored, writing nothing, unless the token names a contact that still
-   * exists for THIS workspace + form and the form takes submissions now.
-   * One open row per (form, contact): a second beacon (a reload, another
-   * tab) only moves `lastActivityAt` / `abandonAt` forward.
+   * Open (or refresh) the linked contact's visit of a published web form,
+   * for one page load (`interactionId`). Ignored, writing nothing, unless
+   * the token names a contact that still exists for THIS workspace + form
+   * and the form takes submissions now. One statement, two outcomes:
+   * - a new interaction inserts its row, unless the contact already has an
+   *   OPEN visit of the form (another tab, a reload): that one is refreshed;
+   * - a known interaction (a replayed beacon, or one that arrived after its
+   *   own submit) changes nothing, so it can never reopen a finished visit.
    */
   async start(props: {
     form: Pick<NormalizedForm, "id" | "workspaceId" | "settings">
     formLinkToken: string | undefined
+    interactionId: string
     now?: Date
   }): Promise<StartFormVisitResult> {
     const now = props.now ?? new Date()
@@ -72,22 +83,51 @@ export class FormVisitService {
     const abandonAt = new Date(
       now.getTime() + form.settings.abandonAfterMinutes * 60_000,
     )
-    await db
+    const inserted = await db
       .insert(formVisitModel)
       .values({
         id: createId(),
         workspaceId: form.workspaceId,
         formId: form.id,
         contactId,
+        interactionId: props.interactionId,
         startedAt: now,
         lastActivityAt: now,
         abandonAt,
       })
-      .onConflictDoUpdate({
-        target: [formVisitModel.formId, formVisitModel.contactId],
-        targetWhere: openVisit(),
-        set: { lastActivityAt: now, abandonAt },
-      })
+      // Either unique index: the interaction exists, or an open visit does.
+      .onConflictDoNothing()
+      .returning({ id: formVisitModel.id })
+    if (inserted.length === 0) {
+      await db
+        .update(formVisitModel)
+        // Refreshes never push past FORM_MAX_ABANDON_MINUTES from the first
+        // interaction: repeated beacons cannot hold an abandon off forever
+        // (skeptic s224a).
+        .set({
+          lastActivityAt: now,
+          abandonAt: sql`least(${abandonAt}, ${formVisitModel.startedAt} + make_interval(mins => ${FORM_MAX_ABANDON_MINUTES}))`,
+        })
+        .where(
+          and(
+            eq(formVisitModel.formId, form.id),
+            eq(formVisitModel.contactId, contactId),
+            openVisit(),
+            notExists(
+              db
+                .select({ one: sql`1` })
+                .from(interaction)
+                .where(
+                  and(
+                    eq(interaction.formId, form.id),
+                    eq(interaction.contactId, contactId),
+                    eq(interaction.interactionId, props.interactionId),
+                  ),
+                ),
+            ),
+          ),
+        )
+    }
     return { kind: "started" }
   }
 

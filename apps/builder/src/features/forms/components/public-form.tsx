@@ -42,7 +42,7 @@ export function PublicForm(props: {
   const root = useRef<HTMLDivElement>(null)
   // s224a A2-4: one beacon on the first focus inside the form (a typed
   // answer, a rating tap), only for a personal link's visitor.
-  const markStarted = useMemo(
+  const visit = useMemo(
     () =>
       createFormStartBeacon({
         workspaceId,
@@ -114,6 +114,7 @@ export function PublicForm(props: {
           values,
           website: honeypot,
           k: props.formLinkToken,
+          v: props.formLinkToken ? visit.interactionId : undefined,
           // zone: viewer (the public submitter's own browser zone)
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
@@ -169,7 +170,7 @@ export function PublicForm(props: {
     <div
       className="rounded-lg border bg-background p-4 md:p-6"
       data-testid="public-form"
-      onFocusCapture={markStarted}
+      onFocusCapture={visit.start}
       ref={root}
     >
       {embed ? null : <h1 className="mb-4 font-semibold text-xl">{title}</h1>}

@@ -1072,6 +1072,7 @@ export class FormSessionService {
           .returning()
         // Answered in chat: an open web visit of the same form is done too.
         await closeFormVisits(sp, {
+          workspaceId: session.workspaceId,
           formId: session.formId,
           contactId: session.contactId,
           now,

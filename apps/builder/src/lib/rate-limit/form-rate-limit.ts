@@ -48,31 +48,50 @@ export const checkFormRateLimit = ({
 
 /**
  * The start beacon (s224a A2-4) has its OWN budget, so a page that beacons
- * never eats its visitor's submit allowance: 30 / min per ip, 300 / min per
- * form. A real page sends one per load.
+ * never eats its visitor's submit allowance. Two steps: the per-ip check
+ * runs BEFORE any database lookup (an unknown slug still costs a query;
+ * Codex probe s224a), the per-form one after the form resolved. A real page
+ * sends one per load.
  */
 const START_IP_LIMIT = 30
 const START_FORM_LIMIT = 300
 const startKey = (...parts: string[]) => ["form-start", ...parts].join(":")
 
-export const checkFormStartRateLimit = ({
-  formId,
+export const checkFormStartIpRateLimit = ({
   clientIp,
   store,
   now = Date.now(),
-}: FormRateLimitInput): Promise<FormRateLimitResult> => {
-  const suffix = windowSuffix(now, WINDOW_SECONDS)
-  return checkFixedWindow({
+}: Omit<FormRateLimitInput, "formId">): Promise<FormRateLimitResult> =>
+  checkFixedWindow({
     buckets: [
-      { key: startKey("ip", clientIp, suffix), limit: START_IP_LIMIT },
-      { key: startKey("form", formId, suffix), limit: START_FORM_LIMIT },
+      {
+        key: startKey("ip", clientIp, windowSuffix(now, WINDOW_SECONDS)),
+        limit: START_IP_LIMIT,
+      },
     ],
     windowSeconds: WINDOW_SECONDS,
     store,
     now,
     scope: "form-start",
   })
-}
+
+export const checkFormStartFormRateLimit = ({
+  formId,
+  store,
+  now = Date.now(),
+}: Omit<FormRateLimitInput, "clientIp">): Promise<FormRateLimitResult> =>
+  checkFixedWindow({
+    buckets: [
+      {
+        key: startKey("form", formId, windowSuffix(now, WINDOW_SECONDS)),
+        limit: START_FORM_LIMIT,
+      },
+    ],
+    windowSeconds: WINDOW_SECONDS,
+    store,
+    now,
+    scope: "form-start",
+  })
 
 /** Test seam: forget every in-memory window. */
 export const resetFormRateLimitMemory = resetFixedWindowMemory

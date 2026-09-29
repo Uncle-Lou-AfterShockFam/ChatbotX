@@ -102,6 +102,7 @@ export type PublicFormGate =
 export async function openPublicForm(
   req: NextRequest,
   ctx: FormRouteParams,
+  maxBodyBytes: number = MAX_FORM_BODY_BYTES,
 ): Promise<PublicFormGate> {
   const origin = req.headers.get("origin")
   const closed = formCorsHeaders(origin, false)
@@ -114,7 +115,7 @@ export async function openPublicForm(
     return refuse(404)
   }
   const length = Number(req.headers.get("content-length") ?? 0)
-  if (length > MAX_FORM_BODY_BYTES) {
+  if (length > maxBodyBytes) {
     return refuse(413)
   }
 

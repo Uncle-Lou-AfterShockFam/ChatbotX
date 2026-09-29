@@ -350,13 +350,13 @@ describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
     const visitId = createId()
     const otherVisitId = createId()
     await asReplica(sql`
-      INSERT INTO "FormVisit" (id, "workspaceId", "formId", "contactId", "startedAt", "lastActivityAt", "abandonAt")
-      VALUES (${visitId}, ${w.workspaceId}, ${w.formId}, ${w.contactId}, now(), now(), now() + interval '30 minutes')`)
+      INSERT INTO "FormVisit" (id, "workspaceId", "formId", "contactId", "interactionId", "startedAt", "lastActivityAt", "abandonAt")
+      VALUES (${visitId}, ${w.workspaceId}, ${w.formId}, ${w.contactId}, 'tab-1', now(), now(), now() + interval '30 minutes')`)
     // Another contact's open visit (of its own form) is untouched.
     const other = await seedWorld()
     await asReplica(sql`
-      INSERT INTO "FormVisit" (id, "workspaceId", "formId", "contactId", "startedAt", "lastActivityAt", "abandonAt")
-      VALUES (${otherVisitId}, ${other.workspaceId}, ${other.formId}, ${other.contactId}, now(), now(), now() + interval '30 minutes')`)
+      INSERT INTO "FormVisit" (id, "workspaceId", "formId", "contactId", "interactionId", "startedAt", "lastActivityAt", "abandonAt")
+      VALUES (${otherVisitId}, ${other.workspaceId}, ${other.formId}, ${other.contactId}, 'tab-2', now(), now(), now() + interval '30 minutes')`)
     await start(w)
     await answer(w, "Ada")
     await answer(w, "2")

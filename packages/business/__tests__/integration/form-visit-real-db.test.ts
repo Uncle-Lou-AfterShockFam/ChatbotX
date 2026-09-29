@@ -10,6 +10,7 @@
  *     DATABASE_URL=postgres://... pnpm --filter @chatbotx.io/business test:db
  */
 
+import { randomUUID } from "node:crypto"
 import { db, sql } from "@chatbotx.io/database/client"
 import { signFormLinkToken } from "@chatbotx.io/encryption/form-link-token"
 import { requireRealDatabaseUrl } from "@chatbotx.io/vitest-config/real-db"
@@ -117,7 +118,11 @@ const visits = async (formId: string): Promise<VisitRow[]> =>
     abandonEmittedAt: r.abandonEmittedAt ? new Date(r.abandonEmittedAt) : null,
   }))
 
-const submit = (w: Awaited<ReturnType<typeof seed>>, note = "hi") =>
+const submit = (
+  w: Awaited<ReturnType<typeof seed>>,
+  note = "hi",
+  interactionId?: string,
+) =>
   formSubmitService.submit({
     workspaceId: w.workspaceId,
     slug: w.slug,
@@ -126,6 +131,7 @@ const submit = (w: Awaited<ReturnType<typeof seed>>, note = "hi") =>
     clientIp: "198.51.100.40",
     userAgent: "vitest",
     formLinkToken: w.k,
+    interactionId,
   })
 
 const MIN = 60_000
@@ -173,11 +179,17 @@ describe.skipIf(!databaseUrl)("web form visits (real Postgres)", () => {
       await formVisitService.start({
         form: w.form,
         formLinkToken: w.k,
+        interactionId: randomUUID(),
         now: t0,
       }),
     ).toEqual({ kind: "started" })
     const t1 = new Date(t0.getTime() + 3 * MIN)
-    await formVisitService.start({ form: w.form, formLinkToken: w.k, now: t1 })
+    await formVisitService.start({
+      form: w.form,
+      formLinkToken: w.k,
+      interactionId: randomUUID(),
+      now: t1,
+    })
     const rows = await visits(w.formId)
     expect(rows).toHaveLength(1)
     expect(rows[0]?.lastActivityAt.getTime()).toBe(t1.getTime())
@@ -188,7 +200,11 @@ describe.skipIf(!databaseUrl)("web form visits (real Postgres)", () => {
     const w = await seed()
     await Promise.all(
       Array.from({ length: 20 }, () =>
-        formVisitService.start({ form: w.form, formLinkToken: w.k }),
+        formVisitService.start({
+          form: w.form,
+          formLinkToken: w.k,
+          interactionId: randomUUID(),
+        }),
       ),
     )
     expect(await visits(w.formId)).toHaveLength(1)
@@ -198,19 +214,35 @@ describe.skipIf(!databaseUrl)("web form visits (real Postgres)", () => {
     const w = await seed()
     const other = await seed()
     expect(
-      await formVisitService.start({ form: w.form, formLinkToken: undefined }),
+      await formVisitService.start({
+        form: w.form,
+        formLinkToken: undefined,
+        interactionId: randomUUID(),
+      }),
     ).toEqual({ kind: "ignored", reason: "noLink" })
     expect(
-      await formVisitService.start({ form: w.form, formLinkToken: "garbage" }),
+      await formVisitService.start({
+        form: w.form,
+        formLinkToken: "garbage",
+        interactionId: randomUUID(),
+      }),
     ).toEqual({ kind: "ignored", reason: "noLink" })
     // other form's token, same shape
     expect(
-      await formVisitService.start({ form: w.form, formLinkToken: other.k }),
+      await formVisitService.start({
+        form: w.form,
+        formLinkToken: other.k,
+        interactionId: randomUUID(),
+      }),
     ).toEqual({ kind: "ignored", reason: "noLink" })
     const gone = await seed()
     await asReplica(sql`DELETE FROM "Contact" WHERE id = ${gone.contactId}`)
     expect(
-      await formVisitService.start({ form: gone.form, formLinkToken: gone.k }),
+      await formVisitService.start({
+        form: gone.form,
+        formLinkToken: gone.k,
+        interactionId: randomUUID(),
+      }),
     ).toEqual({ kind: "ignored", reason: "noLink" })
     const future = new Date(Date.now() + 60 * MIN).toISOString()
     const pending = await seed({ publishUp: future })
@@ -218,6 +250,7 @@ describe.skipIf(!databaseUrl)("web form visits (real Postgres)", () => {
       await formVisitService.start({
         form: pending.form,
         formLinkToken: pending.k,
+        interactionId: randomUUID(),
       }),
     ).toEqual({ kind: "ignored", reason: "closed" })
     for (const f of [w, other, gone, pending]) {
@@ -228,7 +261,12 @@ describe.skipIf(!databaseUrl)("web form visits (real Postgres)", () => {
   test("a linked submit closes the visit; the sweep then emits nothing for it", async () => {
     const w = await seed()
     const t0 = new Date(Date.now() - 60 * MIN)
-    await formVisitService.start({ form: w.form, formLinkToken: w.k, now: t0 })
+    await formVisitService.start({
+      form: w.form,
+      formLinkToken: w.k,
+      interactionId: randomUUID(),
+      now: t0,
+    })
     expect(await submit(w)).toMatchObject({ kind: "ok", duplicate: false })
     const [row] = await visits(w.formId)
     expect(row?.submittedAt).not.toBeNull()
@@ -244,7 +282,11 @@ describe.skipIf(!databaseUrl)("web form visits (real Postgres)", () => {
   test("a duplicate submit still closes a visit opened after the first copy", async () => {
     const w = await seed()
     expect(await submit(w, "same")).toMatchObject({ duplicate: false })
-    await formVisitService.start({ form: w.form, formLinkToken: w.k })
+    await formVisitService.start({
+      form: w.form,
+      formLinkToken: w.k,
+      interactionId: randomUUID(),
+    })
     expect(await submit(w, "same")).toMatchObject({ duplicate: true })
     const [row] = await visits(w.formId)
     expect(row?.submittedAt).not.toBeNull()
@@ -253,7 +295,12 @@ describe.skipIf(!databaseUrl)("web form visits (real Postgres)", () => {
   test("a due visit emits formAbandoned (web) once; a second sweep adds nothing", async () => {
     const w = await seed({ abandonAfterMinutes: 5 })
     const t0 = new Date(Date.now() - 10 * MIN)
-    await formVisitService.start({ form: w.form, formLinkToken: w.k, now: t0 })
+    await formVisitService.start({
+      form: w.form,
+      formLinkToken: w.k,
+      interactionId: randomUUID(),
+      now: t0,
+    })
     const [open] = await visits(w.formId)
     await formVisitService.emitDueAbandons()
     await formVisitService.emitDueAbandons()
@@ -275,13 +322,21 @@ describe.skipIf(!databaseUrl)("web form visits (real Postgres)", () => {
       },
     ])
     // A new interaction after the abandon opens a NEW visit.
-    await formVisitService.start({ form: w.form, formLinkToken: w.k })
+    await formVisitService.start({
+      form: w.form,
+      formLinkToken: w.k,
+      interactionId: randomUUID(),
+    })
     expect(await visits(w.formId)).toHaveLength(2)
   })
 
   test("a visit not yet due stays open", async () => {
     const w = await seed({ abandonAfterMinutes: 30 })
-    await formVisitService.start({ form: w.form, formLinkToken: w.k })
+    await formVisitService.start({
+      form: w.form,
+      formLinkToken: w.k,
+      interactionId: randomUUID(),
+    })
     await formVisitService.emitDueAbandons()
     const [row] = await visits(w.formId)
     expect(row?.abandonEmittedAt).toBeNull()
@@ -296,6 +351,7 @@ describe.skipIf(!databaseUrl)("web form visits (real Postgres)", () => {
       await formVisitService.start({
         form: w.form,
         formLinkToken: w.k,
+        interactionId: randomUUID(),
         now: t0,
       })
     }
@@ -320,6 +376,7 @@ describe.skipIf(!databaseUrl)("web form visits (real Postgres)", () => {
       await formVisitService.start({
         form: w.form,
         formLinkToken: w.k,
+        interactionId: randomUUID(),
         now: t0,
       })
     }
@@ -343,12 +400,14 @@ describe.skipIf(!databaseUrl)("web form visits (real Postgres)", () => {
     await formVisitService.start({
       form: late.form,
       formLinkToken: late.k,
+      interactionId: randomUUID(),
       now: new Date(Date.now() - 2 * 24 * 60 * MIN),
     })
     const draft = await seed({ abandonAfterMinutes: 5 })
     await formVisitService.start({
       form: draft.form,
       formLinkToken: draft.k,
+      interactionId: randomUUID(),
       now: new Date(Date.now() - 10 * MIN),
     })
     await asReplica(
@@ -371,11 +430,11 @@ describe.skipIf(!databaseUrl)("web form visits (real Postgres)", () => {
     const closedNew = mintId()
     const openOld = mintId()
     await asReplica(sql`
-      INSERT INTO "FormVisit" (id, "createdAt", "workspaceId", "formId", "contactId",
+      INSERT INTO "FormVisit" (id, "createdAt", "workspaceId", "formId", "contactId", "interactionId",
                                "startedAt", "lastActivityAt", "abandonAt", "submittedAt", "abandonEmittedAt")
-      VALUES (${closedOld}, ${old}, ${w.workspaceId}, ${w.formId}, ${w.contactId}, ${old}, ${old}, ${old}, ${old}, NULL),
-             (${closedNew}, now(), ${w.workspaceId}, ${w.formId}, ${w.contactId}, now(), now(), now(), NULL, now()),
-             (${openOld}, ${old}, ${w.workspaceId}, ${w.formId}, ${w.contactId}, ${old}, ${old}, now() + interval '1 day', NULL, NULL)`)
+      VALUES (${closedOld}, ${old}, ${w.workspaceId}, ${w.formId}, ${w.contactId}, 'i1', ${old}, ${old}, ${old}, ${old}, NULL),
+             (${closedNew}, now(), ${w.workspaceId}, ${w.formId}, ${w.contactId}, 'i2', now(), now(), now(), NULL, now()),
+             (${openOld}, ${old}, ${w.workspaceId}, ${w.formId}, ${w.contactId}, 'i3', ${old}, ${old}, now() + interval '1 day', NULL, NULL)`)
     await formVisitService.pruneClosed()
     const left = (await visits(w.formId)).map((r) => r.id).sort()
     expect(left).toEqual([closedNew, openOld].sort())
@@ -383,8 +442,128 @@ describe.skipIf(!databaseUrl)("web form visits (real Postgres)", () => {
 
   test("deleting the contact or the form deletes its visits (cascade)", async () => {
     const w = await seed()
-    await formVisitService.start({ form: w.form, formLinkToken: w.k })
+    await formVisitService.start({
+      form: w.form,
+      formLinkToken: w.k,
+      interactionId: randomUUID(),
+    })
     await db.execute(sql`DELETE FROM "Contact" WHERE id = ${w.contactId}`)
     expect(await visits(w.formId)).toHaveLength(0)
+  })
+
+  test("a beacon that lands AFTER its own submit opens nothing; a replay neither (Codex probe s224a)", async () => {
+    const w = await seed({ abandonAfterMinutes: 5 })
+    const v = randomUUID()
+    expect(await submit(w, "first", v)).toMatchObject({ kind: "ok" })
+    await formVisitService.start({
+      form: w.form,
+      formLinkToken: w.k,
+      interactionId: v,
+    })
+    await formVisitService.start({
+      form: w.form,
+      formLinkToken: w.k,
+      interactionId: v,
+    })
+    const rows = await visits(w.formId)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.submittedAt).not.toBeNull()
+    await formVisitService.emitDueAbandons({
+      now: new Date(Date.now() + 10 * MIN),
+    })
+    expect(
+      emitFormAbandoned.mock.calls.filter((c) => c[0] === w.workspaceId),
+    ).toHaveLength(0)
+  })
+
+  test("beacon and submit of ONE page load racing: never an open visit left behind", async () => {
+    const ws = await Promise.all(
+      Array.from({ length: 6 }, () => seed({ abandonAfterMinutes: 5 })),
+    )
+    await Promise.all(
+      ws.flatMap((w, i) => {
+        const v = randomUUID()
+        const beacon = formVisitService.start({
+          form: w.form,
+          formLinkToken: w.k,
+          interactionId: v,
+        })
+        const sub = submit(w, `n${i}`, v)
+        return i % 2 === 0 ? [beacon, sub] : [sub, beacon]
+      }),
+    )
+    for (const w of ws) {
+      const rows = await visits(w.formId)
+      expect(rows.length).toBeGreaterThan(0)
+      expect(rows.every((r) => r.submittedAt !== null)).toBe(true)
+    }
+  })
+
+  test("another page load (a second tab) refreshes the ONE open visit; a submit from either closes it", async () => {
+    const w = await seed({ abandonAfterMinutes: 10 })
+    const t0 = new Date()
+    const a = randomUUID()
+    const b = randomUUID()
+    await formVisitService.start({
+      form: w.form,
+      formLinkToken: w.k,
+      interactionId: a,
+      now: t0,
+    })
+    const t1 = new Date(t0.getTime() + 2 * MIN)
+    await formVisitService.start({
+      form: w.form,
+      formLinkToken: w.k,
+      interactionId: b,
+      now: t1,
+    })
+    let rows = await visits(w.formId)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.abandonAt.getTime()).toBe(t1.getTime() + 10 * MIN)
+    await submit(w, "from b", b)
+    rows = await visits(w.formId)
+    expect(rows.every((r) => r.submittedAt !== null)).toBe(true)
+    // Tab a's late beacon replay: its row is closed, nothing reopens.
+    await formVisitService.start({
+      form: w.form,
+      formLinkToken: w.k,
+      interactionId: a,
+    })
+    expect((await visits(w.formId)).every((r) => r.submittedAt !== null)).toBe(
+      true,
+    )
+  })
+
+  test("an ANONYMOUS submit carrying an interaction id writes no visit row", async () => {
+    const w = await seed()
+    const r = await formSubmitService.submit({
+      workspaceId: w.workspaceId,
+      slug: w.slug,
+      values: { note: "anon" },
+      honeypotFilled: false,
+      clientIp: "198.51.100.41",
+      userAgent: "vitest",
+      interactionId: randomUUID(),
+    })
+    expect(r).toMatchObject({ kind: "ok", contactId: null })
+    expect(await visits(w.formId)).toHaveLength(0)
+  })
+
+  test("refreshes never push abandonAt past startedAt + 1440 min (skeptic s224a)", async () => {
+    const w = await seed({ abandonAfterMinutes: 1440 })
+    const t0 = new Date(Date.now() - 1000 * MIN)
+    await formVisitService.start({
+      form: w.form,
+      formLinkToken: w.k,
+      interactionId: randomUUID(),
+      now: t0,
+    })
+    await formVisitService.start({
+      form: w.form,
+      formLinkToken: w.k,
+      interactionId: randomUUID(),
+    })
+    const [row] = await visits(w.formId)
+    expect(row?.abandonAt.getTime()).toBe(t0.getTime() + 1440 * MIN)
   })
 })
