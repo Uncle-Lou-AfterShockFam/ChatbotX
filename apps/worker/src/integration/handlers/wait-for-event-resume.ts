@@ -10,6 +10,7 @@ import {
   buildJobId,
   type WaitForEventSpec,
   waitForEventSpecSchema,
+  isWaitFormEventType,
   waitStepEventTypes,
 } from "@chatbotx.io/flow-config"
 import {
@@ -117,6 +118,9 @@ export const eventMatchesSpec = (
   }
   if (spec.eventType === waitStepEventTypes.enum.tagApplied) {
     return Boolean(spec.tagId) && spec.tagId === event.tagId
+  }
+  if (isWaitFormEventType(spec.eventType)) {
+    return Boolean(spec.formId) && spec.formId === event.formId
   }
   if (!spec.customFieldId || spec.customFieldId !== event.customFieldId) {
     return false

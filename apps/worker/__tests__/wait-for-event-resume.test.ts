@@ -495,6 +495,41 @@ describe("eventMatchesSpec", () => {
   })
 })
 
+describe("eventMatchesSpec: form events (s220 A2-3)", () => {
+  const formEvent = (
+    eventType: "formSubmitted" | "formAbandoned",
+    formId?: string,
+  ) => ({ ...tagEvent, tagId: undefined, eventType, formId })
+
+  test("matches the same event type on the same form only", () => {
+    const spec = { eventType: "formSubmitted" as const, formId: "f1" }
+    expect(eventMatchesSpec(spec, formEvent("formSubmitted", "f1"))).toBe(true)
+    expect(eventMatchesSpec(spec, formEvent("formSubmitted", "f2"))).toBe(false)
+    expect(eventMatchesSpec(spec, formEvent("formAbandoned", "f1"))).toBe(false)
+    expect(
+      eventMatchesSpec(
+        { eventType: "formAbandoned", formId: "f1" },
+        formEvent("formAbandoned", "f1"),
+      ),
+    ).toBe(true)
+  })
+
+  test("fails closed on a spec or an event without a form id", () => {
+    expect(
+      eventMatchesSpec(
+        { eventType: "formSubmitted" },
+        formEvent("formSubmitted", undefined),
+      ),
+    ).toBe(false)
+    expect(
+      eventMatchesSpec(
+        { eventType: "formSubmitted", formId: "f1" },
+        formEvent("formSubmitted", undefined),
+      ),
+    ).toBe(false)
+  })
+})
+
 describe("eventMatchesSpec: matchValue", () => {
   const spec = {
     eventType: "customFieldChanged" as const,

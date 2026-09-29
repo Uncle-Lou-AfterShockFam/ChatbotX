@@ -376,9 +376,15 @@ export type IntegrationJobResumeWaitForEvent = {
         reason: "event"
         workspaceId: string
         contactId: string
-        eventType: "tagApplied" | "customFieldChanged"
+        eventType:
+          | "tagApplied"
+          | "customFieldChanged"
+          | "formSubmitted"
+          | "formAbandoned"
         tagId?: string
         customFieldId?: string
+        // formSubmitted / formAbandoned (s220 A2-3): the form it names.
+        formId?: string
         // customFieldChanged: the value the field changed TO (null = cleared).
         newValue?: string | null
         // ISO instant the event fired: a retry never resumes a wait created

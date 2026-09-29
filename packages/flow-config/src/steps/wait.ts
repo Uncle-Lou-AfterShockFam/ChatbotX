@@ -26,8 +26,25 @@ export const waitStepDelayTypes = z.enum([
   "event",
 ])
 
-/** `event`: park the run until this lands on the contact, or the timeout fires. */
-export const waitStepEventTypes = z.enum(["tagApplied", "customFieldChanged"])
+/**
+ * `event`: park the run until this lands on the contact, or the timeout fires.
+ * The form events (s220 A2-3) wait on ONE form: submitted on any channel, or
+ * a chat run of it abandoned.
+ */
+export const waitStepEventTypes = z.enum([
+  "tagApplied",
+  "customFieldChanged",
+  "formSubmitted",
+  "formAbandoned",
+])
+
+/** The event types that name a form (`formId`) rather than a tag or a field. */
+export const isWaitFormEventType = (
+  eventType: WaitStepEventType,
+): eventType is "formSubmitted" | "formAbandoned" =>
+  eventType === waitStepEventTypes.enum.formSubmitted ||
+  eventType === waitStepEventTypes.enum.formAbandoned
+export type WaitStepEventType = z.infer<typeof waitStepEventTypes>
 
 export const MATCH_VALUE_MAX = 500
 
@@ -36,6 +53,7 @@ export const waitForEventSpecSchema = z.object({
   eventType: waitStepEventTypes,
   tagId: z.string().trim().min(1).optional(),
   customFieldId: z.string().trim().min(1).optional(),
+  formId: z.string().trim().min(1).optional(),
   // customFieldChanged only: the RESOLVED value the field must change TO,
   // captured once at wait start (so paying order B cannot resume invoice A).
   matchValue: z.string().trim().max(MATCH_VALUE_MAX).optional(),
@@ -106,6 +124,7 @@ export const waitStepSchema = z
         ),
         tagId: z.string().trim().optional().default(""),
         customFieldId: z.string().trim().optional().default(""),
+        formId: z.string().trim().optional().default(""),
         // customFieldChanged only; may hold {{variables}}, resolved at wait start. "" = any change.
         matchValue: z
           .string()
@@ -142,11 +161,14 @@ export const waitStepSchema = z
           message: "Required",
         })
       }
+      if (isWaitFormEventType(data.eventType) && !data.formId) {
+        ctx.addIssue({ code: "custom", path: ["formId"], message: "Required" })
+      }
       if (
-        data.eventType === waitStepEventTypes.enum.tagApplied &&
+        data.eventType !== waitStepEventTypes.enum.customFieldChanged &&
         data.matchValue
       ) {
-        // A tag event carries no value to compare.
+        // A tag or form event carries no value to compare.
         ctx.addIssue({
           code: "custom",
           path: ["matchValue"],
@@ -225,6 +247,7 @@ export const delayTypeEventDefaultFn = () => ({
   eventType: waitStepEventTypes.enum.tagApplied,
   tagId: "",
   customFieldId: "",
+  formId: "",
   matchValue: "",
   timeoutValue: 1,
   timeoutUnit: waitStepDelayUnits.enum.days,
@@ -248,6 +271,9 @@ export const waitForEventSpecFromStep = (
   }
   if (step.eventType === waitStepEventTypes.enum.tagApplied) {
     return { eventType: step.eventType, tagId: step.tagId }
+  }
+  if (isWaitFormEventType(step.eventType)) {
+    return { eventType: step.eventType, formId: step.formId }
   }
   return step.matchValue
     ? {
