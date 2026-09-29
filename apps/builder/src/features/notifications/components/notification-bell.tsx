@@ -126,8 +126,15 @@ export function NotificationBell({ workspaceId }: { workspaceId: string }) {
           </Badge>
         ) : null}
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-96 p-0">
-        <div className="flex items-center justify-between border-b px-4 py-3">
+      {/* A bounded column: the list scrolls INSIDE the panel (a max-h on the
+      ScrollArea root never bounded its size-full viewport, so rows spilled
+      over the sidebar), and the width never exceeds the viewport on a phone. */}
+      <PopoverContent
+        align="start"
+        className="flex max-h-[min(32rem,80vh)] w-[min(24rem,calc(100vw-2rem))] flex-col p-0"
+        data-testid="notification-panel"
+      >
+        <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
           <span className="font-medium text-sm">
             {t("notifications.title")}
           </span>
@@ -154,7 +161,7 @@ export function NotificationBell({ workspaceId }: { workspaceId: string }) {
             <SettingsIcon className="size-4" />
           </Button>
         </div>
-        <ScrollArea className="max-h-96">
+        <ScrollArea className="min-h-0 shrink">
           {rows.length === 0 ? (
             <p className="px-4 py-6 text-muted-foreground text-sm">
               {list.isPending
