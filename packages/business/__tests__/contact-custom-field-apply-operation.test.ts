@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
 
 const txHandle = {
   __tx: true,
+  // the per-contact advisory lock (s220)
+  execute: vi.fn(async () => ({ rows: [] })),
   select: () => ({
     from: () => ({
       where: () => ({
@@ -86,6 +88,7 @@ vi.mock("../src/contact-custom-field/normalize.ts", () => ({
 vi.mock("@chatbotx.io/database/client", () => ({
   and: (...args: unknown[]) => args,
   eq: (...args: unknown[]) => args,
+  sql: (...args: unknown[]) => args,
   db: {
     transaction: async (cb: (tx: unknown) => unknown) => {
       const result = await cb(txHandle)

@@ -225,24 +225,33 @@ export class NotificationService extends BaseService {
         outcomes.push(NOTHING)
         continue
       }
-      outcomes.push(
-        await this.deliver({
-          workspaceId,
-          userId,
-          type: "formSubmitted",
-          dealId: null,
-          taskId: null,
-          commentId: null,
-          formSubmissionId: submission.id,
-          payload: {
-            formId,
-            formTitle,
-            submissionId: submission.id,
-            contactName: contact.fullName ?? null,
-          },
-          channels: prefs.channels,
-        }),
-      )
+      try {
+        outcomes.push(
+          await this.deliver({
+            workspaceId,
+            userId,
+            type: "formSubmitted",
+            dealId: null,
+            taskId: null,
+            commentId: null,
+            formSubmissionId: submission.id,
+            payload: {
+              formId,
+              formTitle,
+              submissionId: submission.id,
+              contactName: contact.fullName ?? null,
+            },
+            channels: prefs.channels,
+          }),
+        )
+      } catch (err) {
+        // one recipient's failed insert never skips the rest (skeptic, s220)
+        logger.warn(
+          { err, workspaceId, userId, formId },
+          "notification: form submission delivery failed",
+        )
+        outcomes.push(NOTHING)
+      }
     }
     return outcomes
   }

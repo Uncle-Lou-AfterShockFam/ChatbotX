@@ -186,6 +186,50 @@ describe.skipIf(!databaseUrl)("form actions (real Postgres)", () => {
     expect(Number(await fieldValue(w))).toBe(3)
   })
 
+  test("no deadlock with a writer that holds the field row and then touches the contact's FK (Codex probe)", async () => {
+    const w = await seedWorld()
+    const otherField = mintId()
+    await asReplica(sql`
+      INSERT INTO "CustomField" (id, name, type, "workspaceId")
+      VALUES (${otherField}, ${`other_${otherField}`}, 'shortText', ${w.workspaceId})`)
+    seeded.CustomField?.push(otherField)
+    await asReplica(sql`
+      INSERT INTO "ContactCustomField" (id, value, "contactId", "customFieldId")
+      VALUES (${mintId()}, '1', ${w.contactId}, ${w.fieldId})`)
+    let holding: () => void = () => undefined
+    const bHolds = new Promise<void>((resolve) => {
+      holding = resolve
+    })
+    // B: a submission-like writer: updates the points row, then inserts a
+    // child of the same contact (FK check = KEY SHARE on the Contact row).
+    const b = db.transaction(async (tx) => {
+      await tx.execute(sql`
+        UPDATE "ContactCustomField" SET value = '10'
+         WHERE "contactId" = ${w.contactId} AND "customFieldId" = ${w.fieldId}`)
+      holding()
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      await tx.execute(sql`
+        INSERT INTO "ContactCustomField" (id, value, "contactId", "customFieldId")
+        VALUES (${mintId()}, 'x', ${w.contactId}, ${otherField})`)
+    })
+    await bHolds
+    const a = runFormActions({
+      db,
+      workspaceId: w.workspaceId,
+      contactId: w.contactId,
+      form: {
+        id: w.formId,
+        title: "Scored",
+        actions: [{ type: "addPoints", customFieldId: w.fieldId }],
+      },
+      submission: submission(w, 3),
+      notify: vi.fn(),
+    })
+    await Promise.all([a, b])
+    expect(warned).toEqual([])
+    expect(Number(await fieldValue(w))).toBe(13)
+  })
+
   test("Notification: one row per (submission, user); exactly one subject", async () => {
     const w = await seedWorld()
     const submissionId = mintId()

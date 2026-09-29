@@ -35,9 +35,9 @@ export type FormActionNotify = (props: {
 }) => Promise<void>
 
 /**
- * Run a submission's actions once, after its commit. Field writes (points +
- * set values) go in ONE custom-field batch so their events fire after it
- * commits; a stale field is dropped first so it cannot roll the rest back.
+ * Run a submission's actions once, after its commit. Each field batch emits
+ * its events after it commits; a stale field is dropped first so it cannot
+ * roll the rest of its batch back.
  */
 export async function runFormActions(props: {
   db: DatabaseClient
@@ -59,11 +59,14 @@ export async function runFormActions(props: {
   const of = <T extends FormAction["type"]>(type: T) =>
     form.actions.filter((a): a is FormActionOf<T> => a.type === type)
 
-  await runFieldActions({
-    ...props,
-    points: of("addPoints"),
-    sets: of("setField"),
-  }).catch(warn("field update"))
+  // Points and set values are separate batches: a set that the field
+  // refuses at write time must not roll the points back (skeptic, s220).
+  await runFieldActions({ ...props, points: of("addPoints"), sets: [] }).catch(
+    warn("points"),
+  )
+  await runFieldActions({ ...props, points: [], sets: of("setField") }).catch(
+    warn("set field"),
+  )
 
   const removeNames = [...new Set(of("removeTags").flatMap((a) => a.names))]
   if (removeNames.length > 0) {

@@ -4,12 +4,10 @@ import {
   db,
   eq,
   inArray,
+  sql,
 } from "@chatbotx.io/database/client"
 import { contactCustomFieldRepository } from "@chatbotx.io/database/repositories"
-import {
-  contactCustomFieldModel,
-  contactModel,
-} from "@chatbotx.io/database/schema"
+import { contactCustomFieldModel } from "@chatbotx.io/database/schema"
 import { emitCustomFieldChanged } from "@chatbotx.io/events"
 import {
   FieldOperationType,
@@ -278,19 +276,21 @@ class ContactCustomFieldService extends BaseService {
       newValue: string
     }> = []
 
-    // Lock each contact row first, in id order (two bulk ops never lock in
+    // Serialize read-modify-write per contact with a transaction-scoped
+    // ADVISORY lock, in id order (two bulk ops never wait on each other in
     // opposite orders): with no field row yet there is nothing for the
     // `FOR UPDATE` below to lock, so two increments both read "empty" and
-    // one overwrote the other (lost points, real-PG proof s220 A2-3).
+    // one overwrote the other (lost points, real-PG proof s220 A2-3). Not a
+    // Contact row lock: a submission's FK check takes KEY SHARE on the
+    // Contact while holding a field row, and FOR UPDATE on the Contact
+    // deadlocked against it (Codex probe).
     const ordered = [...contacts].sort((a, b) =>
       BigInt(a.id) < BigInt(b.id) ? -1 : 1,
     )
     for (const contact of ordered) {
-      await tx
-        .select({ id: contactModel.id })
-        .from(contactModel)
-        .where(eq(contactModel.id, contact.id))
-        .for("update")
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`contact-field-op:${contact.id}`}, 0))`,
+      )
       const [contactCustomField] = await tx
         .select({
           value: contactCustomFieldModel.value,

@@ -2,6 +2,7 @@ import { formSettingsSchema } from "@chatbotx.io/database/partials"
 import { describe, expect, test, vi } from "vitest"
 
 vi.mock("@chatbotx.io/database/client", () => ({
+  db: {},
   and: (...c: unknown[]) => ({ c }),
   eq: (f: unknown, v: unknown) => ({ f, v }),
   inArray: (f: unknown, v: unknown) => ({ f, v }),
@@ -44,11 +45,16 @@ const txWith = (rows: {
   return { select } as never
 }
 
-const run = (actions: unknown[], rows: Parameters<typeof txWith>[0] = {}) =>
+const run = (
+  actions: unknown[],
+  rows: Parameters<typeof txWith>[0] = {},
+  mappedCustomFieldIds: string[] = [],
+) =>
   assertFormActionRefs({
     tx: txWith(rows),
     workspaceId: "ws-1",
     actions: formSettingsSchema.parse({ actions }).actions,
+    mappedCustomFieldIds,
   })
 
 describe("form action schema (s220 A2-3)", () => {
@@ -84,7 +90,7 @@ describe("assertFormActionRefs", () => {
         {
           fields: [
             { id: "10", type: "number" },
-            { id: "11", type: "text" },
+            { id: "11", type: "shortText" },
           ],
           members: [{ userId: "7" }],
         },
@@ -95,12 +101,40 @@ describe("assertFormActionRefs", () => {
   test("points into a non-number field, or a field not here, refuse with its path", async () => {
     await expect(
       run([{ type: "addPoints", customFieldId: "11" }], {
-        fields: [{ id: "11", type: "text" }],
+        fields: [{ id: "11", type: "shortText" }],
       }),
     ).rejects.toThrow("number field")
     await expect(
       run([{ type: "setField", customFieldId: "99", value: "x" }]),
     ).rejects.toThrow("does not exist")
+  })
+
+  test("a set value the field would refuse at write time refuses at save (skeptic HIGH)", async () => {
+    await expect(
+      run([{ type: "setField", customFieldId: "12", value: "lots" }], {
+        fields: [{ id: "12", type: "number" }],
+      }),
+    ).rejects.toThrow()
+    await expect(
+      run([{ type: "setField", customFieldId: "13", value: "Gold" }], {
+        fields: [{ id: "13", type: "select", options: ["Silver"] } as never],
+      }),
+    ).rejects.toThrow()
+    await expect(
+      run([{ type: "setField", customFieldId: "13", value: "silver" }], {
+        fields: [{ id: "13", type: "select", options: ["Silver"] } as never],
+      }),
+    ).resolves.toBeUndefined()
+  })
+
+  test("points into a field the form's own questions write refuse (fill-blanks would overwrite them)", async () => {
+    await expect(
+      run(
+        [{ type: "addPoints", customFieldId: "10" }],
+        { fields: [{ id: "10", type: "number" }] },
+        ["10"],
+      ),
+    ).rejects.toThrow("points need a field of their own")
   })
 
   test("a notified user who is not a member refuses", async () => {

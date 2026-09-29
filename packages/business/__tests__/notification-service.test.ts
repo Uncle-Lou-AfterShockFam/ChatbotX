@@ -620,4 +620,31 @@ describe("notificationService.notifyFormSubmission (s220 A2-3)", () => {
     expect(m.queueAdd).not.toHaveBeenCalled()
     expect(m.sendToMember).not.toHaveBeenCalled()
   })
+
+  test("one recipient's failed insert does not skip the next (skeptic, s220)", async () => {
+    m.state.member = contactsMember()
+    m.state.insertReturns = [{ ...FORM_ROW, id: "n-2", userId: "u-3" }]
+    const realInsert = m.db.insert
+    let calls = 0
+    m.db.insert = () => {
+      calls++
+      if (calls === 1) {
+        throw new Error("connection reset")
+      }
+      return realInsert()
+    }
+    try {
+      const outcomes = await notificationService.notifyFormSubmission({
+        ...FORM_INPUT,
+        userIds: ["u-2", "u-3"],
+      })
+      expect(outcomes.map((o) => o.notification?.id ?? null)).toEqual([
+        null,
+        "n-2",
+      ])
+      expect(m.logWarn).toHaveBeenCalled()
+    } finally {
+      m.db.insert = realInsert
+    }
+  })
 })
