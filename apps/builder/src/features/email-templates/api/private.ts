@@ -5,7 +5,11 @@ import z from "zod"
 import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
 import { workspaceAuthorizedMidddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
-import { emailTemplateData, emailTemplateResource } from "../schema/resource"
+import {
+  emailTemplateData,
+  emailTemplateResource,
+  includeArchivedParam,
+} from "../schema/resource"
 
 /** Email templates (roadmap B2): workspace-wide, like flows. */
 const tags = ["Email templates"]
@@ -22,7 +26,7 @@ const privateListEmailTemplatesAPI = authorizedAPI
   })
   .input(
     withWorkspaceIdSchema.and(
-      z.object({ includeArchived: z.coerce.boolean().optional() }),
+      z.object({ includeArchived: includeArchivedParam }),
     ),
   )
   .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)

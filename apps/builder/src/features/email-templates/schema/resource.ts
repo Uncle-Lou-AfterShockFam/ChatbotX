@@ -35,3 +35,15 @@ export const emailTemplateData = z
       ),
   })
   .strict()
+
+/**
+ * `includeArchived` from a JSON body (a boolean) or a query string, where
+ * ONLY "true" / "false" are accepted: z.coerce.boolean() would turn
+ * `?includeArchived=false` into true (any non-empty string).
+ */
+export const includeArchivedParam = z
+  .union([
+    z.boolean(),
+    z.enum(["true", "false"]).transform((value) => value === "true"),
+  ])
+  .optional()

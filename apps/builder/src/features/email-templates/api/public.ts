@@ -4,12 +4,17 @@ import { zodBigintAsString } from "@chatbotx.io/utils"
 import { z } from "zod"
 import {
   possibleErrorsOnCreatingResource,
+  possibleErrorsOnDeletingResource,
   possibleErrorsOnFindingResource,
   possibleErrorsOnListingResource,
   possibleErrorsOnMutatingResource,
 } from "@/lib/orpc/orpc-error-helper"
 import { workspaceTokenAuthAPIForScope } from "@/orpc"
-import { emailTemplateData, emailTemplateResource } from "../schema/resource"
+import {
+  emailTemplateData,
+  emailTemplateResource,
+  includeArchivedParam,
+} from "../schema/resource"
 
 /** Email templates over the workspace token (scope `automation`, like flows). */
 const workspaceTokenAuthAPI = workspaceTokenAuthAPIForScope("automation")
@@ -30,10 +35,9 @@ export const emailTemplatesPublicRouter = {
     })
     .input(
       z.object({
-        includeArchived: z.coerce
-          .boolean()
-          .optional()
-          .describe("Also return archived templates."),
+        includeArchived: includeArchivedParam.describe(
+          "Also return archived templates (true/false).",
+        ),
       }),
     )
     .output(z.object({ data: z.array(emailTemplateResource) }))
@@ -146,7 +150,7 @@ export const emailTemplatesPublicRouter = {
       tags,
     })
     .input(idInput)
-    .errors(possibleErrorsOnMutatingResource)
+    .errors(possibleErrorsOnDeletingResource)
     .handler(async ({ input, context }) => {
       await emailTemplateService.delete({
         workspaceId: context.workspace.id,
