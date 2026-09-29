@@ -15,8 +15,8 @@ import {
   contactNoteModel,
   dealActivityModel,
   dealModel,
-  questionnaireModel,
-  questionnaireSubmissionModel,
+  formModel,
+  formSubmissionModel,
 } from "@chatbotx.io/database/schema"
 import { unionAll } from "drizzle-orm/pg-core"
 import { type ContactAccessScope, contactService } from "../contact/service"
@@ -89,7 +89,7 @@ function parseKinds(
 /**
  * `(at, id) < (anchorAt, anchorId)` built from the BRANCH'S OWN columns: a
  * bare `"createdAt"` would be ambiguous in the branches that join a second
- * table (deal activity + deal, submission + questionnaire, appointment +
+ * table (deal activity + deal, submission + form, appointment +
  * calendar). A malformed cursor = first page (no predicate).
  */
 function cursorFor(cursor: string | null | undefined): CursorFor {
@@ -105,7 +105,7 @@ function cursorFor(cursor: string | null | undefined): CursorFor {
 /**
  * Contact / Company 360 timelines (s195). One `UNION ALL` over the MAIN
  * database only: company change log, company / contact notes, the activity of
- * the deals the viewer may see, questionnaire submissions and appointments of
+ * the deals the viewer may see, form submissions and appointments of
  * the contacts in scope. Messages live on the sharded message store and are
  * NOT here: the pages show them as their own tab. Keyset paged on `(at, id)`.
  */
@@ -144,7 +144,7 @@ class CrmTimelineService {
               at: companyActivityModel.createdAt,
               payload: sql<Record<string, unknown>>`jsonb_build_object(
                 'type', ${companyActivityModel.type},
-                'actorId', ${companyActivityModel.actorId},
+                'actorId', ${companyActivityModel.actorId}::text,
                 'data', ${companyActivityModel.payload}
               )`.as("payload"),
             })
@@ -167,7 +167,7 @@ class CrmTimelineService {
               at: companyNoteModel.createdAt,
               payload: sql<Record<string, unknown>>`jsonb_build_object(
                 'text', ${companyNoteModel.text},
-                'createdById', ${companyNoteModel.createdById}
+                'createdById', ${companyNoteModel.createdById}::text
               )`.as("payload"),
             })
             .from(companyNoteModel)
@@ -240,7 +240,7 @@ class CrmTimelineService {
               at: contactNoteModel.createdAt,
               payload: sql<Record<string, unknown>>`jsonb_build_object(
                 'text', ${contactNoteModel.text},
-                'createdById', ${contactNoteModel.createdById}
+                'createdById', ${contactNoteModel.createdById}::text
               )`.as("payload"),
             })
             .from(contactNoteModel)
@@ -304,11 +304,11 @@ class CrmTimelineService {
               id: dealActivityModel.id,
               at: dealActivityModel.createdAt,
               payload: sql<Record<string, unknown>>`jsonb_build_object(
-                'dealId', ${dealModel.id},
+                'dealId', ${dealModel.id}::text,
                 'dealTitle', ${dealModel.title},
-                'pipelineId', ${dealModel.pipelineId},
+                'pipelineId', ${dealModel.pipelineId}::text,
                 'type', ${dealActivityModel.type},
-                'actorId', ${dealActivityModel.actorId},
+                'actorId', ${dealActivityModel.actorId}::text,
                 'data', ${dealActivityModel.payload}
               )`.as("payload"),
             })
@@ -331,35 +331,25 @@ class CrmTimelineService {
           tx
             .select({
               kind: sql<string>`'submission'`.as("kind"),
-              id: questionnaireSubmissionModel.id,
-              at: questionnaireSubmissionModel.createdAt,
+              id: formSubmissionModel.id,
+              at: formSubmissionModel.createdAt,
               payload: sql<Record<string, unknown>>`jsonb_build_object(
-                'questionnaireId', ${questionnaireSubmissionModel.questionnaireId},
-                'questionnaireName', ${questionnaireModel.name},
-                'contactId', ${questionnaireSubmissionModel.contactId},
-                'status', ${questionnaireSubmissionModel.status},
-                'totalPoints', ${questionnaireSubmissionModel.totalPoints},
-                'completedAt', ${questionnaireSubmissionModel.completedAt}
+                'formId', ${formSubmissionModel.formId}::text,
+                'formTitle', ${formModel.title},
+                'contactId', ${formSubmissionModel.contactId}::text,
+                'channel', ${formSubmissionModel.channel},
+                'score', ${formSubmissionModel.score}
               )`.as("payload"),
             })
-            .from(questionnaireSubmissionModel)
-            .innerJoin(
-              questionnaireModel,
-              eq(
-                questionnaireSubmissionModel.questionnaireId,
-                questionnaireModel.id,
-              ),
-            )
+            .from(formSubmissionModel)
+            .innerJoin(formModel, eq(formSubmissionModel.formId, formModel.id))
             .where(
               and(
-                eq(questionnaireSubmissionModel.workspaceId, workspaceId),
+                eq(formSubmissionModel.workspaceId, workspaceId),
                 contactIds.length === 0
                   ? sql`false`
-                  : inArray(questionnaireSubmissionModel.contactId, contactIds),
-                c(
-                  questionnaireSubmissionModel.createdAt,
-                  questionnaireSubmissionModel.id,
-                ),
+                  : inArray(formSubmissionModel.contactId, contactIds),
+                c(formSubmissionModel.createdAt, formSubmissionModel.id),
               ),
             ),
       },
@@ -372,9 +362,9 @@ class CrmTimelineService {
               id: appointmentModel.id,
               at: appointmentModel.createdAt,
               payload: sql<Record<string, unknown>>`jsonb_build_object(
-                'calendarId', ${appointmentModel.calendarId},
+                'calendarId', ${appointmentModel.calendarId}::text,
                 'calendarName', ${appointmentCalendarModel.name},
-                'contactId', ${appointmentModel.contactId},
+                'contactId', ${appointmentModel.contactId}::text,
                 'status', ${appointmentModel.status},
                 'startAt', ${appointmentModel.startAt},
                 'endAt', ${appointmentModel.endAt}

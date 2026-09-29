@@ -247,17 +247,17 @@ export const CONTACT_FILTER_FIELD_DEFINITIONS = [
     optionSource: "reflinks",
   },
   {
-    field: contactFilterFields.enum.questionnaireStarted,
+    field: contactFilterFields.enum.formStarted,
     schemaKind: "boolean",
     optionSource: "none",
   },
   {
-    field: contactFilterFields.enum.questionnaireInProgress,
+    field: contactFilterFields.enum.formInProgress,
     schemaKind: "boolean",
     optionSource: "none",
   },
   {
-    field: contactFilterFields.enum.questionnaireFinished,
+    field: contactFilterFields.enum.formSubmitted,
     schemaKind: "boolean",
     optionSource: "none",
   },

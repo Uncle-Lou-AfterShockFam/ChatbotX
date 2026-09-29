@@ -605,9 +605,9 @@
       "executedFlow": "Udført flow",
       "executedStep": "Udført trin",
       "consecutiveAiFailures": "Antal AI-fejl i træk",
-      "questionnaireStarted": "Spørgeskema startet",
-      "questionnaireInProgress": "Spørgeskema i gang",
-      "questionnaireFinished": "Spørgeskema afsluttet",
+      "formStarted": "Form started",
+      "formInProgress": "Form in progress",
+      "formSubmitted": "Form submitted",
       "couponTopic": "Kupon",
       "votedOnPoll": "Stemte i afstemningen",
       "lastComment": "Seneste kommentar",
@@ -7359,6 +7359,10 @@
     "noTasks": "No tasks.",
     "taskOf": "Deal: {deal}",
     "noSubmissions": "No submissions yet.",
+    "channel": {
+      "web": "Web",
+      "chat": "Chat"
+    },
     "points": "{points} points",
     "noNotes": "No notes yet.",
     "addNote": "Add note",

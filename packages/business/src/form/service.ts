@@ -4,6 +4,7 @@ import {
   db,
   desc,
   eq,
+  inArray,
   isUniqueViolationError,
   type SQL,
   sql,
@@ -814,6 +815,48 @@ export class FormService extends BaseService {
   }
 
   // ---- submissions ------------------------------------------------------
+
+  /**
+   * The Contact / Company 360 "Submissions" tab (s226a, replaced the
+   * questionnaire list): the newest form submissions of the given contacts,
+   * any form, either channel. The caller has already narrowed `contactIds` to
+   * the viewer's contact scope.
+   */
+  async listByContactIds(props: {
+    workspaceId: string
+    contactIds: string[]
+    limit?: number
+    tx?: DatabaseClient
+  }) {
+    const { workspaceId, contactIds, tx = db } = props
+    const limit = Math.min(Math.max(Math.trunc(props.limit ?? 50), 1), 200)
+    if (contactIds.length === 0) {
+      return []
+    }
+    return await tx
+      .select({
+        id: formSubmissionModel.id,
+        formId: formSubmissionModel.formId,
+        formTitle: formModel.title,
+        contactId: formSubmissionModel.contactId,
+        channel: formSubmissionModel.channel,
+        score: formSubmissionModel.score,
+        createdAt: formSubmissionModel.createdAt,
+      })
+      .from(formSubmissionModel)
+      .innerJoin(formModel, eq(formSubmissionModel.formId, formModel.id))
+      .where(
+        and(
+          eq(formSubmissionModel.workspaceId, workspaceId),
+          inArray(formSubmissionModel.contactId, contactIds),
+        ),
+      )
+      .orderBy(
+        desc(formSubmissionModel.createdAt),
+        desc(formSubmissionModel.id),
+      )
+      .limit(limit)
+  }
 
   async listSubmissions(props: {
     workspaceId: string

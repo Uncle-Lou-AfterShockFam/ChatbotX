@@ -605,9 +605,9 @@
       "executedFlow": "Đã thực thi luồng",
       "executedStep": "Đã thực thi bước",
       "consecutiveAiFailures": "Số lần AI lỗi liên tiếp",
-      "questionnaireStarted": "Bảng câu hỏi đã bắt đầu",
-      "questionnaireInProgress": "Bảng câu hỏi đang thực hiện",
-      "questionnaireFinished": "Bảng câu hỏi đã hoàn tất",
+      "formStarted": "Form started",
+      "formInProgress": "Form in progress",
+      "formSubmitted": "Form submitted",
       "couponTopic": "Mã giảm giá",
       "votedOnPoll": "Đã bình chọn khảo sát",
       "lastComment": "Bình luận cuối",
@@ -7359,6 +7359,10 @@
     "noTasks": "No tasks.",
     "taskOf": "Deal: {deal}",
     "noSubmissions": "No submissions yet.",
+    "channel": {
+      "web": "Web",
+      "chat": "Chat"
+    },
     "points": "{points} points",
     "noNotes": "No notes yet.",
     "addNote": "Add note",

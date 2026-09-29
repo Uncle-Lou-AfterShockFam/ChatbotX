@@ -101,8 +101,10 @@ function describeRow(
     case "submission":
       return {
         text: t("crm.timeline.submission", {
-          name: String(p.questionnaireName ?? ""),
-          status: String(p.status ?? ""),
+          name: String(p.formTitle ?? ""),
+          status: t(
+            p.channel === "chat" ? "crm.channel.chat" : "crm.channel.web",
+          ),
         }),
       }
     case "appointment":

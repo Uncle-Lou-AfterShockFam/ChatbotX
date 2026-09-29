@@ -94,7 +94,7 @@ describe("TimelineList", () => {
             kind: "submission",
             id: "3",
             at,
-            payload: { questionnaireName: "Intake", status: "completed" },
+            payload: { formTitle: "Intake", channel: "chat" },
           },
         ]),
       ],
@@ -106,7 +106,7 @@ describe("TimelineList", () => {
     expect(rows[1]?.textContent).toContain("Roof: ")
     expect(rows[1]?.textContent).toContain('"from":"New"')
     expect(rows[2]?.textContent).toContain(
-      'crm.timeline.submission|{"name":"Intake","status":"completed"}',
+      'crm.timeline.submission|{"name":"Intake","status":"crm.channel.chat"}',
     )
     const button = rows[1]?.querySelector("button") as HTMLButtonElement
     act(() => button.click())

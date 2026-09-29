@@ -1111,9 +1111,9 @@
       "optedInForSms": "已同意接收短信",
       "phone": "电话",
       "phoneWasVerified": "电话已验证",
-      "questionnaireFinished": "问卷完成",
-      "questionnaireInProgress": "问卷进行中",
-      "questionnaireStarted": "问卷已开始",
+      "formSubmitted": "Form submitted",
+      "formInProgress": "Form in progress",
+      "formStarted": "Form started",
       "reactedOnPost": "回复贴文",
       "sentMessage": "已发送消息",
       "shoppingCartContainsItems": "购物车包含商品",
@@ -7359,6 +7359,10 @@
     "noTasks": "No tasks.",
     "taskOf": "Deal: {deal}",
     "noSubmissions": "No submissions yet.",
+    "channel": {
+      "web": "Web",
+      "chat": "Chat"
+    },
     "points": "{points} points",
     "noNotes": "No notes yet.",
     "addNote": "Add note",

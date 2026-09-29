@@ -1,6 +1,6 @@
 import {
   companyActivityTypes,
-  questionnaireSubmissionStatuses,
+  formChannels,
 } from "@chatbotx.io/database/partials"
 import {
   companyActivityModel,
@@ -54,14 +54,15 @@ export const timelinePageResource = z.object({
 })
 export type TimelinePageResource = z.infer<typeof timelinePageResource>
 
+/** One form submission on the Contact / Company 360 "Submissions" tab. */
 export const submissionSummaryResource = z.object({
   id: z.string(),
-  questionnaireId: z.string(),
-  questionnaireName: z.string(),
-  contactId: z.string(),
-  status: questionnaireSubmissionStatuses,
-  totalPoints: z.number().int().nullable(),
-  completedAt: z.coerce.date().nullable(),
+  formId: z.string(),
+  formTitle: z.string(),
+  /** Never null here (the query filters by contact); the column is nullable. */
+  contactId: z.string().nullable(),
+  channel: formChannels,
+  score: z.number().int().nullable(),
   createdAt: z.coerce.date(),
 })
 export type SubmissionSummaryResource = z.infer<

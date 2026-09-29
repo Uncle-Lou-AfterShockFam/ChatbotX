@@ -6062,9 +6062,9 @@
       "executedFlow": "תהליך שבוצע",
       "executedStep": "שלב שבוצע",
       "consecutiveAiFailures": "מספר כשלי AI רצופים",
-      "questionnaireStarted": "השאלון התחיל",
-      "questionnaireInProgress": "השאלון בתהליך",
-      "questionnaireFinished": "השאלון הסתיים",
+      "formStarted": "Form started",
+      "formInProgress": "Form in progress",
+      "formSubmitted": "Form submitted",
       "couponTopic": "קופון",
       "votedOnPoll": "הצביע בסקר",
       "lastComment": "תגובה אחרונה",
@@ -7359,6 +7359,10 @@
     "noTasks": "No tasks.",
     "taskOf": "Deal: {deal}",
     "noSubmissions": "No submissions yet.",
+    "channel": {
+      "web": "Web",
+      "chat": "Chat"
+    },
     "points": "{points} points",
     "noNotes": "No notes yet.",
     "addNote": "Add note",

@@ -2333,9 +2333,9 @@
       "executedFlow": "執行流程",
       "executedStep": "執行步驟",
       "consecutiveAiFailures": "AI連續失敗次數",
-      "questionnaireStarted": "問卷已開始",
-      "questionnaireInProgress": "問卷進行中",
-      "questionnaireFinished": "問卷完成",
+      "formStarted": "Form started",
+      "formInProgress": "Form in progress",
+      "formSubmitted": "Form submitted",
       "couponTopic": "優惠券",
       "votedOnPoll": "已投票",
       "lastComment": "最後留言",
@@ -7359,6 +7359,10 @@
     "noTasks": "No tasks.",
     "taskOf": "Deal: {deal}",
     "noSubmissions": "No submissions yet.",
+    "channel": {
+      "web": "Web",
+      "chat": "Chat"
+    },
     "points": "{points} points",
     "noNotes": "No notes yet.",
     "addNote": "Add note",

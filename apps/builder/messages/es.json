@@ -605,9 +605,9 @@
       "executedFlow": "Flujo ejecutado",
       "executedStep": "Paso ejecutado",
       "consecutiveAiFailures": "Número de fallos consecutivos de la IA",
-      "questionnaireStarted": "Cuestionario iniciado",
-      "questionnaireInProgress": "Cuestionario en curso",
-      "questionnaireFinished": "Cuestionario finalizado",
+      "formStarted": "Form started",
+      "formInProgress": "Form in progress",
+      "formSubmitted": "Form submitted",
       "couponTopic": "Cupón",
       "votedOnPoll": "Votó en la encuesta",
       "lastComment": "Último comentario",
@@ -7359,6 +7359,10 @@
     "noTasks": "No tasks.",
     "taskOf": "Deal: {deal}",
     "noSubmissions": "No submissions yet.",
+    "channel": {
+      "web": "Web",
+      "chat": "Chat"
+    },
     "points": "{points} points",
     "noNotes": "No notes yet.",
     "addNote": "Add note",

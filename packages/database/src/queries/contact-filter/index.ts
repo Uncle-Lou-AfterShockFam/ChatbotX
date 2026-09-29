@@ -12,8 +12,9 @@ import {
   contactModel,
   conversationModel,
   couponModel,
-  questionnaireModel,
-  questionnaireSubmissionModel,
+  formSessionModel,
+  formSubmissionModel,
+  formVisitModel,
 } from "../../schema"
 import { escapeLikePattern, likeContains } from "../../utils"
 import { buildBotFieldWhere } from "./bot-field-predicates"
@@ -50,6 +51,7 @@ import type {
   ContactFilterConditionInput as FilterConditionInput,
   ContactFilterCriteriaInput as FilterCriteriaInput,
   ContactWhereInput as FilterWhereInput,
+  RelationExists,
 } from "./types"
 
 export {
@@ -137,10 +139,30 @@ const conversationExists = joinTableExists(
   conversationModel.contactId,
 )
 
-const questionnaireSubmissionExists = joinTableExists(
-  questionnaireSubmissionModel,
-  questionnaireSubmissionModel.contactId,
-)
+/**
+ * Form activity of a contact (s226a, replaced the questionnaire fields):
+ * `submitted` = a FormSubmission (web or chat); `inProgress` = a chat
+ * FormSession still asking, or a web FormVisit neither submitted nor
+ * abandoned; `started` = any of the three. Every branch is pinned to the
+ * contact's own workspace.
+ */
+type FormActivity = "started" | "inProgress" | "submitted"
+
+const formActivityExists =
+  (activity: FormActivity): RelationExists =>
+  (_predicate, negate = false) =>
+    existsWhere((contactId, contactTable) => {
+      const submission = sql`SELECT 1 FROM ${formSubmissionModel} WHERE ${formSubmissionModel.contactId} = ${contactId} AND ${formSubmissionModel.workspaceId} = ${contactTable.workspaceId}`
+      if (activity === "submitted") {
+        return submission
+      }
+      const session = sql`SELECT 1 FROM ${formSessionModel} WHERE ${formSessionModel.contactId} = ${contactId} AND ${formSessionModel.workspaceId} = ${contactTable.workspaceId}`
+      const visit = sql`SELECT 1 FROM ${formVisitModel} WHERE ${formVisitModel.contactId} = ${contactId} AND ${formVisitModel.workspaceId} = ${contactTable.workspaceId}`
+      if (activity === "inProgress") {
+        return sql`${session} AND ${formSessionModel.status} = 'inProgress' UNION ALL ${visit} AND ${formVisitModel.submittedAt} IS NULL AND ${formVisitModel.abandonEmittedAt} IS NULL`
+      }
+      return sql`${submission} UNION ALL ${session} UNION ALL ${visit}`
+    }, negate)
 
 const couponExists = (
   predicate: (contactId: AnyColumn, workspaceId: AnyColumn) => SQL,
@@ -611,26 +633,26 @@ function buildConditionWhere(
     case "ctwaConversion":
       return buildRelationSetWhere(field, operator, value)
 
-    case "questionnaireStarted":
+    case "formStarted":
       return buildExistsBooleanWhere(
-        questionnaireSubmissionExists,
-        sql`${questionnaireSubmissionModel.questionnaireId} IN (SELECT ${questionnaireModel.id} FROM ${questionnaireModel} WHERE ${questionnaireModel.workspaceId} = ${questionnaireSubmissionModel.workspaceId})`,
+        formActivityExists("started"),
+        sql`TRUE`,
         operator,
         value,
       )
 
-    case "questionnaireInProgress":
+    case "formInProgress":
       return buildExistsBooleanWhere(
-        questionnaireSubmissionExists,
-        sql`${questionnaireSubmissionModel.status} = 'inProgress' AND ${questionnaireSubmissionModel.questionnaireId} IN (SELECT ${questionnaireModel.id} FROM ${questionnaireModel} WHERE ${questionnaireModel.workspaceId} = ${questionnaireSubmissionModel.workspaceId})`,
+        formActivityExists("inProgress"),
+        sql`TRUE`,
         operator,
         value,
       )
 
-    case "questionnaireFinished":
+    case "formSubmitted":
       return buildExistsBooleanWhere(
-        questionnaireSubmissionExists,
-        sql`${questionnaireSubmissionModel.status} = 'completed' AND ${questionnaireSubmissionModel.questionnaireId} IN (SELECT ${questionnaireModel.id} FROM ${questionnaireModel} WHERE ${questionnaireModel.workspaceId} = ${questionnaireSubmissionModel.workspaceId})`,
+        formActivityExists("submitted"),
+        sql`TRUE`,
         operator,
         value,
       )

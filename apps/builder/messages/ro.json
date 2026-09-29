@@ -1475,9 +1475,9 @@
       "executedFlow": "Flux executat",
       "executedStep": "Pas executat",
       "consecutiveAiFailures": "Numărul de eșecuri AI consecutive",
-      "questionnaireStarted": "Chestionar început",
-      "questionnaireInProgress": "Chestionar în desfășurare",
-      "questionnaireFinished": "Chestionar finalizat",
+      "formStarted": "Form started",
+      "formInProgress": "Form in progress",
+      "formSubmitted": "Form submitted",
       "couponTopic": "Cupon",
       "votedOnPoll": "A votat în sondaj",
       "lastComment": "Ultimul comentariu",
@@ -7359,6 +7359,10 @@
     "noTasks": "No tasks.",
     "taskOf": "Deal: {deal}",
     "noSubmissions": "No submissions yet.",
+    "channel": {
+      "web": "Web",
+      "chat": "Chat"
+    },
     "points": "{points} points",
     "noNotes": "No notes yet.",
     "addNote": "Add note",

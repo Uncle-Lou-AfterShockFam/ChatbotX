@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useFormatter, useTranslations } from "next-intl"
 import type { SubmissionSummaryResource } from "../schema/resource"
 
-/** Questionnaire submissions; each row opens the questionnaire's applicants page (the answers live there). */
+/** Form submissions (web or chat); each row opens the form's submissions page (the answers live there). */
 export function SubmissionsList({
   workspaceId,
   submissions,
@@ -30,22 +30,22 @@ export function SubmissionsList({
           <div className="min-w-0">
             <Link
               className="truncate font-medium hover:underline"
-              href={`/space/${workspaceId}/questionnaires/${s.questionnaireId}/applicants`}
+              href={`/space/${workspaceId}/forms/${s.formId}/submissions`}
             >
-              {s.questionnaireName}
+              {s.formTitle}
             </Link>
             <div className="text-muted-foreground text-xs">
-              {format.dateTime(new Date(s.completedAt ?? s.createdAt), {
+              {format.dateTime(new Date(s.createdAt), {
                 dateStyle: "medium",
                 timeStyle: "short",
               })}
-              {s.totalPoints === null
+              {s.score === null
                 ? ""
-                : ` · ${t("crm.points", { points: s.totalPoints })}`}
+                : ` · ${t("crm.points", { points: s.score })}`}
             </div>
           </div>
-          <Badge variant={s.status === "completed" ? "default" : "outline"}>
-            {s.status}
+          <Badge variant="outline">
+            {t(s.channel === "chat" ? "crm.channel.chat" : "crm.channel.web")}
           </Badge>
         </li>
       ))}
