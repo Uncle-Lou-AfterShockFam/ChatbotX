@@ -8,14 +8,25 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true
 
-const { preview } = vi.hoisted(() => ({ preview: { current: {} as object } }))
+const { preview, previewVars } = vi.hoisted(() => ({
+  preview: { current: {} as object },
+  previewVars: [] as unknown[],
+}))
 
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }))
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 vi.mock("@/features/email-templates/provider/email-template-hooks", () => ({
-  useEmailTemplatePreview: () => preview.current,
+  useEmailTemplatePreview: (
+    _workspaceId: string,
+    _document: unknown,
+    _enabled: boolean,
+    vars?: Record<string, string>,
+  ) => {
+    previewVars.push(vars)
+    return preview.current
+  },
   useFlowOptions: () => ({ data: [] }),
 }))
 // The picker is a dialog over the media API: stand in with a button that
@@ -182,6 +193,30 @@ describe("EmailDocumentEditor (B2 phase 3)", () => {
     })
     const frame = el.querySelector('[data-testid="email-preview-frame"]')
     expect(frame?.getAttribute("sandbox")).toBe("")
+  })
+
+  test("s223b: the preview gets sample values for system-field tokens only, and says so", () => {
+    preview.current = {
+      data: { ok: true, html: "", text: "", missing: ["plan"], assets: {} },
+    }
+    const el = mount({
+      version: 1,
+      settings: { preheader: "For {{email}}" },
+      blocks: [
+        {
+          id: "5",
+          type: "text",
+          text: "<p>Hi {{first_name|friend}}, your {{plan}} {{bot_field:12}}</p>",
+        },
+      ],
+    })
+    expect(previewVars.at(-1)).toEqual({
+      email: "alex@example.com",
+      first_name: "Alex",
+    })
+    expect(
+      el.querySelector('[data-testid="email-preview-samples"]')?.textContent,
+    ).toContain("previewSamples")
   })
 
   test("removing a selected block clears the inspector", () => {

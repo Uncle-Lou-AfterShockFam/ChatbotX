@@ -7579,7 +7579,9 @@
         "underline": "Alleviivaus",
         "bulletList": "Luettelomerkit",
         "orderedList": "Numeroitu luettelo",
-        "link": "Linkki"
+        "link": "Linkki",
+        "color": "Tekstin väri",
+        "clearColor": "Poista väri"
       },
       "linkInvalid": "Vain https://, http:// ja mailto:-linkit ovat sallittuja.",
       "apply": "Käytä",
@@ -7649,6 +7651,7 @@
       "settings": "Sähköpostiasetukset",
       "preview": "Esikatselu",
       "previewUnavailable": "Esikatselu ei ole juuri nyt käytettävissä.",
+      "previewSamples": "Yhdistämiskentät näyttävät esimerkkiarvot: {list}",
       "previewMissing": "Ei ratkaistu esikatselussa: {list}",
       "previewPending": "Esikatselua muodostetaan…",
       "empty": "Lisää lohko aloittaaksesi."

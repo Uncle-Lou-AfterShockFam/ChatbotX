@@ -67,10 +67,12 @@ export const useEmailTemplatePreview = (
   workspaceId: string,
   document: unknown,
   enabled: boolean,
+  /** Sample merge values (lib/preview-samples.ts); part of the query key. */
+  vars?: Record<string, string>,
 ) =>
   useQuery(
     orpc.emailTemplatesAPI.privatePreviewEmailTemplateAPI.queryOptions({
-      input: { workspaceId, document },
+      input: { workspaceId, document, vars },
       enabled,
       placeholderData: (previous) => previous,
       staleTime: Number.POSITIVE_INFINITY,

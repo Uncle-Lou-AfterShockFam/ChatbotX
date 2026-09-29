@@ -7579,7 +7579,9 @@
         "underline": "קו תחתי",
         "bulletList": "רשימת תבליטים",
         "orderedList": "רשימה ממוספרת",
-        "link": "קישור"
+        "link": "קישור",
+        "color": "צבע טקסט",
+        "clearColor": "נקה צבע"
       },
       "linkInvalid": "מותרים רק קישורי https://, http:// ו-mailto:.",
       "apply": "החל",
@@ -7649,6 +7651,7 @@
       "settings": "הגדרות דואר אלקטרוני",
       "preview": "תצוגה מקדימה",
       "previewUnavailable": "התצוגה המקדימה אינה זמינה כרגע.",
+      "previewSamples": "שדות מיזוג מציגים ערכי דוגמה: {list}",
       "previewMissing": "לא נמצא פתרון בתצוגה המקדימה: {list}",
       "previewPending": "התצוגה המקדימה נטענת…",
       "empty": "הוסיפו בלוק כדי להתחיל."

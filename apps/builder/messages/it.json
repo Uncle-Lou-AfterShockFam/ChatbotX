@@ -7579,7 +7579,9 @@
         "underline": "Sottolineato",
         "bulletList": "Elenco puntato",
         "orderedList": "Elenco numerato",
-        "link": "Link"
+        "link": "Link",
+        "color": "Colore del testo",
+        "clearColor": "Rimuovi colore"
       },
       "linkInvalid": "Sono consentiti solo link https://, http:// e mailto:.",
       "apply": "Applica",
@@ -7649,6 +7651,7 @@
       "settings": "Impostazioni email",
       "preview": "Anteprima",
       "previewUnavailable": "L'anteprima non è disponibile al momento.",
+      "previewSamples": "I campi unione mostrano valori di esempio: {list}",
       "previewMissing": "Non risolto nell'anteprima: {list}",
       "previewPending": "Generazione dell'anteprima…",
       "empty": "Aggiungi un blocco per iniziare."

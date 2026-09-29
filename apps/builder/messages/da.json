@@ -7579,7 +7579,9 @@
         "underline": "Understreget",
         "bulletList": "Punktliste",
         "orderedList": "Nummereret liste",
-        "link": "Link"
+        "link": "Link",
+        "color": "Tekstfarve",
+        "clearColor": "Ryd farve"
       },
       "linkInvalid": "Kun https://, http:// og mailto:-links er tilladt.",
       "apply": "Anvend",
@@ -7649,6 +7651,7 @@
       "settings": "E-mailindstillinger",
       "preview": "Forhåndsvisning",
       "previewUnavailable": "Forhåndsvisningen er ikke tilgængelig lige nu.",
+      "previewSamples": "Flettefelter viser eksempelværdier: {list}",
       "previewMissing": "Ikke løst i forhåndsvisningen: {list}",
       "previewPending": "Genererer forhåndsvisning…",
       "empty": "Tilføj en blok for at starte."

@@ -7579,7 +7579,9 @@
         "underline": "底線",
         "bulletList": "項目符號清單",
         "orderedList": "編號清單",
-        "link": "連結"
+        "link": "連結",
+        "color": "文字顏色",
+        "clearColor": "清除顏色"
       },
       "linkInvalid": "僅允許 https://、http:// 及 mailto: 連結。",
       "apply": "套用",
@@ -7649,6 +7651,7 @@
       "settings": "郵件設定",
       "preview": "預覽",
       "previewUnavailable": "目前無法使用預覽。",
+      "previewSamples": "合併欄位顯示範例值：{list}",
       "previewMissing": "預覽中未解析：{list}",
       "previewPending": "正在產生預覽…",
       "empty": "新增區塊以開始。"

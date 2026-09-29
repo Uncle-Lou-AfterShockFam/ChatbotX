@@ -7579,7 +7579,9 @@
         "underline": "Gạch chân",
         "bulletList": "Danh sách dấu chấm",
         "orderedList": "Danh sách đánh số",
-        "link": "Liên kết"
+        "link": "Liên kết",
+        "color": "Màu chữ",
+        "clearColor": "Xóa màu"
       },
       "linkInvalid": "Chỉ cho phép liên kết https://, http:// và mailto:.",
       "apply": "Áp dụng",
@@ -7649,6 +7651,7 @@
       "settings": "Cài đặt email",
       "preview": "Xem trước",
       "previewUnavailable": "Hiện không thể xem trước.",
+      "previewSamples": "Các trường trộn hiển thị giá trị mẫu: {list}",
       "previewMissing": "Chưa được giải quyết trong bản xem trước: {list}",
       "previewPending": "Đang tạo bản xem trước…",
       "empty": "Thêm một khối để bắt đầu."

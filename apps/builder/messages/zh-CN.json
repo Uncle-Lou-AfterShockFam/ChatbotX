@@ -7579,7 +7579,9 @@
         "underline": "下划线",
         "bulletList": "项目符号列表",
         "orderedList": "编号列表",
-        "link": "链接"
+        "link": "链接",
+        "color": "文字颜色",
+        "clearColor": "清除颜色"
       },
       "linkInvalid": "仅允许 https://、http:// 和 mailto: 链接。",
       "apply": "应用",
@@ -7649,6 +7651,7 @@
       "settings": "邮件设置",
       "preview": "预览",
       "previewUnavailable": "预览目前不可用。",
+      "previewSamples": "合并字段显示示例值：{list}",
       "previewMissing": "预览中未解析：{list}",
       "previewPending": "正在生成预览…",
       "empty": "添加一个区块以开始。"

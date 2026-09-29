@@ -7579,7 +7579,9 @@
         "underline": "Understruken",
         "bulletList": "Punktlista",
         "orderedList": "Numrerad lista",
-        "link": "Länk"
+        "link": "Länk",
+        "color": "Textfärg",
+        "clearColor": "Rensa färg"
       },
       "linkInvalid": "Endast https://-, http://- och mailto:-länkar är tillåtna.",
       "apply": "Tillämpa",
@@ -7649,6 +7651,7 @@
       "settings": "E-postinställningar",
       "preview": "Förhandsgranskning",
       "previewUnavailable": "Förhandsgranskningen är inte tillgänglig just nu.",
+      "previewSamples": "Kopplingsfält visar exempelvärden: {list}",
       "previewMissing": "Inte matchat i förhandsgranskningen: {list}",
       "previewPending": "Skapar förhandsgranskning…",
       "empty": "Lägg till ett block för att börja."

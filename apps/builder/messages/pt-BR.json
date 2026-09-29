@@ -7579,7 +7579,9 @@
         "underline": "Sublinhado",
         "bulletList": "Lista com marcadores",
         "orderedList": "Lista numerada",
-        "link": "Link"
+        "link": "Link",
+        "color": "Cor do texto",
+        "clearColor": "Limpar cor"
       },
       "linkInvalid": "Somente links https://, http:// e mailto: são permitidos.",
       "apply": "Aplicar",
@@ -7649,6 +7651,7 @@
       "settings": "Configurações de e-mail",
       "preview": "Pré-visualização",
       "previewUnavailable": "A pré-visualização não está disponível agora.",
+      "previewSamples": "Os campos de mesclagem mostram valores de exemplo: {list}",
       "previewMissing": "Não resolvido na pré-visualização: {list}",
       "previewPending": "Gerando pré-visualização…",
       "empty": "Adicione um bloco para começar."

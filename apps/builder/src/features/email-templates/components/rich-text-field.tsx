@@ -8,6 +8,7 @@ import {
   PopoverTrigger,
 } from "@chatbotx.io/ui/components/ui/popover"
 import Mention from "@tiptap/extension-mention"
+import { Color, TextStyle } from "@tiptap/extension-text-style"
 import { EditorContent, useEditor } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import {
@@ -16,6 +17,7 @@ import {
   LinkIcon,
   ListIcon,
   ListOrderedIcon,
+  PaletteIcon,
   UnderlineIcon,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
@@ -32,10 +34,32 @@ import "@/components/tiptap/tiptap-editor.css"
 /** Link schemes the document schema and the sanitizer accept. */
 const SAFE_LINK = /^(https?:\/\/|mailto:)/i
 
+/** The only text colors the sanitizer keeps (`COLOR_ONLY`): `#rrggbb`. */
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/
+const DEFAULT_TEXT_COLOR = "#111111"
+const RGB_COLOR = /^rgb\(\s*(\d{1,3}),\s*(\d{1,3}),\s*(\d{1,3})\s*\)$/
+
+/** A stored color as `#rrggbb` for the picker (the DOM may hand back rgb()). */
+export function toHexColor(color: string): string | null {
+  if (HEX_COLOR.test(color)) {
+    return color.toLowerCase()
+  }
+  const rgb = RGB_COLOR.exec(color)
+  if (!rgb) {
+    return null
+  }
+  const parts = rgb.slice(1, 4).map(Number)
+  if (parts.some((n) => n > 255)) {
+    return null
+  }
+  return `#${parts.map((n) => n.toString(16).padStart(2, "0")).join("")}`
+}
+
 /**
  * The only StarterKit nodes/marks the email sanitizer keeps (p br strong em u
- * s a ul ol li): anything else would be stripped at render, so it is not
- * offered. Headings are a block type of their own (level on the block).
+ * s a ul ol li), plus a `span style="color:#rrggbb"` from TextStyle + Color:
+ * anything else would be stripped at render, so it is not offered. Headings
+ * are a block type of their own (level on the block).
  */
 export const richTextExtensions = [
   StarterKit.configure({
@@ -50,6 +74,8 @@ export const richTextExtensions = [
       isAllowedUri: (url) => SAFE_LINK.test(url),
     },
   }),
+  TextStyle,
+  Color,
 ]
 
 /**
@@ -154,6 +180,14 @@ export function RichTextField({
     setLinkOpen(false)
   }
 
+  const activeColor = String(editor?.getAttributes("textStyle").color ?? "")
+  const activeHex = toHexColor(activeColor)
+  const applyColor = (color: string) => {
+    if (HEX_COLOR.test(color)) {
+      editor?.chain().setColor(color.toLowerCase()).run()
+    }
+  }
+
   return (
     <div className="space-y-1">
       <div className="flex flex-wrap items-center gap-1">
@@ -211,6 +245,33 @@ export function RichTextField({
             </Button>
           </PopoverContent>
         </Popover>
+        <label
+          className="relative inline-flex size-9 cursor-pointer items-center justify-center rounded-md hover:bg-accent"
+          title={t("toolbar.color")}
+        >
+          <PaletteIcon
+            className="size-4"
+            style={activeHex ? { color: activeHex } : {}}
+          />
+          <input
+            aria-label={t("toolbar.color")}
+            className="absolute inset-0 cursor-pointer opacity-0"
+            data-testid={testId ? `${testId}-color` : undefined}
+            onChange={(e) => applyColor(e.target.value)}
+            type="color"
+            value={activeHex ?? DEFAULT_TEXT_COLOR}
+          />
+        </label>
+        {activeColor === "" ? null : (
+          <Button
+            onClick={() => editor?.chain().focus().unsetColor().run()}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            {t("toolbar.clearColor")}
+          </Button>
+        )}
         <InsertFieldPopover
           editor={editor}
           label={t("insertField")}

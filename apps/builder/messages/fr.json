@@ -7579,7 +7579,9 @@
         "underline": "Souligné",
         "bulletList": "Liste à puces",
         "orderedList": "Liste numérotée",
-        "link": "Lien"
+        "link": "Lien",
+        "color": "Couleur du texte",
+        "clearColor": "Effacer la couleur"
       },
       "linkInvalid": "Seuls les liens https://, http:// et mailto: sont autorisés.",
       "apply": "Appliquer",
@@ -7649,6 +7651,7 @@
       "settings": "Paramètres de l'e-mail",
       "preview": "Aperçu",
       "previewUnavailable": "L'aperçu n'est pas disponible pour le moment.",
+      "previewSamples": "Les champs de fusion affichent des valeurs d’exemple : {list}",
       "previewMissing": "Non résolu dans l'aperçu : {list}",
       "previewPending": "Génération de l'aperçu…",
       "empty": "Ajoutez un bloc pour commencer."

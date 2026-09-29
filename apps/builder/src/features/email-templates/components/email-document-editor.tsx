@@ -52,6 +52,7 @@ import {
   setColumnCount,
   updateBlock,
 } from "../lib/document-model"
+import { previewSampleVars } from "../lib/preview-samples"
 import { useEmailTemplatePreview } from "../provider/email-template-hooks"
 import { BlockInspector } from "./block-inspector"
 
@@ -425,6 +426,7 @@ function DocumentSettings({
       <div className="space-y-1">
         <Label className="text-xs">{t("background")}</Label>
         <Input
+          className="h-9 w-14 cursor-pointer p-1"
           onChange={(e) =>
             onChange({ ...settings, background: e.target.value })
           }
@@ -471,10 +473,12 @@ export function EmailDocumentEditor({
     schedulePreview(value)
   }, [value, schedulePreview])
 
+  const sampleVars = useMemo(() => previewSampleVars(previewDoc), [previewDoc])
   const preview = useEmailTemplatePreview(
     workspaceId,
     previewDoc,
     previewDoc.blocks.length > 0,
+    sampleVars,
   )
   const result = preview.data
 
@@ -610,6 +614,16 @@ export function EmailDocumentEditor({
           {preview.error ? (
             <p className="text-muted-foreground text-xs">
               {t("previewUnavailable")}
+            </p>
+          ) : null}
+          {result?.ok && Object.keys(sampleVars).length > 0 ? (
+            <p
+              className="text-muted-foreground text-xs"
+              data-testid="email-preview-samples"
+            >
+              {t("previewSamples", {
+                list: Object.keys(sampleVars).join(", "),
+              })}
             </p>
           ) : null}
           {result?.ok && result.missing.length > 0 ? (
