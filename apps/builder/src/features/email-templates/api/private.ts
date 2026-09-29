@@ -7,6 +7,8 @@ import { workspaceAuthorizedMidddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
 import {
   emailTemplateData,
+  emailTemplatePreviewInput,
+  emailTemplatePreviewResource,
   emailTemplateResource,
   includeArchivedParam,
 } from "../schema/resource"
@@ -115,7 +117,29 @@ const privateDeleteEmailTemplateAPI = authorizedAPI
     return { ok: true as const }
   })
 
+const privatePreviewEmailTemplateAPI = authorizedAPI
+  .route({
+    method: "POST",
+    path: "/workspaces/{workspaceId}/email-templates/preview",
+    summary: "Preview an email document",
+    description:
+      "Renders a draft document as a send would (sample merge values, no tracking). A schema miss returns ok false with each issue's path instead of an error.",
+    tags,
+  })
+  .input(withWorkspaceIdSchema.and(emailTemplatePreviewInput))
+  .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+  .output(emailTemplatePreviewResource)
+  .handler(
+    async ({ input }) =>
+      await emailTemplateService.preview({
+        workspaceId: input.workspaceId,
+        document: input.document,
+        vars: input.vars,
+      }),
+  )
+
 export const privateEmailTemplatesAPI = {
+  privatePreviewEmailTemplateAPI,
   privateListEmailTemplatesAPI,
   privateGetEmailTemplateAPI,
   privateCreateEmailTemplateAPI,

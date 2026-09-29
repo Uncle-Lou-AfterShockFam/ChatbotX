@@ -293,4 +293,65 @@ describe.skipIf(!databaseUrl)("emailTemplateService", () => {
         .blocks[0],
     ).toMatchObject({ asset: { fileId: mine } })
   })
+
+  test("s221b preview: renders a valid draft with sample vars and only this workspace's assets", async () => {
+    const workspaceId = await seedWorkspace()
+    const other = await seedWorkspace()
+    const mine = await seedMediaFile(workspaceId)
+    const theirs = await seedMediaFile(other)
+    const out = await emailTemplateService.preview({
+      workspaceId,
+      document: {
+        ...withAssets(mine, theirs),
+        blocks: [
+          ...withAssets(mine, theirs).blocks,
+          { id: "9", type: "text", text: "<p>Hi {{first_name|friend}}</p>" },
+        ],
+      },
+      vars: { first_name: "<b>Ada</b>" },
+    })
+    if (!out.ok) {
+      throw new Error("expected a render")
+    }
+    expect(out.html).toContain("Hi &lt;b&gt;Ada&lt;/b&gt;")
+    expect(Object.keys(out.assets)).toEqual([mine])
+    expect(out.missing).toContain(`asset:${theirs}`)
+    expect(out.html).not.toContain(`media/${theirs}`)
+  })
+
+  test("s221b preview: a schema miss returns its issues with paths, never throws", async () => {
+    const workspaceId = await seedWorkspace()
+    const out = await emailTemplateService.preview({
+      workspaceId,
+      document: {
+        ...DOCUMENT,
+        blocks: [{ id: "1", type: "spacer", height: 1000 }],
+      },
+    })
+    expect(out.ok).toBe(false)
+    if (out.ok) {
+      return
+    }
+    expect(out.issues[0]?.path).toBe("blocks.0.height")
+    for (const bad of [null, "x", { ...DOCUMENT, extra: 1 }]) {
+      expect(
+        (await emailTemplateService.preview({ workspaceId, document: bad })).ok,
+      ).toBe(false)
+    }
+    const huge = await emailTemplateService.preview({
+      workspaceId,
+      document: {
+        ...DOCUMENT,
+        blocks: Array.from({ length: 20 }, (_, i) => ({
+          id: String(i + 1),
+          type: "html",
+          html: "x".repeat(20_000),
+        })),
+      },
+    })
+    expect(huge).toEqual({
+      ok: false,
+      issues: [{ path: "", message: "The email document is too large" }],
+    })
+  })
 })
