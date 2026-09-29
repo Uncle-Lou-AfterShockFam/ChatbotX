@@ -688,6 +688,9 @@ importers:
       '@chatbotx.io/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@chatbotx.io/email-document':
+        specifier: workspace:*
+        version: link:../../packages/email-document
       '@chatbotx.io/encryption':
         specifier: workspace:*
         version: link:../../packages/encryption

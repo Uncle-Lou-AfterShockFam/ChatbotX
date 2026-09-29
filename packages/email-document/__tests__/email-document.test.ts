@@ -723,3 +723,22 @@ describe("hub token grammar + collectRenderInputs (phase 2 inputs)", () => {
     expect(out.html).toContain("https://hub.test/s/2")
   })
 })
+
+describe("flow buttons (s220b phase 2b)", () => {
+  test("a button() URL that is not http(s) is dropped", () => {
+    for (const url of ["javascript:alert(1)", "data:x", "//evil.test", ""]) {
+      const { html } = renderWeb(
+        doc([
+          {
+            id: "1",
+            type: "button",
+            label: "Go",
+            action: { kind: "flow", beforeStep: {}, steps: [] },
+          },
+        ]),
+        { vars: {}, button: () => url },
+      )
+      expect(html).not.toContain(">Go<")
+    }
+  })
+})

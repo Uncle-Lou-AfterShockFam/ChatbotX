@@ -116,7 +116,15 @@ export const emailStepSchema = z.object({
   to: z.string().trim(),
   subject: z.string().trim(),
   preheader: z.string().trim(),
-  elements: z.array(pageElementSchema),
+  /**
+   * B2 (s220b): a saved EmailTemplate, or an inline EmailDocument
+   * (@chatbotx.io/email-document, validated at send by parseDocument). Either
+   * wins over `elements`; both optional / defaulted because saved flow
+   * versions are re-parsed on publish.
+   */
+  templateId: zodBigintAsString().optional(),
+  document: z.record(z.string(), z.unknown()).optional(),
+  elements: z.array(pageElementSchema).default([]),
 })
 export type EmailStepSchema = z.infer<typeof emailStepSchema>
 

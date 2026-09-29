@@ -36,6 +36,7 @@ import { contactVariableService } from "@chatbotx.io/variables"
 import { resolveButtonUrl } from "../../lib/convert-button"
 import { logger } from "../../lib/logger"
 import type { ExecuteStepProps } from "./flow"
+import { renderStepDocument } from "./send-email-document"
 
 async function resolveElements({
   appUrl,
@@ -134,6 +135,42 @@ async function resolveElements({
   return resolved
 }
 
+/** The pre-B2 path, unchanged: elements -> MJML dynamic template. */
+async function renderLegacyElements(props: {
+  appUrl: string
+  step: EmailStepSchema
+  variables: Awaited<ReturnType<typeof contactVariableService.getAll>>
+  inbox: InboxWithIntegrations | undefined
+  flowId: string | undefined
+  unsubscribeUrl: string
+  token: string | undefined
+  workspaceId: string
+  brandName: string
+  subject: string
+  preheader: string
+}): Promise<{ html: string; text: string }> {
+  const elements = await resolveElements({
+    appUrl: props.appUrl,
+    rawElements: props.step.elements,
+    variables: props.variables,
+    inbox: props.inbox,
+    flowId: props.flowId,
+    unsubscribeUrl: props.unsubscribeUrl,
+    token: props.token,
+    workspaceId: props.workspaceId,
+  })
+  const emailProps: DynamicEmailProps = {
+    brandName: props.brandName,
+    subject: props.subject,
+    preheader: props.preheader,
+    elements,
+  }
+  return {
+    html: await renderDynamicEmailHtml(emailProps),
+    text: renderDynamicEmailText(elements),
+  }
+}
+
 export async function sendEmail({
   conversation,
   flowVersion,
@@ -223,22 +260,49 @@ export async function sendEmail({
     token = result.token
   }
 
-  const elements = await resolveElements({
-    appUrl,
-    rawElements: step.elements,
-    variables,
-    inbox,
-    flowId: flowVersion.flowId,
-    unsubscribeUrl,
-    token,
-    workspaceId: conversation.workspaceId,
-  })
-
-  const props: DynamicEmailProps = {
-    brandName: workspace.name ?? smtpIntegration.name,
-    subject,
-    preheader,
-    elements,
+  // B2 (s220b): a template or inline document renders through
+  // @chatbotx.io/email-document; legacy `elements` keep the original path.
+  let body: { html: string; text: string }
+  try {
+    body =
+      step.templateId || step.document
+        ? await renderStepDocument({
+            step,
+            workspaceId: conversation.workspaceId,
+            appUrl,
+            variables,
+            inbox,
+            flowId: flowVersion.flowId,
+            unsubscribeUrl,
+            token,
+          })
+        : await renderLegacyElements({
+            appUrl,
+            step,
+            variables,
+            inbox,
+            flowId: flowVersion.flowId,
+            unsubscribeUrl,
+            token,
+            workspaceId: conversation.workspaceId,
+            brandName: workspace.name ?? smtpIntegration.name,
+            subject,
+            preheader,
+          })
+  } catch (err) {
+    // A missing / invalid template never sends a broken mail.
+    logger.error(
+      {
+        err,
+        workspaceId: conversation.workspaceId,
+        templateId: step.templateId,
+      },
+      "handleSendEmail: email content could not be rendered",
+    )
+    if (token) {
+      await emailTopicAnalyticsService.markFailed(token)
+    }
+    return
   }
 
   const botContext = await buildContext({
@@ -258,8 +322,8 @@ export async function sendEmail({
       from: step.from || smtpIntegration.fromAddress,
       to,
       subject,
-      html: await renderDynamicEmailHtml(props),
-      text: renderDynamicEmailText(elements),
+      html: body.html,
+      text: body.text,
       headers: {
         "List-Unsubscribe": `<${oneClickUrl.toString()}>`,
         "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
