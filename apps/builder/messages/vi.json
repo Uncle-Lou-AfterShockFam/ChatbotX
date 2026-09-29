@@ -4883,7 +4883,8 @@
       "askWhenKnownHint": "Tắt: chat bỏ qua câu hỏi nếu liên hệ đã có câu trả lời.",
       "alwaysAsk": "Không bao giờ bị cắt bởi giới hạn câu hỏi",
       "askAfterSubmissions": "Hỏi từ lần gửi thứ",
-      "askAfterSubmissionsHint": "Hồ sơ lũy tiến: chỉ hỏi sau khi liên hệ đã gửi biểu mẫu này đủ số lần. Trống = luôn hỏi."
+      "askAfterSubmissionsHint": "Hồ sơ lũy tiến: chỉ hỏi sau khi liên hệ đã gửi biểu mẫu này đủ số lần. Trống = luôn hỏi.",
+      "maxSizeMb": "Kích thước tệp tối đa (MB)"
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4950,7 +4951,8 @@
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
       "date": "Enter a valid date or time.",
-      "emailDomainBlocked": "Không chấp nhận địa chỉ email từ tên miền này."
+      "emailDomainBlocked": "Không chấp nhận địa chỉ email từ tên miền này.",
+      "upload": "Hãy tải tệp này lên lại."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -5023,13 +5025,21 @@
       "openContact": "Open contact",
       "anonymous": "Anonymous",
       "detail": "Submission",
-      "more": "Load more"
+      "more": "Load more",
+      "download": "Tải xuống"
     },
     "publishWarnings": {
       "noContact": "No field writes to a contact: submissions are stored, but triggers and flows cannot react to them."
     },
     "variables": {
       "group": "Liên kết biểu mẫu (cá nhân)"
+    },
+    "upload": {
+      "uploading": "Đang tải lên",
+      "tooLarge": "Tệp này quá lớn.",
+      "wrongType": "Loại tệp này không được chấp nhận.",
+      "failed": "Không thể tải tệp lên. Vui lòng thử lại.",
+      "previewOnly": "Có thể thêm tệp trên biểu mẫu đã xuất bản."
     }
   },
   "questionnaires": {

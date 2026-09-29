@@ -4737,7 +4737,8 @@
       "askWhenKnownHint": "Desligado: o chat pula a pergunta se o contato já tiver a resposta.",
       "alwaysAsk": "Nunca cortado pelo limite de perguntas",
       "askAfterSubmissions": "Perguntar a partir do envio nº",
-      "askAfterSubmissionsHint": "Perfilamento progressivo: perguntar só depois que o contato enviar o formulário esse número de vezes. Vazio = sempre."
+      "askAfterSubmissionsHint": "Perfilamento progressivo: perguntar só depois que o contato enviar o formulário esse número de vezes. Vazio = sempre.",
+      "maxSizeMb": "Tamanho máximo do arquivo (MB)"
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4804,7 +4805,8 @@
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
       "date": "Enter a valid date or time.",
-      "emailDomainBlocked": "Endereços de e-mail deste domínio não são aceitos."
+      "emailDomainBlocked": "Endereços de e-mail deste domínio não são aceitos.",
+      "upload": "Envie este arquivo novamente."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -4877,13 +4879,21 @@
       "openContact": "Open contact",
       "anonymous": "Anonymous",
       "detail": "Submission",
-      "more": "Load more"
+      "more": "Load more",
+      "download": "Baixar"
     },
     "publishWarnings": {
       "noContact": "No field writes to a contact: submissions are stored, but triggers and flows cannot react to them."
     },
     "variables": {
       "group": "Links de formulário (pessoais)"
+    },
+    "upload": {
+      "uploading": "Enviando",
+      "tooLarge": "Este arquivo é grande demais.",
+      "wrongType": "Este tipo de arquivo não é aceito.",
+      "failed": "Não foi possível enviar o arquivo. Tente novamente.",
+      "previewOnly": "Os arquivos podem ser adicionados no formulário publicado."
     }
   },
   "questionnaires": {

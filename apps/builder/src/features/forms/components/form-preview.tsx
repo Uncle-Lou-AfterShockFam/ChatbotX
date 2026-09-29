@@ -4,6 +4,7 @@ import type { FormSessionProfile } from "@chatbotx.io/database/partials"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
 import type {
   FormDefinition,
+  FormField,
   FormValidationIssue,
   FormValue,
   FormValues,
@@ -16,7 +17,7 @@ import {
 } from "@chatbotx.io/utils/form"
 import { useTranslations } from "next-intl"
 import { useMemo, useState } from "react"
-import { FormRenderer } from "./form-renderer"
+import { FormRenderer, type FormUploadOutcome } from "./form-renderer"
 
 /**
  * Walks the steps like a submitter would (s200): hidden steps are skipped,
@@ -36,6 +37,11 @@ export function FormPreview(props: {
    * the same set; this only mirrors it).
    */
   profile?: FormSessionProfile | null
+  /**
+   * s225a: the public page's uploader. Its presence also makes validation
+   * judge upload fields as the web does (an upload id, never a URL).
+   */
+  uploadFile?: (field: FormField, file: File) => Promise<FormUploadOutcome>
 }) {
   const {
     definition,
@@ -51,6 +57,8 @@ export function FormPreview(props: {
   }))
   const [stepIndex, setStepIndex] = useState(0)
   const [issues, setIssues] = useState<FormValidationIssue[]>([])
+  const [uploading, setUploading] = useState(0)
+  const channel = props.uploadFile ? "web" : undefined
   const profile = props.profile ?? null
   const evaluation = useMemo(() => {
     const full = evaluateForm(definition, values)
@@ -87,6 +95,7 @@ export function FormPreview(props: {
             "length",
             "date",
             "emailDomainBlocked",
+            "upload",
           ] as const
         ).map((code) => [code, t(`forms.issues.${code}`)]),
       ) as Record<FormValidationIssue["code"], string>,
@@ -118,11 +127,9 @@ export function FormPreview(props: {
     return i < definition.steps.length ? i : null
   }
   const validateStep = (): boolean => {
-    const stepIssues = validateFormSubmission(
-      definition,
-      values,
-      evaluation,
-    ).filter((i) => stepKeys.has(i.key))
+    const stepIssues = validateFormSubmission(definition, values, evaluation, {
+      channel,
+    }).filter((i) => stepKeys.has(i.key))
     setIssues(stepIssues)
     return stepIssues.length === 0
   }
@@ -144,7 +151,9 @@ export function FormPreview(props: {
         }
         const next = nextIndex()
         if (next === null) {
-          const all = validateFormSubmission(definition, values, evaluation)
+          const all = validateFormSubmission(definition, values, evaluation, {
+            channel,
+          })
           if (all.length > 0) {
             setIssues(all)
             const firstBad = definition.steps.findIndex((s) =>
@@ -184,6 +193,16 @@ export function FormPreview(props: {
           setIssues((prev) => prev.filter((i) => i.key !== key))
         }}
         stepId={step.id}
+        upload={{
+          send: props.uploadFile,
+          onBusy: (delta) => setUploading((n) => n + delta),
+          labels: {
+            uploading: t("forms.upload.uploading"),
+            tooLarge: t("forms.upload.tooLarge"),
+            failed: t("forms.upload.failed"),
+            previewOnly: t("forms.upload.previewOnly"),
+          },
+        }}
         values={values}
       />
       <div className="flex items-center gap-2">
@@ -200,7 +219,11 @@ export function FormPreview(props: {
             {t("forms.editor.previewBack")}
           </Button>
         ) : null}
-        <Button className="ms-auto" disabled={submitting} type="submit">
+        <Button
+          className="ms-auto"
+          disabled={submitting || uploading > 0}
+          type="submit"
+        >
           {isLast ? submitLabel : t("forms.editor.previewNext")}
         </Button>
       </div>

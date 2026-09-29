@@ -2854,7 +2854,8 @@
       "askWhenKnownHint": "כבוי: הצ'אט מדלג על השאלה אם לאיש הקשר כבר יש תשובה.",
       "alwaysAsk": "לעולם לא נחתך במגבלת השאלות",
       "askAfterSubmissions": "לשאול החל מהגשה מספר",
-      "askAfterSubmissionsHint": "פרופיילינג הדרגתי: לשאול רק אחרי שאיש הקשר הגיש את הטופס מספר פעמים זה. ריק = תמיד."
+      "askAfterSubmissionsHint": "פרופיילינג הדרגתי: לשאול רק אחרי שאיש הקשר הגיש את הטופס מספר פעמים זה. ריק = תמיד.",
+      "maxSizeMb": "גודל קובץ מרבי (MB)"
     },
     "fieldTypes": {
       "text": "Short text",
@@ -2921,7 +2922,8 @@
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
       "date": "Enter a valid date or time.",
-      "emailDomainBlocked": "כתובות אימייל מהדומיין הזה אינן מתקבלות."
+      "emailDomainBlocked": "כתובות אימייל מהדומיין הזה אינן מתקבלות.",
+      "upload": "העלו את הקובץ שוב."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -2994,13 +2996,21 @@
       "openContact": "Open contact",
       "anonymous": "Anonymous",
       "detail": "Submission",
-      "more": "Load more"
+      "more": "Load more",
+      "download": "הורדה"
     },
     "publishWarnings": {
       "noContact": "No field writes to a contact: submissions are stored, but triggers and flows cannot react to them."
     },
     "variables": {
       "group": "קישורים לטפסים (אישיים)"
+    },
+    "upload": {
+      "uploading": "מעלה",
+      "tooLarge": "הקובץ גדול מדי.",
+      "wrongType": "סוג קובץ זה אינו מתקבל.",
+      "failed": "לא ניתן היה להעלות את הקובץ. נסו שוב.",
+      "previewOnly": "ניתן להוסיף קבצים בטופס שפורסם."
     }
   },
   "questionnaires": {

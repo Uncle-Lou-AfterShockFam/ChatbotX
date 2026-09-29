@@ -86,7 +86,10 @@ const m = vi.hoisted(() => {
       }),
     }),
   }
-  return { state, tx }
+  const client = Object.assign(tx, {
+    transaction: <T>(fn: (t: typeof tx) => Promise<T>) => fn(tx),
+  })
+  return { state, tx: client }
 })
 
 vi.mock("@chatbotx.io/database/client", () => {
@@ -126,6 +129,20 @@ vi.mock("@chatbotx.io/database/schema", () => ({
   },
   inboxModel: { id: "id", workspaceId: "ws", channel: "channel" },
   customFieldModel: { id: "id", workspaceId: "ws" },
+}))
+const uploads = vi.hoisted(() => ({
+  detachForDeletion: vi.fn().mockResolvedValue([]),
+  retire: vi.fn().mockResolvedValue(0),
+  purgeStoragePrefix: vi.fn().mockResolvedValue(0),
+}))
+vi.mock("../src/form/upload", () => ({
+  formUploadService: {
+    detachForDeletion: uploads.detachForDeletion,
+    retire: uploads.retire,
+  },
+}))
+vi.mock("../src/storage/purge-prefix", () => ({
+  purgeStoragePrefix: uploads.purgeStoragePrefix,
 }))
 vi.mock("@chatbotx.io/utils", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -310,7 +327,7 @@ describe("formService.update", () => {
 
   describe("channels on update (s219)", () => {
     const photoDef = {
-      steps: [{ id: "s1", fields: [{ key: "photo", type: "image" }] }],
+      steps: [{ id: "s1", fields: [{ key: "where", type: "location" }] }],
       rules: [],
     }
     const chat = { ...DEFAULT_FORM_SETTINGS, channels: ["chat"] }
@@ -337,7 +354,7 @@ describe("formService.update", () => {
       expect(e.field).toBe("settings.channels")
       expect(e.data).toMatchObject({
         reason: "chatOnlyField",
-        fieldKey: "photo",
+        fieldKey: "where",
       })
     })
 
@@ -570,8 +587,8 @@ describe("formService.publish", () => {
           id: "s1",
           fields: [
             {
-              key: "photo",
-              type: "image",
+              key: "where",
+              type: "location",
               mapTo: { kind: "custom", customFieldId: "77" },
             },
           ],
@@ -585,7 +602,7 @@ describe("formService.publish", () => {
       const e = await field(formService.publish({ workspaceId: WS, id: "f1" }))
       expect(e.data).toMatchObject({
         reason: "chatOnlyField",
-        fieldKey: "photo",
+        fieldKey: "where",
       })
       m.state.selects.push([
         draft({
@@ -816,7 +833,7 @@ describe("formService reads never throw on corrupt jsonb", () => {
               id: "s1",
               fields: [
                 { key: "q", type: "text" },
-                { key: "photo", type: "image" },
+                { key: "where", type: "location" },
               ],
             },
           ],
@@ -969,5 +986,39 @@ describe("submissions", () => {
       formService.deleteSubmission({ workspaceId: WS, formId: "f1", id: "9" }),
     )
     expect(e.httpStatusCode).toBe(404)
+  })
+
+  test("a deleted submission's uploads are detached in its transaction, then retired (s225a)", async () => {
+    const rows = [{ id: "u1", path: "workspaces/1/forms/f1/a" }]
+    uploads.detachForDeletion.mockResolvedValueOnce(rows)
+    m.state.deletes.push([{ id: "9" }])
+    await formService.deleteSubmission({
+      workspaceId: WS,
+      formId: "f1",
+      id: "9",
+    })
+    expect(uploads.detachForDeletion).toHaveBeenCalledWith(expect.anything(), {
+      workspaceId: WS,
+      formId: "f1",
+      submissionId: "9",
+    })
+    expect(uploads.retire).toHaveBeenCalledWith(rows, {
+      workspaceId: WS,
+      formId: "f1",
+      submissionId: "9",
+    })
+  })
+
+  test("an unknown submission retires nothing (the detach rolls back with it) (s225a)", async () => {
+    uploads.retire.mockClear()
+    uploads.detachForDeletion.mockResolvedValueOnce([
+      { id: "u1", path: "workspaces/1/forms/f1/a" },
+    ])
+    m.state.deletes.push([])
+    const e = await field(
+      formService.deleteSubmission({ workspaceId: WS, formId: "f1", id: "9" }),
+    )
+    expect(e.httpStatusCode).toBe(404)
+    expect(uploads.retire).not.toHaveBeenCalled()
   })
 })

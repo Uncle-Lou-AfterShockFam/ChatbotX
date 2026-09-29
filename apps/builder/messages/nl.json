@@ -4844,7 +4844,8 @@
       "askWhenKnownHint": "Uit: een chat slaat de vraag over als het contact het antwoord al heeft.",
       "alwaysAsk": "Nooit ingekort door de vragenlimiet",
       "askAfterSubmissions": "Vragen vanaf inzending nr.",
-      "askAfterSubmissionsHint": "Progressieve profilering: pas vragen als het contact het formulier zo vaak heeft ingestuurd. Leeg = altijd."
+      "askAfterSubmissionsHint": "Progressieve profilering: pas vragen als het contact het formulier zo vaak heeft ingestuurd. Leeg = altijd.",
+      "maxSizeMb": "Maximale bestandsgrootte (MB)"
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4911,7 +4912,8 @@
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
       "date": "Enter a valid date or time.",
-      "emailDomainBlocked": "E-mailadressen van dit domein worden niet geaccepteerd."
+      "emailDomainBlocked": "E-mailadressen van dit domein worden niet geaccepteerd.",
+      "upload": "Upload dit bestand opnieuw."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -4984,13 +4986,21 @@
       "openContact": "Open contact",
       "anonymous": "Anonymous",
       "detail": "Submission",
-      "more": "Load more"
+      "more": "Load more",
+      "download": "Downloaden"
     },
     "publishWarnings": {
       "noContact": "No field writes to a contact: submissions are stored, but triggers and flows cannot react to them."
     },
     "variables": {
       "group": "Formulierlinks (persoonlijk)"
+    },
+    "upload": {
+      "uploading": "Uploaden",
+      "tooLarge": "Dit bestand is te groot.",
+      "wrongType": "Dit bestandstype wordt niet geaccepteerd.",
+      "failed": "Het bestand kon niet worden geüpload. Probeer het opnieuw.",
+      "previewOnly": "Bestanden kunnen worden toegevoegd op het gepubliceerde formulier."
     }
   },
   "questionnaires": {

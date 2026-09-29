@@ -45,7 +45,10 @@ import {
   notFoundException,
   validationException,
 } from "../errors"
+import { formUploadsPrefix } from "../storage/paths"
+import { purgeStoragePrefix } from "../storage/purge-prefix"
 import { assertFormActionRefs } from "./action-refs"
+import { formUploadService } from "./upload"
 
 const FORM_NOT_FOUND = "Form not found"
 const SUBMISSION_NOT_FOUND = "Submission not found"
@@ -726,19 +729,22 @@ export class FormService extends BaseService {
   }
 
   /** Hard delete; submissions go with it (FK cascade). */
-  async delete(props: {
-    workspaceId: string
-    id: string
-    tx?: DatabaseClient
-  }): Promise<void> {
-    const { workspaceId, id, tx = db } = props
-    const deleted = await tx
+  async delete(props: { workspaceId: string; id: string }): Promise<void> {
+    const { workspaceId, id } = props
+    const deleted = await db
       .delete(formModel)
       .where(and(eq(formModel.id, id), eq(formModel.workspaceId, workspaceId)))
       .returning({ id: formModel.id })
     if (deleted.length === 0) {
       throw notFoundException(FORM_NOT_FOUND)
     }
+    // s225a: its private uploads are objects, not rows; after the commit, so
+    // a failed delete never loses files (best-effort, logged).
+    await purgeStoragePrefix(
+      formUploadsPrefix(workspaceId, id),
+      { workspaceId, formId: id },
+      "form-delete",
+    )
   }
 
   /** A draft copy `<slug>-copy[-N]` with the same draft definition and settings. */
@@ -880,22 +886,38 @@ export class FormService extends BaseService {
     workspaceId: string
     formId: string
     id: string
-    tx?: DatabaseClient
   }): Promise<void> {
-    const { workspaceId, formId, id, tx = db } = props
-    const deleted = await tx
-      .delete(formSubmissionModel)
-      .where(
-        and(
-          eq(formSubmissionModel.id, id),
-          eq(formSubmissionModel.formId, formId),
-          eq(formSubmissionModel.workspaceId, workspaceId),
-        ),
-      )
-      .returning({ id: formSubmissionModel.id })
-    if (deleted.length === 0) {
-      throw notFoundException(SUBMISSION_NOT_FOUND)
-    }
+    const { workspaceId, formId, id } = props
+    // s225a: its uploads are DETACHED and marked for deletion in the same
+    // transaction (the rows would cascade away with the submission and take
+    // the only record of their objects); a missing submission rolls the
+    // detach back. The objects then go best-effort, the sweep retries.
+    const cleanup = await db.transaction(async (tx) => {
+      const rows = await formUploadService.detachForDeletion(tx, {
+        workspaceId,
+        formId,
+        submissionId: id,
+      })
+      const deleted = await tx
+        .delete(formSubmissionModel)
+        .where(
+          and(
+            eq(formSubmissionModel.id, id),
+            eq(formSubmissionModel.formId, formId),
+            eq(formSubmissionModel.workspaceId, workspaceId),
+          ),
+        )
+        .returning({ id: formSubmissionModel.id })
+      if (deleted.length === 0) {
+        throw notFoundException(SUBMISSION_NOT_FOUND)
+      }
+      return rows
+    })
+    await formUploadService.retire(cleanup, {
+      workspaceId,
+      formId,
+      submissionId: id,
+    })
   }
 }
 

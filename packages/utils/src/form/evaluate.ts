@@ -4,6 +4,7 @@ import {
   FORM_OPTION_FIELD_TYPES,
   FORM_RATING_DEFAULT_STARS,
   FORM_SCALE_FIELD_TYPES,
+  FORM_UPLOAD_ID_REGEX,
   type FormConditionGroup,
   type FormConditionOp,
   type FormConditionRule,
@@ -341,6 +342,7 @@ export type FormValidationIssue = {
     | "date"
     | "location"
     | "emailDomainBlocked"
+    | "upload"
 }
 
 const TRAILING_DOT_RE = /\.$/
@@ -454,9 +456,18 @@ function validateScale(
   return Math.abs(steps - Math.round(steps)) <= slack ? null : "number"
 }
 
+/**
+ * Where an answer came from. An upload field's web answer is a private
+ * upload's opaque id (s225a), its chat answer the received attachment's URL;
+ * neither channel accepts the other's shape, so a web POST can never plant a
+ * URL a member later opens from the submissions page.
+ */
+export type FormAnswerChannel = "web" | "chat"
+
 export function validateFormField(
   field: FormField,
   value: FormValue,
+  channel: FormAnswerChannel = "chat",
 ): FormValidationIssue["code"] | null {
   if (FORM_LIST_FIELD_TYPES.has(field.type)) {
     if (!Array.isArray(value) || value.some((v) => typeof v !== "string")) {
@@ -519,6 +530,9 @@ export function validateFormField(
     // such a value server-side goes through the pinned outbound fetch.
     case "image":
     case "file":
+      if (channel === "web") {
+        return FORM_UPLOAD_ID_REGEX.test(value) ? null : "upload"
+      }
       return isHttpUrl(value) ? null : "url"
     case "location":
       return isLocation(value) ? null : "location"
@@ -555,6 +569,8 @@ export function validateFormSubmission(
     suppressed?: ReadonlySet<string>
     /** s220c A2-4: the form's `blockedEmailDomains` (email-type fields only). */
     blockedEmailDomains?: readonly string[]
+    /** s225a: the web page and the submit route pass "web"; chat is the default. */
+    channel?: FormAnswerChannel
   } = {},
 ): FormValidationIssue[] {
   const issues: FormValidationIssue[] = []
@@ -572,7 +588,7 @@ export function validateFormSubmission(
       }
       continue
     }
-    const code = validateFormField(field, value)
+    const code = validateFormField(field, value, options.channel)
     if (code) {
       issues.push({ key: field.key, code })
     } else if (

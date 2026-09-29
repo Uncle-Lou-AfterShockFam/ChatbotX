@@ -19,23 +19,61 @@ const INT8 = /^\d{1,19}$/
 const INT8_MAX = 2n ** 63n - 1n
 const isInt8 = (v: string) => INT8.test(v) && BigInt(v) <= INT8_MAX
 
+/** The body did not finish within the reader's deadline (s225a). */
+export class BodyReadTimeoutError extends Error {
+  constructor() {
+    super("request body read timed out")
+    this.name = "BodyReadTimeoutError"
+  }
+}
+
 /**
  * Read at most `max` bytes of the body; a lying or missing Content-Length
  * cannot make us buffer more than that (skeptic, s200). Returns null when
- * the cap is exceeded.
+ * the cap is exceeded. With `timeoutMs` the WHOLE read has a deadline: a
+ * body that trickles or never ends is cancelled and `BodyReadTimeoutError`
+ * thrown, so a slow sender cannot pin its buffered bytes (Codex probe s225a).
  */
-export async function readBodyCapped(
+export async function readBodyBytesCapped(
   req: NextRequest,
   max: number,
-): Promise<string | null> {
+  options: { timeoutMs?: number } = {},
+): Promise<Uint8Array | null> {
   const reader = req.body?.getReader()
   if (!reader) {
-    return ""
+    return new Uint8Array(0)
   }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline =
+    options.timeoutMs === undefined
+      ? null
+      : new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new BodyReadTimeoutError()),
+            options.timeoutMs,
+          )
+        })
+  try {
+    return await readCapped(reader, max, deadline)
+  } catch (error) {
+    await reader.cancel().catch(() => undefined)
+    throw error
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function readCapped(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  max: number,
+  deadline: Promise<never> | null,
+): Promise<Uint8Array | null> {
   const chunks: Uint8Array[] = []
   let total = 0
   for (;;) {
-    const { done, value } = await reader.read()
+    const { done, value } = await (deadline
+      ? Promise.race([reader.read(), deadline])
+      : reader.read())
     if (done) {
       break
     }
@@ -52,7 +90,16 @@ export async function readBodyCapped(
     merged.set(chunk, offset)
     offset += chunk.byteLength
   }
-  return new TextDecoder().decode(merged)
+  return merged
+}
+
+/** `readBodyBytesCapped`, decoded as UTF-8 text (the JSON routes). */
+export async function readBodyCapped(
+  req: NextRequest,
+  max: number,
+): Promise<string | null> {
+  const bytes = await readBodyBytesCapped(req, max)
+  return bytes === null ? null : new TextDecoder().decode(bytes)
 }
 
 export const formCorsHeaders = (origin: string | null, allowed: boolean) => {

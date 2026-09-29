@@ -4823,7 +4823,8 @@
       "askWhenKnownHint": "オフ: 連絡先が既に回答を持っていればチャットはこの質問を飛ばします。",
       "alwaysAsk": "質問数の上限で省略しない",
       "askAfterSubmissions": "送信回数がこの数から質問",
-      "askAfterSubmissionsHint": "段階的プロファイリング: 連絡先がこのフォームをこの回数送信した後にのみ質問します。空欄 = 常に。"
+      "askAfterSubmissionsHint": "段階的プロファイリング: 連絡先がこのフォームをこの回数送信した後にのみ質問します。空欄 = 常に。",
+      "maxSizeMb": "最大ファイルサイズ (MB)"
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4890,7 +4891,8 @@
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
       "date": "Enter a valid date or time.",
-      "emailDomainBlocked": "このドメインのメールアドレスは受け付けていません。"
+      "emailDomainBlocked": "このドメインのメールアドレスは受け付けていません。",
+      "upload": "このファイルをもう一度アップロードしてください。"
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -4963,13 +4965,21 @@
       "openContact": "Open contact",
       "anonymous": "Anonymous",
       "detail": "Submission",
-      "more": "Load more"
+      "more": "Load more",
+      "download": "ダウンロード"
     },
     "publishWarnings": {
       "noContact": "No field writes to a contact: submissions are stored, but triggers and flows cannot react to them."
     },
     "variables": {
       "group": "フォームのリンク（個人用）"
+    },
+    "upload": {
+      "uploading": "アップロード中",
+      "tooLarge": "ファイルが大きすぎます。",
+      "wrongType": "この種類のファイルは受け付けていません。",
+      "failed": "ファイルをアップロードできませんでした。もう一度お試しください。",
+      "previewOnly": "ファイルは公開中のフォームで追加できます。"
     }
   },
   "questionnaires": {

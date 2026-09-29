@@ -15,9 +15,10 @@ import { isHttpsUrl } from "./url"
  *   optional a field or skip forward to a step.
  *
  * One definition, two channels (s219, owner): the same form runs on the web
- * page and question by question in chat. `image` / `file` / `location` are
- * CHAT-ONLY until the web page grows upload fields (publish refuses them on a
- * web form); `chat` carries the per-field prompt / retry / media a chat run
+ * page and question by question in chat. `location` is CHAT-ONLY (publish
+ * refuses it on a web form); `image` / `file` run on both since s225a (a web
+ * answer is a private upload's opaque id, a chat answer the stored URL);
+ * `chat` carries the per-field prompt / retry / media a chat run
  * sends, and option `points` score an answer.
  *
  * Everything caller-supplied has a cap and the condition tree has a depth
@@ -104,12 +105,58 @@ export const FORM_LIST_FIELD_TYPES: ReadonlySet<WebFormFieldType> = new Set([
   "checkboxGroup",
 ])
 /**
- * Answered by sending something in chat (a photo, a file, a shared
- * location); the web page cannot render them yet, so a form that runs on the
- * web may not contain them.
+ * Answered with something sent rather than typed (a photo, a file, a shared
+ * location): no pattern / bounds / default, and never a system field.
+ */
+export const FORM_ATTACHMENT_FIELD_TYPES: ReadonlySet<WebFormFieldType> =
+  new Set(["image", "file", "location"])
+/**
+ * Only a chat run can answer these (a shared location); a form that runs on
+ * the web may not contain them.
  */
 export const FORM_CHAT_ONLY_FIELD_TYPES: ReadonlySet<WebFormFieldType> =
-  new Set(["image", "file", "location"])
+  new Set(["location"])
+/**
+ * s225a A2-4 PR 5: answered on the web with ONE private upload (the value is
+ * its opaque `fu_` id, see FORM_UPLOAD_ID_REGEX), in chat with the URL of
+ * the received attachment.
+ */
+export const FORM_UPLOAD_FIELD_TYPES: ReadonlySet<WebFormFieldType> = new Set([
+  "image",
+  "file",
+])
+/** A web upload's reference: `fu_` + 32 random bytes, base64url. */
+export const FORM_UPLOAD_ID_REGEX = /^fu_[A-Za-z0-9_-]{43}$/
+/** Hard cap of one web upload (a field may lower it with `maxSizeMb`). */
+export const FORM_UPLOAD_MAX_MB = 10
+export const FORM_UPLOAD_MAX_BYTES = FORM_UPLOAD_MAX_MB * 1024 * 1024
+/**
+ * What a web upload may be, judged by its magic bytes (never the client's
+ * type or file name): an `image` field takes images, a `file` field images
+ * or a PDF.
+ */
+export const FORM_UPLOAD_IMAGE_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+] as const
+export const FORM_UPLOAD_FILE_MIME_TYPES = [
+  ...FORM_UPLOAD_IMAGE_MIME_TYPES,
+  "application/pdf",
+] as const
+export type FormUploadMimeType = (typeof FORM_UPLOAD_FILE_MIME_TYPES)[number]
+export function formUploadMimeTypes(
+  type: WebFormFieldType,
+): readonly FormUploadMimeType[] {
+  if (type === "image") {
+    return FORM_UPLOAD_IMAGE_MIME_TYPES
+  }
+  return type === "file" ? FORM_UPLOAD_FILE_MIME_TYPES : []
+}
+/** A field's own cap in bytes (its `maxSizeMb`, else the hard cap). */
+export const formUploadMaxBytes = (field: { maxSizeMb?: number }): number =>
+  (field.maxSizeMb ?? FORM_UPLOAD_MAX_MB) * 1024 * 1024
 /** s220c A2-4: answered with a number on a bounded scale (slider, rating). */
 export const FORM_SCALE_FIELD_TYPES: ReadonlySet<WebFormFieldType> = new Set([
   "slider",
@@ -317,6 +364,8 @@ export const formField = z
     /** `slider` only: the knob's increment from `min` (default 1). */
     step: z.number().positive().optional(),
     pattern: z.string().max(MAX_FORM_PATTERN).optional(),
+    /** `image` / `file` only (s225a): a web upload's cap, whole MB. */
+    maxSizeMb: z.number().int().min(1).max(FORM_UPLOAD_MAX_MB).optional(),
     mapTo: formFieldMapTo.optional(),
     visibleWhen: formConditionGroup.optional(),
     chat: formFieldChat.optional(),
@@ -397,7 +446,17 @@ export const formField = z
         message: `A ${field.type} answer can only map to a custom field.`,
       })
     }
-    if (FORM_CHAT_ONLY_FIELD_TYPES.has(field.type)) {
+    if (
+      field.maxSizeMb !== undefined &&
+      !FORM_UPLOAD_FIELD_TYPES.has(field.type)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["maxSizeMb"],
+        message: "Only a photo or file field has a size limit.",
+      })
+    }
+    if (FORM_ATTACHMENT_FIELD_TYPES.has(field.type)) {
       for (const prop of ["pattern", "min", "max", "defaultValue"] as const) {
         if (field[prop] !== undefined) {
           ctx.addIssue({

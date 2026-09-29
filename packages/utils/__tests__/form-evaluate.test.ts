@@ -3,6 +3,7 @@ import {
   applyHiddenDefaults,
   compareFormValue,
   evaluateForm,
+  FORM_UPLOAD_ID_REGEX,
   type FormDefinition,
   type FormDefinitionInput,
   formDefinition,
@@ -583,6 +584,69 @@ describe("validation of chat answers", () => {
     ["location", `${"1".repeat(3000)},0`, "length"],
   ])("%s refuses %j with %s", (type, value, code) => {
     expect(validate(type, value)).toEqual([{ key: "q", code }])
+  })
+})
+
+// s225a A2-4 PR 5: a web answer to a photo / file field is a private
+// upload's opaque id and NEVER a URL; a chat answer stays the URL.
+describe("upload fields by channel", () => {
+  const ID = `fu_${"aZ09_-".repeat(7)}a`
+  const validate = (type: string, value: unknown, channel?: "web" | "chat") => {
+    const def = formDefinition.parse({
+      steps: [{ id: "s1", fields: [{ key: "q", type }] }],
+      rules: [],
+    })
+    return validateFormSubmission(
+      def,
+      { q: value as never },
+      evaluateForm(def, { q: value as never }),
+      { channel },
+    )
+  }
+
+  test("the id shape is fu_ + 43 base64url characters", () => {
+    expect(FORM_UPLOAD_ID_REGEX.test(ID)).toBe(true)
+    expect(ID).toHaveLength(46)
+  })
+
+  test.each([
+    "image",
+    "file",
+  ])("%s: web takes an upload id, chat a URL", (type) => {
+    expect(validate(type, ID, "web")).toEqual([])
+    expect(validate(type, "https://a.example/x.png", "chat")).toEqual([])
+    expect(validate(type, "https://a.example/x.png")).toEqual([])
+  })
+
+  test.each([
+    ["https://evil.example/x.png"],
+    ["javascript:alert(1)"],
+    [`${ID}x`],
+    [`fu_${"a".repeat(42)}`],
+    [`fu_${"a".repeat(42)}+`],
+    [` ${ID}`],
+    [["x"]],
+  ])("web refuses %j", (value) => {
+    const [issue] = validate("file", value, "web")
+    expect(issue?.key).toBe("q")
+    expect(["upload", "type"]).toContain(issue?.code)
+  })
+
+  test("chat refuses an upload id (it names no chat attachment)", () => {
+    expect(validate("image", ID, "chat")).toEqual([{ key: "q", code: "url" }])
+  })
+
+  test("fuzz: no random string that is not an upload id passes on the web", () => {
+    const alphabet = "fu_:/.aZ09-+ %\\u0000\n"
+    for (let i = 0; i < 2000; i++) {
+      const len = Math.floor(Math.random() * 60)
+      let v = ""
+      for (let j = 0; j < len; j++) {
+        v += alphabet[Math.floor(Math.random() * alphabet.length)]
+      }
+      const ok = validate("image", v, "web").length === 0
+      expect(ok).toBe(v === "" || FORM_UPLOAD_ID_REGEX.test(v))
+    }
   })
 })
 

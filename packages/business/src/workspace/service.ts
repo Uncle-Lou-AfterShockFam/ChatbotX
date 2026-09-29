@@ -27,6 +27,7 @@ import { quotaEnforcementService } from "../quota-enforcement/service"
 import {
   workspaceAvatarsPrefix,
   workspaceContactFilesPrefix,
+  workspaceFormUploadsPrefix,
 } from "../storage/paths"
 import { purgeStoragePrefix } from "../storage/purge-prefix"
 import { userQuotaService } from "../user-quota/service"
@@ -390,8 +391,9 @@ class WorkspaceService extends BaseService {
         })
 
       // Contact documents (rendered + signed PDFs) and contact / channel
-      // avatars (public-read) are not rows: purge their storage prefixes before the
-      // row goes, best-effort like the quota release above.
+      // avatars (public-read) and private form uploads (s225a) are not rows:
+      // purge their storage prefixes before the row goes, best-effort like the
+      // quota release above.
       await purgeStoragePrefix(
         workspaceDocumentsPrefix(workspace.id),
         { workspaceId: workspace.id },
@@ -404,6 +406,11 @@ class WorkspaceService extends BaseService {
       )
       await purgeStoragePrefix(
         workspaceAvatarsPrefix(workspace.id),
+        { workspaceId: workspace.id },
+        "workspace-purge",
+      )
+      await purgeStoragePrefix(
+        workspaceFormUploadsPrefix(workspace.id),
         { workspaceId: workspace.id },
         "workspace-purge",
       )

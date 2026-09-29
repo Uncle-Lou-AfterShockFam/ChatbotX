@@ -4877,7 +4877,8 @@
       "askWhenKnownHint": "關閉：若聯絡人已有答案，聊天會略過此問題。",
       "alwaysAsk": "不受問題數量上限裁剪",
       "askAfterSubmissions": "從第幾次提交起詢問",
-      "askAfterSubmissionsHint": "漸進式輪廓：聯絡人提交此表單達到該次數後才詢問。留空 = 一律詢問。"
+      "askAfterSubmissionsHint": "漸進式輪廓：聯絡人提交此表單達到該次數後才詢問。留空 = 一律詢問。",
+      "maxSizeMb": "最大檔案大小 (MB)"
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4944,7 +4945,8 @@
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
       "date": "Enter a valid date or time.",
-      "emailDomainBlocked": "不接受此網域的電子郵件地址。"
+      "emailDomainBlocked": "不接受此網域的電子郵件地址。",
+      "upload": "請重新上傳此檔案。"
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -5017,13 +5019,21 @@
       "openContact": "Open contact",
       "anonymous": "Anonymous",
       "detail": "Submission",
-      "more": "Load more"
+      "more": "Load more",
+      "download": "下載"
     },
     "publishWarnings": {
       "noContact": "No field writes to a contact: submissions are stored, but triggers and flows cannot react to them."
     },
     "variables": {
       "group": "表單連結（個人）"
+    },
+    "upload": {
+      "uploading": "正在上傳",
+      "tooLarge": "檔案過大。",
+      "wrongType": "不接受此類型的檔案。",
+      "failed": "檔案無法上傳,請再試一次。",
+      "previewOnly": "可在已發布的表單中新增檔案。"
     }
   },
   "questionnaires": {

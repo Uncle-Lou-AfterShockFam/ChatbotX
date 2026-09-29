@@ -4844,7 +4844,8 @@
       "askWhenKnownHint": "Fra: en chat springer spørgsmålet over, når kontakten allerede har svaret.",
       "alwaysAsk": "Skæres aldrig af spørgsmålsgrænsen",
       "askAfterSubmissions": "Spørg fra indsendelse nummer",
-      "askAfterSubmissionsHint": "Progressiv profilering: spørg først når kontakten har indsendt formularen så mange gange. Tom = altid."
+      "askAfterSubmissionsHint": "Progressiv profilering: spørg først når kontakten har indsendt formularen så mange gange. Tom = altid.",
+      "maxSizeMb": "Maksimal filstørrelse (MB)"
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4911,7 +4912,8 @@
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
       "date": "Enter a valid date or time.",
-      "emailDomainBlocked": "E-mailadresser fra dette domæne accepteres ikke."
+      "emailDomainBlocked": "E-mailadresser fra dette domæne accepteres ikke.",
+      "upload": "Upload filen igen."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -4984,13 +4986,21 @@
       "openContact": "Open contact",
       "anonymous": "Anonymous",
       "detail": "Submission",
-      "more": "Load more"
+      "more": "Load more",
+      "download": "Download"
     },
     "publishWarnings": {
       "noContact": "No field writes to a contact: submissions are stored, but triggers and flows cannot react to them."
     },
     "variables": {
       "group": "Formularlinks (personlige)"
+    },
+    "upload": {
+      "uploading": "Uploader",
+      "tooLarge": "Filen er for stor.",
+      "wrongType": "Denne filtype accepteres ikke.",
+      "failed": "Filen kunne ikke uploades. Prøv igen.",
+      "previewOnly": "Filer kan tilføjes i den publicerede formular."
     }
   },
   "questionnaires": {

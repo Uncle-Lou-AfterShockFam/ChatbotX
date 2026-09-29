@@ -4844,7 +4844,8 @@
       "askWhenKnownHint": "Disattivato: la chat salta la domanda se il contatto ha già la risposta.",
       "alwaysAsk": "Mai tagliato dal limite di domande",
       "askAfterSubmissions": "Chiedi dall'invio numero",
-      "askAfterSubmissionsHint": "Profilazione progressiva: chiedi solo dopo che il contatto ha inviato il modulo questo numero di volte. Vuoto = sempre."
+      "askAfterSubmissionsHint": "Profilazione progressiva: chiedi solo dopo che il contatto ha inviato il modulo questo numero di volte. Vuoto = sempre.",
+      "maxSizeMb": "Dimensione massima del file (MB)"
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4911,7 +4912,8 @@
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
       "date": "Enter a valid date or time.",
-      "emailDomainBlocked": "Gli indirizzi email di questo dominio non sono accettati."
+      "emailDomainBlocked": "Gli indirizzi email di questo dominio non sono accettati.",
+      "upload": "Carica di nuovo questo file."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -4984,13 +4986,21 @@
       "openContact": "Open contact",
       "anonymous": "Anonymous",
       "detail": "Submission",
-      "more": "Load more"
+      "more": "Load more",
+      "download": "Scarica"
     },
     "publishWarnings": {
       "noContact": "No field writes to a contact: submissions are stored, but triggers and flows cannot react to them."
     },
     "variables": {
       "group": "Link ai moduli (personali)"
+    },
+    "upload": {
+      "uploading": "Caricamento",
+      "tooLarge": "Questo file è troppo grande.",
+      "wrongType": "Questo tipo di file non è accettato.",
+      "failed": "Impossibile caricare il file. Riprova.",
+      "previewOnly": "I file possono essere aggiunti nel modulo pubblicato."
     }
   },
   "questionnaires": {

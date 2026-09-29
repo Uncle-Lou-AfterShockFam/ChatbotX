@@ -49,6 +49,7 @@ import { scanContactScans } from "./handlers/scan-contact-scans"
 import { scanDealTaskOverdue } from "./handlers/scan-deal-task-overdue"
 import { scanSmartDelay } from "./handlers/scan-smart-delay"
 import { sweepFormSessions } from "./handlers/sweep-form-sessions"
+import { sweepFormUploads } from "./handlers/sweep-form-uploads"
 import { sweepStaleWhatsappCalls } from "./handlers/sweep-stale-whatsapp-calls"
 import { syncUserQuota } from "./handlers/sync-user-quota"
 import { teardownExpiredTrial } from "./handlers/teardown-expired-trial"
@@ -130,6 +131,10 @@ async function startScheduleWorker() {
 
             case ScheduleJobData.sweepFormSessions:
               await sweepFormSessions()
+              return
+
+            case ScheduleJobData.sweepFormUploads:
+              await sweepFormUploads()
               return
 
             case ScheduleJobData.pollQuickbooksChanges:

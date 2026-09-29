@@ -373,7 +373,7 @@ describe("WorkspaceService.teardownDueWorkspace — contact document files", () 
     logger.warn.mockClear()
   })
 
-  test("purges the workspace's documents, contact-files and avatars prefixes after the heavy-data drain and before the row delete", async () => {
+  test("purges the workspace's documents, contact-files, avatars and form-upload prefixes after the heavy-data drain and before the row delete", async () => {
     const order: string[] = []
     workspaceLifecycleService.purgeWorkspaceHeavyData.mockImplementation(() => {
       order.push("heavy")
@@ -394,6 +394,8 @@ describe("WorkspaceService.teardownDueWorkspace — contact document files", () 
       "purge:workspaces/ws-9/documents/",
       "purge:public/space/ws-9/contacts/",
       "purge:public/space/ws-9/avatars/",
+      // s225a: private web form uploads
+      "purge:workspaces/ws-9/forms/",
       "row",
     ])
     expect(deleteByPrefix).toHaveBeenCalledWith(

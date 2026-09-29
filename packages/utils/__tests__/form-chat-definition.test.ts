@@ -22,14 +22,33 @@ const issues = (input: FormDefinitionInput) => {
 }
 
 describe("chat-only field types", () => {
-  test.each([
-    "image",
-    "file",
-    "location",
-  ])("%s parses and is listed as chat-only", (type) => {
-    const parsed = formDefinition.parse(one({ key: "q", type }))
-    expect(FORM_CHAT_ONLY_FIELD_TYPES.has(type as never)).toBe(true)
+  test("location parses and is listed as chat-only", () => {
+    const parsed = formDefinition.parse(one({ key: "q", type: "location" }))
+    expect(FORM_CHAT_ONLY_FIELD_TYPES.has("location")).toBe(true)
     expect(formChatOnlyFields(parsed).map((f) => f.key)).toEqual(["q"])
+  })
+
+  // s225a A2-4 PR 5: photo / file fields run on the web as private uploads.
+  test.each(["image", "file"])("%s parses and is NOT chat-only", (type) => {
+    const parsed = formDefinition.parse(one({ key: "q", type }))
+    expect(FORM_CHAT_ONLY_FIELD_TYPES.has(type as never)).toBe(false)
+    expect(formChatOnlyFields(parsed)).toEqual([])
+  })
+
+  test("maxSizeMb: whole MB 1..10, and only on a photo / file field", () => {
+    expect(issues(one({ key: "q", type: "file", maxSizeMb: 1 }))).toEqual([])
+    expect(issues(one({ key: "q", type: "image", maxSizeMb: 10 }))).toEqual([])
+    for (const bad of [0, 11, 2.5, -1]) {
+      expect(
+        issues(one({ key: "q", type: "file", maxSizeMb: bad })),
+      ).not.toEqual([])
+    }
+    expect(issues(one({ key: "q", type: "text", maxSizeMb: 2 }))).toEqual([
+      "Only a photo or file field has a size limit.",
+    ])
+    expect(
+      issues(one({ key: "q", type: "location", maxSizeMb: 2 })),
+    ).not.toEqual([])
   })
 
   test.each([

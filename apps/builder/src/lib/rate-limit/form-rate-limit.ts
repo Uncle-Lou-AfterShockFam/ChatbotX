@@ -93,5 +93,51 @@ export const checkFormStartFormRateLimit = ({
     scope: "form-start",
   })
 
+/**
+ * Web form uploads (s225a A2-4 PR 5): their own budget, ip first (before any
+ * database lookup), then per form. Each call can carry 10 MiB, so the
+ * budgets are small; the business layer also caps UNCLAIMED uploads per ip
+ * and per form against stored rows.
+ */
+const UPLOAD_IP_LIMIT = 10
+const UPLOAD_FORM_LIMIT = 100
+const uploadKey = (...parts: string[]) => ["form-upload", ...parts].join(":")
+
+export const checkFormUploadIpRateLimit = ({
+  clientIp,
+  store,
+  now = Date.now(),
+}: Omit<FormRateLimitInput, "formId">): Promise<FormRateLimitResult> =>
+  checkFixedWindow({
+    buckets: [
+      {
+        key: uploadKey("ip", clientIp, windowSuffix(now, WINDOW_SECONDS)),
+        limit: UPLOAD_IP_LIMIT,
+      },
+    ],
+    windowSeconds: WINDOW_SECONDS,
+    store,
+    now,
+    scope: "form-upload",
+  })
+
+export const checkFormUploadFormRateLimit = ({
+  formId,
+  store,
+  now = Date.now(),
+}: Omit<FormRateLimitInput, "clientIp">): Promise<FormRateLimitResult> =>
+  checkFixedWindow({
+    buckets: [
+      {
+        key: uploadKey("form", formId, windowSuffix(now, WINDOW_SECONDS)),
+        limit: UPLOAD_FORM_LIMIT,
+      },
+    ],
+    windowSeconds: WINDOW_SECONDS,
+    store,
+    now,
+    scope: "form-upload",
+  })
+
 /** Test seam: forget every in-memory window. */
 export const resetFormRateLimitMemory = resetFixedWindowMemory
