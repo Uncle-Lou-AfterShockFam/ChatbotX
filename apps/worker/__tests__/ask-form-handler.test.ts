@@ -7,6 +7,9 @@ const mocks = vi.hoisted(() => ({
   start: vi.fn(),
   answer: vi.fn(),
   markAsked: vi.fn(async () => true),
+  markUndelivered: vi.fn(async () => true),
+  claimExpiredRoute: vi.fn(async () => true),
+  delivered: vi.fn(async () => true),
   findById: vi.fn(),
   chatQueueAdd: vi.fn(async () => ({ id: "job" })),
   waitForChatJobCompletion: vi.fn(async () => undefined),
@@ -33,6 +36,8 @@ vi.mock("@chatbotx.io/business/form", () => ({
     start: mocks.start,
     answer: mocks.answer,
     markAsked: mocks.markAsked,
+    markUndelivered: mocks.markUndelivered,
+    claimExpiredRoute: mocks.claimExpiredRoute,
     findById: mocks.findById,
   },
 }))
@@ -60,6 +65,7 @@ vi.mock("@chatbotx.io/worker-config", () => ({
 }))
 vi.mock("../src/integration/utils/message", () => ({
   waitForChatJobCompletion: mocks.waitForChatJobCompletion,
+  waitForChatJobDelivered: mocks.delivered,
 }))
 vi.mock("../src/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -168,8 +174,7 @@ describe("askForm handler", () => {
         }),
       }),
     )
-    const sendOrder =
-      mocks.waitForChatJobCompletion.mock.invocationCallOrder.at(-1) ?? 0
+    const sendOrder = mocks.delivered.mock.invocationCallOrder.at(-1) ?? 0
     expect(mocks.markAsked.mock.invocationCallOrder[0]).toBeGreaterThan(
       sendOrder,
     )
@@ -194,10 +199,11 @@ describe("askForm handler", () => {
         data: { quickReplies: { label: string; postback: string }[] }
       }
     ).data
+    // Opaque payloads: a Telegram echo never carries an option value.
     expect(data.quickReplies.map((q) => q.postback)).toEqual([
-      "red",
-      "blue",
-      "skip",
+      "askform:0",
+      "askform:1",
+      "askform:skip",
     ])
   })
 
@@ -369,31 +375,84 @@ describe("askForm handler", () => {
     expect((await askForm(props())).status).toBe("wait")
   })
 
-  test("the expiry re-entry routes skip only for THIS still-expired run", async () => {
+  test("the expiry re-entry routes skip once, and only on the job that re-entered THIS step", async () => {
     const meta = {
       type: "askFormExpired",
       stepId: "step-1",
       formSessionId: "session-1",
     }
-    mocks.findById.mockResolvedValueOnce(session({ status: "expired" }))
-    expect((await askForm(props({ metadata: meta as never }))).status).toBe(
-      "skip",
-    )
-    mocks.findById.mockResolvedValueOnce(session({ status: "completed" }))
-    expect((await askForm(props({ metadata: meta as never }))).status).toBe(
-      "wait",
-    )
-    mocks.findById.mockResolvedValueOnce(
-      session({ status: "expired", conversationId: "conv-OTHER" }),
-    )
-    expect((await askForm(props({ metadata: meta as never }))).status).toBe(
-      "wait",
-    )
-    mocks.findById.mockResolvedValueOnce(undefined)
-    expect((await askForm(props({ metadata: meta as never }))).status).toBe(
-      "wait",
-    )
+    const reentry = { metadata: meta as never, startFromStepId: "step-1" }
+    mocks.claimExpiredRoute.mockResolvedValueOnce(true)
+    expect((await askForm(props(reentry))).status).toBe("skip")
+    expect(mocks.claimExpiredRoute).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      sessionId: "session-1",
+      contactId: "contact-1",
+      conversationId: "conv-1",
+      stepId: "step-1",
+    })
+    mocks.claimExpiredRoute.mockResolvedValueOnce(false)
+    expect((await askForm(props(reentry))).status).toBe("wait")
     expect(mocks.start).not.toHaveBeenCalled()
+    // The same metadata carried into a later visit (a loop back to this
+    // step) is not ours: the step starts a fresh run.
+    mocks.start.mockResolvedValueOnce({ kind: "unavailable", reason: "busy" })
+    await askForm(props({ metadata: meta as never }))
+    expect(mocks.start).toHaveBeenCalledTimes(1)
+  })
+
+  test("an undelivered question (failed / timed-out send) is never opened for answers", async () => {
+    mocks.start.mockResolvedValue({
+      kind: "ask",
+      session: session(),
+      field: colorField,
+      preface: [],
+      retry: false,
+    })
+    mocks.delivered.mockResolvedValueOnce(false)
+    await askForm(props())
+    expect(mocks.markAsked).not.toHaveBeenCalled()
+    expect(mocks.markUndelivered).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      sessionId: "session-1",
+      challengeId: "ch-1",
+    })
+  })
+
+  test("a send that throws marks the question undelivered too", async () => {
+    mocks.start.mockResolvedValue({
+      kind: "ask",
+      session: session(),
+      field: colorField,
+      preface: [],
+      retry: false,
+    })
+    mocks.chatQueueAdd.mockRejectedValueOnce(new Error("redis down"))
+    expect(await askForm(props())).toEqual({ status: "wait", result: null })
+    expect(mocks.markUndelivered).toHaveBeenCalled()
+    expect(mocks.markAsked).not.toHaveBeenCalled()
+  })
+
+  test("a start that replaced a run elsewhere clears that conversation's challenge", async () => {
+    mocks.start.mockResolvedValue({
+      kind: "ask",
+      session: session(),
+      field: colorField,
+      preface: [],
+      retry: false,
+      replaced: {
+        conversationId: "conv-A",
+        stepId: "step-9",
+        challengeId: "ch-A",
+      },
+    })
+    await askForm(props())
+    expect(mocks.consumeChallenge).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      conversationId: "conv-A",
+      stepId: "step-9",
+      challengeId: "ch-A",
+    })
   })
 
   test("a picker submit answers by challenge id with the picked value", async () => {
@@ -406,10 +465,13 @@ describe("askForm handler", () => {
           challengeId: "ch-1",
           selectedValue: "2026-10-01T00:00:00.000Z",
         } as never,
+        startFromStepId: "step-1",
       }),
     )
     expect(mocks.answer).toHaveBeenCalledWith(
       expect.objectContaining({
+        conversationId: "conv-1",
+        contactInboxId: "ci-1",
         reply: { challengeId: "ch-1", text: "2026-10-01T00:00:00.000Z" },
       }),
     )

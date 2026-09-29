@@ -117,7 +117,9 @@ const isInt8 = (value: unknown): value is string =>
   BigInt(value) <= INT8_MAX
 
 /** Epoch microseconds as int8 text (s198 rule: never `::text` on a timestamp). */
-const createdAtMicros = sql<string>`(extract(epoch from ${formSubmissionModel.createdAt}) * 1000000)::bigint::text`
+/** Built on first use, never at module load (test mocks of the db client). */
+const createdAtMicros = () =>
+  sql<string>`(extract(epoch from ${formSubmissionModel.createdAt}) * 1000000)::bigint::text`
 
 export function encodeSubmissionCursor(c: SubmissionCursor): string {
   return Buffer.from(JSON.stringify(c)).toString("base64url")
@@ -762,11 +764,11 @@ export class FormService extends BaseService {
     ]
     if (after) {
       conditions.push(
-        sql`(${createdAtMicros}::bigint < ${after.k}::bigint or (${createdAtMicros}::bigint = ${after.k}::bigint and ${formSubmissionModel.id} < ${after.i}::bigint))`,
+        sql`(${createdAtMicros()}::bigint < ${after.k}::bigint or (${createdAtMicros()}::bigint = ${after.k}::bigint and ${formSubmissionModel.id} < ${after.i}::bigint))`,
       )
     }
     const rows = await tx
-      .select({ row: formSubmissionModel, k: createdAtMicros })
+      .select({ row: formSubmissionModel, k: createdAtMicros() })
       .from(formSubmissionModel)
       .where(and(...conditions))
       .orderBy(

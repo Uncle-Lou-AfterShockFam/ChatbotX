@@ -216,6 +216,8 @@ const answer = async (w: World, text: string | null, messageId = createId()) =>
     await formSessionService.answer({
       workspaceId: w.workspaceId,
       contactId: w.contactId,
+      conversationId: w.conversationId,
+      contactInboxId: w.contactInboxId,
       stepId: "step-1",
       reply: { messageId, read: () => text },
     }),
@@ -535,6 +537,8 @@ describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
       await formSessionService.answer({
         workspaceId: w.workspaceId,
         contactId: w.contactId,
+        conversationId: w.conversationId,
+        contactInboxId: w.contactInboxId,
         stepId: "step-1",
         reply: { challengeId: first.session.challengeId ?? "", text: "red" },
       }),
@@ -583,6 +587,153 @@ describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
       await track(w)
     }
   }, 60_000)
+
+  test("an undelivered question ends the run at the next sweep; a delivered one is untouched", async () => {
+    const w = await seedWorld()
+    const raw = await formSessionService.start(startInput(w))
+    if (raw.kind !== "ask") {
+      throw new Error("expected ask")
+    }
+    const args = {
+      workspaceId: w.workspaceId,
+      sessionId: raw.session.id,
+      challengeId: raw.session.challengeId ?? "",
+    }
+    expect(await formSessionService.markUndelivered(args)).toBe(true)
+    const swept = await formSessionService.expireDue()
+    const mine = swept.find((x) => x.id === raw.session.id)
+    expect(mine?.status).toBe("expired")
+    expect(mine?.endReason).toBe("undelivered")
+    // A delivered question cannot be marked undelivered afterwards.
+    const w2 = await seedWorld()
+    const ok = await start(w2)
+    if (ok.kind !== "ask") {
+      throw new Error("expected ask")
+    }
+    expect(
+      await formSessionService.markUndelivered({
+        workspaceId: w2.workspaceId,
+        sessionId: ok.session.id,
+        challengeId: ok.session.challengeId ?? "",
+      }),
+    ).toBe(false)
+    await track(w)
+    await track(w2)
+  })
+
+  test("an expired run routes skip exactly once, and never while a newer run is active", async () => {
+    const w = await seedWorld()
+    const first = await start(w)
+    if (first.kind !== "ask") {
+      throw new Error("expected ask")
+    }
+    await db.execute(sql`
+      UPDATE "FormSession" SET "expiresAt" = now() - interval '1 minute'
+       WHERE id = ${first.session.id}`)
+    await formSessionService.expireDue()
+    const claim = {
+      workspaceId: w.workspaceId,
+      sessionId: first.session.id,
+      contactId: w.contactId,
+      conversationId: w.conversationId,
+      stepId: "step-1",
+    }
+    const w2 = await seedWorld()
+    const second = await start(w2)
+    expect(second.kind).toBe("ask")
+    // Contact w has no newer run: exactly one of two racing claims wins.
+    const claims = await Promise.all([
+      formSessionService.claimExpiredRoute(claim),
+      formSessionService.claimExpiredRoute(claim),
+    ])
+    expect(claims.filter(Boolean)).toHaveLength(1)
+    // A newer run for the contact blocks the old run's skip.
+    const w3 = await seedWorld()
+    const old = await start(w3)
+    if (old.kind !== "ask") {
+      throw new Error("expected ask")
+    }
+    await db.execute(sql`
+      UPDATE "FormSession" SET "expiresAt" = now() - interval '1 minute'
+       WHERE id = ${old.session.id}`)
+    await formSessionService.expireDue()
+    await start(w3)
+    expect(
+      await formSessionService.claimExpiredRoute({
+        workspaceId: w3.workspaceId,
+        sessionId: old.session.id,
+        contactId: w3.contactId,
+        conversationId: w3.conversationId,
+        stepId: "step-1",
+      }),
+    ).toBe(false)
+    await track(w)
+    await track(w2)
+    await track(w3)
+  })
+
+  test("a question stuck undelivered (worker died mid-send) is re-asked on the next reply after 2 min", async () => {
+    const w = await seedWorld()
+    const raw = await formSessionService.start(startInput(w))
+    if (raw.kind !== "ask") {
+      throw new Error("expected ask")
+    }
+    expect(await answer(w, "Ada")).toEqual({ kind: "ignored", reason: "stale" })
+    await db.execute(sql`
+      UPDATE "FormSession" SET "updatedAt" = now() - interval '3 minutes'
+       WHERE id = ${raw.session.id}`)
+    const again = await formSessionService.answer({
+      workspaceId: w.workspaceId,
+      contactId: w.contactId,
+      conversationId: w.conversationId,
+      contactInboxId: w.contactInboxId,
+      stepId: "step-1",
+      reply: { messageId: createId(), read: () => "Ada" },
+    })
+    expect(again.kind === "ask" && again.field.key).toBe("name")
+    await track(w)
+  })
+
+  test("a reply on another conversation or channel identity never answers", async () => {
+    const w = await seedWorld()
+    await start(w)
+    const base = {
+      workspaceId: w.workspaceId,
+      contactId: w.contactId,
+      stepId: "step-1",
+      reply: { messageId: createId(), read: () => "Ada" },
+    }
+    expect(
+      await formSessionService.answer({
+        ...base,
+        conversationId: mintId(),
+        contactInboxId: w.contactInboxId,
+      }),
+    ).toEqual({ kind: "ignored", reason: "otherConversation" })
+    expect(
+      await formSessionService.answer({
+        ...base,
+        conversationId: w.conversationId,
+        contactInboxId: mintId(),
+      }),
+    ).toEqual({ kind: "ignored", reason: "otherConversation" })
+    await track(w)
+  })
+
+  test("start on another step names the run it replaced (its challenge must be cleared)", async () => {
+    const w = await seedWorld()
+    const a = await start(w)
+    const b = await start(w, "step-2")
+    if (a.kind !== "ask" || b.kind !== "ask") {
+      throw new Error("expected ask")
+    }
+    expect(b.replaced).toEqual({
+      conversationId: w.conversationId,
+      stepId: "step-1",
+      challengeId: a.session.challengeId,
+    })
+    await track(w)
+  })
 
   test("a form that is not published for chat is unavailable", async () => {
     const w = await seedWorld({ channels: ["web"] })

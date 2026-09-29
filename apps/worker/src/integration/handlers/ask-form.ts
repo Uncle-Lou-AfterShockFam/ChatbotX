@@ -7,6 +7,7 @@ import {
 import {
   type FormChatAction,
   formSessionService,
+  type ReplacedRun,
 } from "@chatbotx.io/business/form"
 import { validateReplyInput } from "@chatbotx.io/business/get-user-data"
 import { getPublicFileUrl } from "@chatbotx.io/business/utils"
@@ -35,12 +36,20 @@ import {
   URL_QUICK_REPLY_CAPABLE_CHANNELS,
   WHATSAPP_NATIVE_LOCATION_REQUEST,
 } from "@chatbotx.io/sdk"
-import { FORM_CHAT_SKIP_WORD } from "@chatbotx.io/utils/form"
+import {
+  FORM_CHAT_SKIP_WORD,
+  formChatPayload,
+  formOptionsNumbered,
+  isFormChatSkip,
+} from "@chatbotx.io/utils/form"
 import { ChatJobAction, chatQueue } from "@chatbotx.io/worker-config"
 import { normalizeError } from "universal-error-normalizer"
 import { logger } from "../../lib/logger"
 import { QUICK_REPLY_CHANNELS } from "../../questionnaires/services/engine"
-import { waitForChatJobCompletion } from "../utils/message"
+import {
+  waitForChatJobCompletion,
+  waitForChatJobDelivered,
+} from "../utils/message"
 import type { ExecuteStepProps } from "./flow-utils"
 import type { ExecuteStepResult } from "./step"
 
@@ -81,14 +90,19 @@ const REPLY_FORMAT_BY_TYPE: Partial<Record<FormField["type"], ReplyFormat>> = {
 
 export async function askForm(props: Props): Promise<ExecuteStepResult> {
   const { ctx, metadata, step } = props
+  // Metadata rides into every later step and node; it is ours only on the
+  // job that re-entered THIS step (a flow looping back here starts fresh).
+  const reentry = props.startFromStepId === step.id
   try {
     if (
+      reentry &&
       metadata?.type === ASK_FORM_EXPIRED_PAYLOAD_TYPE &&
       metadata.stepId === step.id
     ) {
       return await routeExpired(props, metadata.formSessionId)
     }
     if (
+      reentry &&
       metadata?.type === GET_USER_DATA_WEBVIEW_SELECTION_PAYLOAD_TYPE &&
       metadata.stepId === step.id
     ) {
@@ -101,6 +115,8 @@ export async function askForm(props: Props): Promise<ExecuteStepResult> {
         await formSessionService.answer({
           workspaceId: props.conversation.workspaceId,
           contactId: props.conversation.contactId,
+          conversationId: props.conversation.id,
+          contactInboxId: props.contactInbox.id,
           stepId: step.id,
           reply: { challengeId: metadata.challengeId, text: value },
         }),
@@ -153,6 +169,8 @@ async function answerFromMessage(props: Props): Promise<ExecuteStepResult> {
     await formSessionService.answer({
       workspaceId: props.conversation.workspaceId,
       contactId: props.conversation.contactId,
+      conversationId: props.conversation.id,
+      contactInboxId: message.contactInboxId ?? props.contactInbox.id,
       stepId: props.step.id,
       reply: {
         messageId: message.id,
@@ -215,7 +233,7 @@ async function replyText(
   if (!format) {
     return message.text ?? null
   }
-  if (message.text?.trim().toLowerCase() === FORM_CHAT_SKIP_WORD) {
+  if (message.text && isFormChatSkip(message.text)) {
     return message.text
   }
   const result = validateReplyInput(format, message)
@@ -243,10 +261,12 @@ async function perform(
 ): Promise<ExecuteStepResult> {
   switch (action.kind) {
     case "ask":
+      await clearReplaced(props, action.replaced)
       await sendPreface(props, action.preface)
       await ask(props, action.session, action.field, action.retry)
       return { status: action.retry ? "retry" : "wait", result: null }
     case "completed":
+      await clearReplaced(props, action.replaced)
       await clearChallenge(props, action.session)
       await sendPreface(props, action.preface)
       return { status: "success", result: action.submission.id }
@@ -276,23 +296,24 @@ async function perform(
   }
 }
 
-/** The sweep ended this run; route `skip` only while the run is still expired. */
+/**
+ * The sweep ended this run: route `skip` ONCE (claimExpiredRoute), never
+ * when the contact already has a newer run (skip + success in one flow).
+ */
 async function routeExpired(
   props: Props,
   formSessionId: string,
 ): Promise<ExecuteStepResult> {
-  const session = await formSessionService.findById({
+  const claimed = await formSessionService.claimExpiredRoute({
     workspaceId: props.conversation.workspaceId,
-    id: formSessionId,
+    sessionId: formSessionId,
+    contactId: props.conversation.contactId,
+    conversationId: props.conversation.id,
+    stepId: props.step.id,
   })
-  if (
-    session?.status !== "expired" ||
-    session.stepId !== props.step.id ||
-    session.conversationId !== props.conversation.id
-  ) {
-    return { status: "wait", result: null }
-  }
-  return { status: "skip", result: "expired" }
+  return claimed
+    ? { status: "skip", result: "expired" }
+    : { status: "wait", result: null }
 }
 
 function challengeNodeId(props: Props): string {
@@ -304,56 +325,67 @@ function questionText(field: FormField): string {
   return field.helpText ? `${base}\n${field.helpText}` : base
 }
 
-/** Native buttons where the channel renders them, numbered text otherwise. */
+/**
+ * Native buttons where the channel renders them, a list otherwise. Button
+ * payloads are opaque `askform:<n>` tokens: a channel that echoes the payload
+ * never sends an option value that reads as a number or a flow button.
+ */
 function optionPrompt(
   field: FormField,
   channel: string,
   skipLabel: string,
 ): { text: string; quickReplies?: MessageButtonTemplate[] } {
-  const options = (field.options ?? []).map((o) => ({
-    value: o.value,
-    label: o.label,
-  }))
-  if (field.type === "checkbox") {
-    options.push({ value: "yes", label: "Yes" }, { value: "no", label: "No" })
-  }
+  const buttons: { payload: string; label: string }[] =
+    field.type === "checkbox"
+      ? [
+          { payload: formChatPayload("yes"), label: "Yes" },
+          { payload: formChatPayload("no"), label: "No" },
+        ]
+      : (field.options ?? []).map((o, i) => ({
+          payload: formChatPayload(i),
+          label: o.label,
+        }))
   if (!field.required) {
-    options.push({ value: FORM_CHAT_SKIP_WORD, label: skipLabel })
+    buttons.push({
+      payload: formChatPayload(FORM_CHAT_SKIP_WORD),
+      label: skipLabel,
+    })
   }
   const text = questionText(field)
-  const buttons =
+  const native =
     field.type !== "checkboxGroup" &&
     QUICK_REPLY_CHANNELS.has(channel) &&
-    options.length > 0 &&
-    options.length <= MAX_QUICK_REPLIES &&
-    options.every((o) => o.label.length <= BUTTON_LABEL_MAX)
-  if (buttons) {
+    buttons.length > 0 &&
+    buttons.length <= MAX_QUICK_REPLIES &&
+    buttons.every((b) => b.label.length <= BUTTON_LABEL_MAX)
+  if (native) {
     return {
       text,
-      quickReplies: options.map((o) => ({
-        id: o.value,
-        label: o.label,
+      quickReplies: buttons.map((b) => ({
+        id: b.payload,
+        label: b.label,
         buttonType: "postback" as const,
-        postback: o.value,
+        postback: b.payload,
       })),
     }
   }
-  const choices = field.options ?? []
-  if (choices.length === 0) {
-    return {
-      text: field.required
-        ? text
-        : `${text}\n(Reply ${skipLabel.toUpperCase()} to skip.)`,
-    }
-  }
-  const list = choices.map((o, i) => `${i + 1}. ${o.label}`).join("\n")
-  const hint =
-    field.type === "checkboxGroup"
-      ? "\n(Reply with one or more numbers, separated by commas.)"
-      : ""
   const skip = field.required
     ? ""
     : `\n(Reply ${skipLabel.toUpperCase()} to skip.)`
+  const choices = field.options ?? []
+  if (choices.length === 0) {
+    return { text: `${text}${skip}` }
+  }
+  // Numbers only when no option is itself a number ("2" would be ambiguous).
+  const numbered = formOptionsNumbered(field)
+  const list = choices
+    .map((o, i) => (numbered ? `${i + 1}. ${o.label}` : `- ${o.label}`))
+    .join("\n")
+  const unit = numbered ? "numbers" : "options"
+  const hint =
+    field.type === "checkboxGroup"
+      ? `\n(Reply with one or more ${unit}, separated by commas.)`
+      : ""
   return { text: `${text}\n${list}${hint}${skip}` }
 }
 
@@ -449,29 +481,69 @@ async function ask(
     ]
   }
 
-  const job = await chatQueue.add(ChatJobAction.sendChatMessage, {
-    type: ChatJobAction.sendChatMessage,
-    data: {
-      contactInbox,
-      conversation,
-      text: `${retryText}${prompt.text}`,
-      url: field.chat?.mediaUrl,
-      quickReplies,
-      trackingContext: props.trackingContext,
-      metadata: props.metadata,
-    },
-  })
-  await waitForChatJobCompletion(job, {
-    conversationId: conversation.id,
-    stepId: step.id,
-  })
-  // Only now may a reply answer it: a message stored before this point was
-  // written without seeing the question (probe, s219 A2-2).
-  await formSessionService.markAsked({
-    workspaceId: conversation.workspaceId,
-    sessionId: session.id,
-    challengeId,
-  })
+  const undelivered = () =>
+    formSessionService.markUndelivered({
+      workspaceId: conversation.workspaceId,
+      sessionId: session.id,
+      challengeId,
+    })
+  let delivered = false
+  try {
+    const job = await chatQueue.add(ChatJobAction.sendChatMessage, {
+      type: ChatJobAction.sendChatMessage,
+      data: {
+        contactInbox,
+        conversation,
+        text: `${retryText}${prompt.text}`,
+        url: field.chat?.mediaUrl,
+        quickReplies,
+        trackingContext: props.trackingContext,
+      },
+    })
+    delivered = await waitForChatJobDelivered(job, {
+      conversationId: conversation.id,
+      stepId: step.id,
+    })
+  } catch (error) {
+    await undelivered()
+    throw error
+  }
+  // Only a DELIVERED question may be answered: a message stored before this
+  // point was written without seeing it (probe), and a failed or timed-out
+  // send (skeptic: the plain wait swallows both) ends the run at the next
+  // sweep instead of letting an unrelated message answer it.
+  if (delivered) {
+    await formSessionService.markAsked({
+      workspaceId: conversation.workspaceId,
+      sessionId: session.id,
+      challengeId,
+    })
+  } else {
+    await undelivered()
+  }
+}
+
+/** A run start() canceled was asking elsewhere: free that conversation. */
+async function clearReplaced(
+  props: Props,
+  replaced: ReplacedRun | undefined,
+): Promise<void> {
+  if (!replaced?.challengeId) {
+    return
+  }
+  try {
+    await conversationService.consumeChallenge({
+      workspaceId: props.conversation.workspaceId,
+      conversationId: replaced.conversationId,
+      stepId: replaced.stepId,
+      challengeId: replaced.challengeId,
+    })
+  } catch (error) {
+    logger.warn(
+      { err: normalizeError(error), conversationId: replaced.conversationId },
+      "askForm: failed to clear the replaced run's challenge",
+    )
+  }
 }
 
 /** Heading / paragraph blocks, each as its own message, in order. */

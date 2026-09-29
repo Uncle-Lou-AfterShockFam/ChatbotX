@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "ac0a8a46-3de4-41a6-86e6-0e865d3eb917",
+  "id": "398ea422-870b-4cb8-9c2b-41c7fd6590f2",
   "prevIds": [
     "de58d776-c876-404b-906f-bf9a37edad48"
   ],
@@ -17175,6 +17175,19 @@
       "generated": null,
       "identity": null,
       "name": "endedAt",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "FormSession"
+    },
+    {
+      "type": "timestamp(6) with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "routedAt",
       "entityType": "columns",
       "schema": "public",
       "table": "FormSession"

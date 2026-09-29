@@ -192,7 +192,6 @@ const TIKTOK_MENU_ORDER = [
   "sendImage",
   "sendMultipleImages",
   "getUserData",
-  "askForm",
   "typing",
   "actions",
 ] as const

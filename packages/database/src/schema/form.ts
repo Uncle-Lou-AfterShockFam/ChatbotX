@@ -248,6 +248,8 @@ export const formSessionModel = pgTable(
     lastAnsweredMessageId: bigintAsString(),
     expiresAt: timestamp(timestampConfig).notNull(),
     endedAt: timestamp(timestampConfig),
+    /** When an expired run's flow was routed down skip (at most once). */
+    routedAt: timestamp(timestampConfig),
   },
   (table) => [
     uniqueIndex("FormSession_contactId_inProgress_key")

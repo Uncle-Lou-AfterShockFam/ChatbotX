@@ -5,9 +5,11 @@ import {
   desc,
   eq,
   inArray,
+  isNull,
   isUniqueViolationError,
   lte,
   ne,
+  sql,
 } from "@chatbotx.io/database/client"
 import {
   evaluateForm,
@@ -66,19 +68,38 @@ export type FormChatAction =
       preface: FormField[]
       /** True when this re-asks after an answer that did not validate. */
       retry: boolean
+      /** start(): the run this one canceled, whose challenge must be cleared. */
+      replaced?: ReplacedRun
     }
   | {
       kind: "completed"
       session: FormSessionModel
       submission: FormSubmissionModel
       preface: FormField[]
+      replaced?: ReplacedRun
     }
   | { kind: "ended"; session: FormSessionModel; reason: "attempts" }
   | { kind: "unavailable"; reason: "formNotFound" | "busy" }
   | {
       kind: "ignored"
-      reason: "noSession" | "duplicate" | "stale" | "otherStep" | "expired"
+      reason:
+        | "noSession"
+        | "duplicate"
+        | "stale"
+        | "otherStep"
+        | "otherConversation"
+        | "expired"
     }
+
+/** Where a canceled run was asking: its challenge still points there. */
+export type ReplacedRun = {
+  conversationId: string
+  stepId: string
+  challengeId: string | null
+}
+
+/** A question still pending delivery this long is re-asked on the next reply. */
+export const FORM_UNDELIVERED_REASK_MS = 2 * 60_000
 
 export type StartFormSessionInput = {
   workspaceId: string
@@ -113,6 +134,9 @@ export type FormChatReply =
 export type AnswerFormSessionInput = {
   workspaceId: string
   contactId: string
+  /** The conversation and channel identity the reply arrived on; must be the run's own. */
+  conversationId: string
+  contactInboxId: string
   stepId: string
   reply: FormChatReply
   now?: Date
@@ -197,6 +221,7 @@ export class FormSessionService {
       MAX_FORM_CHAT_MAX_ATTEMPTS,
     )
     let step: Step
+    let replaced: ReplacedRun | undefined
     try {
       step = await db.transaction(async (tx): Promise<Step> => {
         const form = await formService.findPublishedForChat({
@@ -229,6 +254,11 @@ export class FormSessionService {
             }
           }
           await this.end(tx, current.id, "canceled", "replaced", now)
+          replaced = {
+            conversationId: current.conversationId,
+            stepId: current.stepId,
+            challengeId: current.challengeId,
+          }
         }
         const profile = await this.profileFor(tx, {
           workspaceId: input.workspaceId,
@@ -269,6 +299,13 @@ export class FormSessionService {
       }
       throw error
     }
+    if (replaced) {
+      if ("finished" in step) {
+        step.finished.action.replaced = replaced
+      } else if (step.action.kind === "ask") {
+        step.action.replaced = replaced
+      }
+    }
     return await this.settle(step)
   }
 
@@ -289,12 +326,35 @@ export class FormSessionService {
       if (session.stepId !== input.stepId) {
         return { action: { kind: "ignored", reason: "otherStep" } }
       }
+      if (
+        session.conversationId !== input.conversationId ||
+        session.contactInboxId !== input.contactInboxId
+      ) {
+        // Asked on one channel, answered on another (a merged contact): the
+        // reply never saw this question's buttons or numbering (skeptic).
+        return { action: { kind: "ignored", reason: "otherConversation" } }
+      }
       if (session.expiresAt.getTime() <= now.getTime()) {
         // Past its timeout: the sweep ends it and routes skip; a late reply
         // must not revive it in between.
         return { action: { kind: "ignored", reason: "expired" } }
       }
       const verdict = this.acceptReply(session, input.reply)
+      if (
+        verdict === "stale" &&
+        session.askMarker === FORM_ASK_PENDING_MARKER &&
+        now.getTime() - session.updatedAt.getTime() > FORM_UNDELIVERED_REASK_MS
+      ) {
+        // The worker never confirmed this question (it died mid-send): the
+        // contact is replying to nothing, so ask it again rather than wait
+        // out the whole timeout (blind probe, s219 A2-2).
+        const field = this.fieldOf(session, session.currentFieldKey)
+        if (field) {
+          return {
+            action: { kind: "ask", session, field, preface: [], retry: false },
+          }
+        }
+      }
       if (verdict) {
         return { action: { kind: "ignored", reason: verdict } }
       }
@@ -416,7 +476,7 @@ export class FormSessionService {
         .update(formSessionModel)
         .set({
           status: "expired",
-          endReason: "timeout",
+          endReason: sql`coalesce(${formSessionModel.endReason}, 'timeout')`,
           endedAt: now,
           currentFieldKey: null,
         })
@@ -481,6 +541,69 @@ export class FormSessionService {
           eq(formSessionModel.status, "inProgress"),
           eq(formSessionModel.challengeId, props.challengeId),
           eq(formSessionModel.askMarker, FORM_ASK_PENDING_MARKER),
+        ),
+      )
+      .returning({ id: formSessionModel.id })
+    return rows.length > 0
+  }
+
+  /**
+   * The current question was NOT delivered (the send failed, timed out or
+   * threw): the contact cannot answer it, so the run is due now and the next
+   * sweep ends it down the skip path instead of after the full timeout.
+   * Conditional on the question still pending, like markAsked.
+   */
+  async markUndelivered(props: {
+    workspaceId: string
+    sessionId: string
+    challengeId: string
+    now?: Date
+  }): Promise<boolean> {
+    const rows = await db
+      .update(formSessionModel)
+      .set({ expiresAt: props.now ?? new Date(), endReason: "undelivered" })
+      .where(
+        and(
+          eq(formSessionModel.workspaceId, props.workspaceId),
+          eq(formSessionModel.id, props.sessionId),
+          eq(formSessionModel.status, "inProgress"),
+          eq(formSessionModel.challengeId, props.challengeId),
+          eq(formSessionModel.askMarker, FORM_ASK_PENDING_MARKER),
+        ),
+      )
+      .returning({ id: formSessionModel.id })
+    return rows.length > 0
+  }
+
+  /**
+   * Claim the ONE skip routing of an expired run. Refused when it was routed
+   * already (a flow that loops back to the step must start a fresh run, not
+   * skip again) or when the contact has a newer run in progress (routing the
+   * old run's skip then would give one flow both skip and success).
+   */
+  async claimExpiredRoute(props: {
+    workspaceId: string
+    sessionId: string
+    contactId: string
+    conversationId: string
+    stepId: string
+    now?: Date
+  }): Promise<boolean> {
+    const active = await this.findActive(props)
+    if (active) {
+      return false
+    }
+    const rows = await db
+      .update(formSessionModel)
+      .set({ routedAt: props.now ?? new Date() })
+      .where(
+        and(
+          eq(formSessionModel.workspaceId, props.workspaceId),
+          eq(formSessionModel.id, props.sessionId),
+          eq(formSessionModel.status, "expired"),
+          eq(formSessionModel.conversationId, props.conversationId),
+          eq(formSessionModel.stepId, props.stepId),
+          isNull(formSessionModel.routedAt),
         ),
       )
       .returning({ id: formSessionModel.id })

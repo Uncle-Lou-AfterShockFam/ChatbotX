@@ -29,7 +29,8 @@ CREATE TABLE "FormSession" (
 	"timeoutMinutes" integer NOT NULL,
 	"lastAnsweredMessageId" bigint,
 	"expiresAt" timestamp(6) with time zone NOT NULL,
-	"endedAt" timestamp(6) with time zone
+	"endedAt" timestamp(6) with time zone,
+	"routedAt" timestamp(6) with time zone
 );
 --> statement-breakpoint
 ALTER TABLE "FormSubmission" ADD COLUMN "channel" "formChannel" DEFAULT 'web'::"formChannel" NOT NULL;--> statement-breakpoint

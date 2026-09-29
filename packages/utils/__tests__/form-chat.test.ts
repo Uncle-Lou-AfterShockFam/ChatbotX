@@ -6,6 +6,7 @@ import {
   type FormField,
   formDefinition,
   formInputFields,
+  formOptionsNumbered,
   isFormChatSkip,
   matchFormOption,
   parseFormChatAnswer,
@@ -411,6 +412,35 @@ describe("matchFormOption", () => {
     expect(matchFormOption(color, text)).toBe(out)
   })
 
+  test("button payloads pick by position, never by value text", () => {
+    expect(matchFormOption(color, "askform:1")).toBe("blue")
+    expect(matchFormOption(color, "askform:9")).toBeNull()
+    expect(matchFormOption(color, "askform:skip")).toBeNull()
+  })
+
+  test("numeric option values: a Telegram echo of the value matches the value, and numbering is off (blind probe)", () => {
+    const numeric = {
+      options: [
+        { value: "3", label: "Three" },
+        { value: "1", label: "One" },
+        { value: "2", label: "Two" },
+      ],
+    }
+    expect(formOptionsNumbered(numeric)).toBe(false)
+    expect(matchFormOption(numeric, "1")).toBe("1")
+    expect(matchFormOption(numeric, "One")).toBe("1")
+    expect(formOptionsNumbered(color)).toBe(true)
+  })
+
+  test("a value shaped like a flow payload (10:30) still matches as an option", () => {
+    expect(
+      matchFormOption(
+        { options: [{ value: "10:30", label: "Half past ten" }] },
+        "10:30",
+      ),
+    ).toBe("10:30")
+  })
+
   test("a field without options matches nothing", () => {
     expect(matchFormOption({ options: undefined }, "1")).toBeNull()
   })
@@ -467,6 +497,9 @@ describe("parseFormChatAnswer", () => {
     ["where", "40.7,-74.0", { ok: true, value: "40.7,-74.0" }],
     ["where", "95,10", { ok: false, code: "location" }],
     ["when", "2026-09-28", { ok: true, value: "2026-09-28" }],
+    ["when", "2026-10-01T00:00:00.000Z", { ok: true, value: "2026-10-01" }],
+    ["agree", "askform:yes", { ok: true, value: true }],
+    ["color", "askform:0", { ok: true, value: "red" }],
     ["when", "tomorrow", { ok: false, code: "date" }],
   ] as const)("%s <- %j", (key, text, out) => {
     expect(parseFormChatAnswer(f(key), text)).toEqual(out)
@@ -496,8 +529,9 @@ describe("parseFormChatAnswer", () => {
     expect(parsed.ok && validateFormField(f("age"), parsed.value)).toBeNull()
   })
 
-  test("isFormChatSkip is exact and case-insensitive", () => {
+  test("isFormChatSkip is exact and case-insensitive; the skip button counts", () => {
     expect(isFormChatSkip(" SKIP ")).toBe(true)
+    expect(isFormChatSkip("askform:skip")).toBe(true)
     expect(isFormChatSkip("skip it")).toBe(false)
   })
 })

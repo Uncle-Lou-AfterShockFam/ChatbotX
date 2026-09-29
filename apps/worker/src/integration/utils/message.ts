@@ -126,6 +126,31 @@ export async function waitForChatJobCompletion(
   await awaitChatJob(job, context)
 }
 
+/**
+ * Like {@link waitForChatJobCompletion}, but REPORTS the outcome: true only
+ * when the job completed. A caller that must know the contact actually
+ * received the message (the askForm step, s219 A2-2) branches on it; it still
+ * never throws, for the same no-double-send reason.
+ */
+export async function waitForChatJobDelivered(
+  job: Awaited<ReturnType<typeof chatQueue.add>>,
+  context?: Record<string, unknown>,
+): Promise<boolean> {
+  if (!(typeof job === "object" && "waitUntilFinished" in job)) {
+    return false
+  }
+  try {
+    await job.waitUntilFinished(getChatQueueEvents(), CHAT_JOB_WAIT_TIMEOUT_MS)
+    return true
+  } catch (err) {
+    logger.error(
+      { ...context, err },
+      "Chat job did not complete in time or failed; not delivered",
+    )
+    return false
+  }
+}
+
 export async function sendMessageAndWait(
   conversationId: string,
   text: string,

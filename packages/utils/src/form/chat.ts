@@ -173,6 +173,8 @@ export type FormChatAnswer =
   | { ok: false; code: FormValidationIssue["code"] }
 
 const OPTION_NUMBER_RE = /^\d{1,3}$/
+const DIGITS_RE = /^\d+$/
+const ISO_INSTANT_RE = /^\d{4}-\d{2}-\d{2}T/
 const LIST_SEPARATOR_RE = /[,;\n]+/
 
 const YES = new Set(["yes", "y", "true", "1", "ok", "agree", "i agree"])
@@ -181,10 +183,43 @@ const NO = new Set(["no", "n", "false", "0"])
 /** A reply that skips an OPTIONAL question (the caller checks required-ness). */
 export const FORM_CHAT_SKIP_WORD = "skip"
 
-export const isFormChatSkip = (text: string): boolean =>
-  text.trim().toLowerCase() === FORM_CHAT_SKIP_WORD
+/**
+ * A quick-reply button's payload: `askform:<n>` (option n, 0-based),
+ * `askform:skip`, `askform:yes`, `askform:no`. Opaque on purpose: a channel
+ * that echoes the payload (Telegram) must not send an option VALUE that
+ * reads as an option number, or as a flow button payload like `10:30`
+ * (blind probe, s219 A2-2).
+ */
+export const FORM_CHAT_PAYLOAD_PREFIX = "askform:"
+const PAYLOAD_RE = /^askform:([a-z0-9]{1,8})$/
 
-/** An option by its 1-based number, its value or its label (case-insensitive). */
+export const formChatPayload = (token: string | number): string =>
+  `${FORM_CHAT_PAYLOAD_PREFIX}${token}`
+
+const payloadToken = (text: string): string | null =>
+  PAYLOAD_RE.exec(text.trim().toLowerCase())?.[1] ?? null
+
+export const isFormChatSkip = (text: string): boolean => {
+  const word = text.trim().toLowerCase()
+  return word === FORM_CHAT_SKIP_WORD || payloadToken(word) === "skip"
+}
+
+/**
+ * True when an option can be picked by its number: no option value or label
+ * is itself all digits, which would make "2" ambiguous. The chat prompt
+ * numbers the list only then.
+ */
+export const formOptionsNumbered = (
+  field: Pick<FormField, "options">,
+): boolean =>
+  !(field.options ?? []).some(
+    (o) => OPTION_NUMBER_RE.test(o.value) || OPTION_NUMBER_RE.test(o.label),
+  )
+
+/**
+ * An option by its button payload, its label, its value, or (only when the
+ * list is numbered) its 1-based number; case-insensitive.
+ */
 export function matchFormOption(
   field: Pick<FormField, "options">,
   text: string,
@@ -194,16 +229,22 @@ export function matchFormOption(
   if (needle === "") {
     return null
   }
-  if (OPTION_NUMBER_RE.test(needle)) {
-    const option = options[Number(needle) - 1]
-    if (option) {
-      return option.value
-    }
+  const token = payloadToken(needle)
+  if (token !== null) {
+    return DIGITS_RE.test(token)
+      ? (options[Number(token)]?.value ?? null)
+      : null
   }
   const hit =
-    options.find((o) => o.value.toLowerCase() === needle) ??
-    options.find((o) => o.label.toLowerCase() === needle)
-  return hit ? hit.value : null
+    options.find((o) => o.label.toLowerCase() === needle) ??
+    options.find((o) => o.value.toLowerCase() === needle)
+  if (hit) {
+    return hit.value
+  }
+  if (OPTION_NUMBER_RE.test(needle) && formOptionsNumbered(field)) {
+    return options[Number(needle) - 1]?.value ?? null
+  }
+  return null
 }
 
 /**
@@ -259,7 +300,7 @@ export function parseFormChatAnswer(
       break
     }
     case "checkbox": {
-      const word = trimmed.toLowerCase()
+      const word = payloadToken(trimmed) ?? trimmed.toLowerCase()
       if (YES.has(word)) {
         value = true
       } else if (NO.has(word)) {
@@ -276,6 +317,11 @@ export function parseFormChatAnswer(
     }
     case "email":
       value = trimmed.toLowerCase()
+      break
+    case "date":
+      // The date picker answers with an ISO instant at UTC midnight; the
+      // field stores the day (blind probe, s219 A2-2).
+      value = ISO_INSTANT_RE.test(trimmed) ? trimmed.slice(0, 10) : trimmed
       break
     default:
       value = trimmed
