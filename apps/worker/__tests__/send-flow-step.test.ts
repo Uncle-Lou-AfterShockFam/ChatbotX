@@ -1303,3 +1303,39 @@ describe("sendChatMessage", () => {
     )
   })
 })
+
+describe("isPrivateDestination (s220c personal form links)", () => {
+  test("person channels yes; Telegram only for a private chat; group-capable / public channels no", async () => {
+    const { isPrivateDestination } = await import(
+      "../src/chat/handlers/send-flow-step"
+    )
+    for (const channel of [
+      "messenger",
+      "instagram",
+      "whatsapp",
+      "webchat",
+      "api",
+      "smtp",
+    ]) {
+      expect(isPrivateDestination({ channel, sourceId: "x" })).toBe(true)
+    }
+    expect(
+      isPrivateDestination({ channel: "telegram", sourceId: "123456789" }),
+    ).toBe(true)
+    expect(
+      isPrivateDestination({ channel: "telegram", sourceId: "-1001234567890" }),
+    ).toBe(false)
+    expect(isPrivateDestination({ channel: "telegram", sourceId: null })).toBe(
+      false,
+    )
+    for (const channel of [
+      "zalo",
+      "threads",
+      "tiktok",
+      "omnichannel",
+      "something-new",
+    ]) {
+      expect(isPrivateDestination({ channel, sourceId: "1" })).toBe(false)
+    }
+  })
+})

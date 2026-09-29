@@ -575,6 +575,43 @@ describe("personal form links in email (s220c)", () => {
     ).toBe(false)
     expect(isContactsOwnAddress("", "")).toBe(false)
     expect(isContactsOwnAddress("jane@example.com", null)).toBe(false)
+    // a stored "email" that is really a list never passes, even when equal
+    const list = "jane@example.com, other@example.com"
+    expect(isContactsOwnAddress(list, list)).toBe(false)
+    expect(
+      isContactsOwnAddress("jane@example.com;x@y.z", "jane@example.com;x@y.z"),
+    ).toBe(false)
+  })
+
+  test("an email LINE send is judged by the line's address, not step.to (Codex review s220c)", async () => {
+    const { contactVariableService } = await import("@chatbotx.io/variables")
+    const getAll = vi.mocked(contactVariableService.getAll)
+    const replaceAll = vi.mocked(contactVariableService.replaceAll)
+    for (const [lineAddress, expected] of [
+      ["other@example.com", false],
+      ["jane@example.com", true],
+    ] as const) {
+      getAll.mockResolvedValueOnce({
+        contact: { email: "jane@example.com" },
+      } as never)
+      resolveEmailLineMock.mockResolvedValueOnce({
+        id: "ci-line",
+        inboxId: "line-1",
+        sourceId: lineAddress,
+      })
+      replaceAll.mockClear()
+      await sendEmail(
+        makeProps({
+          to: "jane@example.com",
+          lineInboxId: "line-1",
+          templateId: "77",
+        }) as never,
+      )
+      const subjectCall = replaceAll.mock.calls.find(
+        ([arg]) => (arg as { text: string }).text === "Hello",
+      )?.[0] as { variables: { personalLinks?: boolean } }
+      expect(subjectCall.variables.personalLinks).toBe(expected)
+    }
   })
 
   test("the body is resolved with the opt-in only when the recipient is the contact", async () => {

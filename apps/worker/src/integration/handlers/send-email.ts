@@ -296,6 +296,8 @@ async function sendViaLine(props: {
   }
 }
 
+const SINGLE_MAILBOX_RE = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+$/
+
 /**
  * The resolved recipient is exactly the contact's stored email (one address,
  * case-insensitive). A list, a different or an empty address is not.
@@ -305,7 +307,13 @@ export const isContactsOwnAddress = (
   contactEmail: string | null | undefined,
 ): boolean => {
   const own = contactEmail?.trim().toLowerCase()
-  return Boolean(own) && to.trim().toLowerCase() === own
+  // ONE mailbox: a stored "email" that is really a list (the contact field
+  // takes any string) must not pass as its own recipient
+  return (
+    Boolean(own) &&
+    SINGLE_MAILBOX_RE.test(own ?? "") &&
+    to.trim().toLowerCase() === own
+  )
 }
 
 export async function sendEmail({
@@ -378,14 +386,6 @@ export async function sendEmail({
     text: step.to,
     variables,
   })
-  // Personal (bearer) links only in mail to the contact's OWN address: an
-  // owner may address this step to someone else (a notification), and that
-  // reader must not get the contact's link (Codex review s220c).
-  variables.personalLinks = isContactsOwnAddress(to, variables.contact?.email)
-  const [subject, preheader] = await Promise.all([
-    contactVariableService.replaceAll({ text: step.subject, variables }),
-    contactVariableService.replaceAll({ text: step.preheader, variables }),
-  ])
 
   const unsubscribeUrl = await buildUnsubscribeUrl(
     appUrl,
@@ -416,6 +416,19 @@ export async function sendEmail({
     }
   }
   const recipient = lineContactInbox?.sourceId ?? to
+  // Personal (bearer) links only in mail DELIVERED to the contact's own,
+  // single address (the email line's identity when it sends): an owner may
+  // address this step to someone else, and that reader must not get the
+  // contact's link (Codex reviews s220c). Decided before any content is
+  // resolved; every render below reads this context.
+  variables.personalLinks = isContactsOwnAddress(
+    recipient,
+    variables.contact?.email,
+  )
+  const [subject, preheader] = await Promise.all([
+    contactVariableService.replaceAll({ text: step.subject, variables }),
+    contactVariableService.replaceAll({ text: step.preheader, variables }),
+  ])
   if (isDocument && !contentError) {
     try {
       prepared = await prepareStepDocument({
