@@ -8,9 +8,9 @@ import {
 } from "@chatbotx.io/database/partials"
 import {
   buildJobId,
+  isWaitFormEventType,
   type WaitForEventSpec,
   waitForEventSpecSchema,
-  isWaitFormEventType,
   waitStepEventTypes,
 } from "@chatbotx.io/flow-config"
 import {
