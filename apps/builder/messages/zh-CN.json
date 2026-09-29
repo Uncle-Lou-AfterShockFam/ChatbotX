@@ -3454,7 +3454,7 @@
       "eventTagApplied": "A tag is applied",
       "eventCustomFieldChanged": "A custom field changes",
       "eventFormSubmitted": "A form is submitted",
-      "eventFormAbandoned": "A chat form is abandoned",
+      "eventFormAbandoned": "A form is abandoned",
       "eventFormLabel": "Form",
       "eventTagLabel": "Tag",
       "eventCustomFieldLabel": "Custom field",
@@ -5083,7 +5083,9 @@
         "chat": "由“询问表单”步骤逐题提问。"
       },
       "profilingLimit": "每次聊天的问题数",
-      "profilingLimitHint": "渐进式画像：每次最多询问这么多问题。留空 = 全部询问。"
+      "profilingLimitHint": "渐进式画像：每次最多询问这么多问题。留空 = 全部询问。",
+      "abandonAfterMinutes": "放弃判定时间 (分钟)",
+      "abandonAfterMinutesHint": "通过个人链接访问并开始填写、但在此时间内未提交的访客会触发“表单被放弃” (5-1440)。"
     },
     "submitActions": {
       "title": "Actions after submit",
@@ -5483,7 +5485,7 @@
       "taskAssigned": "Task assigned",
       "dealMentioned": "Teammate mentioned on a deal",
       "formSubmitted": "Form submitted",
-      "formAbandoned": "Chat form abandoned",
+      "formAbandoned": "Form abandoned",
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",

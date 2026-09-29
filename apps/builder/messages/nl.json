@@ -2536,7 +2536,7 @@
       "eventTagApplied": "A tag is applied",
       "eventCustomFieldChanged": "A custom field changes",
       "eventFormSubmitted": "A form is submitted",
-      "eventFormAbandoned": "A chat form is abandoned",
+      "eventFormAbandoned": "A form is abandoned",
       "eventFormLabel": "Form",
       "eventTagLabel": "Tag",
       "eventCustomFieldLabel": "Custom field",
@@ -4475,7 +4475,7 @@
       "taskAssigned": "Task assigned",
       "dealMentioned": "Teammate mentioned on a deal",
       "formSubmitted": "Form submitted",
-      "formAbandoned": "Chat form abandoned",
+      "formAbandoned": "Form abandoned",
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
@@ -4952,7 +4952,9 @@
         "chat": "Vraag voor vraag gesteld door een Formulier-vragen-stap."
       },
       "profilingLimit": "Vragen per chat",
-      "profilingLimitHint": "Progressieve profilering: hoogstens zoveel vragen per doorloop. Leeg = alles vragen."
+      "profilingLimitHint": "Progressieve profilering: hoogstens zoveel vragen per doorloop. Leeg = alles vragen.",
+      "abandonAfterMinutes": "Verlaten na (minuten)",
+      "abandonAfterMinutesHint": "Bezoekers via een persoonlijke link die beginnen maar niet binnen deze tijd verzenden, activeren Formulier verlaten (5-1440)."
     },
     "submitActions": {
       "title": "Actions after submit",

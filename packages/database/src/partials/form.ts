@@ -31,6 +31,9 @@ export const FORM_MAX_PROFILING_LIMIT = 100
 /** s220c A2-4: the most submissions a form can be capped at. */
 export const FORM_MAX_SUBMISSION_LIMIT = 100_000
 export const FORM_MAX_BLOCKED_EMAIL_DOMAINS = 100
+/** s224a A2-4: bounds of a linked web visit's inactivity before formAbandoned. */
+export const FORM_MIN_ABANDON_MINUTES = 5
+export const FORM_MAX_ABANDON_MINUTES = 1440
 /** What normalize keeps for a corrupt stored bound (never a valid instant). */
 const UNPARSEABLE_WINDOW_BOUND = "unparseable"
 /** Same key rule as a custom-field key / hub-connector field key. */
@@ -202,6 +205,18 @@ export const formSettingsSchema = z
       .max(FORM_MAX_BLOCKED_EMAIL_DOMAINS)
       .refine((v) => new Set(v).size === v.length, "Duplicate domain.")
       .default([]),
+    /**
+     * Web abandon (s224a A2-4): a visitor who opened a PERSONAL form link
+     * (`?k=`), started typing and has not submitted this many minutes later
+     * fires `formAbandoned` (channel web). An anonymous visitor never does:
+     * there is no contact to name.
+     */
+    abandonAfterMinutes: z
+      .number()
+      .int()
+      .min(FORM_MIN_ABANDON_MINUTES)
+      .max(FORM_MAX_ABANDON_MINUTES)
+      .default(30),
   })
   .strict()
 export type FormSettings = z.infer<typeof formSettingsSchema>

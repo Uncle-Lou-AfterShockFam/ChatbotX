@@ -1,5 +1,8 @@
 import { conversationService } from "@chatbotx.io/business"
-import { formSessionService } from "@chatbotx.io/business/form"
+import {
+  formSessionService,
+  formVisitService,
+} from "@chatbotx.io/business/form"
 import type { FormSessionModel } from "@chatbotx.io/database/types"
 import { runWithWebhookExecutionContext } from "@chatbotx.io/events/context"
 import { ASK_FORM_EXPIRED_PAYLOAD_TYPE } from "@chatbotx.io/flow-config"
@@ -25,6 +28,9 @@ const MAX_BATCHES_PER_RUN = 20
  * deterministic job id, so a re-run of this sweep never routes twice.
  * A timed-out run also emits `formAbandoned` (s220 A2-3, claimed once per
  * run); a last catch-up pass emits for runs that ended but never got it.
+ * Then the web pass (s224a A2-4): personal-link visits idle past their
+ * form's `abandonAfterMinutes` emit `formAbandoned` channel web, and closed
+ * visits past retention are pruned.
  */
 export async function sweepFormSessions() {
   return await distributedLock.runExclusive({
@@ -52,10 +58,14 @@ export async function sweepFormSessions() {
         )
         return 0
       })
-      if (expired > 0 || abandonCatchUp > 0) {
-        logger.info({ expired, abandonCatchUp }, "form session sweep")
+      const web = await sweepWebVisits()
+      if (expired > 0 || abandonCatchUp > 0 || web.claimed > 0) {
+        logger.info(
+          { expired, abandonCatchUp, webAbandoned: web.emitted },
+          "form session sweep",
+        )
       }
-      return { expired, abandonCatchUp }
+      return { expired, abandonCatchUp, webAbandoned: web.emitted }
     },
   })
 }
@@ -121,4 +131,42 @@ async function emitAbandoned(row: FormSessionModel): Promise<void> {
       "form session sweep: formAbandoned claim failed",
     )
   }
+}
+
+/**
+ * The web half: claim-then-emit in batches, inside the same contact-event
+ * webhook context as chat (the visitor stopped, like a chat timeout). A
+ * failed claim is retried next minute; a claimed visit whose emit fails is
+ * lost and logged (at most once, as chat). The prune runs on its own, so a
+ * failed pass never stops it, and neither blocks the chat half above.
+ */
+async function sweepWebVisits(): Promise<{ claimed: number; emitted: number }> {
+  let claimed = 0
+  let emitted = 0
+  try {
+    for (let batch = 0; batch < MAX_BATCHES_PER_RUN; batch++) {
+      const result = await asContactEvent(() =>
+        formVisitService.emitDueAbandons({ limit: BATCH_SIZE }),
+      )
+      claimed += result.claimed
+      emitted += result.emitted
+      if (result.claimed < BATCH_SIZE) {
+        break
+      }
+    }
+  } catch (error) {
+    logger.error(
+      { err: normalizeError(error) },
+      "form session sweep: web visit pass failed",
+    )
+  }
+  await formVisitService
+    .pruneClosed()
+    .catch((error: unknown) =>
+      logger.error(
+        { err: normalizeError(error) },
+        "form session sweep: web visit prune failed",
+      ),
+    )
+  return { claimed, emitted }
 }

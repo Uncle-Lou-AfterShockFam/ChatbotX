@@ -275,4 +275,30 @@ describe("personal form link key (s220c A2-4)", () => {
       parseFormSettings({ prefillKeys: ["kind", "first_name"] }).success,
     ).toBe(true)
   })
+
+  test.each([
+    [undefined, 30],
+    [5, 5],
+    [1440, 1440],
+  ])("abandonAfterMinutes %s -> %s (s224a A2-4)", (v, want) => {
+    expect(
+      formSettingsSchema.parse(
+        v === undefined ? {} : { abandonAfterMinutes: v },
+      ).abandonAfterMinutes,
+    ).toBe(want)
+  })
+
+  test.each([
+    4,
+    1441,
+    7.5,
+    "30",
+    null,
+    -1,
+  ])("abandonAfterMinutes %s is refused on write, defaulted on read", (v) => {
+    expect(parseFormSettings({ abandonAfterMinutes: v }).success).toBe(false)
+    expect(
+      normalizeFormSettings({ abandonAfterMinutes: v }).abandonAfterMinutes,
+    ).toBe(30)
+  })
 })

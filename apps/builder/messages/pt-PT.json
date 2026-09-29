@@ -2536,7 +2536,7 @@
       "eventTagApplied": "A tag is applied",
       "eventCustomFieldChanged": "A custom field changes",
       "eventFormSubmitted": "A form is submitted",
-      "eventFormAbandoned": "A chat form is abandoned",
+      "eventFormAbandoned": "A form is abandoned",
       "eventFormLabel": "Form",
       "eventTagLabel": "Tag",
       "eventCustomFieldLabel": "Custom field",
@@ -4471,7 +4471,7 @@
       "taskAssigned": "Task assigned",
       "dealMentioned": "Teammate mentioned on a deal",
       "formSubmitted": "Form submitted",
-      "formAbandoned": "Chat form abandoned",
+      "formAbandoned": "Form abandoned",
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
@@ -4948,7 +4948,9 @@
         "chat": "Perguntado uma a uma por um passo Perguntar formulário."
       },
       "profilingLimit": "Perguntas por chat",
-      "profilingLimitHint": "Perfilagem progressiva: no máximo este número de perguntas por execução. Vazio = perguntar tudo."
+      "profilingLimitHint": "Perfilagem progressiva: no máximo este número de perguntas por execução. Vazio = perguntar tudo.",
+      "abandonAfterMinutes": "Abandonado após (minutos)",
+      "abandonAfterMinutesHint": "Visitantes de ligação pessoal que começam e não submetem neste tempo disparam Formulário abandonado (5-1440)."
     },
     "submitActions": {
       "title": "Actions after submit",

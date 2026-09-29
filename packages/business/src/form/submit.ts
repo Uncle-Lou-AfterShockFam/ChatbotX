@@ -7,6 +7,7 @@ import {
   eq,
   gte,
   inArray,
+  isNull,
   isUniqueViolationError,
   sql,
 } from "@chatbotx.io/database/client"
@@ -38,6 +39,7 @@ import {
   customFieldModel,
   formModel,
   formSubmissionModel,
+  formVisitModel,
 } from "@chatbotx.io/database/schema"
 import type { FormSubmissionModel } from "@chatbotx.io/database/types"
 import { contactFromFormLink } from "@chatbotx.io/encryption/form-link-token"
@@ -98,6 +100,8 @@ export type SubmitFormInput = {
    * Verified HERE for this form; the submission then lands on that contact.
    */
   formLinkToken?: string
+  /** s224a A2-4: the page load's id, also sent by its start beacon. */
+  interactionId?: string
   now?: Date
 }
 
@@ -263,6 +267,73 @@ const closedResult = (
     reason === "pending" ? settings.pendingMessage : settings.closedMessage,
 })
 
+/**
+ * One (form, contact)'s visit lifecycle, serialised: `start` and every
+ * close take this transaction-scoped lock first. Taken last by a submit
+ * (after the dedup and admission locks), never before them, so no cycle.
+ */
+export async function lockFormVisits(
+  tx: DatabaseClient,
+  formId: string,
+  contactId: string,
+): Promise<void> {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${`form-visit:${formId}:${contactId}`}, 0))`,
+  )
+}
+
+/**
+ * The contact answered the form (web or chat): its open web visit is done
+ * and must never read as abandoned (s224a A2-4). Conditional on the visit
+ * still being open, so it serialises with the sweep's claim on the row:
+ * exactly one of the two closes it. A web submit also names its page load
+ * (`interactionId`): that interaction is recorded as submitted even when its
+ * beacon has not arrived yet, so the late beacon opens nothing (Codex probe
+ * s224a).
+ */
+export async function closeFormVisits(
+  tx: DatabaseClient,
+  props: {
+    workspaceId: string
+    formId: string
+    contactId: string
+    now: Date
+    interactionId?: string
+  },
+): Promise<void> {
+  // The same lock `start` takes, held to the caller's commit: a beacon can
+  // never insert between this close and the commit (Codex probe s224a).
+  await lockFormVisits(tx, props.formId, props.contactId)
+  await tx
+    .update(formVisitModel)
+    .set({ submittedAt: props.now })
+    .where(
+      and(
+        eq(formVisitModel.formId, props.formId),
+        eq(formVisitModel.contactId, props.contactId),
+        isNull(formVisitModel.submittedAt),
+        isNull(formVisitModel.abandonEmittedAt),
+      ),
+    )
+  if (props.interactionId === undefined) {
+    return
+  }
+  await tx
+    .insert(formVisitModel)
+    .values({
+      id: createId(),
+      workspaceId: props.workspaceId,
+      formId: props.formId,
+      contactId: props.contactId,
+      interactionId: props.interactionId,
+      startedAt: props.now,
+      lastActivityAt: props.now,
+      abandonAt: props.now,
+      submittedAt: props.now,
+    })
+    .onConflictDoNothing()
+}
+
 export class FormSubmitService {
   async submit(input: SubmitFormInput): Promise<SubmitFormResult> {
     const now = input.now ?? new Date()
@@ -302,6 +373,10 @@ export class FormSubmitService {
     // then hides (and never requires) what that contact already answered,
     // recomputed here, never taken from the page.
     const linkedContactId = await this.linkedContact(input, form.id)
+    // Only a linked submit records its page load: an anonymous caller must
+    // not be able to write interaction rows (s224a).
+    const linkedInteraction =
+      linkedContactId === null ? undefined : input.interactionId
     const suppressed =
       linkedContactId === null
         ? undefined
@@ -336,6 +411,19 @@ export class FormSubmitService {
 
     const duplicate = await this.findRecentDuplicate({ form, dedupHash, now })
     if (duplicate) {
+      if (duplicate.contactId !== null) {
+        // A visit opened after the first copy went in is answered by it too.
+        const contactOfDuplicate = duplicate.contactId
+        await db.transaction((tx) =>
+          closeFormVisits(tx, {
+            workspaceId: input.workspaceId,
+            formId: form.id,
+            contactId: contactOfDuplicate,
+            now,
+            interactionId: linkedInteraction,
+          }),
+        )
+      }
       return {
         kind: "ok",
         duplicate: true,
@@ -424,6 +512,15 @@ export class FormSubmitService {
           tx,
         })
         if (duplicateOf) {
+          if (duplicateOf.contactId !== null) {
+            await closeFormVisits(tx, {
+              workspaceId: input.workspaceId,
+              formId: form.id,
+              contactId: duplicateOf.contactId,
+              now,
+              interactionId: linkedInteraction,
+            })
+          }
           return { row: duplicateOf, pending: [], duplicateOf }
         }
         const pending =
@@ -469,6 +566,15 @@ export class FormSubmitService {
             dedupHash,
           })
           .returning()
+        if (contactId !== null) {
+          await closeFormVisits(tx, {
+            workspaceId: input.workspaceId,
+            formId: form.id,
+            contactId,
+            now,
+            interactionId: linkedInteraction,
+          })
+        }
         return { row, pending, duplicateOf: null }
       }, ADMISSION_ISOLATION)
     } catch (error) {
@@ -1026,7 +1132,7 @@ export class FormSubmitService {
    * The contact a signed form link names for THIS form, when it still
    * exists in the workspace; null otherwise (an anonymous submission).
    */
-  private async linkedContact(
+  async linkedContact(
     input: Pick<SubmitFormInput, "workspaceId" | "formLinkToken">,
     formId: string,
   ): Promise<string | null> {

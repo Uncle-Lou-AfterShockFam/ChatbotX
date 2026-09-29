@@ -278,6 +278,8 @@ afterEach(async () => {
       sql`, `,
     )
     await asReplica(sql`
+      DELETE FROM "FormVisit" WHERE "contactId" IN (${list})`)
+    await asReplica(sql`
       DELETE FROM "FormSubmission" WHERE "contactId" IN (${list})`)
     await asReplica(sql`
       DELETE FROM "FormSession" WHERE "contactId" IN (${list})`)
@@ -341,6 +343,31 @@ describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
       w.contactId,
       { channel: "chat", conversationId: w.conversationId, score: 5 },
     ])
+  })
+
+  test("a chat completion closes the contact's open web visit of the form (s224a A2-4)", async () => {
+    const w = await seedWorld()
+    const visitId = createId()
+    const otherVisitId = createId()
+    await asReplica(sql`
+      INSERT INTO "FormVisit" (id, "workspaceId", "formId", "contactId", "interactionId", "startedAt", "lastActivityAt", "abandonAt")
+      VALUES (${visitId}, ${w.workspaceId}, ${w.formId}, ${w.contactId}, 'tab-1', now(), now(), now() + interval '30 minutes')`)
+    // Another contact's open visit (of its own form) is untouched.
+    const other = await seedWorld()
+    await asReplica(sql`
+      INSERT INTO "FormVisit" (id, "workspaceId", "formId", "contactId", "interactionId", "startedAt", "lastActivityAt", "abandonAt")
+      VALUES (${otherVisitId}, ${other.workspaceId}, ${other.formId}, ${other.contactId}, 'tab-2', now(), now(), now() + interval '30 minutes')`)
+    await start(w)
+    await answer(w, "Ada")
+    await answer(w, "2")
+    await answer(w, "ada@example.com")
+    expect((await answer(w, "skip")).kind).toBe("completed")
+    await track(w)
+    const rows = await db.execute<{ id: string; submittedAt: Date | null }>(sql`
+      SELECT id, "submittedAt" FROM "FormVisit" WHERE id IN (${visitId}, ${otherVisitId})`)
+    const byId = new Map(rows.rows.map((r) => [r.id, r.submittedAt]))
+    expect(byId.get(visitId)).not.toBeNull()
+    expect(byId.get(otherVisitId)).toBeNull()
   })
 
   test("hidden fields are never asked, yet their defaults reach the rules and the ONE submission (s220c A2-4)", async () => {

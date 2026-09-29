@@ -2853,7 +2853,7 @@
       "eventTagApplied": "A tag is applied",
       "eventCustomFieldChanged": "A custom field changes",
       "eventFormSubmitted": "A form is submitted",
-      "eventFormAbandoned": "A chat form is abandoned",
+      "eventFormAbandoned": "A form is abandoned",
       "eventFormLabel": "Form",
       "eventTagLabel": "Tag",
       "eventCustomFieldLabel": "Custom field",
@@ -4508,7 +4508,7 @@
       "taskAssigned": "Task assigned",
       "dealMentioned": "Teammate mentioned on a deal",
       "formSubmitted": "Form submitted",
-      "formAbandoned": "Chat form abandoned",
+      "formAbandoned": "Form abandoned",
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
@@ -4985,7 +4985,9 @@
         "chat": "由「詢問表單」步驟逐題提問。"
       },
       "profilingLimit": "每次聊天的問題數",
-      "profilingLimitHint": "漸進式輪廓：每次最多詢問這麼多問題。留空 = 全部詢問。"
+      "profilingLimitHint": "漸進式輪廓：每次最多詢問這麼多問題。留空 = 全部詢問。",
+      "abandonAfterMinutes": "放棄判定時間 (分鐘)",
+      "abandonAfterMinutesHint": "透過個人連結造訪並開始填寫、但在此時間內未送出的訪客會觸發「表單被放棄」 (5-1440)。"
     },
     "submitActions": {
       "title": "Actions after submit",

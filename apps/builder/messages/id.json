@@ -2536,7 +2536,7 @@
       "eventTagApplied": "A tag is applied",
       "eventCustomFieldChanged": "A custom field changes",
       "eventFormSubmitted": "A form is submitted",
-      "eventFormAbandoned": "A chat form is abandoned",
+      "eventFormAbandoned": "A form is abandoned",
       "eventFormLabel": "Form",
       "eventTagLabel": "Tag",
       "eventCustomFieldLabel": "Custom field",
@@ -4475,7 +4475,7 @@
       "taskAssigned": "Task assigned",
       "dealMentioned": "Teammate mentioned on a deal",
       "formSubmitted": "Form submitted",
-      "formAbandoned": "Chat form abandoned",
+      "formAbandoned": "Form abandoned",
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
@@ -4952,7 +4952,9 @@
         "chat": "Ditanyakan satu per satu oleh langkah Tanya formulir."
       },
       "profilingLimit": "Pertanyaan per chat",
-      "profilingLimitHint": "Profiling progresif: paling banyak sejumlah pertanyaan ini per sesi. Kosong = tanyakan semua."
+      "profilingLimitHint": "Profiling progresif: paling banyak sejumlah pertanyaan ini per sesi. Kosong = tanyakan semua.",
+      "abandonAfterMinutes": "Ditinggalkan setelah (menit)",
+      "abandonAfterMinutesHint": "Pengunjung tautan pribadi yang mulai tetapi tidak mengirim dalam waktu ini memicu Formulir ditinggalkan (5-1440)."
     },
     "submitActions": {
       "title": "Actions after submit",

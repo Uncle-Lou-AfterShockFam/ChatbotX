@@ -53,4 +53,18 @@ export const formRelations = defineRelationsPart(schema, (r) => ({
       to: r.conversationModel.id,
     }),
   },
+  formVisitModel: {
+    workspace: r.one.workspaceModel({
+      from: r.formVisitModel.workspaceId,
+      to: r.workspaceModel.id,
+    }),
+    form: r.one.formModel({
+      from: r.formVisitModel.formId,
+      to: r.formModel.id,
+    }),
+    contact: r.one.contactModel({
+      from: r.formVisitModel.contactId,
+      to: r.contactModel.id,
+    }),
+  },
 }))

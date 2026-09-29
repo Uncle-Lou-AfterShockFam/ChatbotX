@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   emitPendingAbandons: vi.fn(async () => 0),
   consumeChallenge: vi.fn(async () => true),
   add: vi.fn(async () => undefined),
+  emitDueAbandons: vi.fn(async () => ({ claimed: 0, emitted: 0 })),
+  pruneClosed: vi.fn(async () => 0),
 }))
 
 vi.mock("@chatbotx.io/business", () => ({
@@ -16,6 +18,10 @@ vi.mock("@chatbotx.io/business/form", () => ({
     expireDue: mocks.expireDue,
     emitAbandoned: mocks.emitAbandoned,
     emitPendingAbandons: mocks.emitPendingAbandons,
+  },
+  formVisitService: {
+    emitDueAbandons: mocks.emitDueAbandons,
+    pruneClosed: mocks.pruneClosed,
   },
 }))
 vi.mock("@chatbotx.io/events/context", async () => {
@@ -63,12 +69,19 @@ const row = (id: string, over: Record<string, unknown> = {}) => ({
   ...over,
 })
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  mocks.emitDueAbandons.mockResolvedValue({ claimed: 0, emitted: 0 })
+})
 
 describe("sweepFormSessions", () => {
   test("each expired run: compare-and-clear its challenge, then ONE deduped re-entry at the askForm step", async () => {
     mocks.expireDue.mockResolvedValueOnce([row("s1"), row("s2")])
-    expect(await sweepFormSessions()).toEqual({ expired: 2, abandonCatchUp: 0 })
+    expect(await sweepFormSessions()).toEqual({
+      expired: 2,
+      abandonCatchUp: 0,
+      webAbandoned: 0,
+    })
     expect(mocks.consumeChallenge).toHaveBeenCalledWith({
       workspaceId: "ws-1",
       conversationId: "conv-1",
@@ -104,6 +117,7 @@ describe("sweepFormSessions", () => {
     expect(await sweepFormSessions()).toEqual({
       expired: 101,
       abandonCatchUp: 0,
+      webAbandoned: 0,
     })
     expect(mocks.expireDue).toHaveBeenCalledTimes(2)
   })
@@ -111,13 +125,21 @@ describe("sweepFormSessions", () => {
   test("a failed re-entry is logged and the sweep continues", async () => {
     mocks.expireDue.mockResolvedValueOnce([row("s1"), row("s2")])
     mocks.add.mockRejectedValueOnce(new Error("redis down"))
-    expect(await sweepFormSessions()).toEqual({ expired: 2, abandonCatchUp: 0 })
+    expect(await sweepFormSessions()).toEqual({
+      expired: 2,
+      abandonCatchUp: 0,
+      webAbandoned: 0,
+    })
     expect(mocks.add).toHaveBeenCalledTimes(2)
   })
 
   test("nothing due: no challenge touched, no job", async () => {
     mocks.expireDue.mockResolvedValueOnce([])
-    expect(await sweepFormSessions()).toEqual({ expired: 0, abandonCatchUp: 0 })
+    expect(await sweepFormSessions()).toEqual({
+      expired: 0,
+      abandonCatchUp: 0,
+      webAbandoned: 0,
+    })
     expect(mocks.add).not.toHaveBeenCalled()
   })
 
@@ -127,6 +149,7 @@ describe("sweepFormSessions", () => {
     expect(await sweepFormSessions()).toEqual({
       expired: 2,
       abandonCatchUp: 3,
+      webAbandoned: 0,
     })
     expect(mocks.emitAbandoned).toHaveBeenCalledTimes(2)
     expect(mocks.emitAbandoned).toHaveBeenCalledWith(
@@ -143,6 +166,7 @@ describe("sweepFormSessions", () => {
     expect(await sweepFormSessions()).toEqual({
       expired: 2,
       abandonCatchUp: 0,
+      webAbandoned: 0,
     })
     expect(mocks.add).toHaveBeenCalledTimes(2)
     expect(mocks.emitAbandoned).toHaveBeenCalledTimes(2)
@@ -154,6 +178,7 @@ describe("sweepFormSessions", () => {
     expect(await sweepFormSessions()).toEqual({
       expired: 0,
       abandonCatchUp: 1,
+      webAbandoned: 0,
     })
     expect(mocks.emitAbandoned).not.toHaveBeenCalled()
   })
@@ -176,5 +201,51 @@ describe("sweepFormSessions", () => {
     await sweepFormSessions()
     // add (routing) first, then the claim, then the catch-up
     expect(seen).toEqual([false, true, true])
+  })
+
+  test("the web pass (s224a): batches of 100 in the webhook context until short, then one prune", async () => {
+    mocks.expireDue.mockResolvedValue([])
+    const contexts: boolean[] = []
+    mocks.emitDueAbandons
+      .mockImplementationOnce(() => {
+        contexts.push(isWebhookContext())
+        return Promise.resolve({ claimed: 100, emitted: 99 })
+      })
+      .mockImplementationOnce(() => {
+        contexts.push(isWebhookContext())
+        return Promise.resolve({ claimed: 3, emitted: 3 })
+      })
+    expect(await sweepFormSessions()).toEqual({
+      expired: 0,
+      abandonCatchUp: 0,
+      webAbandoned: 102,
+    })
+    expect(mocks.emitDueAbandons).toHaveBeenCalledTimes(2)
+    expect(mocks.emitDueAbandons).toHaveBeenCalledWith({ limit: 100 })
+    expect(contexts).toEqual([true, true])
+    expect(mocks.pruneClosed).toHaveBeenCalledTimes(1)
+  })
+
+  test("a failing web pass is logged; the chat half's result stands", async () => {
+    mocks.expireDue.mockResolvedValueOnce([row("s1")])
+    mocks.emitDueAbandons.mockRejectedValueOnce(new Error("db down"))
+    expect(await sweepFormSessions()).toEqual({
+      expired: 1,
+      abandonCatchUp: 0,
+      webAbandoned: 0,
+    })
+    expect(mocks.add).toHaveBeenCalledTimes(1)
+    // The prune runs on its own (Codex probe s224a).
+    expect(mocks.pruneClosed).toHaveBeenCalledTimes(1)
+  })
+
+  test("a failing prune is logged and the sweep result stands", async () => {
+    mocks.expireDue.mockResolvedValueOnce([])
+    mocks.pruneClosed.mockRejectedValueOnce(new Error("db down"))
+    expect(await sweepFormSessions()).toEqual({
+      expired: 0,
+      abandonCatchUp: 0,
+      webAbandoned: 0,
+    })
   })
 })

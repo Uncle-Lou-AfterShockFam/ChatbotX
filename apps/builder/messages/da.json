@@ -2536,7 +2536,7 @@
       "eventTagApplied": "A tag is applied",
       "eventCustomFieldChanged": "A custom field changes",
       "eventFormSubmitted": "A form is submitted",
-      "eventFormAbandoned": "A chat form is abandoned",
+      "eventFormAbandoned": "A form is abandoned",
       "eventFormLabel": "Form",
       "eventTagLabel": "Tag",
       "eventCustomFieldLabel": "Custom field",
@@ -4475,7 +4475,7 @@
       "taskAssigned": "Task assigned",
       "dealMentioned": "Teammate mentioned on a deal",
       "formSubmitted": "Form submitted",
-      "formAbandoned": "Chat form abandoned",
+      "formAbandoned": "Form abandoned",
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
@@ -4952,7 +4952,9 @@
         "chat": "Stilles spørgsmål for spørgsmål af et Spørg-formular-trin."
       },
       "profilingLimit": "Spørgsmål pr. chat",
-      "profilingLimitHint": "Progressiv profilering: højst så mange spørgsmål pr. gennemløb. Tom = spørg om alt."
+      "profilingLimitHint": "Progressiv profilering: højst så mange spørgsmål pr. gennemløb. Tom = spørg om alt.",
+      "abandonAfterMinutes": "Forladt efter (minutter)",
+      "abandonAfterMinutesHint": "Besøgende via personligt link, der starter uden at indsende inden for denne tid, udløser Formular forladt (5-1440)."
     },
     "submitActions": {
       "title": "Actions after submit",

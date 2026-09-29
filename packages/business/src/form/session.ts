@@ -47,6 +47,7 @@ import { logger } from "../logger"
 import { formService, type NormalizedForm } from "./service"
 import {
   ADMISSION_ISOLATION,
+  closeFormVisits,
   FormNotAdmittedError,
   formSubmitService,
   type PendingChanges,
@@ -1069,6 +1070,13 @@ export class FormSessionService {
             identityConflict: conflicts.length > 0,
           })
           .returning()
+        // Answered in chat: an open web visit of the same form is done too.
+        await closeFormVisits(sp, {
+          workspaceId: session.workspaceId,
+          formId: session.formId,
+          contactId: session.contactId,
+          now,
+        })
         return { submission, pending }
       })
     } catch (error) {

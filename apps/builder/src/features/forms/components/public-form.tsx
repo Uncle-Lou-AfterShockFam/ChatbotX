@@ -4,6 +4,7 @@ import type { FormSessionProfile } from "@chatbotx.io/database/partials"
 import type { FormDefinition, FormValues } from "@chatbotx.io/utils/form"
 import { useTranslations } from "next-intl"
 import { useEffect, useMemo, useRef, useState } from "react"
+import { createFormStartBeacon } from "../lib/start-beacon"
 import { FormPreview } from "./form-preview"
 
 /**
@@ -39,6 +40,17 @@ export function PublicForm(props: {
     props.closedMessage ?? null,
   )
   const root = useRef<HTMLDivElement>(null)
+  // s224a A2-4: one beacon on the first focus inside the form (a typed
+  // answer, a rating tap), only for a personal link's visitor.
+  const visit = useMemo(
+    () =>
+      createFormStartBeacon({
+        workspaceId,
+        slug,
+        formLinkToken: props.formLinkToken,
+      }),
+    [workspaceId, slug, props.formLinkToken],
+  )
 
   const hostOrigin = useMemo(() => {
     if (!embed || typeof document === "undefined" || document.referrer === "") {
@@ -102,6 +114,7 @@ export function PublicForm(props: {
           values,
           website: honeypot,
           k: props.formLinkToken,
+          v: props.formLinkToken ? visit.interactionId : undefined,
           // zone: viewer (the public submitter's own browser zone)
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
@@ -157,6 +170,7 @@ export function PublicForm(props: {
     <div
       className="rounded-lg border bg-background p-4 md:p-6"
       data-testid="public-form"
+      onFocusCapture={visit.start}
       ref={root}
     >
       {embed ? null : <h1 className="mb-4 font-semibold text-xl">{title}</h1>}

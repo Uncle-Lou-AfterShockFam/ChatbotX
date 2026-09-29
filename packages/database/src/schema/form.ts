@@ -273,3 +273,69 @@ export const formSessionModel = pgTable(
     ),
   ],
 )
+
+/**
+ * One web visit of a published form by a contact a PERSONAL form link names
+ * (s224a A2-4): the page's first interaction opens it, a submit closes it
+ * (`submittedAt`), and the sweep closes the rest at `abandonAt` with
+ * `formAbandoned` (channel web; the `abandonEmittedAt` compare-and-set is
+ * the claim). An anonymous visitor never has one. At most one OPEN visit per
+ * (form, contact): a later beacon refreshes it instead of adding a row.
+ * `interactionId` is the page load's own id, sent with its beacon AND its
+ * submit: a submit that lands first leaves a closed row under that id, so
+ * the late beacon finds it and opens nothing (Codex probe s224a).
+ */
+export const formVisitModel = pgTable(
+  "FormVisit",
+  {
+    ...sharedColumns,
+    workspaceId: bigintAsString()
+      .notNull()
+      .references(() => workspaceModel.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    formId: bigintAsString()
+      .notNull()
+      .references(() => formModel.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    contactId: bigintAsString()
+      .notNull()
+      .references(() => contactModel.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    interactionId: text().notNull(),
+    startedAt: timestamp(timestampConfig).notNull(),
+    lastActivityAt: timestamp(timestampConfig).notNull(),
+    /** lastActivityAt + the form's abandonAfterMinutes at that beacon. */
+    abandonAt: timestamp(timestampConfig).notNull(),
+    submittedAt: timestamp(timestampConfig),
+    abandonEmittedAt: timestamp(timestampConfig),
+  },
+  (table) => [
+    uniqueIndex("FormVisit_formId_contactId_open_key")
+      .on(table.formId, table.contactId)
+      .where(
+        sql`${table.submittedAt} is null and ${table.abandonEmittedAt} is null`,
+      ),
+    uniqueIndex("FormVisit_formId_contactId_interactionId_key").on(
+      table.formId,
+      table.contactId,
+      table.interactionId,
+    ),
+    index("FormVisit_abandonAt_open_idx")
+      .on(table.abandonAt)
+      .where(
+        sql`${table.submittedAt} is null and ${table.abandonEmittedAt} is null`,
+      ),
+    index("FormVisit_createdAt_closed_idx")
+      .on(table.createdAt)
+      .where(
+        sql`${table.submittedAt} is not null or ${table.abandonEmittedAt} is not null`,
+      ),
+    index("FormVisit_contactId_idx").on(table.contactId),
+  ],
+)
