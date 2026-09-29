@@ -5075,7 +5075,8 @@
       "askWhenKnownHint": "Off: a chat run skips this question when the contact already has the answer.",
       "alwaysAsk": "Never cut by the question limit",
       "askAfterSubmissions": "Ask from submission number",
-      "askAfterSubmissionsHint": "Progressive profiling: ask only once the contact has submitted this form this many times. Empty = always."
+      "askAfterSubmissionsHint": "Progressive profiling: ask only once the contact has submitted this form this many times. Empty = always.",
+      "maxSizeMb": "Maximum file size (MB)"
     },
     "fieldTypes": {
       "text": "Short text",
@@ -5142,7 +5143,8 @@
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
       "date": "Enter a valid date or time.",
-      "emailDomainBlocked": "Email addresses from this domain are not accepted."
+      "emailDomainBlocked": "Email addresses from this domain are not accepted.",
+      "upload": "Upload this file again."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -5215,13 +5217,21 @@
       "openContact": "Open contact",
       "anonymous": "Anonymous",
       "detail": "Submission",
-      "more": "Load more"
+      "more": "Load more",
+      "download": "Download"
     },
     "publishWarnings": {
       "noContact": "No field writes to a contact: submissions are stored, but triggers and flows cannot react to them."
     },
     "variables": {
       "group": "Form links (personal)"
+    },
+    "upload": {
+      "uploading": "Uploading",
+      "tooLarge": "This file is too large.",
+      "wrongType": "This type of file is not accepted.",
+      "failed": "The file could not be uploaded. Please try again.",
+      "previewOnly": "Files can be added on the published form."
     }
   },
   "questionnaires": {

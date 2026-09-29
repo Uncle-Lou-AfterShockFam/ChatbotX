@@ -45,7 +45,10 @@ import {
   notFoundException,
   validationException,
 } from "../errors"
+import { formUploadsPrefix } from "../storage/paths"
+import { purgeStoragePrefix } from "../storage/purge-prefix"
 import { assertFormActionRefs } from "./action-refs"
+import { formUploadService } from "./upload"
 
 const FORM_NOT_FOUND = "Form not found"
 const SUBMISSION_NOT_FOUND = "Submission not found"
@@ -726,19 +729,22 @@ export class FormService extends BaseService {
   }
 
   /** Hard delete; submissions go with it (FK cascade). */
-  async delete(props: {
-    workspaceId: string
-    id: string
-    tx?: DatabaseClient
-  }): Promise<void> {
-    const { workspaceId, id, tx = db } = props
-    const deleted = await tx
+  async delete(props: { workspaceId: string; id: string }): Promise<void> {
+    const { workspaceId, id } = props
+    const deleted = await db
       .delete(formModel)
       .where(and(eq(formModel.id, id), eq(formModel.workspaceId, workspaceId)))
       .returning({ id: formModel.id })
     if (deleted.length === 0) {
       throw notFoundException(FORM_NOT_FOUND)
     }
+    // s225a: its private uploads are objects, not rows; after the commit, so
+    // a failed delete never loses files (best-effort, logged).
+    await purgeStoragePrefix(
+      formUploadsPrefix(workspaceId, id),
+      { workspaceId, formId: id },
+      "form-delete",
+    )
   }
 
   /** A draft copy `<slug>-copy[-N]` with the same draft definition and settings. */
@@ -880,10 +886,12 @@ export class FormService extends BaseService {
     workspaceId: string
     formId: string
     id: string
-    tx?: DatabaseClient
   }): Promise<void> {
-    const { workspaceId, formId, id, tx = db } = props
-    const deleted = await tx
+    const { workspaceId, formId, id } = props
+    // s225a: its uploads' rows cascade with it, so read their keys first and
+    // remove the objects once the delete committed.
+    const paths = await formUploadService.pathsOfSubmission(id)
+    const deleted = await db
       .delete(formSubmissionModel)
       .where(
         and(
@@ -896,6 +904,11 @@ export class FormService extends BaseService {
     if (deleted.length === 0) {
       throw notFoundException(SUBMISSION_NOT_FOUND)
     }
+    await formUploadService.removeObjects(paths, {
+      workspaceId,
+      formId,
+      submissionId: id,
+    })
   }
 }
 

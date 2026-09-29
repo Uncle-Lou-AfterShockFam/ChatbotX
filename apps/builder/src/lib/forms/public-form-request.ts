@@ -24,13 +24,13 @@ const isInt8 = (v: string) => INT8.test(v) && BigInt(v) <= INT8_MAX
  * cannot make us buffer more than that (skeptic, s200). Returns null when
  * the cap is exceeded.
  */
-export async function readBodyCapped(
+export async function readBodyBytesCapped(
   req: NextRequest,
   max: number,
-): Promise<string | null> {
+): Promise<Uint8Array | null> {
   const reader = req.body?.getReader()
   if (!reader) {
-    return ""
+    return new Uint8Array(0)
   }
   const chunks: Uint8Array[] = []
   let total = 0
@@ -52,7 +52,16 @@ export async function readBodyCapped(
     merged.set(chunk, offset)
     offset += chunk.byteLength
   }
-  return new TextDecoder().decode(merged)
+  return merged
+}
+
+/** `readBodyBytesCapped`, decoded as UTF-8 text (the JSON routes). */
+export async function readBodyCapped(
+  req: NextRequest,
+  max: number,
+): Promise<string | null> {
+  const bytes = await readBodyBytesCapped(req, max)
+  return bytes === null ? null : new TextDecoder().decode(bytes)
 }
 
 export const formCorsHeaders = (origin: string | null, allowed: boolean) => {

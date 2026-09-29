@@ -127,6 +127,20 @@ vi.mock("@chatbotx.io/database/schema", () => ({
   inboxModel: { id: "id", workspaceId: "ws", channel: "channel" },
   customFieldModel: { id: "id", workspaceId: "ws" },
 }))
+const uploads = vi.hoisted(() => ({
+  pathsOfSubmission: vi.fn().mockResolvedValue([]),
+  removeObjects: vi.fn().mockResolvedValue(undefined),
+  purgeStoragePrefix: vi.fn().mockResolvedValue(0),
+}))
+vi.mock("../src/form/upload", () => ({
+  formUploadService: {
+    pathsOfSubmission: uploads.pathsOfSubmission,
+    removeObjects: uploads.removeObjects,
+  },
+}))
+vi.mock("../src/storage/purge-prefix", () => ({
+  purgeStoragePrefix: uploads.purgeStoragePrefix,
+}))
 vi.mock("@chatbotx.io/utils", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   createId: (() => {
@@ -310,7 +324,7 @@ describe("formService.update", () => {
 
   describe("channels on update (s219)", () => {
     const photoDef = {
-      steps: [{ id: "s1", fields: [{ key: "photo", type: "image" }] }],
+      steps: [{ id: "s1", fields: [{ key: "where", type: "location" }] }],
       rules: [],
     }
     const chat = { ...DEFAULT_FORM_SETTINGS, channels: ["chat"] }
@@ -337,7 +351,7 @@ describe("formService.update", () => {
       expect(e.field).toBe("settings.channels")
       expect(e.data).toMatchObject({
         reason: "chatOnlyField",
-        fieldKey: "photo",
+        fieldKey: "where",
       })
     })
 
@@ -570,8 +584,8 @@ describe("formService.publish", () => {
           id: "s1",
           fields: [
             {
-              key: "photo",
-              type: "image",
+              key: "where",
+              type: "location",
               mapTo: { kind: "custom", customFieldId: "77" },
             },
           ],
@@ -585,7 +599,7 @@ describe("formService.publish", () => {
       const e = await field(formService.publish({ workspaceId: WS, id: "f1" }))
       expect(e.data).toMatchObject({
         reason: "chatOnlyField",
-        fieldKey: "photo",
+        fieldKey: "where",
       })
       m.state.selects.push([
         draft({
@@ -816,7 +830,7 @@ describe("formService reads never throw on corrupt jsonb", () => {
               id: "s1",
               fields: [
                 { key: "q", type: "text" },
-                { key: "photo", type: "image" },
+                { key: "where", type: "location" },
               ],
             },
           ],
@@ -969,5 +983,29 @@ describe("submissions", () => {
       formService.deleteSubmission({ workspaceId: WS, formId: "f1", id: "9" }),
     )
     expect(e.httpStatusCode).toBe(404)
+  })
+
+  test("a deleted submission's upload objects go AFTER its row (s225a)", async () => {
+    uploads.pathsOfSubmission.mockResolvedValueOnce(["workspaces/1/forms/f1/a"])
+    m.state.deletes.push([{ id: "9" }])
+    await formService.deleteSubmission({
+      workspaceId: WS,
+      formId: "f1",
+      id: "9",
+    })
+    expect(uploads.removeObjects).toHaveBeenCalledWith(
+      ["workspaces/1/forms/f1/a"],
+      { workspaceId: WS, formId: "f1", submissionId: "9" },
+    )
+  })
+
+  test("an unknown submission removes no objects (s225a)", async () => {
+    uploads.removeObjects.mockClear()
+    uploads.pathsOfSubmission.mockResolvedValueOnce(["workspaces/1/forms/f1/a"])
+    m.state.deletes.push([])
+    await field(
+      formService.deleteSubmission({ workspaceId: WS, formId: "f1", id: "9" }),
+    )
+    expect(uploads.removeObjects).not.toHaveBeenCalled()
   })
 })

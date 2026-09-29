@@ -12,22 +12,12 @@ import {
 } from "@chatbotx.io/integration-facebook-ads"
 import { imageSize } from "image-size"
 import { ChatbotXException } from "../errors"
+import { SNIFFED_IMAGE_FORMAT } from "../storage/sniff"
 
 export type ResolvedStoredImage = {
   bytes: Uint8Array
   mimeType: MessagingAdImageMimeType
   fileName: string
-}
-
-/** Magic-byte format (`image-size`'s sniffed `type`) -> the canonical allowlisted MIME + safe extension — never the client-declared `imageMimeType`/`imageFileName`. */
-const SNIFFED_IMAGE_FORMAT: Record<
-  string,
-  { mimeType: MessagingAdImageMimeType; extension: string }
-> = {
-  jpg: { mimeType: "image/jpeg", extension: "jpg" },
-  png: { mimeType: "image/png", extension: "png" },
-  gif: { mimeType: "image/gif", extension: "gif" },
-  webp: { mimeType: "image/webp", extension: "webp" },
 }
 
 function rejectPreflight(message: string): never {
@@ -142,7 +132,14 @@ export async function resolveStoredImageBytes(input: {
   } catch {
     rejectPreflight("This file is not a supported image.")
   }
-  const format = sniffedType ? SNIFFED_IMAGE_FORMAT[sniffedType] : undefined
+  // Magic-byte format -> the canonical allowlisted MIME + safe extension,
+  // never the client-declared `imageMimeType` / `imageFileName`.
+  const format:
+    | { mimeType: MessagingAdImageMimeType; extension: string }
+    | undefined =
+    sniffedType && Object.hasOwn(SNIFFED_IMAGE_FORMAT, sniffedType)
+      ? SNIFFED_IMAGE_FORMAT[sniffedType as keyof typeof SNIFFED_IMAGE_FORMAT]
+      : undefined
   if (!format) {
     rejectPreflight("This file is not a supported image.")
   }

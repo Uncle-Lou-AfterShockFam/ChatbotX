@@ -4975,7 +4975,8 @@
       "askWhenKnownHint": "关闭：若联系人已有答案，聊天会跳过此问题。",
       "alwaysAsk": "不受问题数量上限裁剪",
       "askAfterSubmissions": "从第几次提交起询问",
-      "askAfterSubmissionsHint": "渐进式画像：联系人提交此表单达到该次数后才询问。留空 = 始终询问。"
+      "askAfterSubmissionsHint": "渐进式画像：联系人提交此表单达到该次数后才询问。留空 = 始终询问。",
+      "maxSizeMb": "最大文件大小 (MB)"
     },
     "fieldTypes": {
       "text": "Short text",
@@ -5042,7 +5043,8 @@
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
       "date": "Enter a valid date or time.",
-      "emailDomainBlocked": "不接受该域名的邮箱地址。"
+      "emailDomainBlocked": "不接受该域名的邮箱地址。",
+      "upload": "请重新上传此文件。"
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -5115,13 +5117,21 @@
       "openContact": "Open contact",
       "anonymous": "Anonymous",
       "detail": "Submission",
-      "more": "Load more"
+      "more": "Load more",
+      "download": "下载"
     },
     "publishWarnings": {
       "noContact": "No field writes to a contact: submissions are stored, but triggers and flows cannot react to them."
     },
     "variables": {
       "group": "表单链接（个人）"
+    },
+    "upload": {
+      "uploading": "正在上传",
+      "tooLarge": "文件过大。",
+      "wrongType": "不接受此类型的文件。",
+      "failed": "文件无法上传,请重试。",
+      "previewOnly": "可在已发布的表单中添加文件。"
     }
   },
   "questionnaires": {

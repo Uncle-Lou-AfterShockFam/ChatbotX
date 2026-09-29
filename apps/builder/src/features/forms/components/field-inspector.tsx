@@ -24,6 +24,8 @@ import {
   FORM_RATING_MAX_STARS,
   FORM_RATING_MIN_STARS,
   FORM_SCALE_FIELD_TYPES,
+  FORM_UPLOAD_FIELD_TYPES,
+  FORM_UPLOAD_MAX_MB,
   formMappingIssue,
   formSystemFieldKeys,
   isFormInputFieldType,
@@ -218,6 +220,27 @@ export function FieldInspector(props: {
                 }
                 type="number"
                 value={field.max ?? FORM_RATING_DEFAULT_STARS}
+              />
+            </div>
+          ) : null}
+          {FORM_UPLOAD_FIELD_TYPES.has(field.type) ? (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="fi-max-size">{t("forms.editor.maxSizeMb")}</Label>
+              <Input
+                id="fi-max-size"
+                max={FORM_UPLOAD_MAX_MB}
+                min={1}
+                onChange={(e) => {
+                  const n = Number.parseInt(e.target.value, 10)
+                  patch({
+                    maxSizeMb:
+                      Number.isInteger(n) && n >= 1 && n <= FORM_UPLOAD_MAX_MB
+                        ? n
+                        : undefined,
+                  })
+                }}
+                type="number"
+                value={field.maxSizeMb ?? FORM_UPLOAD_MAX_MB}
               />
             </div>
           ) : null}

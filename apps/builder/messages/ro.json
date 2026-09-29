@@ -4844,7 +4844,8 @@
       "askWhenKnownHint": "Oprit: chatul sare peste întrebare dacă contactul are deja răspunsul.",
       "alwaysAsk": "Niciodată tăiat de limita de întrebări",
       "askAfterSubmissions": "Întreabă de la trimiterea nr.",
-      "askAfterSubmissionsHint": "Profilare progresivă: întreabă doar după ce contactul a trimis formularul de atâtea ori. Gol = mereu."
+      "askAfterSubmissionsHint": "Profilare progresivă: întreabă doar după ce contactul a trimis formularul de atâtea ori. Gol = mereu.",
+      "maxSizeMb": "Dimensiunea maximă a fișierului (MB)"
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4911,7 +4912,8 @@
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
       "date": "Enter a valid date or time.",
-      "emailDomainBlocked": "Adresele de e-mail de pe acest domeniu nu sunt acceptate."
+      "emailDomainBlocked": "Adresele de e-mail de pe acest domeniu nu sunt acceptate.",
+      "upload": "Încarcă din nou acest fișier."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -4984,13 +4986,21 @@
       "openContact": "Open contact",
       "anonymous": "Anonymous",
       "detail": "Submission",
-      "more": "Load more"
+      "more": "Load more",
+      "download": "Descarcă"
     },
     "publishWarnings": {
       "noContact": "No field writes to a contact: submissions are stored, but triggers and flows cannot react to them."
     },
     "variables": {
       "group": "Linkuri de formular (personale)"
+    },
+    "upload": {
+      "uploading": "Se încarcă",
+      "tooLarge": "Acest fișier este prea mare.",
+      "wrongType": "Acest tip de fișier nu este acceptat.",
+      "failed": "Fișierul nu a putut fi încărcat. Încearcă din nou.",
+      "previewOnly": "Fișierele pot fi adăugate în formularul publicat."
     }
   },
   "questionnaires": {

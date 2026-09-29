@@ -4844,7 +4844,8 @@
       "askWhenKnownHint": "Mati: chat melewati pertanyaan ini jika kontak sudah punya jawabannya.",
       "alwaysAsk": "Tidak pernah dipotong batas pertanyaan",
       "askAfterSubmissions": "Tanyakan mulai pengiriman ke",
-      "askAfterSubmissionsHint": "Profiling progresif: tanyakan hanya setelah kontak mengirim formulir ini sebanyak itu. Kosong = selalu."
+      "askAfterSubmissionsHint": "Profiling progresif: tanyakan hanya setelah kontak mengirim formulir ini sebanyak itu. Kosong = selalu.",
+      "maxSizeMb": "Ukuran file maksimum (MB)"
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4911,7 +4912,8 @@
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
       "date": "Enter a valid date or time.",
-      "emailDomainBlocked": "Alamat email dari domain ini tidak diterima."
+      "emailDomainBlocked": "Alamat email dari domain ini tidak diterima.",
+      "upload": "Unggah file ini lagi."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -4984,13 +4986,21 @@
       "openContact": "Open contact",
       "anonymous": "Anonymous",
       "detail": "Submission",
-      "more": "Load more"
+      "more": "Load more",
+      "download": "Unduh"
     },
     "publishWarnings": {
       "noContact": "No field writes to a contact: submissions are stored, but triggers and flows cannot react to them."
     },
     "variables": {
       "group": "Tautan formulir (pribadi)"
+    },
+    "upload": {
+      "uploading": "Mengunggah",
+      "tooLarge": "File ini terlalu besar.",
+      "wrongType": "Jenis file ini tidak diterima.",
+      "failed": "File tidak dapat diunggah. Silakan coba lagi.",
+      "previewOnly": "File dapat ditambahkan pada formulir yang diterbitkan."
     }
   },
   "questionnaires": {

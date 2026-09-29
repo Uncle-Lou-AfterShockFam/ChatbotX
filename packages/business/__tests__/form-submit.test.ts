@@ -211,10 +211,10 @@ vi.mock("@chatbotx.io/utils", async (importOriginal) => ({
 
 import { isWebhookContext } from "@chatbotx.io/events/context"
 import { ChatbotXException } from "../src/errors"
+import { hashClientIp } from "../src/form/ip-hash"
 import {
   FORM_DEDUP_WINDOW_SECONDS,
   formSubmitService,
-  hashClientIp,
   retryOnLockTimeout,
 } from "../src/form/submit"
 

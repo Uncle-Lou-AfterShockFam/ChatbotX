@@ -1,11 +1,16 @@
 "use client"
 
 import type { FormSessionProfile } from "@chatbotx.io/database/partials"
-import type { FormDefinition, FormValues } from "@chatbotx.io/utils/form"
+import type {
+  FormDefinition,
+  FormField,
+  FormValues,
+} from "@chatbotx.io/utils/form"
 import { useTranslations } from "next-intl"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { createFormStartBeacon } from "../lib/start-beacon"
 import { FormPreview } from "./form-preview"
+import type { FormUploadOutcome } from "./form-renderer"
 
 /**
  * The public renderer around `FormPreview` (s200): the honeypot, the POST,
@@ -114,7 +119,9 @@ export function PublicForm(props: {
           values,
           website: honeypot,
           k: props.formLinkToken,
-          v: props.formLinkToken ? visit.interactionId : undefined,
+          // the page load's id: a personal link's visit, and the owner of
+          // every upload this page sent (s225a)
+          v: visit.interactionId,
           // zone: viewer (the public submitter's own browser zone)
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
@@ -140,6 +147,8 @@ export function PublicForm(props: {
           message = t("forms.public.tooMany")
         } else if (body?.errors?.some((e) => e.code === "emailDomainBlocked")) {
           message = t("forms.issues.emailDomainBlocked")
+        } else if (body?.errors?.some((e) => e.code === "upload")) {
+          message = t("forms.issues.upload")
         }
         setFailure(message)
         return
@@ -163,6 +172,47 @@ export function PublicForm(props: {
       setFailure(t("forms.public.failed"))
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  // s225a: one file per upload field, raw bytes, bound to this page load.
+  const uploadFile = async (
+    field: FormField,
+    file: File,
+  ): Promise<FormUploadOutcome> => {
+    const query = new URLSearchParams({
+      field: field.key,
+      v: visit.interactionId,
+      name: file.name.slice(0, 255),
+    })
+    try {
+      const res = await fetch(
+        `/api/forms/${workspaceId}/${slug}/upload?${query}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: file,
+        },
+      )
+      const body = (await res.json().catch(() => null)) as
+        | { ok: true; uploadId: string; name: string }
+        | { ok: false; errors?: { code: string }[] }
+        | null
+      if (body?.ok === true) {
+        return { ok: true, uploadId: body.uploadId, name: body.name }
+      }
+      const code = body?.errors?.[0]?.code
+      let message = t("forms.upload.failed")
+      if (res.status === 429) {
+        message = t("forms.public.tooMany")
+      } else if (code === "uploadSize" || res.status === 413) {
+        message = t("forms.upload.tooLarge")
+      } else if (code === "uploadType") {
+        message = t("forms.upload.wrongType")
+      }
+      return { ok: false, message }
+    } catch {
+      return { ok: false, message: t("forms.upload.failed") }
     }
   }
 
@@ -208,6 +258,7 @@ export function PublicForm(props: {
             profile={props.profile ?? null}
             submitLabel={t("forms.public.submit")}
             submitting={submitting}
+            uploadFile={uploadFile}
           />
           {failure ? (
             <p

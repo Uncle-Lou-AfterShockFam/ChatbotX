@@ -128,8 +128,8 @@ export function FieldList(props: {
           }
         />
         <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
-          {/* Chat-only types (photo, file, location): only on a form that
-              does not run on the web (the page cannot render them). */}
+          {/* Chat-only types (a shared location): only on a form that does
+              not run on the web (the page cannot render them). */}
           {webFormFieldTypes.options
             .filter(
               (type) =>

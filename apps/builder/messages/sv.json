@@ -4975,7 +4975,8 @@
       "askWhenKnownHint": "Av: en chatt hoppar över frågan om kontakten redan har svaret.",
       "alwaysAsk": "Kapas aldrig av frågegränsen",
       "askAfterSubmissions": "Fråga från inskick nummer",
-      "askAfterSubmissionsHint": "Progressiv profilering: fråga först när kontakten skickat formuläret så många gånger. Tomt = alltid."
+      "askAfterSubmissionsHint": "Progressiv profilering: fråga först när kontakten skickat formuläret så många gånger. Tomt = alltid.",
+      "maxSizeMb": "Maximal filstorlek (MB)"
     },
     "fieldTypes": {
       "text": "Short text",
@@ -5042,7 +5043,8 @@
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
       "date": "Enter a valid date or time.",
-      "emailDomainBlocked": "E-postadresser från den här domänen accepteras inte."
+      "emailDomainBlocked": "E-postadresser från den här domänen accepteras inte.",
+      "upload": "Ladda upp filen igen."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -5115,13 +5117,21 @@
       "openContact": "Open contact",
       "anonymous": "Anonymous",
       "detail": "Submission",
-      "more": "Load more"
+      "more": "Load more",
+      "download": "Ladda ned"
     },
     "publishWarnings": {
       "noContact": "No field writes to a contact: submissions are stored, but triggers and flows cannot react to them."
     },
     "variables": {
       "group": "Formulärlänkar (personliga)"
+    },
+    "upload": {
+      "uploading": "Laddar upp",
+      "tooLarge": "Filen är för stor.",
+      "wrongType": "Den här filtypen accepteras inte.",
+      "failed": "Filen kunde inte laddas upp. Försök igen.",
+      "previewOnly": "Filer kan läggas till i det publicerade formuläret."
     }
   },
   "questionnaires": {

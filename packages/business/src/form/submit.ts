@@ -16,6 +16,8 @@ import {
   EMPTY_FORM_DEFINITION,
   evaluateForm,
   FORM_OPTION_FIELD_TYPES,
+  FORM_UPLOAD_FIELD_TYPES,
+  FORM_UPLOAD_ID_REGEX,
   type FormDefinition,
   type FormSessionProfile,
   type FormSubmissionVisibility,
@@ -66,7 +68,9 @@ import { logger } from "../logger"
 import { tagService } from "../tag/service"
 import { workspaceService } from "../workspace/service"
 import { runFormActions } from "./actions"
+import { hashClientIp } from "./ip-hash"
 import { formService, type NormalizedForm } from "./service"
+import { formUploadRefs, formUploadService } from "./upload"
 
 /**
  * The public submit pipeline (s200, PR2), in this order:
@@ -136,16 +140,6 @@ const SYSTEM_KEY_TO_FIELD: Record<FormSystemFieldKey, RichSystemContactField> =
 
 const sha256 = (value: string): string =>
   createHash("sha256").update(value).digest("hex")
-
-/**
- * One hash per (workspace, ip): the row never stores the address itself, and
- * the server secret keeps a row reader from brute-forcing IPv4 (2^32 hashes
- * without it; probe, s200).
- */
-export const hashClientIp = (workspaceId: string, clientIp: string): string =>
-  sha256(
-    `${process.env.BETTER_AUTH_SECRET ?? ""}|${workspaceId.length}:${workspaceId}|${clientIp}`,
-  )
 
 /** Stable JSON: sorted keys, so `{a,b}` and `{b,a}` hash alike. */
 const canonical = (values: FormValues): string =>
@@ -223,6 +217,13 @@ export class FormNotAdmittedError extends Error {
   constructor(reason: FormClosedReason) {
     super(`form submission not admitted: ${reason}`)
     this.reason = reason
+  }
+}
+
+/** s225a: an upload the answers name was claimed or swept meanwhile. */
+class FormUploadClaimError extends Error {
+  constructor() {
+    super("form submission: an upload could not be claimed")
   }
 }
 
@@ -395,11 +396,30 @@ export class FormSubmitService {
     const issues = validateFormSubmission(def, values, evaluation, {
       blockedEmailDomains: settings.blockedEmailDomains ?? [],
       suppressed,
+      channel: "web",
     })
     if (issues.length > 0) {
       return { kind: "invalid", issues }
     }
     const pruned = pruneFormValues(def, values, evaluation)
+    // s225a: every upload the answers name must be this page load's own,
+    // unclaimed one (read here so a refused submit creates no contact; the
+    // claim in the transaction below is the authoritative check).
+    const uploads = formUploadRefs(def, pruned)
+    const uploadIssue = (): SubmitFormResult => ({
+      kind: "invalid",
+      issues: uploads.map((u) => ({ key: u.fieldKey, code: "upload" })),
+    })
+    if (
+      !(await formUploadService.claimable({
+        formId: form.id,
+        interactionId: input.interactionId,
+        refs: uploads,
+        now,
+      }))
+    ) {
+      return uploadIssue()
+    }
     const visibility: FormSubmissionVisibility = {
       steps: [...evaluation.visibleSteps],
       fields: [...evaluation.visibleFields],
@@ -566,6 +586,17 @@ export class FormSubmitService {
             dedupHash,
           })
           .returning()
+        if (
+          !(await formUploadService.claim(tx, {
+            formId: form.id,
+            submissionId: row.id,
+            interactionId: input.interactionId,
+            refs: uploads,
+            now,
+          }))
+        ) {
+          throw new FormUploadClaimError()
+        }
         if (contactId !== null) {
           await closeFormVisits(tx, {
             workspaceId: input.workspaceId,
@@ -578,6 +609,15 @@ export class FormSubmitService {
         return { row, pending, duplicateOf: null }
       }, ADMISSION_ISOLATION)
     } catch (error) {
+      if (error instanceof FormUploadClaimError) {
+        // Another submit claimed an upload between the read and here (a
+        // double submit with different answers), or the sweep took it.
+        logger.warn(
+          { workspaceId: input.workspaceId, formId: form.id, contactId },
+          "form submit: an upload could not be claimed, rolled back",
+        )
+        return uploadIssue()
+      }
       if (error instanceof FormNotAdmittedError || isLockTimeout(error)) {
         if (contactCreated) {
           // resolveContact committed on its own: the contact (and its
@@ -1000,7 +1040,12 @@ export class FormSubmitService {
         !field.mapTo ||
         value === undefined ||
         value === null ||
-        value === ""
+        value === "" ||
+        // s225a: a web upload's opaque id means nothing on the contact (the
+        // file lives with the submission); a chat answer's URL still maps.
+        (FORM_UPLOAD_FIELD_TYPES.has(field.type) &&
+          typeof value === "string" &&
+          FORM_UPLOAD_ID_REGEX.test(value))
       ) {
         continue
       }

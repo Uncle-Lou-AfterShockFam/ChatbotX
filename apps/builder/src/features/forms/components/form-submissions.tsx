@@ -17,8 +17,12 @@ import {
   TableHeader,
   TableRow,
 } from "@chatbotx.io/ui/components/ui/table"
-import { formInputFields } from "@chatbotx.io/utils/form"
-import { Loader2Icon, Trash2Icon } from "lucide-react"
+import {
+  FORM_UPLOAD_FIELD_TYPES,
+  FORM_UPLOAD_ID_REGEX,
+  formInputFields,
+} from "@chatbotx.io/utils/form"
+import { Loader2Icon, PaperclipIcon, Trash2Icon } from "lucide-react"
 import Link from "next/link"
 import { useFormatter, useTranslations } from "next-intl"
 import { useMemo, useState } from "react"
@@ -46,6 +50,29 @@ const cell = (value: unknown): string => {
 }
 
 /**
+ * s225a: a web upload's value is its opaque id; members open the file
+ * through the authed download route (never a storage URL).
+ */
+function UploadLink(props: {
+  workspaceId: string
+  formId: string
+  uploadId: string
+  label: string
+}) {
+  return (
+    <a
+      className="inline-flex min-w-0 items-center gap-1 hover:underline"
+      data-testid="submission-upload-link"
+      href={`/space/${props.workspaceId}/forms/${props.formId}/uploads/${props.uploadId}`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <PaperclipIcon aria-hidden="true" className="size-3 shrink-0" />
+      <span className="truncate">{props.label}</span>
+    </a>
+  )
+}
+
+/**
  * A form's submissions, newest first (s200). Columns come from the union of
  * the current input fields and the keys found in the loaded rows, so a row
  * answered on an older version still shows every value it carries.
@@ -69,8 +96,12 @@ export function FormSubmissions(props: { workspaceId: string; id: string }) {
         )
       : null
     const labels = new Map<string, string>()
+    const uploadKeys = new Set<string>()
     for (const f of def ? formInputFields(def) : []) {
       labels.set(f.key, f.label || f.key)
+      if (FORM_UPLOAD_FIELD_TYPES.has(f.type)) {
+        uploadKeys.add(f.key)
+      }
     }
     for (const row of rows) {
       for (const key of Object.keys(row.values)) {
@@ -79,9 +110,22 @@ export function FormSubmissions(props: { workspaceId: string; id: string }) {
         }
       }
     }
-    return [...labels.entries()]
+    return { entries: [...labels.entries()], uploadKeys }
   }, [form.data, rows])
-  const columns = fields.slice(0, MAX_COLUMNS)
+  const columns = fields.entries.slice(0, MAX_COLUMNS)
+  const value = (key: string, raw: unknown) =>
+    fields.uploadKeys.has(key) &&
+    typeof raw === "string" &&
+    FORM_UPLOAD_ID_REGEX.test(raw) ? (
+      <UploadLink
+        formId={id}
+        label={t("forms.submissions.download")}
+        uploadId={raw}
+        workspaceId={workspaceId}
+      />
+    ) : (
+      cell(raw)
+    )
 
   return (
     <div className="flex flex-col gap-4" data-testid="form-submissions">
@@ -141,7 +185,7 @@ export function FormSubmissions(props: { workspaceId: string; id: string }) {
                   </TableCell>
                   {columns.map(([key]) => (
                     <TableCell className="max-w-48 truncate text-xs" key={key}>
-                      {cell(row.values[key])}
+                      {value(key, row.values[key])}
                     </TableCell>
                   ))}
                   <TableCell>
@@ -194,11 +238,11 @@ export function FormSubmissions(props: { workspaceId: string; id: string }) {
           </SheetHeader>
           {open ? (
             <dl className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-x-4 gap-y-2 px-4 text-sm">
-              {fields.map(([key, label]) => (
+              {fields.entries.map(([key, label]) => (
                 <div className="contents" key={key}>
                   <dt className="truncate text-muted-foreground">{label}</dt>
                   <dd className="break-words">
-                    {cell(open.values[key]) || "—"}
+                    {value(key, open.values[key]) || "—"}
                   </dd>
                 </div>
               ))}

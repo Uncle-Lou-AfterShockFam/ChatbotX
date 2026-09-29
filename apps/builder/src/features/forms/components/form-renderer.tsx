@@ -25,8 +25,15 @@ import type {
   FormValue,
   FormValues,
 } from "@chatbotx.io/utils/form"
-import { formScaleBounds, isFormInputFieldType } from "@chatbotx.io/utils/form"
-import { StarIcon } from "lucide-react"
+import {
+  FORM_UPLOAD_FIELD_TYPES,
+  formScaleBounds,
+  formUploadMaxBytes,
+  formUploadMimeTypes,
+  isFormInputFieldType,
+} from "@chatbotx.io/utils/form"
+import { PaperclipIcon, StarIcon } from "lucide-react"
+import { useState } from "react"
 
 /**
  * Renders the fields of ONE step against the current evaluation (s200).
@@ -45,6 +52,27 @@ export type FormRendererProps = {
   disabled?: boolean
   /** Prefix for input ids so two renderers on a page never collide. */
   idPrefix?: string
+  /**
+   * s225a: how an `image` / `file` field sends its file (the public page's
+   * upload route). Without `send` (the editor preview) the picker is off.
+   */
+  upload?: FormUploadHandler
+}
+
+export type FormUploadOutcome =
+  | { ok: true; uploadId: string; name: string }
+  | { ok: false; message: string }
+
+export type FormUploadHandler = {
+  send?: (field: FormField, file: File) => Promise<FormUploadOutcome>
+  /** Called with +1 when an upload starts and -1 when it ends. */
+  onBusy?: (delta: 1 | -1) => void
+  labels: {
+    uploading: string
+    tooLarge: string
+    failed: string
+    previewOnly: string
+  }
 }
 
 const INPUT_TYPES: Record<string, string> = {
@@ -69,6 +97,7 @@ export function FormRenderer(props: FormRendererProps) {
     onChange,
     disabled = false,
     idPrefix = "form",
+    upload,
   } = props
   const step = definition.steps.find((s) => s.id === stepId)
   if (!step) {
@@ -116,6 +145,7 @@ export function FormRenderer(props: FormRendererProps) {
               invalid={issue !== undefined}
               onChange={(v) => onChange(field.key, v)}
               required={required}
+              upload={upload}
               value={values[field.key]}
             />
             {field.helpText ? (
@@ -164,9 +194,23 @@ function FieldInput(props: {
   disabled: boolean
   invalid: boolean
   required: boolean
+  upload?: FormUploadHandler
 }) {
   const { field, id, value, onChange, disabled, invalid, required } = props
   const options = field.options ?? []
+  if (FORM_UPLOAD_FIELD_TYPES.has(field.type)) {
+    return (
+      <UploadInput
+        disabled={disabled}
+        field={field}
+        id={id}
+        invalid={invalid}
+        onChange={onChange}
+        required={required}
+        upload={props.upload}
+      />
+    )
+  }
   switch (field.type) {
     case "textarea":
       return (
@@ -409,5 +453,100 @@ function RatingInput(props: {
         </label>
       ))}
     </fieldset>
+  )
+}
+
+/**
+ * s225a A2-4 PR 5: one file per field, sent as soon as it is picked; the
+ * field's value becomes the upload's opaque id (the submit claims it). The
+ * size is checked here first only to spare a doomed request: the server
+ * sniffs the bytes and enforces every limit again.
+ */
+function UploadInput(props: {
+  field: FormField
+  id: string
+  onChange: (value: FormValue) => void
+  disabled: boolean
+  invalid: boolean
+  required: boolean
+  upload?: FormUploadHandler
+}) {
+  const { field, id, onChange, disabled, invalid, required, upload } = props
+  const [state, setState] = useState<
+    | { kind: "idle" }
+    | { kind: "uploading"; name: string }
+    | { kind: "done"; name: string }
+    | { kind: "error"; message: string }
+  >({ kind: "idle" })
+  const send = upload?.send
+  const pick = async (file: File | undefined) => {
+    if (!(file && send && upload)) {
+      return
+    }
+    onChange("")
+    if (file.size > formUploadMaxBytes(field)) {
+      setState({ kind: "error", message: upload.labels.tooLarge })
+      return
+    }
+    setState({ kind: "uploading", name: file.name })
+    upload.onBusy?.(1)
+    try {
+      const outcome = await send(field, file)
+      if (outcome.ok) {
+        onChange(outcome.uploadId)
+        setState({ kind: "done", name: outcome.name })
+      } else {
+        setState({ kind: "error", message: outcome.message })
+      }
+    } catch {
+      setState({ kind: "error", message: upload.labels.failed })
+    } finally {
+      upload.onBusy?.(-1)
+    }
+  }
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <input
+        accept={formUploadMimeTypes(field.type).join(",")}
+        aria-invalid={invalid}
+        className="block w-full min-w-0 text-sm file:me-3 file:rounded-md file:border file:bg-background file:px-3 file:py-1.5 file:text-sm disabled:cursor-not-allowed disabled:opacity-50"
+        data-testid={`${id}-file`}
+        disabled={disabled || !send || state.kind === "uploading"}
+        id={id}
+        onChange={(e) => {
+          pick(e.target.files?.[0]).catch(() => undefined)
+        }}
+        required={required}
+        type="file"
+      />
+      {send ? null : (
+        <span className="text-muted-foreground text-xs">
+          {upload?.labels.previewOnly}
+        </span>
+      )}
+      {state.kind === "uploading" || state.kind === "done" ? (
+        <span
+          className="flex min-w-0 items-center gap-1 text-muted-foreground text-xs"
+          data-testid={`${id}-upload-${state.kind}`}
+          role="status"
+        >
+          <PaperclipIcon aria-hidden="true" className="size-3 shrink-0" />
+          <span className="truncate">
+            {state.kind === "uploading"
+              ? `${upload?.labels.uploading} ${state.name}`
+              : state.name}
+          </span>
+        </span>
+      ) : null}
+      {state.kind === "error" ? (
+        <span
+          className="text-destructive text-xs"
+          data-testid={`${id}-upload-error`}
+          role="alert"
+        >
+          {state.message}
+        </span>
+      ) : null}
+    </div>
   )
 }

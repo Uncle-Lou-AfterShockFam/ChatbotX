@@ -218,6 +218,21 @@ export const registerSchedules = async () => {
     },
   )
 
+  // s225a: unclaimed web form uploads past their TTL (row + object).
+  await scheduleQueue.upsertJobScheduler(
+    ScheduleJobData.sweepFormUploads,
+    {
+      pattern: "23 * * * *",
+    },
+    {
+      name: ScheduleJobData.sweepFormUploads,
+      data: {
+        type: ScheduleJobData.sweepFormUploads,
+        data: {},
+      },
+    },
+  )
+
   await scheduleQueue.upsertJobScheduler(
     ScheduleJobData.scanAppointmentReminders,
     {

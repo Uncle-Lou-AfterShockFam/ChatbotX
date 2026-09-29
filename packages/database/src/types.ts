@@ -307,4 +307,5 @@ export type FormModel = typeof schema.formModel.$inferSelect
 export type FormSubmissionModel = typeof schema.formSubmissionModel.$inferSelect
 export type FormSessionModel = typeof schema.formSessionModel.$inferSelect
 export type FormVisitModel = typeof schema.formVisitModel.$inferSelect
+export type FormUploadModel = typeof schema.formUploadModel.$inferSelect
 export type NotificationModel = typeof schema.notificationModel.$inferSelect

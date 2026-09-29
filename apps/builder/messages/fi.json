@@ -4844,7 +4844,8 @@
       "askWhenKnownHint": "Pois: chat ohittaa kysymyksen, jos yhteystiedolla on jo vastaus.",
       "alwaysAsk": "Kysymysraja ei koskaan karsi",
       "askAfterSubmissions": "Kysy lähetyksestä numero",
-      "askAfterSubmissionsHint": "Progressiivinen profilointi: kysy vasta kun yhteystieto on lähettänyt lomakkeen näin monta kertaa. Tyhjä = aina."
+      "askAfterSubmissionsHint": "Progressiivinen profilointi: kysy vasta kun yhteystieto on lähettänyt lomakkeen näin monta kertaa. Tyhjä = aina.",
+      "maxSizeMb": "Tiedoston enimmäiskoko (Mt)"
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4911,7 +4912,8 @@
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
       "date": "Enter a valid date or time.",
-      "emailDomainBlocked": "Tämän verkkotunnuksen sähköpostiosoitteita ei hyväksytä."
+      "emailDomainBlocked": "Tämän verkkotunnuksen sähköpostiosoitteita ei hyväksytä.",
+      "upload": "Lataa tämä tiedosto uudelleen."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -4984,13 +4986,21 @@
       "openContact": "Open contact",
       "anonymous": "Anonymous",
       "detail": "Submission",
-      "more": "Load more"
+      "more": "Load more",
+      "download": "Lataa"
     },
     "publishWarnings": {
       "noContact": "No field writes to a contact: submissions are stored, but triggers and flows cannot react to them."
     },
     "variables": {
       "group": "Lomakelinkit (henkilökohtaiset)"
+    },
+    "upload": {
+      "uploading": "Ladataan",
+      "tooLarge": "Tiedosto on liian suuri.",
+      "wrongType": "Tätä tiedostotyyppiä ei hyväksytä.",
+      "failed": "Tiedostoa ei voitu ladata. Yritä uudelleen.",
+      "previewOnly": "Tiedostoja voi lisätä julkaistussa lomakkeessa."
     }
   },
   "questionnaires": {

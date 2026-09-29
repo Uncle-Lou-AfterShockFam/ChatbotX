@@ -33,3 +33,17 @@ const CONTACT_AVATAR_KEY =
 /** True for a key under `contactAvatarPrefix` of ANY contact (any workspace). */
 export const isContactAvatarKey = (key: string): boolean =>
   CONTACT_AVATAR_KEY.test(key)
+
+/**
+ * PRIVATE web form uploads (s225a A2-4 PR 5): never under `public/`, read
+ * only through the member-authed stream route. One prefix per form, so a
+ * form delete purges exactly its own files; the workspace delete purges
+ * `workspaceFormUploadsPrefix`.
+ */
+export const workspaceFormUploadsPrefix = (workspaceId: string): string =>
+  `workspaces/${workspaceId}/forms/`
+
+export const formUploadsPrefix = (
+  workspaceId: string,
+  formId: string,
+): string => `${workspaceFormUploadsPrefix(workspaceId)}${formId}/`

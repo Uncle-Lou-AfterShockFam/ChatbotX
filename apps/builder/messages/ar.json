@@ -4844,7 +4844,8 @@
       "askWhenKnownHint": "عند الإيقاف: تتخطى الدردشة هذا السؤال إذا كانت الإجابة لدى جهة الاتصال بالفعل.",
       "alwaysAsk": "لا يُحذف بسبب حد الأسئلة",
       "askAfterSubmissions": "اسأل بدءًا من رقم الإرسال",
-      "askAfterSubmissionsHint": "التنميط التدريجي: اسأل فقط بعد أن ترسل جهة الاتصال هذا النموذج هذا العدد من المرات. فارغ = دائمًا."
+      "askAfterSubmissionsHint": "التنميط التدريجي: اسأل فقط بعد أن ترسل جهة الاتصال هذا النموذج هذا العدد من المرات. فارغ = دائمًا.",
+      "maxSizeMb": "الحد الأقصى لحجم الملف (ميغابايت)"
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4911,7 +4912,8 @@
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
       "date": "Enter a valid date or time.",
-      "emailDomainBlocked": "عناوين البريد من هذا النطاق غير مقبولة."
+      "emailDomainBlocked": "عناوين البريد من هذا النطاق غير مقبولة.",
+      "upload": "ارفع هذا الملف مرة أخرى."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -4984,13 +4986,21 @@
       "openContact": "Open contact",
       "anonymous": "Anonymous",
       "detail": "Submission",
-      "more": "Load more"
+      "more": "Load more",
+      "download": "تنزيل"
     },
     "publishWarnings": {
       "noContact": "No field writes to a contact: submissions are stored, but triggers and flows cannot react to them."
     },
     "variables": {
       "group": "روابط النماذج (شخصية)"
+    },
+    "upload": {
+      "uploading": "جارٍ الرفع",
+      "tooLarge": "هذا الملف كبير جدًا.",
+      "wrongType": "هذا النوع من الملفات غير مقبول.",
+      "failed": "تعذّر رفع الملف. يُرجى المحاولة مرة أخرى.",
+      "previewOnly": "يمكن إضافة الملفات في النموذج المنشور."
     }
   },
   "questionnaires": {

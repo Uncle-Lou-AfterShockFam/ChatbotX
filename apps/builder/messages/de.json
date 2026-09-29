@@ -4844,7 +4844,8 @@
       "askWhenKnownHint": "Aus: Ein Chat überspringt die Frage, wenn der Kontakt die Antwort schon hat.",
       "alwaysAsk": "Nie vom Fragenlimit gekürzt",
       "askAfterSubmissions": "Fragen ab Einsendung Nr.",
-      "askAfterSubmissionsHint": "Progressive Profilierung: erst fragen, wenn der Kontakt das Formular so oft eingesendet hat. Leer = immer."
+      "askAfterSubmissionsHint": "Progressive Profilierung: erst fragen, wenn der Kontakt das Formular so oft eingesendet hat. Leer = immer.",
+      "maxSizeMb": "Maximale Dateigröße (MB)"
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4911,7 +4912,8 @@
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
       "date": "Enter a valid date or time.",
-      "emailDomainBlocked": "E-Mail-Adressen dieser Domain werden nicht akzeptiert."
+      "emailDomainBlocked": "E-Mail-Adressen dieser Domain werden nicht akzeptiert.",
+      "upload": "Lade diese Datei erneut hoch."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -4984,13 +4986,21 @@
       "openContact": "Open contact",
       "anonymous": "Anonymous",
       "detail": "Submission",
-      "more": "Load more"
+      "more": "Load more",
+      "download": "Herunterladen"
     },
     "publishWarnings": {
       "noContact": "No field writes to a contact: submissions are stored, but triggers and flows cannot react to them."
     },
     "variables": {
       "group": "Formularlinks (persönlich)"
+    },
+    "upload": {
+      "uploading": "Wird hochgeladen",
+      "tooLarge": "Diese Datei ist zu groß.",
+      "wrongType": "Dieser Dateityp wird nicht akzeptiert.",
+      "failed": "Die Datei konnte nicht hochgeladen werden. Bitte versuche es erneut.",
+      "previewOnly": "Dateien können im veröffentlichten Formular hinzugefügt werden."
     }
   },
   "questionnaires": {
