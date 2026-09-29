@@ -127,7 +127,10 @@ export function resolveButtonHref(
   missing: Set<string>,
 ): string {
   if (block.action.kind === "flow") {
-    return ctx.button ? ctx.button(block.id) : ""
+    // The caller's resolved URL gets the same scheme rule as every other
+    // href: an openWebsite step's beforeStep.url of javascript: never lands.
+    const url = ctx.button ? ctx.button(block.id).trim() : ""
+    return HTTP_URL.test(url) ? url : ""
   }
   return resolveTemplateUrl(block.action.url, block.id, ctx, missing)
 }

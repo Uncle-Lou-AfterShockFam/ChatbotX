@@ -79,6 +79,15 @@ vi.mock("../../src/lib/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn() },
 }))
 
+const renderStepDocumentMock = vi.fn()
+const { ContentError } = vi.hoisted(() => ({
+  ContentError: class extends Error {},
+}))
+vi.mock("../src/integration/handlers/send-email-document", () => ({
+  EmailContentError: ContentError,
+  renderStepDocument: (...args: unknown[]) => renderStepDocumentMock(...args),
+}))
+
 const { sendEmail } = await import("../../src/integration/handlers/send-email")
 
 // ── shared fixture ──────────────────────────────────────────────────────────
@@ -280,4 +289,39 @@ describe("s220b: broadcast attribution", () => {
       expect.objectContaining({ broadcastId: null }),
     )
   })
+})
+
+describe("s220b phase 2b: template / document steps", () => {
+  test("a template step sends the rendered document, not the elements path", async () => {
+    renderStepDocumentMock.mockResolvedValueOnce({
+      html: "<html>doc</html>",
+      text: "doc",
+    })
+    await sendEmail(makeProps({ templateId: "77", elements: [] }) as never)
+    const args = runAction.mock.calls.at(-1)?.[1] as {
+      html: string
+      text: string
+    }
+    expect(args.html).toBe("<html>doc</html>")
+    expect(args.text).toBe("doc")
+  })
+
+  test("an unrenderable template fails closed: nothing is sent, the topic row is marked failed", async () => {
+    renderStepDocumentMock.mockRejectedValueOnce(
+      new ContentError("Email template not found"),
+    )
+    runAction.mockClear()
+    await sendEmail(makeProps({ templateId: "404", elements: [] }) as never)
+    expect(runAction).not.toHaveBeenCalled()
+    expect(markFailed).toHaveBeenCalledWith("test-token-xyz")
+  })
+})
+
+test("s220b review: a transient render error propagates (queue retry), nothing sent", async () => {
+  renderStepDocumentMock.mockRejectedValueOnce(new Error("connection reset"))
+  runAction.mockClear()
+  await expect(
+    sendEmail(makeProps({ templateId: "77", elements: [] }) as never),
+  ).rejects.toThrow("connection reset")
+  expect(runAction).not.toHaveBeenCalled()
 })

@@ -36,6 +36,7 @@ import { contactVariableService } from "@chatbotx.io/variables"
 import { resolveButtonUrl } from "../../lib/convert-button"
 import { logger } from "../../lib/logger"
 import type { ExecuteStepProps } from "./flow"
+import { EmailContentError, renderStepDocument } from "./send-email-document"
 
 async function resolveElements({
   appUrl,
@@ -134,6 +135,42 @@ async function resolveElements({
   return resolved
 }
 
+/** The pre-B2 path, unchanged: elements -> MJML dynamic template. */
+async function renderLegacyElements(props: {
+  appUrl: string
+  step: EmailStepSchema
+  variables: Awaited<ReturnType<typeof contactVariableService.getAll>>
+  inbox: InboxWithIntegrations | undefined
+  flowId: string | undefined
+  unsubscribeUrl: string
+  token: string | undefined
+  workspaceId: string
+  brandName: string
+  subject: string
+  preheader: string
+}): Promise<{ html: string; text: string }> {
+  const elements = await resolveElements({
+    appUrl: props.appUrl,
+    rawElements: props.step.elements,
+    variables: props.variables,
+    inbox: props.inbox,
+    flowId: props.flowId,
+    unsubscribeUrl: props.unsubscribeUrl,
+    token: props.token,
+    workspaceId: props.workspaceId,
+  })
+  const emailProps: DynamicEmailProps = {
+    brandName: props.brandName,
+    subject: props.subject,
+    preheader: props.preheader,
+    elements,
+  }
+  return {
+    html: await renderDynamicEmailHtml(emailProps),
+    text: renderDynamicEmailText(elements),
+  }
+}
+
 export async function sendEmail({
   conversation,
   flowVersion,
@@ -223,22 +260,55 @@ export async function sendEmail({
     token = result.token
   }
 
-  const elements = await resolveElements({
-    appUrl,
-    rawElements: step.elements,
-    variables,
-    inbox,
-    flowId: flowVersion.flowId,
-    unsubscribeUrl,
-    token,
-    workspaceId: conversation.workspaceId,
-  })
-
-  const props: DynamicEmailProps = {
-    brandName: workspace.name ?? smtpIntegration.name,
-    subject,
-    preheader,
-    elements,
+  // B2 (s220b): a template or inline document renders through
+  // @chatbotx.io/email-document; legacy `elements` keep the original path
+  // (no try: its errors propagate to the queue's retry, as they always did).
+  let body: { html: string; text: string }
+  if (step.templateId || step.document) {
+    try {
+      body = await renderStepDocument({
+        step,
+        workspaceId: conversation.workspaceId,
+        appUrl,
+        variables,
+        inbox,
+        flowId: flowVersion.flowId,
+        unsubscribeUrl,
+        token,
+      })
+    } catch (err) {
+      // Only unusable CONTENT (template gone, invalid document) fails the
+      // send closed; a transient error propagates to the retry.
+      if (!(err instanceof EmailContentError)) {
+        throw err
+      }
+      logger.error(
+        {
+          err,
+          workspaceId: conversation.workspaceId,
+          templateId: step.templateId,
+        },
+        "handleSendEmail: email content could not be rendered",
+      )
+      if (token) {
+        await emailTopicAnalyticsService.markFailed(token)
+      }
+      return
+    }
+  } else {
+    body = await renderLegacyElements({
+      appUrl,
+      step,
+      variables,
+      inbox,
+      flowId: flowVersion.flowId,
+      unsubscribeUrl,
+      token,
+      workspaceId: conversation.workspaceId,
+      brandName: workspace.name ?? smtpIntegration.name,
+      subject,
+      preheader,
+    })
   }
 
   const botContext = await buildContext({
@@ -258,8 +328,8 @@ export async function sendEmail({
       from: step.from || smtpIntegration.fromAddress,
       to,
       subject,
-      html: await renderDynamicEmailHtml(props),
-      text: renderDynamicEmailText(elements),
+      html: body.html,
+      text: body.text,
       headers: {
         "List-Unsubscribe": `<${oneClickUrl.toString()}>`,
         "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
