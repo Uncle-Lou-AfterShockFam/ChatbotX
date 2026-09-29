@@ -44,7 +44,12 @@ vi.mock("../src/lib/logger", () => ({
 }))
 
 const {
+  ATTACHMENT_CACHE_BYTES,
+  ATTACHMENT_CACHE_MAX_ENTRIES,
+  ATTACHMENT_CACHE_TTL_MS,
+  clearAttachmentCache,
   EmailContentError,
+  loadAttachments,
   MAX_ATTACHMENT_BYTES_TOTAL,
   MAX_ATTACHMENTS,
   prepareStepDocument,
@@ -582,5 +587,112 @@ describe("start-flow buttons with no chat to open (s222b)", () => {
     )
     expect(out.html).not.toContain("&amp;r=")
     expect(out.html).not.toContain("Go2")
+  })
+})
+
+describe("s223b: one broadcast's recipients share attachment bytes", () => {
+  beforeEach(() => {
+    clearAttachmentCache()
+    findFile.mockImplementation(async ({ fileId }: { fileId: string }) =>
+      mediaFile(fileId),
+    )
+    getObjectStream.mockImplementation(async (path: string) =>
+      object(Buffer.from(`bytes:${path}`)),
+    )
+  })
+  const prepare = (broadcastId?: string) =>
+    prepareStepDocument({
+      ...base,
+      step: { templateId: "77" } as never,
+      broadcastId,
+    })
+
+  test("two recipients of one broadcast read each file from storage once, with identical bytes", async () => {
+    getDocument.mockResolvedValue(attachmentDoc("8", "7"))
+    const first = await prepare("b-1")
+    const second = await prepare("b-1")
+    expect(getObjectStream).toHaveBeenCalledTimes(2)
+    expect(second.attachments).toEqual(first.attachments)
+  })
+
+  test("another broadcast, another workspace or a non-broadcast send never shares", async () => {
+    getDocument.mockResolvedValue(attachmentDoc("8"))
+    await prepare("b-1")
+    await prepare("b-2")
+    await prepare(undefined)
+    await prepare(undefined)
+    expect(getObjectStream).toHaveBeenCalledTimes(4)
+    const files = [mediaFile("8")] as never
+    await loadAttachments("ws-1", files, "b-9")
+    await expect(loadAttachments("ws-2", files, "b-9")).rejects.toThrow(
+      EmailContentError,
+    )
+    expect(getObjectStream).toHaveBeenCalledTimes(5)
+  })
+
+  test("an entry older than the TTL is read again", async () => {
+    vi.useFakeTimers()
+    try {
+      getDocument.mockResolvedValue(attachmentDoc("8"))
+      await prepare("b-1")
+      vi.setSystemTime(Date.now() + ATTACHMENT_CACHE_TTL_MS + 1)
+      await prepare("b-1")
+      expect(getObjectStream).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("the cache stays within its byte bound: the least recently used entry goes first", async () => {
+    const third = Math.floor(ATTACHMENT_CACHE_BYTES / 3) + 1
+    getObjectStream.mockImplementation(async () => object(Buffer.alloc(third)))
+    const one = (id: string) =>
+      loadAttachments("ws-1", [mediaFile(id)] as never, "b-1")
+    await one("1")
+    await one("2")
+    await one("1") // hit: 1 is now the most recent
+    await one("3") // 3 * third > bound: evicts 2, the least recent
+    expect(getObjectStream).toHaveBeenCalledTimes(3)
+    await one("1")
+    await one("3")
+    expect(getObjectStream).toHaveBeenCalledTimes(3)
+    await one("2")
+    expect(getObjectStream).toHaveBeenCalledTimes(4)
+  })
+
+  test("Codex probe: empty files are bounded by count, and expired entries are swept on the next insert", async () => {
+    getObjectStream.mockImplementation(async () => object(Buffer.alloc(0)))
+    const one = (id: string, scope = "b-1") =>
+      loadAttachments("ws-1", [mediaFile(id)] as never, scope)
+    for (let i = 0; i <= ATTACHMENT_CACHE_MAX_ENTRIES; i++) {
+      await one(String(i))
+    }
+    // Entry 0 was evicted by count (0 bytes never trips the byte bound).
+    getObjectStream.mockClear()
+    await one(String(ATTACHMENT_CACHE_MAX_ENTRIES))
+    expect(getObjectStream).not.toHaveBeenCalled()
+    await one("0")
+    expect(getObjectStream).toHaveBeenCalledTimes(1)
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(Date.now() + ATTACHMENT_CACHE_TTL_MS + 1)
+      await one("fresh", "b-2")
+      getObjectStream.mockClear()
+      await one("fresh", "b-2")
+      expect(getObjectStream).not.toHaveBeenCalled()
+      await one("1")
+      expect(getObjectStream).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("cached bytes still count toward the per-email budget", async () => {
+    const half = Math.floor(MAX_ATTACHMENT_BYTES_TOTAL / 2) + 1
+    getObjectStream.mockImplementation(async () => object(Buffer.alloc(half)))
+    await loadAttachments("ws-1", [mediaFile("1")] as never, "b-1")
+    await expect(
+      loadAttachments("ws-1", [mediaFile("1"), mediaFile("2")] as never, "b-1"),
+    ).rejects.toThrow(EmailContentError)
   })
 })
