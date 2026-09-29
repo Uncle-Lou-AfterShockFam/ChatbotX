@@ -7711,6 +7711,19 @@
       "noLines": "אין עדיין תיבות דואר של ערוץ API."
     }
   },
+  "emailSuppression": {
+    "title": "חסימת דוא\"ל",
+    "description": "שלב הדוא\"ל לעולם לא שולח לכתובות או לדומיינים האלה. שליחות שהוחזרו נוספות אוטומטית. רשומת דומיין תואמת רק לדומיין המדויק הזה.",
+    "placeholder": "name@example.com או @example.com",
+    "add": "הוספה",
+    "empty": "אין כתובות או דומיינים חסומים.",
+    "remove": "הסרה",
+    "removeConfirm": "דואר לרשומה הזו יישלח שוב.",
+    "reasonManual": "נוסף ידנית",
+    "reasonUnreachable": "הוחזר",
+    "added": "החסימה נוספה",
+    "loadMore": "טעינת עוד"
+  },
   "emailFlowPage": {
     "confirmTitle": "המשך",
     "confirmDescription": "הקישו על הכפתור כדי להמשיך.",

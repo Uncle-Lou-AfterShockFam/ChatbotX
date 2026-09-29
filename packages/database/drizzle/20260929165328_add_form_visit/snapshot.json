@@ -1,9 +1,9 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "ab798c22-5297-4ba6-a8eb-ff38b393bfb8",
+  "id": "f28cd3a2-1d13-4668-bc1f-337018f98b8e",
   "prevIds": [
-    "48340c8b-6e60-4f29-ba6c-b576f4752263"
+    "de7023c0-5211-4e28-a6b8-42da2748ac5d"
   ],
   "ddl": [
     {
@@ -568,6 +568,24 @@
         "archived"
       ],
       "name": "documentTemplateStatus",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "address",
+        "domain"
+      ],
+      "name": "emailSuppressionKind",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "manual",
+        "unreachable"
+      ],
+      "name": "emailSuppressionReason",
       "entityType": "enums",
       "schema": "public"
     },
@@ -1540,6 +1558,12 @@
     {
       "isRlsEnabled": false,
       "name": "DynamicImage",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "EmailSuppression",
       "entityType": "tables",
       "schema": "public"
     },
@@ -13558,6 +13582,123 @@
       "entityType": "columns",
       "schema": "public",
       "table": "DynamicImage"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "EmailSuppression"
+    },
+    {
+      "type": "timestamp(6) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "createdAt",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "EmailSuppression"
+    },
+    {
+      "type": "timestamp(6) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updatedAt",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "EmailSuppression"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "value",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "EmailSuppression"
+    },
+    {
+      "type": "emailSuppressionKind",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "kind",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "EmailSuppression"
+    },
+    {
+      "type": "emailSuppressionReason",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'manual'",
+      "generated": null,
+      "identity": null,
+      "name": "reason",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "EmailSuppression"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "source",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "EmailSuppression"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspaceId",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "EmailSuppression"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "createdById",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "EmailSuppression"
     },
     {
       "type": "bigint",
@@ -38889,6 +39030,34 @@
           "opclass": null
         },
         {
+          "value": "value",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "EmailSuppression_workspaceId_value_key",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "EmailSuppression"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspaceId",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
           "value": "status",
           "isExpression": false,
           "asc": true,
@@ -49319,6 +49488,40 @@
       ],
       "onUpdate": "CASCADE",
       "onDelete": "CASCADE",
+      "name": "EmailSuppression_workspaceId_Workspace_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "EmailSuppression"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "createdById"
+      ],
+      "schemaTo": "public",
+      "tableTo": "User",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "CASCADE",
+      "onDelete": "SET NULL",
+      "name": "EmailSuppression_createdById_User_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "EmailSuppression"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspaceId"
+      ],
+      "schemaTo": "public",
+      "tableTo": "Workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "CASCADE",
+      "onDelete": "CASCADE",
       "name": "EmailTemplate_workspaceId_Workspace_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -54936,6 +55139,16 @@
       "name": "DynamicImage_pkey",
       "schema": "public",
       "table": "DynamicImage",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "EmailSuppression_pkey",
+      "schema": "public",
+      "table": "EmailSuppression",
       "entityType": "pks"
     },
     {

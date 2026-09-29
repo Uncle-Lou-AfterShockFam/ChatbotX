@@ -7711,6 +7711,19 @@
       "noLines": "لا توجد صناديق وارد لقناة API بعد."
     }
   },
+  "emailSuppression": {
+    "title": "حظر البريد الإلكتروني",
+    "description": "لا ترسل خطوة البريد الإلكتروني أبدًا إلى هذه العناوين أو النطاقات. تُضاف الرسائل المرتدة تلقائيًا. يطابق إدخال النطاق ذلك النطاق بالضبط فقط.",
+    "placeholder": "name@example.com أو @example.com",
+    "add": "إضافة",
+    "empty": "لا توجد عناوين أو نطاقات محظورة.",
+    "remove": "إزالة",
+    "removeConfirm": "سيتم إرسال البريد إلى هذا الإدخال مرة أخرى.",
+    "reasonManual": "أُضيف يدويًا",
+    "reasonUnreachable": "مرتد",
+    "added": "تمت إضافة الحظر",
+    "loadMore": "تحميل المزيد"
+  },
   "emailFlowPage": {
     "confirmTitle": "متابعة",
     "confirmDescription": "اضغط على الزر للمتابعة.",

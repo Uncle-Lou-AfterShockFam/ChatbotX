@@ -7711,6 +7711,19 @@
       "noLines": "Noch keine API-Kanal-Posteingänge."
     }
   },
+  "emailSuppression": {
+    "title": "E-Mail-Sperrliste",
+    "description": "Der E-Mail-Schritt sendet nie an diese Adressen oder Domains. Unzustellbare Sendungen werden automatisch hinzugefügt. Ein Domain-Eintrag gilt nur für genau diese Domain.",
+    "placeholder": "name@example.com oder @example.com",
+    "add": "Hinzufügen",
+    "empty": "Keine gesperrten Adressen oder Domains.",
+    "remove": "Entfernen",
+    "removeConfirm": "An diesen Eintrag wird wieder gesendet.",
+    "reasonManual": "Manuell hinzugefügt",
+    "reasonUnreachable": "Unzustellbar",
+    "added": "Sperre hinzugefügt",
+    "loadMore": "Mehr laden"
+  },
   "emailFlowPage": {
     "confirmTitle": "Weiter",
     "confirmDescription": "Tippen Sie auf die Schaltfläche, um fortzufahren.",

@@ -75,6 +75,11 @@ export const router = {
       default: m.dealsAPI,
     })),
   ),
+  emailSuppressionAPI: lazy(() =>
+    import("@/features/email-suppression/api").then((m) => ({
+      default: m.emailSuppressionAPI,
+    })),
+  ),
   emailTemplatesAPI: lazy(() =>
     import("@/features/email-templates/api").then((m) => ({
       default: m.emailTemplatesAPI,

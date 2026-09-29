@@ -47,6 +47,7 @@ import {
   renderStepDocument,
 } from "./send-email-document"
 import { buildLineEmail, resolveEmailLine } from "./send-email-line"
+import { isSendSuppressed, SUPPRESSED_ERROR } from "./send-email-suppression"
 
 async function resolveElements({
   appUrl,
@@ -416,6 +417,14 @@ export async function sendEmail({
     }
   }
   const recipient = lineContactInbox?.sourceId ?? to
+  // Outreach B-1 (s224b): a listed address or @domain is never handed off,
+  // on either path. Checked on the address the mail would really go to.
+  const suppressed =
+    !contentError &&
+    (await isSendSuppressed({
+      workspaceId: conversation.workspaceId,
+      recipient,
+    }))
   // Personal (bearer) links only in mail DELIVERED to the contact's own,
   // single address (the email line's identity when it sends): an owner may
   // address this step to someone else, and that reader must not get the
@@ -429,7 +438,7 @@ export async function sendEmail({
     contactVariableService.replaceAll({ text: step.subject, variables }),
     contactVariableService.replaceAll({ text: step.preheader, variables }),
   ])
-  if (isDocument && !contentError) {
+  if (isDocument && !contentError && !suppressed) {
     try {
       prepared = await prepareStepDocument({
         step,
@@ -470,6 +479,21 @@ export async function sendEmail({
       broadcastId: broadcast?.broadcastId ?? null,
     })
     token = result.token
+  }
+
+  if (suppressed) {
+    logger.warn(
+      {
+        workspaceId: conversation.workspaceId,
+        contactId: conversation.contactId,
+        lineInboxId,
+      },
+      "handleSendEmail: recipient is suppressed, not sent",
+    )
+    if (token) {
+      await emailTopicAnalyticsService.markFailed(token, SUPPRESSED_ERROR)
+    }
+    return
   }
 
   if (contentError) {

@@ -7711,6 +7711,19 @@
       "noLines": "Inga API-kanalinkorgar ännu."
     }
   },
+  "emailSuppression": {
+    "title": "E-postspärr",
+    "description": "E-poststeget skickar aldrig till dessa adresser eller domäner. Studsade utskick läggs till automatiskt. En domänpost matchar bara exakt den domänen.",
+    "placeholder": "namn@example.com eller @example.com",
+    "add": "Lägg till",
+    "empty": "Inga spärrade adresser eller domäner.",
+    "remove": "Ta bort",
+    "removeConfirm": "E-post till den här posten skickas igen.",
+    "reasonManual": "Tillagd manuellt",
+    "reasonUnreachable": "Studsad",
+    "added": "Spärr tillagd",
+    "loadMore": "Läs in fler"
+  },
   "emailFlowPage": {
     "confirmTitle": "Fortsätt",
     "confirmDescription": "Tryck på knappen för att fortsätta.",

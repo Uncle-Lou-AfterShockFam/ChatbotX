@@ -7711,6 +7711,19 @@
       "noLines": "尚無 API 頻道收件匣。"
     }
   },
+  "emailSuppression": {
+    "title": "郵件封鎖",
+    "description": "郵件步驟永遠不會寄送到這些地址或網域。退信的寄送會自動加入。網域項目只比對該確切網域。",
+    "placeholder": "name@example.com 或 @example.com",
+    "add": "新增",
+    "empty": "沒有被封鎖的地址或網域。",
+    "remove": "移除",
+    "removeConfirm": "將重新寄送郵件到此項目。",
+    "reasonManual": "手動新增",
+    "reasonUnreachable": "退信",
+    "added": "已新增封鎖",
+    "loadMore": "載入更多"
+  },
   "emailFlowPage": {
     "confirmTitle": "繼續",
     "confirmDescription": "點按按鈕以繼續。",

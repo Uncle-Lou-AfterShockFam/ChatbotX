@@ -7711,6 +7711,19 @@
       "noLines": "Nessuna casella del canale API."
     }
   },
+  "emailSuppression": {
+    "title": "Soppressione email",
+    "description": "Il passaggio email non invia mai a questi indirizzi o domini. Gli invii rimbalzati vengono aggiunti automaticamente. Una voce di dominio corrisponde solo a quel dominio esatto.",
+    "placeholder": "nome@example.com o @example.com",
+    "add": "Aggiungi",
+    "empty": "Nessun indirizzo o dominio soppresso.",
+    "remove": "Rimuovi",
+    "removeConfirm": "Le email verso questa voce verranno di nuovo inviate.",
+    "reasonManual": "Aggiunto manualmente",
+    "reasonUnreachable": "Rimbalzato",
+    "added": "Soppressione aggiunta",
+    "loadMore": "Carica altri"
+  },
   "emailFlowPage": {
     "confirmTitle": "Continua",
     "confirmDescription": "Tocca il pulsante per continuare.",

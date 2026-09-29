@@ -7711,6 +7711,19 @@
       "noLines": "Ei vielä API-kanavan saapuneita-kansioita."
     }
   },
+  "emailSuppression": {
+    "title": "Sähköpostiesto",
+    "description": "Sähköpostivaihe ei koskaan lähetä näihin osoitteisiin tai verkkotunnuksiin. Palautuneet lähetykset lisätään automaattisesti. Verkkotunnusmerkintä koskee vain täsmälleen kyseistä verkkotunnusta.",
+    "placeholder": "nimi@example.com tai @example.com",
+    "add": "Lisää",
+    "empty": "Ei estettyjä osoitteita tai verkkotunnuksia.",
+    "remove": "Poista",
+    "removeConfirm": "Tähän merkintään lähetetään taas postia.",
+    "reasonManual": "Lisätty käsin",
+    "reasonUnreachable": "Palautunut",
+    "added": "Esto lisätty",
+    "loadMore": "Lataa lisää"
+  },
   "emailFlowPage": {
     "confirmTitle": "Jatka",
     "confirmDescription": "Jatka napauttamalla painiketta.",

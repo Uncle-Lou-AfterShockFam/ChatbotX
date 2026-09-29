@@ -13,6 +13,16 @@ vi.mock("@chatbotx.io/business", () => ({
   },
 }))
 
+const addSuppression = vi.fn()
+vi.mock("@chatbotx.io/business/email-suppression", () => ({
+  emailSuppressionService: {
+    add: (...args: unknown[]) => addSuppression(...args),
+  },
+}))
+vi.mock("../src/lib/logger", () => ({
+  logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+}))
+
 const { lineEmailRef, settleLineEmailStatus } = await import(
   "../src/integration/handlers/line-email-status"
 )
@@ -33,6 +43,7 @@ describe("settleLineEmailStatus (s222b): a pull line's final word settles the qu
   test("delivered and failed settle the recipient named by the outbox row's ref, scoped to the status's inbox", async () => {
     await expect(
       settleLineEmailStatus({
+        workspaceId: "ws-1",
         inboxId: "in-1",
         messageId: "outbox:ob_7",
         status: "delivered",
@@ -41,6 +52,7 @@ describe("settleLineEmailStatus (s222b): a pull line's final word settles the qu
     expect(newsletterRef).toHaveBeenCalledWith({ inboxId: "in-1", id: "ob_7" })
     expect(markDelivered).toHaveBeenCalledWith("tok-1")
     await settleLineEmailStatus({
+      workspaceId: "ws-1",
       inboxId: "in-1",
       messageId: "outbox:ob_8",
       status: "failed",
@@ -56,7 +68,12 @@ describe("settleLineEmailStatus (s222b): a pull line's final word settles the qu
     ]
     for (const [messageId, status] of cases) {
       await expect(
-        settleLineEmailStatus({ inboxId: "in-1", messageId, status }),
+        settleLineEmailStatus({
+          workspaceId: "ws-1",
+          inboxId: "in-1",
+          messageId,
+          status,
+        }),
       ).resolves.toBe(false)
     }
     expect(newsletterRef).not.toHaveBeenCalled()
@@ -75,5 +92,103 @@ describe("settleLineEmailStatus (s222b): a pull line's final word settles the qu
     }
     expect(markFailed).not.toHaveBeenCalled()
     expect(markDelivered).not.toHaveBeenCalled()
+  })
+})
+
+describe("settleLineEmailStatus (s224b): an unreachable email send suppresses its address", () => {
+  const base = {
+    workspaceId: "ws-1",
+    inboxId: "in-1",
+    messageId: "outbox:ob_9",
+    status: "failed",
+    recipient: "Bounce@Example.com",
+  }
+  beforeEach(() => {
+    vi.clearAllMocks()
+    newsletterRef.mockResolvedValue("email:t:tok-1")
+  })
+
+  test("every unreachable reason adds the lower-cased address with the ref as source, and still settles the row", async () => {
+    for (const error of [
+      "bad-address",
+      "undelivered",
+      "bounce",
+      "hard-bounce",
+      "complaint",
+    ]) {
+      addSuppression.mockClear()
+      await expect(settleLineEmailStatus({ ...base, error })).resolves.toBe(
+        true,
+      )
+      expect(addSuppression).toHaveBeenCalledWith({
+        workspaceId: "ws-1",
+        value: "bounce@example.com",
+        reason: "unreachable",
+        source: "email:t:tok-1",
+      })
+    }
+    expect(markFailed).toHaveBeenCalledWith("tok-1")
+  })
+
+  test("an untracked email ref suppresses too (nothing to settle)", async () => {
+    newsletterRef.mockResolvedValue("email:u:uuid-1")
+    await expect(
+      settleLineEmailStatus({ ...base, error: "hard-bounce" }),
+    ).resolves.toBe(false)
+    expect(addSuppression).toHaveBeenCalledOnce()
+    expect(markFailed).not.toHaveBeenCalled()
+  })
+
+  test("skip, line-error, unknown, empty and non-string reasons, and delivered, add nothing", async () => {
+    for (const error of [
+      "suppressed",
+      "opted-out",
+      "line-error",
+      "mystery",
+      "",
+      null,
+      undefined,
+      42,
+      { reason: "bounce" },
+    ]) {
+      await settleLineEmailStatus({ ...base, error })
+    }
+    await settleLineEmailStatus({
+      ...base,
+      status: "delivered",
+      error: "bounce",
+    })
+    expect(addSuppression).not.toHaveBeenCalled()
+  })
+
+  test("a non-email outbox row (an SMS line's bad number) never suppresses", async () => {
+    newsletterRef.mockResolvedValue(null)
+    await settleLineEmailStatus({ ...base, error: "bad-number" })
+    newsletterRef.mockResolvedValue("sms:whatever")
+    await settleLineEmailStatus({ ...base, error: "bounce" })
+    expect(addSuppression).not.toHaveBeenCalled()
+  })
+
+  test("a recipient that is not ONE address (missing, a domain, junk) is not added", async () => {
+    for (const recipient of [
+      undefined,
+      null,
+      "",
+      "@example.com",
+      "a@b@c.com",
+      "x y@z.com",
+      7,
+    ]) {
+      await settleLineEmailStatus({ ...base, error: "bounce", recipient })
+    }
+    expect(addSuppression).not.toHaveBeenCalled()
+  })
+
+  test("a failed suppression write propagates (the status job retries), and the row is left for the retry", async () => {
+    addSuppression.mockRejectedValueOnce(new Error("db down"))
+    await expect(
+      settleLineEmailStatus({ ...base, error: "bounce" }),
+    ).rejects.toThrow("db down")
+    expect(markFailed).not.toHaveBeenCalled()
   })
 })

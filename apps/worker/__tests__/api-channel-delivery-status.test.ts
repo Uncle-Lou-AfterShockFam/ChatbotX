@@ -245,12 +245,19 @@ describe("API channel delivery status reaches the message", () => {
   test("s222b: an API status is offered to the email-line settler FIRST, even when no conversation resolves", async () => {
     mockSettleLineEmail.mockClear()
     await expect(
-      handleMessageStatus(apiStatusJob("failed", "+15550009999") as never),
+      handleMessageStatus(
+        apiStatusJob("failed", "+15550009999", "hard-bounce") as never,
+      ),
     ).rejects.toThrow("Unable to find conversation")
+    // s224b: the reason and the recipient reach it for the unreachable ->
+    // suppression rule, scoped to the status's workspace.
     expect(mockSettleLineEmail).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
       inboxId: "inbox-1",
       messageId: "msg:57",
       status: "failed",
+      error: "hard-bounce",
+      recipient: "+15550009999",
     })
   })
 

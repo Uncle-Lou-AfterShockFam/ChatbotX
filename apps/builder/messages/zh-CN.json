@@ -7711,6 +7711,19 @@
       "noLines": "还没有 API 渠道收件箱。"
     }
   },
+  "emailSuppression": {
+    "title": "邮件屏蔽",
+    "description": "邮件步骤永远不会发送到这些地址或域名。退信的发送会自动加入。域名条目只匹配该确切域名。",
+    "placeholder": "name@example.com 或 @example.com",
+    "add": "添加",
+    "empty": "没有被屏蔽的地址或域名。",
+    "remove": "移除",
+    "removeConfirm": "将重新向此条目发送邮件。",
+    "reasonManual": "手动添加",
+    "reasonUnreachable": "退信",
+    "added": "已添加屏蔽",
+    "loadMore": "加载更多"
+  },
   "emailFlowPage": {
     "confirmTitle": "继续",
     "confirmDescription": "点击按钮继续。",

@@ -7711,6 +7711,19 @@
       "noLines": "No API-channel inboxes yet."
     }
   },
+  "emailSuppression": {
+    "title": "Email suppression",
+    "description": "The email step never sends to these addresses or domains. Bounced line sends are added automatically. A domain entry matches that exact domain only.",
+    "placeholder": "name@example.com or @example.com",
+    "add": "Add",
+    "empty": "No suppressed addresses or domains.",
+    "remove": "Remove",
+    "removeConfirm": "Mail to this entry will be sent again.",
+    "reasonManual": "Added manually",
+    "reasonUnreachable": "Bounced",
+    "added": "Suppression added",
+    "loadMore": "Load more"
+  },
   "emailFlowPage": {
     "confirmTitle": "Continue",
     "confirmDescription": "Tap the button to continue.",

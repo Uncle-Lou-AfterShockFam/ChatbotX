@@ -14,8 +14,9 @@ export class EmailTopicAnalyticsService {
     return emailTopicStatsRepository.markDelivered(token)
   }
 
-  markFailed(token: string): Promise<void> {
-    return emailTopicStatsRepository.markFailed(token)
+  /** `errorContent` lands in the broadcast's failure row (default smtp-send-failed). */
+  markFailed(token: string, errorContent?: string): Promise<void> {
+    return emailTopicStatsRepository.markFailed(token, errorContent)
   }
 
   recordOpen(token: string): Promise<void> {

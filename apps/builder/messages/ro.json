@@ -7711,6 +7711,19 @@
       "noLines": "Nu există încă inboxuri de canal API."
     }
   },
+  "emailSuppression": {
+    "title": "Suprimare e-mail",
+    "description": "Pasul de e-mail nu trimite niciodată către aceste adrese sau domenii. Trimiterile respinse sunt adăugate automat. O intrare de domeniu se potrivește doar cu acel domeniu exact.",
+    "placeholder": "nume@example.com sau @example.com",
+    "add": "Adaugă",
+    "empty": "Nu există adrese sau domenii suprimate.",
+    "remove": "Elimină",
+    "removeConfirm": "E-mailurile către această intrare vor fi trimise din nou.",
+    "reasonManual": "Adăugat manual",
+    "reasonUnreachable": "Respins",
+    "added": "Suprimare adăugată",
+    "loadMore": "Încarcă mai multe"
+  },
   "emailFlowPage": {
     "confirmTitle": "Continuă",
     "confirmDescription": "Apasă butonul pentru a continua.",
