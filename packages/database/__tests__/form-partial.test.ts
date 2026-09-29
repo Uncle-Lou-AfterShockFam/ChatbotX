@@ -264,3 +264,15 @@ describe("form availability settings", () => {
     ).toBe("closed")
   })
 })
+
+describe("personal form link key (s220c A2-4)", () => {
+  test("`k` can never be a prefill key (it carries the link's token)", () => {
+    expect(parseFormSettings({ prefillKeys: ["k"] }).success).toBe(false)
+    expect(
+      parseFormSettings({ prefillKeys: ["first_name", "k"] }).success,
+    ).toBe(false)
+    expect(
+      parseFormSettings({ prefillKeys: ["kind", "first_name"] }).success,
+    ).toBe(true)
+  })
+})

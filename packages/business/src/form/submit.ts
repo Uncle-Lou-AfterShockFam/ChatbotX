@@ -3,6 +3,7 @@ import {
   and,
   type DatabaseClient,
   db,
+  desc,
   eq,
   gte,
   inArray,
@@ -15,6 +16,7 @@ import {
   evaluateForm,
   FORM_OPTION_FIELD_TYPES,
   type FormDefinition,
+  type FormSessionProfile,
   type FormSubmissionVisibility,
   type FormSystemFieldKey,
   type FormValidationIssue,
@@ -22,8 +24,11 @@ import {
   type FormValues,
   formInputFields,
   formMapsToContact,
+  formProfileContext,
+  formProfiledOutKeys,
   formScore,
   formWindowState,
+  isEmptyFormValue,
   normalizeFormSettings,
   pruneFormValues,
   validateFormSubmission,
@@ -35,6 +40,7 @@ import {
   formSubmissionModel,
 } from "@chatbotx.io/database/schema"
 import type { FormSubmissionModel } from "@chatbotx.io/database/types"
+import { contactFromFormLink } from "@chatbotx.io/encryption/form-link-token"
 import { emitFormSubmitted } from "@chatbotx.io/events"
 import { runWithWebhookExecutionContext } from "@chatbotx.io/events/context"
 import { createId, isPlainRecord } from "@chatbotx.io/utils"
@@ -87,6 +93,11 @@ export type SubmitFormInput = {
   userAgent: string | null
   /** The submitter's browser zone, anchors naive date answers. */
   sourceTimezone?: string
+  /**
+   * s220c A2-4: the `k` of a signed form link, as the page received it.
+   * Verified HERE for this form; the submission then lands on that contact.
+   */
+  formLinkToken?: string
   now?: Date
 }
 
@@ -192,6 +203,9 @@ export type PendingChanges = Awaited<
   ReturnType<typeof contactCustomFieldService.setValuesInTransaction>
 >
 
+/** Mautic caps the submission history profiling reads at 200 rows. */
+export const FORM_SESSION_HISTORY_CAP = 200
+
 /** The admission lock wait: a slow holder must not starve the pool. */
 const ADMISSION_LOCK_TIMEOUT = "5s"
 const ADMISSION_RETRY_AFTER_SECONDS = 5
@@ -284,9 +298,28 @@ export class FormSubmitService {
       coerceValues(input.values),
       new Set(settings.prefillKeys),
     )
+    // s220c A2-4: a signed link names the contact; progressive profiling
+    // then hides (and never requires) what that contact already answered,
+    // recomputed here, never taken from the page.
+    const linkedContactId = await this.linkedContact(input, form.id)
+    const suppressed =
+      linkedContactId === null
+        ? undefined
+        : formProfiledOutKeys(
+            def,
+            values,
+            formProfileContext(
+              await this.contactProfile({
+                workspaceId: input.workspaceId,
+                contactId: linkedContactId,
+                form,
+              }),
+            ),
+          )
     const evaluation = evaluateForm(def, values)
     const issues = validateFormSubmission(def, values, evaluation, {
       blockedEmailDomains: settings.blockedEmailDomains ?? [],
+      suppressed,
     })
     if (issues.length > 0) {
       return { kind: "invalid", issues }
@@ -297,7 +330,9 @@ export class FormSubmitService {
       fields: [...evaluation.visibleFields],
     }
     const ipHash = hashClientIp(input.workspaceId, input.clientIp)
-    const dedupHash = sha256(`${form.id}|${canonical(pruned)}|${ipHash}`)
+    const dedupHash = sha256(
+      `${form.id}|${canonical(pruned)}|${ipHash}|${linkedContactId ?? ""}`,
+    )
 
     const duplicate = await this.findRecentDuplicate({ form, dedupHash, now })
     if (duplicate) {
@@ -328,7 +363,12 @@ export class FormSubmitService {
     let contactId: string | null = null
     let contactCreated = false
     let identityIssue: FormValidationIssue | null = null
-    if (formMapsToContact(def) && form.inboxId) {
+    if (linkedContactId !== null) {
+      // The link's contact wins over any phone / email typed in the form:
+      // those only fill its blank fields (fill-blanks below), so a forwarded
+      // link can never move a contact's identity.
+      contactId = linkedContactId
+    } else if (formMapsToContact(def) && form.inboxId) {
       let resolved: Awaited<ReturnType<FormSubmitService["resolveContact"]>>
       try {
         resolved = await this.resolveContact({
@@ -398,7 +438,12 @@ export class FormSubmitService {
                 // A contact this submission created is ours to fill; an
                 // existing contact keeps every non-blank value unless the form
                 // owner opted into overwriting (skeptic, s200).
-                fillBlanksOnly: !(contactCreated || settings.overwriteExisting),
+                // A linked contact is written blanks-only WHATEVER the form's
+                // overwriteExisting: a forwarded link must not let its holder
+                // replace the contact's data (skeptic + blind probe s220c).
+                fillBlanksOnly:
+                  linkedContactId !== null ||
+                  !(contactCreated || settings.overwriteExisting),
                 tx,
               })
         // Last, so the per-form lock is held only for count + insert +
@@ -975,6 +1020,81 @@ export class FormSubmitService {
         { type: r.type as OptionFieldType, options: r.options ?? [] },
       ]),
     )
+  }
+
+  /**
+   * The contact a signed form link names for THIS form, when it still
+   * exists in the workspace; null otherwise (an anonymous submission).
+   */
+  private async linkedContact(
+    input: Pick<SubmitFormInput, "workspaceId" | "formLinkToken">,
+    formId: string,
+  ): Promise<string | null> {
+    const contactId = await contactFromFormLink(input.formLinkToken, {
+      workspaceId: input.workspaceId,
+      formId,
+    })
+    if (contactId === null) {
+      return null
+    }
+    const contact = await db.query.contactModel.findFirst({
+      where: { id: contactId, workspaceId: input.workspaceId },
+      columns: { id: true },
+    })
+    return contact?.id ?? null
+  }
+
+  /**
+   * What progressive profiling knows about a contact for one form (s219
+   * A2-2; the web uses it since s220c A2-4, for a contact a signed form link
+   * names): the field keys whose answer the contact already holds (a set
+   * mapped contact field, or an answer in an earlier submission of this
+   * form), how many earlier submissions, and the form's question budget.
+   */
+  async contactProfile(props: {
+    workspaceId: string
+    contactId: string
+    form: Pick<NormalizedForm, "id" | "publishedDefinition" | "settings">
+    tx?: DatabaseClient
+  }): Promise<FormSessionProfile> {
+    const { workspaceId, contactId, form, tx = db } = props
+    const def = form.publishedDefinition ?? EMPTY_FORM_DEFINITION
+    const known = new Set<string>()
+    const stored = await this.storedValues({ workspaceId, contactId, def, tx })
+    for (const field of formInputFields(def)) {
+      const target = field.mapTo
+      if (
+        (target?.kind === "system" && stored.system[target.key]) ||
+        (target?.kind === "custom" && stored.custom.has(target.customFieldId))
+      ) {
+        known.add(field.key)
+      }
+    }
+    // Mautic caps the history it reads at 200 rows (FormModel.php:396).
+    const history = await tx
+      .select({ values: formSubmissionModel.values })
+      .from(formSubmissionModel)
+      .where(
+        and(
+          eq(formSubmissionModel.formId, form.id),
+          eq(formSubmissionModel.contactId, contactId),
+        ),
+      )
+      .orderBy(desc(formSubmissionModel.createdAt))
+      .limit(FORM_SESSION_HISTORY_CAP)
+    for (const row of history) {
+      const values = isPlainRecord(row.values) ? row.values : {}
+      for (const [key, value] of Object.entries(values)) {
+        if (!isEmptyFormValue(value as FormValue)) {
+          known.add(key)
+        }
+      }
+    }
+    return {
+      known: [...known],
+      priorSubmissions: history.length,
+      limit: form.settings.profilingLimit,
+    }
   }
 
   /** What the contact already holds for the mapped fields (blank = absent). Shared with FormSessionService (s219 A2-2). */

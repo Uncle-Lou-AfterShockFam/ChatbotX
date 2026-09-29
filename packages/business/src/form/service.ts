@@ -37,6 +37,7 @@ import type {
   FormModel,
   FormSubmissionModel,
 } from "@chatbotx.io/database/types"
+import { signFormLinkToken } from "@chatbotx.io/encryption/form-link-token"
 import { createId } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
 import {
@@ -287,6 +288,51 @@ export class FormService extends BaseService {
       return null
     }
     return form
+  }
+
+  /**
+   * A contact's personal link to a published web form (s220c A2-4), or null
+   * when the page would not serve the form (draft, archived, chat-only,
+   * unknown). The sealed `k` names the contact for THIS form only; the page
+   * and the submit re-verify it and never trust anything else the link says.
+   */
+  async personalLink(props: {
+    workspaceId: string
+    formId: string
+    contactId: string
+    appUrl: string
+  }): Promise<string | null> {
+    const [row] = await db
+      .select({ slug: formModel.slug })
+      .from(formModel)
+      .where(
+        and(
+          eq(formModel.id, props.formId),
+          eq(formModel.workspaceId, props.workspaceId),
+        ),
+      )
+      .limit(1)
+    if (!row) {
+      return null
+    }
+    const form = await this.findPublishedBySlug({
+      workspaceId: props.workspaceId,
+      slug: row.slug,
+    })
+    if (!form) {
+      return null
+    }
+    const token = await signFormLinkToken({
+      workspaceId: props.workspaceId,
+      formId: form.id,
+      contactId: props.contactId,
+    })
+    const url = new URL(
+      `/forms/${encodeURIComponent(props.workspaceId)}/${encodeURIComponent(form.slug)}`,
+      props.appUrl,
+    )
+    url.searchParams.set("k", token)
+    return url.toString()
   }
 
   /**

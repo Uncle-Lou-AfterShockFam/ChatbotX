@@ -357,6 +357,41 @@ const convertCardsToTemplate = (props: {
   }))
 }
 
+/** Channels whose contact identity is ONE person (a DM, an inbox, a number). */
+const PERSONAL_CHANNELS: ReadonlySet<string> = new Set([
+  channelTypes.enum.messenger,
+  channelTypes.enum.instagram,
+  channelTypes.enum.whatsapp,
+  channelTypes.enum.webchat,
+  channelTypes.enum.smtp,
+])
+/** Telegram private chats have positive ids; groups / channels negative. */
+const TELEGRAM_PRIVATE_CHAT_RE = /^[1-9]\d*$/
+/**
+ * An `api` line is only as private as its identity: one phone number
+ * (E.164, how the SMS / iMessage lines address a person) or one email
+ * address. Anything else (an adapter's group / thread id) is not.
+ */
+const API_PERSON_IDENTITY_RE =
+  /^(?:\+[1-9]\d{6,14}|[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+)$/
+
+/**
+ * s220c A2-4: may a personal (bearer) form link be sent to this destination?
+ * Fail closed: only channels addressed to one person; a Telegram contact
+ * only in a private chat; an `api` line only when its identity is one
+ * phone number or one email address (Codex review s220c). Zalo, Threads,
+ * TikTok and anything new: no.
+ */
+export const isPrivateDestination = (contactInbox: {
+  channel: string
+  sourceId: string | null
+}): boolean =>
+  PERSONAL_CHANNELS.has(contactInbox.channel) ||
+  (contactInbox.channel === channelTypes.enum.telegram &&
+    TELEGRAM_PRIVATE_CHAT_RE.test(contactInbox.sourceId ?? "")) ||
+  (contactInbox.channel === channelTypes.enum.api &&
+    API_PERSON_IDENTITY_RE.test(contactInbox.sourceId ?? ""))
+
 export async function sendFlowStep({
   conversationId,
   contactInboxId,
@@ -528,6 +563,12 @@ export async function sendFlowStep({
     {
       contactInbox: targetContactInbox,
       conversation,
+      // Personal (bearer) links only when the message reaches this contact
+      // alone (Codex reviews s220c): never a PUBLIC comment reply, never a
+      // group chat. A private comment reply is a DM to the commenter.
+      personalLinks:
+        commentAnchor?.replyChannel !== "public" &&
+        isPrivateDestination(targetContactInbox),
       ...(appointmentId ? { appointmentId } : {}),
     },
   )

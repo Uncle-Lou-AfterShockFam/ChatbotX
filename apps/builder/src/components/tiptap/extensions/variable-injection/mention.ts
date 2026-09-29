@@ -18,6 +18,7 @@ const COUPON_VARIABLE_ID_PREFIX = "coupon:"
 // rather than being half-relabeled into something even more confusing.
 const BOT_FIELD_VARIABLE_TOKEN_REGEX = /(?<!\{)\{\{bot_field:(\d+)\}\}(?!\})/g
 const BOT_FIELD_VARIABLE_ID_PREFIX = "bot_field:"
+const FORM_LINK_VARIABLE_ID_PREFIX = "form_link:"
 const TRAILING_DOUBLE_BRACE_REGEX = /\}\}$/
 
 const isCouponMentionId = (id: unknown) =>
@@ -25,6 +26,9 @@ const isCouponMentionId = (id: unknown) =>
 
 const isBotFieldMentionId = (id: unknown) =>
   typeof id === "string" && id.startsWith(BOT_FIELD_VARIABLE_ID_PREFIX)
+
+const isFormLinkMentionId = (id: unknown) =>
+  typeof id === "string" && id.startsWith(FORM_LINK_VARIABLE_ID_PREFIX)
 
 export const escapeHtml = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -49,8 +53,8 @@ export const toVariableMentionAttrs = (
 export const renderVariableMentionText: MentionRenderText = ({ node }) =>
   variableText(node.attrs.id)
 
-// Coupon and bot-field mentions carry an OPAQUE id (`coupon:<topicId>`,
-// `bot_field:<id>`) — the chip must display the human label instead; a
+// Coupon, bot-field and form-link mentions carry an OPAQUE id
+// (`coupon:<topicId>`, `bot_field:<id>`, `form_link:<formId>`) — the chip must display the human label instead; a
 // custom-field mention's id IS its name, so it displays as-is. Serialization
 // (`renderVariableMentionText` above) always keeps the id-based token.
 export const renderVariableMentionHTML: MentionRenderHTML = ({
@@ -61,7 +65,9 @@ export const renderVariableMentionHTML: MentionRenderHTML = ({
     "span",
     options.HTMLAttributes,
     variableText(
-      isCouponMentionId(node.attrs.id) || isBotFieldMentionId(node.attrs.id)
+      isCouponMentionId(node.attrs.id) ||
+        isBotFieldMentionId(node.attrs.id) ||
+        isFormLinkMentionId(node.attrs.id)
         ? (node.attrs.label ?? node.attrs.id)
         : node.attrs.id,
     ),

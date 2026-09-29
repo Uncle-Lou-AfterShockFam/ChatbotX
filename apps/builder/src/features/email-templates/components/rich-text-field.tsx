@@ -99,7 +99,7 @@ export function RichTextField({
   const t = useTranslations("emailTemplates.editor")
   const [linkOpen, setLinkOpen] = useState(false)
   const [linkUrl, setLinkUrl] = useState("")
-  const options = usePromptVariableOptions({})
+  const options = usePromptVariableOptions({ includeFormLinkVariables: true })
   const optionsRef = useRef(options)
   useEffect(() => {
     optionsRef.current = options

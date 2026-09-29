@@ -114,6 +114,15 @@ describe("POST /api/forms/{ws}/{slug}/submit", () => {
     )
   })
 
+  test("a signed link's k rides to the pipeline untouched; an oversized k is a 400 (s220c A2-4)", async () => {
+    await post({ values: {}, k: "sealed-token" })
+    expect(m.submit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ formLinkToken: "sealed-token" }),
+    )
+    const res = await post({ values: {}, k: "x".repeat(5000) })
+    expect(res.status).toBe(400)
+  })
+
   test("a filled honeypot is passed as honeypotFilled", async () => {
     await post({ values: {}, website: "http://spam" })
     expect(m.submit).toHaveBeenCalledWith(

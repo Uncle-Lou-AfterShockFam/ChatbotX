@@ -4986,6 +4986,9 @@
     },
     "publishWarnings": {
       "noContact": "No field writes to a contact: submissions are stored, but triggers and flows cannot react to them."
+    },
+    "variables": {
+      "group": "Link ai moduli (personali)"
     }
   },
   "questionnaires": {

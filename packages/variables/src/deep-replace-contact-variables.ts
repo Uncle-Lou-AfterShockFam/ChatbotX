@@ -75,6 +75,8 @@ export const resolveContactVariablesDeep = async <T>(
     conversation?: ConversationModel | null
     workspace?: WorkspaceModel
     appointmentId?: string
+    /** Direct sends to this contact only (see ContactVariableContext). */
+    personalLinks?: boolean
   },
 ): Promise<T> => {
   if (!valueContainsVariablePlaceholder(value)) {

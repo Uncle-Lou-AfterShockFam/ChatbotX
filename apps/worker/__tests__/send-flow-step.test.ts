@@ -1090,6 +1090,27 @@ describe("sendFlowStep", () => {
     expect(mockCreateMessageRepository).not.toHaveBeenCalled()
   })
 
+  test("personal form links: minted for a DM / private reply, NEVER for a public comment reply (s220c)", async () => {
+    const optIn = () =>
+      (
+        mockResolveContactVariables.mock.calls.at(-1)?.[2] as {
+          personalLinks?: boolean
+        }
+      )?.personalLinks
+    await sendFlowStep({ ...baseParams })
+    expect(optIn()).toBe(true)
+    await sendFlowStep({
+      ...baseParams,
+      commentAnchor: { commentId: "comment-1", replyChannel: "private" },
+    })
+    expect(optIn()).toBe(true)
+    await sendFlowStep({
+      ...baseParams,
+      commentAnchor: { commentId: "comment-1", replyChannel: "public" },
+    })
+    expect(optIn()).toBe(false)
+  })
+
   test("forwards a private commentAnchor to sendFlowStepToChannel when the resolved contactInbox is messenger", async () => {
     await sendFlowStep({
       ...baseParams,
@@ -1280,5 +1301,51 @@ describe("sendChatMessage", () => {
         text: "https://storage.googleapis.com/private/image.png",
       }),
     )
+  })
+})
+
+describe("isPrivateDestination (s220c personal form links)", () => {
+  test("person channels yes; Telegram private chats and one-person api identities only; the rest no", async () => {
+    const { isPrivateDestination } = await import(
+      "../src/chat/handlers/send-flow-step"
+    )
+    const ok = (channel: string, sourceId: string | null) =>
+      isPrivateDestination({ channel, sourceId })
+    for (const channel of [
+      "messenger",
+      "instagram",
+      "whatsapp",
+      "webchat",
+      "smtp",
+    ]) {
+      expect(ok(channel, "x")).toBe(true)
+    }
+    // Telegram: a positive id is a private chat; a group / channel is negative
+    expect(ok("telegram", "123456789")).toBe(true)
+    for (const id of ["-1001234567890", "0", "000", "", null]) {
+      expect(ok("telegram", id)).toBe(false)
+    }
+    // api lines: one E.164 number or one email address (the bulktext lines)
+    expect(ok("api", "+12154075123")).toBe(true)
+    expect(ok("api", "jane@example.com")).toBe(true)
+    for (const id of [
+      "group-42",
+      "chat:123",
+      "+1",
+      "a@b.com,c@d.com",
+      "12154075123",
+      null,
+    ]) {
+      expect(ok("api", id)).toBe(false)
+    }
+    for (const channel of [
+      "zalo",
+      "threads",
+      "tiktok",
+      "omnichannel",
+      "something-new",
+    ]) {
+      expect(ok(channel, "1")).toBe(false)
+    }
   })
 })

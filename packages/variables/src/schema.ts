@@ -24,6 +24,14 @@ export type ContactVariableContext = {
   conversation?: ConversationModel | null
   appointmentId?: string
   workspace: WorkspaceModel | null
+  /**
+   * s220c A2-4: mint per-contact bearer links (`{{form_link:<formId>}}`).
+   * ONLY a direct send to this contact opts in (a flow message step, an
+   * email); every other consumer (public comment replies, Sheets, AI
+   * prompts, HTTP / webhook steps, conditions) renders them empty, so a live
+   * token never lands in a public or third-party payload.
+   */
+  personalLinks?: boolean
 }
 
 export type ReplaceVariableProps = ContactVariableContext & {

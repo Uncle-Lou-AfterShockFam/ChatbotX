@@ -24,6 +24,7 @@
     "./appointment-schedule-token": "./src/appointment-schedule-token.ts",
     "./appointment-webview-token": "./src/appointment-webview-token.ts",
     "./dynamic-image-token": "./src/dynamic-image-token.ts",
+    "./form-link-token": "./src/form-link-token.ts",
     "./keys": "./src/keys.ts",
     "./minigame-play-token": "./src/minigame-play-token.ts",
     "./quickbooks-oauth-state": "./src/quickbooks-oauth-state.ts",
