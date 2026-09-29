@@ -169,6 +169,37 @@ describe.skipIf(!databaseUrl)("smart delay claim CAS on real Postgres", () => {
     )
   })
 
+  test("a row the TIMEOUT claimed, failed and requeued is never claimed by an event (s220 A2-3)", async () => {
+    const id = await insertRow({ status: "scheduled" })
+    const timeout = await smartDelayService.claimRunning({ id })
+    expect(timeout?.nodeId).toBe("timeout-edge")
+    // The timeout edge ran side effects, then threw: back to scheduled.
+    expect(
+      await smartDelayService.requeueClaimedRun({
+        id,
+        generation: timeout?.claimGeneration ?? -1,
+      }),
+    ).toBe("scheduled")
+    expect(await smartDelayService.claimForEvent({ id })).toBeNull()
+    const row = await readRow(id)
+    expect(row).toMatchObject({ status: "scheduled", nodeId: "timeout-edge" })
+    // Its own retry still owns it.
+    expect(await smartDelayService.claimRunning({ id })).not.toBeNull()
+  })
+
+  test("a row the EVENT claimed and requeued stays claimable by a later event (same edge)", async () => {
+    const id = await insertRow({ status: "scheduled" })
+    const first = await smartDelayService.claimForEvent({ id })
+    expect(first?.nodeId).toBe("event-edge")
+    await smartDelayService.requeueClaimedRun({
+      id,
+      generation: first?.claimGeneration ?? -1,
+    })
+    const again = await smartDelayService.claimForEvent({ id })
+    expect(again?.nodeId).toBe("event-edge")
+    expect(again?.claimGeneration).toBe(2)
+  })
+
   test("a claim blocked on the winner's row lock re-checks and loses after commit", async () => {
     const id = await insertRow({ status: "scheduled" })
     let releaseWinner: () => void = () => undefined

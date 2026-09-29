@@ -642,6 +642,7 @@ export class FormSessionService {
       askedCount: readAsked(claimed.asked).length,
       conversationId: claimed.conversationId,
       flowId: claimed.flowId,
+      occurredAt: (claimed.endedAt ?? now).toISOString(),
     }).catch((error: unknown) =>
       logger.warn(
         { err: error, formSessionId: claimed.id },

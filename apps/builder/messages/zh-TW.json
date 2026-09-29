@@ -2851,6 +2851,9 @@
       "eventTypeLabel": "Wait for",
       "eventTagApplied": "A tag is applied",
       "eventCustomFieldChanged": "A custom field changes",
+      "eventFormSubmitted": "A form is submitted",
+      "eventFormAbandoned": "A chat form is abandoned",
+      "eventFormLabel": "Form",
       "eventTagLabel": "Tag",
       "eventCustomFieldLabel": "Custom field",
       "eventMatchValueLabel": "Only when it changes to",
@@ -2859,6 +2862,8 @@
       "eventTimeoutLabel": "Give up after",
       "eventDetailTag": "Wait until tag",
       "eventDetailCustomField": "Wait until field",
+      "eventDetailFormSubmitted": "Wait until submitted",
+      "eventDetailFormAbandoned": "Wait until abandoned",
       "eventDetailTimeout": "or after",
       "eventStateEvent": "Event",
       "eventStateTimeout": "Timeout"

@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  isWaitFormEventType,
   type WaitStepSchema,
   waitStepDateTypes,
   waitStepDelayTypes,
@@ -9,6 +10,7 @@ import {
 } from "@chatbotx.io/flow-config"
 import { useFormatter, useTranslations } from "next-intl"
 import { useCustomFieldStore } from "@/features/custom-fields/provider/custom-field-store-context"
+import { useFormOptions } from "@/features/forms/provider/form-hooks"
 import { useTagSelectOptions } from "@/features/tags/provider/tag-hook"
 import { BaseStateViewer } from "../../states/viewer"
 
@@ -24,6 +26,7 @@ const WaitStepViewer = (props: WaitStepViewerProps) => {
   const { customFields } = useCustomFieldStore((state) => state)
 
   const tagOptions = useTagSelectOptions()
+  const formOptions = useFormOptions()
 
   const customField =
     data.delayType === waitStepDelayTypes.enum.date &&
@@ -32,17 +35,26 @@ const WaitStepViewer = (props: WaitStepViewerProps) => {
       : undefined
 
   if (data.delayType === waitStepDelayTypes.enum.event) {
-    const target =
-      data.eventType === waitStepEventTypes.enum.tagApplied
-        ? (tagOptions.find((tag) => tag.value === data.tagId)?.label ?? "")
-        : (customFields.find((obj) => obj.id === data.customFieldId)?.name ??
-          "")
+    const isForm = isWaitFormEventType(data.eventType)
+    let target = ""
+    let detail = t("flows.wait.eventDetailCustomField")
+    if (data.eventType === waitStepEventTypes.enum.tagApplied) {
+      target = tagOptions.find((tag) => tag.value === data.tagId)?.label ?? ""
+      detail = t("flows.wait.eventDetailTag")
+    } else if (isForm) {
+      target = formOptions.find((f) => f.value === data.formId)?.label ?? ""
+      detail =
+        data.eventType === waitStepEventTypes.enum.formSubmitted
+          ? t("flows.wait.eventDetailFormSubmitted")
+          : t("flows.wait.eventDetailFormAbandoned")
+    } else {
+      target =
+        customFields.find((obj) => obj.id === data.customFieldId)?.name ?? ""
+    }
     return (
       <div className="flex w-full flex-col gap-2 py-0 text-sm">
         <div className="text-center">
-          {data.eventType === waitStepEventTypes.enum.tagApplied
-            ? t("flows.wait.eventDetailTag")
-            : t("flows.wait.eventDetailCustomField")}{" "}
+          {detail}{" "}
           <span className="rounded-full py-1 font-medium text-primary text-sm">
             {target}
           </span>

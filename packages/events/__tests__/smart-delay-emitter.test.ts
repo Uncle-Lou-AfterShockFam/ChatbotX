@@ -110,3 +110,75 @@ describe("SmartDelayEventEmitter", () => {
     expect(mocks.enqueueIntegrationJob).not.toHaveBeenCalled()
   })
 })
+
+describe("SmartDelayEventEmitter: form events (s220 A2-3)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const submitted = {
+    formId: "form-1",
+    formSlug: "intake",
+    submissionId: "sub-1",
+    definitionVersion: 1,
+    values: { email: "a@example.com" },
+  }
+
+  test("formSubmitted enqueues with the form id only (never the answers)", async () => {
+    await SmartDelayEventEmitter.formSubmitted("ws-1", "contact-1", submitted)
+    expect(mocks.enqueueIntegrationJob.mock.calls[0]?.[0]).toEqual({
+      type: "resumeWaitForEvent",
+      data: {
+        reason: "event",
+        workspaceId: "ws-1",
+        contactId: "contact-1",
+        eventType: "formSubmitted",
+        formId: "form-1",
+        emittedAt: expect.any(String),
+      },
+    })
+  })
+
+  test("formAbandoned enqueues with the form id", async () => {
+    await SmartDelayEventEmitter.formAbandoned("ws-1", "contact-1", {
+      formId: "form-2",
+      formSessionId: "fs-1",
+      channel: "chat",
+      reason: "timeout",
+      lastFieldKey: null,
+      askedCount: 0,
+      conversationId: "conv-1",
+      flowId: "flow-1",
+    })
+    expect(mocks.enqueueIntegrationJob.mock.calls[0]?.[0]).toMatchObject({
+      data: { eventType: "formAbandoned", formId: "form-2" },
+    })
+  })
+
+  test("a form event without a form id is ignored", async () => {
+    await SmartDelayEventEmitter.formSubmitted("ws-1", "contact-1", {
+      ...submitted,
+      formId: "",
+    })
+    expect(mocks.enqueueIntegrationJob).not.toHaveBeenCalled()
+  })
+
+  test("a form event's occurredAt is the stale-guard instant, not the emit time", async () => {
+    await SmartDelayEventEmitter.formSubmitted("ws-1", "contact-1", {
+      ...submitted,
+      occurredAt: "2026-09-29T01:02:03.000Z",
+    })
+    await SmartDelayEventEmitter.formSubmitted("ws-1", "contact-1", {
+      ...submitted,
+      occurredAt: "not-a-date",
+    })
+    const stamps = mocks.enqueueIntegrationJob.mock.calls.map(
+      (call) => (call[0] as { data: { emittedAt: string } }).data.emittedAt,
+    )
+    expect(stamps[0]).toBe("2026-09-29T01:02:03.000Z")
+    // A malformed instant falls back to now (never undefined).
+    expect(Date.parse(stamps[1] ?? "")).toBeGreaterThan(
+      Date.parse("2026-09-29T01:02:03.000Z"),
+    )
+  })
+})

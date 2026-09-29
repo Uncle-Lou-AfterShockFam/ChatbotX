@@ -2,8 +2,10 @@
 
 import {
   delayTypeEventDefaultFn,
+  isWaitFormEventType,
   waitStepEventTypes,
 } from "@chatbotx.io/flow-config"
+import { ComboboxField } from "@chatbotx.io/ui/components/form/combobox-field"
 import { InputField } from "@chatbotx.io/ui/components/form/input-field"
 import { InputNumberField } from "@chatbotx.io/ui/components/form/input-number-field"
 import { SelectField } from "@chatbotx.io/ui/components/form/select-field"
@@ -14,6 +16,7 @@ import { useFormContext, useWatch } from "react-hook-form"
 import { FieldValuePickerPopover } from "@/features/custom-fields/components/field-value-picker-popover"
 import { CustomFieldSelect } from "@/features/custom-fields/custom-field-select"
 import { useCustomFieldStore } from "@/features/custom-fields/provider/custom-field-store-context"
+import { useFormOptions } from "@/features/forms/provider/form-hooks"
 import { useTagSelectOptions } from "@/features/tags/provider/tag-hook"
 import DelayUnitSelect from "./delay-unit-select"
 
@@ -23,7 +26,8 @@ type EventDelayEditorProps = {
 
 /**
  * `event` wait: park the run until a tag is applied / a custom field changes
- * on the contact, or the timeout fires (the step's success / skip exits).
+ * on the contact / one form is submitted or its chat run abandoned, or the
+ * timeout fires (the step's success / skip exits).
  */
 export function EventDelayEditor({ parentName }: EventDelayEditorProps) {
   const t = useTranslations()
@@ -31,6 +35,7 @@ export function EventDelayEditor({ parentName }: EventDelayEditorProps) {
   const eventType = useWatch({ name: `${parentName}.eventType` })
   const customFieldId = useWatch({ name: `${parentName}.customFieldId` })
   const tagOptions = useTagSelectOptions()
+  const formOptions = useFormOptions()
   // s203: a select / multiSelect match value is picked from the options; the
   // resume check compares the stored text exactly, so a multiSelect match is
   // "the new value is exactly this set" (canonical JSON, written by the picker).
@@ -60,6 +65,14 @@ export function EventDelayEditor({ parentName }: EventDelayEditorProps) {
     {
       value: waitStepEventTypes.enum.customFieldChanged,
       label: t("flows.wait.eventCustomFieldChanged"),
+    },
+    {
+      value: waitStepEventTypes.enum.formSubmitted,
+      label: t("flows.wait.eventFormSubmitted"),
+    },
+    {
+      value: waitStepEventTypes.enum.formAbandoned,
+      label: t("flows.wait.eventFormAbandoned"),
     },
   ]
 
@@ -109,6 +122,17 @@ export function EventDelayEditor({ parentName }: EventDelayEditorProps) {
             />
           )}
         </>
+      )}
+
+      {isWaitFormEventType(eventType) && (
+        <ComboboxField
+          emptyText={t("forms.empty")}
+          label={t("flows.wait.eventFormLabel")}
+          name={`${parentName}.formId`}
+          options={formOptions}
+          placeholder={t("forms.singular")}
+          popoverClassName="w-[var(--anchor-width)]"
+        />
       )}
 
       <div className="space-y-2">

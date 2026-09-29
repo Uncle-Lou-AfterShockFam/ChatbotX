@@ -53,6 +53,11 @@ export const REFERENCE_FIELD_ENTITY_KIND: Record<string, string> = {
   pipelineId: "pipeline",
   stageId: "pipelineStage",
   templateId: "dealTaskTemplate",
+  // Forms (s219 askForm, s220 wait on a form event). There is no forms
+  // template adapter yet: a copied flow keeps the source id, so the export
+  // and the install at least WARN instead of silently pinning another
+  // workspace's form (skeptic, s220 A2-3).
+  formId: "form",
 }
 
 // `flowId` shows up both as a cross-flow jump target (steps/start-external-flow.ts,

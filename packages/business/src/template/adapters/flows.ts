@@ -37,6 +37,8 @@ const FLOW_INSERT_KINDS = [
   "aiFunction",
   "aiFile",
   "aiMcpServer",
+  // No forms adapter yet: an unresolved form id is a warning, never silent (s220).
+  "form",
 ]
 
 // `trigger` cannot be in `FLOW_INSERT_KINDS`: `triggers` inserts *after*

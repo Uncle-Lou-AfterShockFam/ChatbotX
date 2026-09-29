@@ -217,3 +217,59 @@ describe("wait step: event matchValue", () => {
     ).toBe("3635")
   })
 })
+
+describe("wait step: form events (s220 A2-3)", () => {
+  const formStep = (extra: Record<string, unknown> = {}) =>
+    eventStep({ tagId: "", eventType: "formSubmitted", ...extra })
+
+  test("a form wait needs a form; a tag is not required", () => {
+    expect(
+      waitStepSchema.safeParse(formStep({ formId: "form-1" })).success,
+    ).toBe(true)
+    const missing = waitStepSchema.safeParse(formStep())
+    expect(missing.success).toBe(false)
+    expect(missing.error?.issues.map((i) => i.path.join("."))).toContain(
+      "formId",
+    )
+    expect(
+      waitStepSchema.safeParse(
+        formStep({ eventType: "formAbandoned", formId: "form-1" }),
+      ).success,
+    ).toBe(true)
+  })
+
+  test("a form wait cannot carry a matchValue", () => {
+    const parsed = waitStepSchema.safeParse(
+      formStep({ formId: "form-1", matchValue: "x" }),
+    )
+    expect(parsed.success).toBe(false)
+  })
+
+  test("the stored spec carries only the form id", () => {
+    const parsed = waitStepSchema.parse(
+      formStep({ formId: "form-1", customFieldId: "cf-9" }),
+    )
+    expect(waitForEventSpecFromStep(parsed)).toEqual({
+      eventType: "formSubmitted",
+      formId: "form-1",
+    })
+    expect(
+      waitForEventSpecSchema.safeParse({
+        eventType: "formAbandoned",
+        formId: "f",
+      }).success,
+    ).toBe(true)
+  })
+
+  test("an old saved event step (no formId key) still parses", () => {
+    const { formId: _drop, ...old } = delayTypeEventDefaultFn()
+    const parsed = waitStepSchema.safeParse({
+      ...base,
+      delayType: "event",
+      ...old,
+      tagId: "tag-1",
+    })
+    expect(parsed.success).toBe(true)
+    expect(waitStepEventTypes.options).toContain("formAbandoned")
+  })
+})

@@ -885,6 +885,7 @@ export class FormSubmitService {
       channel: submission.channel,
       conversationId: submission.conversationId ?? null,
       score: submission.score ?? null,
+      occurredAt: submission.createdAt.toISOString(),
     }).catch(warn("formSubmitted event"))
   }
 }

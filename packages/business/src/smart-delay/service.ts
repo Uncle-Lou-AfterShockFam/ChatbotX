@@ -8,6 +8,7 @@ import {
   isNotNull,
   lt,
   lte,
+  or,
   sql,
 } from "@chatbotx.io/database/client"
 import {
@@ -430,6 +431,10 @@ class SmartDelayService extends BaseService {
    * The SAME update re-points the row at its event edge and makes it due now,
    * so whatever resumes it later (this run, a retry, the stuck-running sweep
    * -> scanner -> timeout job) runs the edge that actually fired; no re-read.
+   * A row the TIMEOUT already claimed (generation > 0, still on its timeout
+   * edge) is never claimable here: its edge may have run side effects before
+   * it failed and was requeued, and the event edge running after it would
+   * give one wait both outcomes (Codex probe, s220 A2-3).
    */
   async claimForEvent(props: {
     tx?: DatabaseClient
@@ -454,6 +459,10 @@ class SmartDelayService extends BaseService {
             smartDelayStatuses.enum.pending,
             smartDelayStatuses.enum.scheduled,
           ]),
+          or(
+            eq(contactOnSmartDelayModel.claimGeneration, 0),
+            sql`${contactOnSmartDelayModel.nodeId} IS NOT DISTINCT FROM ${contactOnSmartDelayModel.eventNodeId}`,
+          ),
         ),
       )
       .returning()

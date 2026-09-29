@@ -190,6 +190,7 @@ import {
 } from "../src/form/submit"
 
 const SUB_ID_RE = /^sub-\d+$/
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T/
 const WS = "11701868563365888"
 const NOW = new Date("2026-09-25T17:00:00Z")
 const DEF = {
@@ -527,6 +528,8 @@ describe("formSubmitService.submit (s200)", () => {
       channel: "web",
       conversationId: null,
       score: null,
+      // s220 A2-3: the stale-guard instant of a wait on this form
+      occurredAt: expect.stringMatching(ISO_RE),
     })
     expect(m.state.inserted[0]).toMatchObject({
       channel: "web",

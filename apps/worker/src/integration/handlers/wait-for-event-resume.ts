@@ -8,6 +8,7 @@ import {
 } from "@chatbotx.io/database/partials"
 import {
   buildJobId,
+  isWaitFormEventType,
   type WaitForEventSpec,
   waitForEventSpecSchema,
   waitStepEventTypes,
@@ -117,6 +118,9 @@ export const eventMatchesSpec = (
   }
   if (spec.eventType === waitStepEventTypes.enum.tagApplied) {
     return Boolean(spec.tagId) && spec.tagId === event.tagId
+  }
+  if (isWaitFormEventType(spec.eventType)) {
+    return Boolean(spec.formId) && spec.formId === event.formId
   }
   if (!spec.customFieldId || spec.customFieldId !== event.customFieldId) {
     return false
