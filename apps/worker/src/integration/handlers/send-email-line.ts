@@ -17,6 +17,7 @@ export const LINE_EMAIL_LIMITS = {
   subject: 200,
   htmlBytes: 512 * 1024,
   textBytes: 128 * 1024,
+  threadKeys: 20,
 } as const
 
 /**
@@ -81,18 +82,39 @@ export async function resolveEmailLine(props: {
 export async function buildLineEmail(props: {
   appUrl: string
   subject: string
-  html: string
+  /** Absent for a `text` mail (s225b): the line refuses html there. */
+  html?: string
   text: string
   headers: Record<string, string>
   attachments: MailAttachment[]
+  format?: "html" | "text"
+  messageKey?: string
+  threadKeys?: string[]
 }): Promise<LineEmail> {
+  const format = props.format ?? "html"
+  if (format === "html" && typeof props.html !== "string") {
+    throw new EmailContentError("an html line mail needs its html body")
+  }
+  if (format === "text" && props.text.trim() === "") {
+    throw new EmailContentError("a plain-text line mail needs a text body")
+  }
+  const threadKeys = props.threadKeys ?? []
+  if (threadKeys.length > 0 && !props.messageKey) {
+    throw new EmailContentError("a threaded line mail needs its own messageKey")
+  }
+  if (threadKeys.length > LINE_EMAIL_LIMITS.threadKeys) {
+    throw new EmailContentError(
+      `a line mail threads under at most ${LINE_EMAIL_LIMITS.threadKeys} earlier mails`,
+    )
+  }
   const subject = props.subject.replace(CONTROL_CHARS, " ").trim()
   if (subject === "" || subject.length > LINE_EMAIL_LIMITS.subject) {
     throw new EmailContentError(
       `the subject must be 1..${LINE_EMAIL_LIMITS.subject} characters for the email line`,
     )
   }
-  if (Buffer.byteLength(props.html, "utf8") > LINE_EMAIL_LIMITS.htmlBytes) {
+  const html = format === "html" ? (props.html as string) : ""
+  if (Buffer.byteLength(html, "utf8") > LINE_EMAIL_LIMITS.htmlBytes) {
     throw new EmailContentError(
       `the rendered email exceeds ${LINE_EMAIL_LIMITS.htmlBytes} bytes, the email line's cap`,
     )
@@ -123,11 +145,15 @@ export async function buildLineEmail(props: {
       }
     }),
   )
+  // A text mail carries no html key at all, and the html shape stays
+  // byte-identical to before (no format / key fields) when unthreaded.
   return {
+    ...(format === "text" ? { format } : { html }),
     subject,
-    html: props.html,
     text: props.text,
     headers: props.headers,
+    ...(props.messageKey ? { messageKey: props.messageKey } : {}),
+    ...(threadKeys.length > 0 ? { threadKeys } : {}),
     attachments,
   }
 }

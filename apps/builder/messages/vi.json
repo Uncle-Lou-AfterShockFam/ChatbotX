@@ -7718,7 +7718,11 @@
       "line": "Kênh email (bulktext)",
       "lineHint": "Gửi qua kênh này thay vì SMTP. Kênh gửi tới địa chỉ của liên hệ trên kênh, từ địa chỉ riêng của kênh.",
       "lineNone": "Không (gửi qua SMTP)",
-      "noLines": "Chưa có hộp thư kênh API nào."
+      "noLines": "Chưa có hộp thư kênh API nào.",
+      "format": "Định dạng",
+      "formatHtml": "HTML (bản tin)",
+      "formatText": "Văn bản thuần (ghi chú cá nhân)",
+      "formatHint": "Văn bản thuần không có pixel mở thư hay liên kết theo dõi; trong một chuỗi, mỗi bước văn bản trả lời trong một luồng dưới email đầu tiên."
     }
   },
   "emailSuppression": {

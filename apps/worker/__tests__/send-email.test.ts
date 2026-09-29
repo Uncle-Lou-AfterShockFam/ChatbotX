@@ -97,6 +97,12 @@ const buildLineEmailMock = vi.fn()
 vi.mock("../src/integration/handlers/send-email-line", () => ({
   resolveEmailLine: (...args: unknown[]) => resolveEmailLineMock(...args),
   buildLineEmail: (...args: unknown[]) => buildLineEmailMock(...args),
+  LINE_EMAIL_LIMITS: {
+    subject: 200,
+    htmlBytes: 524_288,
+    textBytes: 131_072,
+    threadKeys: 20,
+  },
 }))
 const lineRunAction = vi.fn()
 const resolveLineContext = vi.fn()
@@ -110,6 +116,18 @@ const isSuppressedMock = vi.fn()
 vi.mock("@chatbotx.io/business/email-suppression", () => ({
   emailSuppressionService: {
     isSuppressed: (...args: unknown[]) => isSuppressedMock(...args),
+  },
+}))
+
+// s225b: the sequence thread store (its SQL is covered by the business real-DB suite).
+const threadFind = vi.fn()
+const threadRecord = vi.fn()
+const threadClaim = vi.fn()
+vi.mock("@chatbotx.io/business/email-thread", () => ({
+  emailThreadService: {
+    find: (...args: unknown[]) => threadFind(...args),
+    recordSent: (...args: unknown[]) => threadRecord(...args),
+    claimRoot: (...args: unknown[]) => threadClaim(...args),
   },
 }))
 
@@ -474,6 +492,7 @@ describe("s221b skeptic HIGH: document reads happen before the tracking row", ()
 })
 
 const UUID_REF = /^email:u:[0-9a-f-]{36}$/
+const MINTED_KEY = /^bt\.[A-Za-z0-9_-]{20}$/
 
 describe("s222b B2 phase 4: a step with an email line sends through bulktext, not SMTP", () => {
   const lineStep = { lineInboxId: "line-1", templateId: "77", elements: [] }
@@ -514,6 +533,7 @@ describe("s222b B2 phase 4: a step with an email line sends through bulktext, no
         "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
       },
       attachments: [],
+      format: "html",
     })
     expect(resolveLineContext).toHaveBeenCalledWith({
       workspaceId: "ws-1",
@@ -788,5 +808,243 @@ describe("s224b outreach B-1: a suppressed recipient is never handed off", () =>
     await sendEmail(makeProps() as never)
     expect(runAction).toHaveBeenCalledOnce()
     expect(markDelivered).toHaveBeenCalledWith("test-token-xyz")
+  })
+})
+
+describe("s225b outreach B-1: a text step on a line is text/plain, untracked, and threads inside a sequence", () => {
+  const textStep = {
+    lineInboxId: "line-1",
+    templateId: "77",
+    elements: [],
+    format: "text",
+  }
+  const seqMeta = {
+    type: "sequenceSchedule",
+    sequenceId: "555",
+    sequenceStepId: "1",
+    dispatchId: "d",
+    contactInboxId: "ci-1",
+  }
+  const props = (
+    step: Record<string, unknown>,
+    metadata: unknown = seqMeta,
+  ) => ({ ...makeProps(step), metadata })
+  const ref = { workspaceId: "ws-1", contactId: "contact-1", sequenceId: "555" }
+
+  beforeEach(() => {
+    for (const m of [threadFind, threadRecord, threadClaim]) {
+      m.mockReset()
+    }
+    threadFind.mockResolvedValue(null)
+    threadRecord.mockResolvedValue({ id: "t-1" })
+    threadClaim.mockResolvedValue({ id: "t-1" })
+    buildLineEmailMock.mockClear()
+    lineRunAction.mockClear()
+    markFailed.mockClear()
+    renderStepDocumentMock.mockReset()
+    renderStepDocumentMock.mockResolvedValue({
+      html: "<p>doc</p>",
+      text: "doc",
+      attachments: [],
+    })
+  })
+
+  test("the first step: rendered WITHOUT a token (no pixel, no signed links), no html to the line, a fresh key that CLAIMS the root before the queue", async () => {
+    await sendEmail(props(textStep) as never)
+    expect(renderStepDocumentMock).toHaveBeenCalledWith(
+      expect.objectContaining({ token: undefined }),
+    )
+    // The tracking row still exists: the line's status settles it.
+    expect(lineRunAction.mock.calls[0]?.[1]).toMatchObject({
+      ref: "email:t:test-token-xyz",
+    })
+    const mail = buildLineEmailMock.mock.calls[0]?.[0]
+    expect(mail).toMatchObject({
+      format: "text",
+      html: undefined,
+      text: "doc",
+      subject: "Hello",
+      threadKeys: [],
+    })
+    expect(mail.messageKey).toMatch(MINTED_KEY)
+    expect(threadClaim).toHaveBeenCalledWith({
+      ...ref,
+      lineInboxId: "line-1",
+      subject: "Hello",
+      key: mail.messageKey,
+    })
+    expect(threadClaim.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
+      lineRunAction.mock.invocationCallOrder[0] ?? 0,
+    )
+    // The root is already stored: neither recorded again nor released.
+    expect(threadRecord).not.toHaveBeenCalled()
+  })
+
+  test("a follow-up replies under the thread (Re: <first subject>, References = stored keys) and is recorded after the queue", async () => {
+    threadFind.mockResolvedValue({
+      id: "t-1",
+      lineInboxId: "line-1",
+      subject: "Saturday",
+      keys: ["bt.root-000001", "bt.two-0000001"],
+    })
+    await sendEmail(props({ ...textStep, subject: "step 2 subject" }) as never)
+    const mail = buildLineEmailMock.mock.calls[0]?.[0]
+    expect(mail).toMatchObject({
+      subject: "Re: Saturday",
+      threadKeys: ["bt.root-000001", "bt.two-0000001"],
+      format: "text",
+    })
+    expect(mail.messageKey).not.toBe("bt.root-000001")
+    expect(threadClaim).not.toHaveBeenCalled()
+    expect(threadRecord).toHaveBeenCalledWith({
+      ...ref,
+      lineInboxId: "line-1",
+      subject: "step 2 subject",
+      key: mail.messageKey,
+    })
+  })
+
+  test("losing the root race (claim returns null) follows up under the winner instead of starting a second thread", async () => {
+    threadFind.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: "t-1",
+      lineInboxId: "line-1",
+      subject: "Winner",
+      keys: ["bt.winner-00001"],
+    })
+    threadClaim.mockResolvedValueOnce(null)
+    await sendEmail(props(textStep) as never)
+    expect(buildLineEmailMock.mock.calls[0]?.[0]).toMatchObject({
+      subject: "Re: Winner",
+      threadKeys: ["bt.winner-00001"],
+    })
+    expect(threadRecord).toHaveBeenCalledOnce()
+  })
+
+  test("a thread on ANOTHER line (found, or won by a racing send) fails closed: counted, failed, nothing queued or recorded", async () => {
+    threadFind.mockResolvedValue({
+      id: "t-1",
+      lineInboxId: "line-9",
+      subject: "s",
+      keys: ["bt.root-000001"],
+    })
+    await sendEmail(props(textStep) as never)
+    threadFind.mockReset()
+    threadFind.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: "t-1",
+      lineInboxId: "line-9",
+      subject: "s",
+      keys: ["bt.winner-00001"],
+    })
+    threadClaim.mockResolvedValueOnce(null)
+    await sendEmail(props(textStep) as never)
+    expect(markFailed).toHaveBeenCalledTimes(2)
+    expect(buildLineEmailMock).not.toHaveBeenCalled()
+    expect(lineRunAction).not.toHaveBeenCalled()
+    expect(threadRecord).not.toHaveBeenCalled()
+  })
+
+  test("a stored key that is not a hub key fails closed too", async () => {
+    threadFind.mockResolvedValue({
+      id: "t-1",
+      lineInboxId: "line-1",
+      subject: "s",
+      keys: ["x@evil.example"],
+    })
+    await sendEmail(props(textStep) as never)
+    expect(buildLineEmailMock).not.toHaveBeenCalled()
+    expect(markFailed).toHaveBeenCalled()
+  })
+
+  test("a claimed root whose mail never queues is KEPT (no release race); a failed send never throws past the tracking row", async () => {
+    lineRunAction.mockRejectedValueOnce(new Error("outbox down"))
+    await expect(sendEmail(props(textStep) as never)).resolves.toBeUndefined()
+    expect(threadClaim).toHaveBeenCalledOnce()
+    expect(markFailed).toHaveBeenCalledWith("test-token-xyz")
+    expect(threadRecord).not.toHaveBeenCalled()
+  })
+
+  test("a follow-up whose queue fails records nothing; a failed thread write never fails a queued send", async () => {
+    threadFind.mockResolvedValue({
+      id: "t-1",
+      lineInboxId: "line-1",
+      subject: "s",
+      keys: ["bt.root-000001"],
+    })
+    lineRunAction.mockRejectedValueOnce(new Error("outbox down"))
+    await sendEmail(props(textStep) as never)
+    expect(threadRecord).not.toHaveBeenCalled()
+    markFailed.mockClear()
+    threadRecord.mockRejectedValueOnce(new Error("pg down"))
+    await expect(sendEmail(props(textStep) as never)).resolves.toBeUndefined()
+    expect(markFailed).not.toHaveBeenCalled()
+  })
+
+  test("a retried job (same dispatch + step) reuses its key: the replay gets its first headers and never releases the root", async () => {
+    await sendEmail(props({ ...textStep, id: "step-9" }) as never)
+    const first = buildLineEmailMock.mock.calls[0]?.[0]
+    // Same job again, now that its root is stored: same key, root headers.
+    threadFind.mockResolvedValue({
+      id: "t-1",
+      lineInboxId: "line-1",
+      subject: "Hello",
+      keys: [first.messageKey, "bt.later-000001"],
+    })
+    lineRunAction.mockRejectedValueOnce(new Error("outbox down"))
+    await sendEmail(props({ ...textStep, id: "step-9" }) as never)
+    const replay = buildLineEmailMock.mock.calls[1]?.[0]
+    expect(replay).toMatchObject({
+      messageKey: first.messageKey,
+      threadKeys: [],
+      subject: "Hello",
+    })
+    // Another dispatch of the same step is a different mail.
+    await sendEmail(
+      props(
+        { ...textStep, id: "step-9" },
+        { ...seqMeta, dispatchId: "d2" },
+      ) as never,
+    )
+    expect(buildLineEmailMock.mock.calls[2]?.[0].messageKey).not.toBe(
+      first.messageKey,
+    )
+  })
+
+  test("outside a sequence (or with a junk sequence id) a text mail is not threaded", async () => {
+    for (const metadata of [
+      {},
+      null,
+      { type: "broadcast", sequenceId: "555" },
+      { ...seqMeta, sequenceId: "" },
+      { ...seqMeta, sequenceId: "1; drop" },
+      { ...seqMeta, sequenceId: 5 },
+    ]) {
+      buildLineEmailMock.mockClear()
+      await sendEmail(props(textStep, metadata) as never)
+      expect(buildLineEmailMock.mock.calls[0]?.[0]).toMatchObject({
+        format: "text",
+        messageKey: undefined,
+        threadKeys: undefined,
+      })
+    }
+    expect(threadFind).not.toHaveBeenCalled()
+    expect(threadClaim).not.toHaveBeenCalled()
+    expect(threadRecord).not.toHaveBeenCalled()
+  })
+
+  test("an html step in a sequence, or a text step over SMTP, is unchanged (tracked, no thread)", async () => {
+    await sendEmail(props({ ...textStep, format: "html" }) as never)
+    expect(renderStepDocumentMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ token: "test-token-xyz" }),
+    )
+    expect(buildLineEmailMock.mock.calls[0]?.[0]).toMatchObject({
+      format: "html",
+      html: "<p>doc</p>",
+    })
+    const { lineInboxId: _l, ...smtpText } = textStep
+    await sendEmail(props(smtpText) as never)
+    expect(renderStepDocumentMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ token: "test-token-xyz" }),
+    )
+    expect(threadFind).not.toHaveBeenCalled()
   })
 })

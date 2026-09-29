@@ -300,6 +300,7 @@ export type DocumentTemplateModel =
   typeof schema.documentTemplateModel.$inferSelect
 export type EmailSuppressionModel =
   typeof schema.emailSuppressionModel.$inferSelect
+export type EmailThreadModel = typeof schema.emailThreadModel.$inferSelect
 export type EmailTemplateModel = typeof schema.emailTemplateModel.$inferSelect
 export type ContactDocumentModel =
   typeof schema.contactDocumentModel.$inferSelect

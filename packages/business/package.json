@@ -25,6 +25,7 @@
     "./deal-task": "./src/deal-task/index.ts",
     "./documents": "./src/documents/index.ts",
     "./email-suppression": "./src/email-suppression/index.ts",
+    "./email-thread": "./src/email-thread/index.ts",
     "./email-templates": "./src/email-templates/index.ts",
     "./form": "./src/form/index.ts",
     "./coexist": "./src/coexist/index.ts",

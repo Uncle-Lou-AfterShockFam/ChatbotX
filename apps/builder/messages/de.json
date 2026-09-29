@@ -7718,7 +7718,11 @@
       "line": "E-Mail-Leitung (bulktext)",
       "lineHint": "Über diese Leitung statt über SMTP senden. Die Leitung schreibt an die Adresse des Kontakts auf ihr, von ihrer eigenen Adresse.",
       "lineNone": "Keine (über SMTP senden)",
-      "noLines": "Noch keine API-Kanal-Posteingänge."
+      "noLines": "Noch keine API-Kanal-Posteingänge.",
+      "format": "Format",
+      "formatHtml": "HTML (Newsletter)",
+      "formatText": "Nur Text (persönliche Nachricht)",
+      "formatHint": "Nur-Text hat kein Öffnungspixel und keine getrackten Links; in einer Sequenz antwortet jeder Textschritt im selben Thread unter dem ersten."
     }
   },
   "emailSuppression": {

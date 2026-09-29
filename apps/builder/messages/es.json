@@ -7718,7 +7718,11 @@
       "line": "Línea de correo (bulktext)",
       "lineHint": "Enviar por esta línea en lugar de SMTP. La línea escribe a la dirección del contacto en ella, desde su propia dirección.",
       "lineNone": "Ninguna (enviar por SMTP)",
-      "noLines": "Aún no hay bandejas de canal API."
+      "noLines": "Aún no hay bandejas de canal API.",
+      "format": "Formato",
+      "formatHtml": "HTML (boletín)",
+      "formatText": "Texto sin formato (nota personal)",
+      "formatHint": "El texto sin formato no tiene píxel de apertura ni enlaces rastreados; en una secuencia, cada paso de texto responde en un solo hilo bajo el primero."
     }
   },
   "emailSuppression": {

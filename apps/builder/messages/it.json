@@ -7718,7 +7718,11 @@
       "line": "Linea email (bulktext)",
       "lineHint": "Invia tramite questa linea invece che via SMTP. La linea scrive all'indirizzo del contatto su di essa, dal proprio indirizzo.",
       "lineNone": "Nessuna (invia via SMTP)",
-      "noLines": "Nessuna casella del canale API."
+      "noLines": "Nessuna casella del canale API.",
+      "format": "Formato",
+      "formatHtml": "HTML (newsletter)",
+      "formatText": "Testo semplice (nota personale)",
+      "formatHint": "Il testo semplice non ha pixel di apertura né link tracciati; in una sequenza, ogni passaggio in testo risponde in un unico thread sotto il primo."
     }
   },
   "emailSuppression": {

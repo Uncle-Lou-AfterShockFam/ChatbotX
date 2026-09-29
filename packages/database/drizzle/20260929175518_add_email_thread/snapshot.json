@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "5ab88287-86ca-4d0e-ae4a-f738684f16c9",
+  "id": "74390eae-9b61-4950-8056-eaadf182cdd4",
   "prevIds": [
     "f28cd3a2-1d13-4668-bc1f-337018f98b8e"
   ],
@@ -1569,6 +1569,12 @@
     },
     {
       "isRlsEnabled": false,
+      "name": "EmailThread",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
       "name": "EmailTemplate",
       "entityType": "tables",
       "schema": "public"
@@ -1708,12 +1714,6 @@
     {
       "isRlsEnabled": false,
       "name": "FormSubmission",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
-      "name": "FormUpload",
       "entityType": "tables",
       "schema": "public"
     },
@@ -13717,6 +13717,123 @@
       "name": "id",
       "entityType": "columns",
       "schema": "public",
+      "table": "EmailThread"
+    },
+    {
+      "type": "timestamp(6) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "createdAt",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "EmailThread"
+    },
+    {
+      "type": "timestamp(6) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updatedAt",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "EmailThread"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "subject",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "EmailThread"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 1,
+      "default": "'{}'",
+      "generated": null,
+      "identity": null,
+      "name": "keys",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "EmailThread"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "workspaceId",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "EmailThread"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "contactId",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "EmailThread"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "sequenceId",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "EmailThread"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "lineInboxId",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "EmailThread"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
       "table": "EmailTemplate"
     },
     {
@@ -17592,201 +17709,6 @@
       "entityType": "columns",
       "schema": "public",
       "table": "FormSubmission"
-    },
-    {
-      "type": "bigint",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "type": "timestamp(6) with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "createdAt",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "type": "timestamp(6) with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "updatedAt",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "uploadId",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "type": "bigint",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "workspaceId",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "type": "bigint",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "formId",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "type": "bigint",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "submissionId",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "fieldKey",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "interactionId",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "path",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "mimeType",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "type": "integer",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "sizeBytes",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "fileName",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "ipHash",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "type": "timestamp(6) with time zone",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "deletingAt",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "FormUpload"
     },
     {
       "type": "bigint",
@@ -39259,6 +39181,41 @@
           "opclass": null
         },
         {
+          "value": "contactId",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "sequenceId",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "EmailThread_workspaceId_contactId_sequenceId_key",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "EmailThread"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspaceId",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
           "value": "status",
           "isExpression": false,
           "asc": true,
@@ -40430,125 +40387,6 @@
       "entityType": "indexes",
       "schema": "public",
       "table": "FormSubmission"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "uploadId",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "FormUpload_uploadId_key",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "path",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "FormUpload_path_key",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "coalesce(\"deletingAt\", \"createdAt\")",
-          "isExpression": true,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": "\"submissionId\" is null",
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "FormUpload_cleanup_pending_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "formId",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "ipHash",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "createdAt",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "FormUpload_formId_ipHash_createdAt_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "submissionId",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "FormUpload_submissionId_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "FormUpload"
     },
     {
       "nameExplicit": true,
@@ -49842,6 +49680,74 @@
       ],
       "onUpdate": "CASCADE",
       "onDelete": "CASCADE",
+      "name": "EmailThread_workspaceId_Workspace_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "EmailThread"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "contactId"
+      ],
+      "schemaTo": "public",
+      "tableTo": "Contact",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "CASCADE",
+      "onDelete": "CASCADE",
+      "name": "EmailThread_contactId_Contact_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "EmailThread"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "sequenceId"
+      ],
+      "schemaTo": "public",
+      "tableTo": "Sequence",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "CASCADE",
+      "onDelete": "CASCADE",
+      "name": "EmailThread_sequenceId_Sequence_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "EmailThread"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "lineInboxId"
+      ],
+      "schemaTo": "public",
+      "tableTo": "Inbox",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "CASCADE",
+      "onDelete": "CASCADE",
+      "name": "EmailThread_lineInboxId_Inbox_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "EmailThread"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "workspaceId"
+      ],
+      "schemaTo": "public",
+      "tableTo": "Workspace",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "CASCADE",
+      "onDelete": "CASCADE",
       "name": "EmailTemplate_workspaceId_Workspace_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -50611,57 +50517,6 @@
       "entityType": "fks",
       "schema": "public",
       "table": "FormSubmission"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "workspaceId"
-      ],
-      "schemaTo": "public",
-      "tableTo": "Workspace",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "CASCADE",
-      "onDelete": "CASCADE",
-      "name": "FormUpload_workspaceId_Workspace_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "formId"
-      ],
-      "schemaTo": "public",
-      "tableTo": "Form",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "CASCADE",
-      "onDelete": "CASCADE",
-      "name": "FormUpload_formId_Form_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "FormUpload"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "submissionId"
-      ],
-      "schemaTo": "public",
-      "tableTo": "FormSubmission",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "CASCADE",
-      "onDelete": "CASCADE",
-      "name": "FormUpload_submissionId_FormSubmission_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "FormUpload"
     },
     {
       "nameExplicit": false,
@@ -55527,6 +55382,16 @@
         "id"
       ],
       "nameExplicit": false,
+      "name": "EmailThread_pkey",
+      "schema": "public",
+      "table": "EmailThread",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
       "name": "EmailTemplate_pkey",
       "schema": "public",
       "table": "EmailTemplate",
@@ -55760,16 +55625,6 @@
       "name": "FormSubmission_pkey",
       "schema": "public",
       "table": "FormSubmission",
-      "entityType": "pks"
-    },
-    {
-      "columns": [
-        "id"
-      ],
-      "nameExplicit": false,
-      "name": "FormUpload_pkey",
-      "schema": "public",
-      "table": "FormUpload",
       "entityType": "pks"
     },
     {
