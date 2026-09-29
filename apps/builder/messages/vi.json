@@ -2571,7 +2571,8 @@
       "createTask": "Create task",
       "completeTask": "Complete task",
       "sendDocumentForSignature": "Gửi tài liệu để ký",
-      "createInvoice": "Create invoice"
+      "createInvoice": "Create invoice",
+      "askForm": "Ask a form"
     },
     "splitTraffic": {
       "balanceHint": "Tổng phần trăm phải bằng 100%.",
@@ -2706,6 +2707,19 @@
     "whatsappCallButton": {
       "editButtonTitle": "Chỉnh sửa nút",
       "buttonLabel": "Nhãn nút"
+    },
+    "askForm": {
+      "description": "Ask a published form in this conversation, one question per message. Success = submitted; Skip = the form is not available, the answers ran out of attempts, or the contact stopped replying.",
+      "form": "Form",
+      "formHint": "Only published forms whose channels include Chat are listed.",
+      "noChatForms": "No published chat form. Publish a form with the Chat channel first.",
+      "noFormPicked": "No form picked",
+      "timeoutMinutes": "Wait for a reply (minutes)",
+      "timeoutHint": "After this long without an answer, the run ends and the flow takes the Skip path.",
+      "maxAttempts": "Attempts per question",
+      "maxAttemptsHint": "Wrong answers allowed before the run ends on the Skip path.",
+      "retryMessage": "Retry message",
+      "retryHint": "Sent before re-asking after an answer that does not fit. A field's own chat retry message wins."
     }
   },
   "folders": {

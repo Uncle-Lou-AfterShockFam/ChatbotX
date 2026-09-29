@@ -1,6 +1,7 @@
 import { type ChannelType, channelTypes } from "@chatbotx.io/database/partials"
 import { stepTypes } from "@chatbotx.io/flow-config"
 import {
+  ClipboardPenLineIcon,
   CreditCardIcon,
   ImageIcon,
   ImagePlayIcon,
@@ -69,6 +70,11 @@ const ALL_MENU_ITEMS = (
     label: t("flows.actions.getUserData"),
     icon: KeyboardIcon,
     stepType: stepTypes.enum.getUserData,
+  },
+  askForm: {
+    label: t("flows.actions.askForm"),
+    icon: ClipboardPenLineIcon,
+    stepType: stepTypes.enum.askForm,
   },
   sendGif: {
     label: t("flows.actions.sendGif"),
@@ -139,6 +145,7 @@ const BASE_MENU_ORDER = [
   "sendCarousel",
   "sendVideo",
   "getUserData",
+  "askForm",
   "sendGif",
   "typing",
   "sendFile",
@@ -153,6 +160,7 @@ const WHATSAPP_MENU_ORDER = [
   "sendCarousel",
   "sendVideo",
   "getUserData",
+  "askForm",
   "sendGif",
   "sendTemplateMessage",
   "whatsappFlow",
@@ -171,6 +179,7 @@ const MESSENGER_MENU_ORDER = [
   "sendCarousel",
   "sendVideo",
   "getUserData",
+  "askForm",
   "sendGif",
   "sendTemplateMessage",
   "typing",
@@ -197,6 +206,7 @@ const API_MENU_ORDER = [
   "sendImage",
   "sendMultipleImages",
   "getUserData",
+  "askForm",
   "typing",
   "actions",
 ] as const

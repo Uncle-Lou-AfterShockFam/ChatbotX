@@ -26,6 +26,7 @@ export const FORM_MAX_SUCCESS_MESSAGE = 1000
 export const FORM_MAX_TAGS = 10
 export const FORM_MAX_EMBED_ORIGINS = 10
 export const FORM_MAX_PREFILL_KEYS = 20
+export const FORM_MAX_PROFILING_LIMIT = 100
 /** Same key rule as a custom-field key / hub-connector field key. */
 const FORM_PREFILL_KEY_REGEX = /^[a-z][a-z0-9_]{0,39}$/
 /** `https://host[:port]` only: no path, no wildcard, no trailing slash. */
@@ -85,6 +86,18 @@ export const formSettingsSchema = z
       .max(2)
       .refine((v) => new Set(v).size === v.length, "Duplicate channel.")
       .default(["web"]),
+    /**
+     * Progressive profiling budget (s219 A2-2): at most this many questions
+     * in one chat run, `alwaysDisplay` fields counted first. null = ask every
+     * visible field.
+     */
+    profilingLimit: z
+      .number()
+      .int()
+      .min(1)
+      .max(FORM_MAX_PROFILING_LIMIT)
+      .nullable()
+      .default(null),
   })
   .strict()
 export type FormSettings = z.infer<typeof formSettingsSchema>
@@ -166,6 +179,28 @@ export function slugifyFormTitle(title: string): string {
     .slice(0, 64)
     .replace(/-+$/g, "")
   return slug === "" ? "form" : slug
+}
+
+/**
+ * A chat run of a form (s219 A2-2): `inProgress` while it asks; every other
+ * status is terminal. `skipped` = the contact exhausted the attempts on a
+ * question, `expired` = the timeout sweep ended it, `canceled` = another form
+ * run or a company stop replaced it.
+ */
+export const formSessionStatuses = z.enum([
+  "inProgress",
+  "completed",
+  "skipped",
+  "expired",
+  "canceled",
+])
+export type FormSessionStatus = z.infer<typeof formSessionStatuses>
+
+/** The progressive-profiling inputs a chat run fixed when it started. */
+export type FormSessionProfile = {
+  known: string[]
+  priorSubmissions: number
+  limit: number | null
 }
 
 /** What a submission stored about visibility at answer time. */

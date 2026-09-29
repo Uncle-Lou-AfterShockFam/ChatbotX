@@ -22,6 +22,7 @@ export const ScheduleJobData = {
   scanSmartDelay: "scanSmartDelay",
   scanAppointmentReminders: "scanAppointmentReminders",
   scanDealTaskOverdue: "scanDealTaskOverdue",
+  sweepFormSessions: "sweepFormSessions",
   syncUserQuota: "syncUserQuota",
   reconcileTenants: "reconcileTenants",
   reconcileMac: "reconcileMac",
@@ -152,6 +153,11 @@ export type ScheduleJobScanAppointmentReminders = {
 
 export type ScheduleJobScanDealTaskOverdue = {
   type: typeof ScheduleJobData.scanDealTaskOverdue
+  data: Record<string, never>
+}
+
+export type ScheduleJobSweepFormSessions = {
+  type: typeof ScheduleJobData.sweepFormSessions
   data: Record<string, never>
 }
 
@@ -297,6 +303,7 @@ export type ScheduleJobData =
   | ScheduleJobScanSmartDelay
   | ScheduleJobScanAppointmentReminders
   | ScheduleJobScanDealTaskOverdue
+  | ScheduleJobSweepFormSessions
   | ScheduleJobPollQuickbooksChanges
   | ScheduleJobSweepInvoiceMirrors
   | ScheduleJobRefreshQuickbooksTokens

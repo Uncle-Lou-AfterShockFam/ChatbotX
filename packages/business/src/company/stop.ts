@@ -22,6 +22,7 @@ import { dispatchAuditRecordSafely } from "../audit/dispatcher"
 import { broadcastService } from "../broadcast/service"
 import { contactSequenceService } from "../contact-sequence/service"
 import { notFoundException } from "../errors"
+import { formSessionService } from "../form/session"
 import { logger } from "../logger"
 import {
   runSmartDelayCancelLoop,
@@ -41,6 +42,7 @@ export type CompanyStopReason =
 export type CompanyStopPhase =
   | "sequences"
   | "smart-delays"
+  | "forms"
   | "broadcasts"
   | "tag"
 
@@ -349,6 +351,21 @@ export async function stopCompany(props: {
     (error) =>
       error instanceof SmartDelayCancelIncompleteError ? error.canceled : 0,
   )
+  // A running chat form asks nothing more (s219 A2-2); its open question is
+  // cut off by the challenge's own company-stop guard on the next reply.
+  const formRunsCanceled = await phase(
+    "forms",
+    ctx,
+    async () =>
+      (
+        await formSessionService.cancelForContacts({
+          workspaceId,
+          contactIds,
+          reason: "company_stopped",
+        })
+      ).length,
+    0,
+  )
   const broadcastRowsFailed = await phase(
     "broadcasts",
     ctx,
@@ -383,6 +400,7 @@ export async function stopCompany(props: {
       contactCount: contactIds.length,
       enrollmentsRemoved,
       smartDelaysCanceled,
+      formRunsCanceled,
       broadcastRowsFailed,
     },
     "company-stop: company stopped",

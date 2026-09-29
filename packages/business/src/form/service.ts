@@ -117,7 +117,9 @@ const isInt8 = (value: unknown): value is string =>
   BigInt(value) <= INT8_MAX
 
 /** Epoch microseconds as int8 text (s198 rule: never `::text` on a timestamp). */
-const createdAtMicros = sql<string>`(extract(epoch from ${formSubmissionModel.createdAt}) * 1000000)::bigint::text`
+/** Built on first use, never at module load (test mocks of the db client). */
+const createdAtMicros = () =>
+  sql<string>`(extract(epoch from ${formSubmissionModel.createdAt}) * 1000000)::bigint::text`
 
 export function encodeSubmissionCursor(c: SubmissionCursor): string {
   return Buffer.from(JSON.stringify(c)).toString("base64url")
@@ -278,6 +280,45 @@ export class FormService extends BaseService {
     // A published form always has an input field (publish refuses an empty
     // one), so a normalised-to-empty copy is a corrupt row: fail closed.
     if (
+      formInputFields(form.publishedDefinition ?? EMPTY_FORM_DEFINITION)
+        .length === 0
+    ) {
+      return null
+    }
+    return form
+  }
+
+  /**
+   * A PUBLISHED form a chat run may ask (s219 A2-2): its channels include
+   * `chat` and its live copy has an input field. Null otherwise, never a throw:
+   * the flow step routes a missing form to its skip branch.
+   */
+  async findPublishedForChat(props: {
+    workspaceId: string
+    id: string
+    tx?: DatabaseClient
+  }): Promise<NormalizedForm | null> {
+    const { workspaceId, id, tx = db } = props
+    if (!INT8_ID.test(id)) {
+      return null
+    }
+    const [row] = await tx
+      .select()
+      .from(formModel)
+      .where(
+        and(
+          eq(formModel.workspaceId, workspaceId),
+          eq(formModel.id, id),
+          eq(formModel.status, "published"),
+        ),
+      )
+      .limit(1)
+    if (!row || row.publishedDefinition === null) {
+      return null
+    }
+    const form = this.normalize(row)
+    if (
+      !form.settings.channels.includes("chat") ||
       formInputFields(form.publishedDefinition ?? EMPTY_FORM_DEFINITION)
         .length === 0
     ) {
@@ -723,11 +764,11 @@ export class FormService extends BaseService {
     ]
     if (after) {
       conditions.push(
-        sql`(${createdAtMicros}::bigint < ${after.k}::bigint or (${createdAtMicros}::bigint = ${after.k}::bigint and ${formSubmissionModel.id} < ${after.i}::bigint))`,
+        sql`(${createdAtMicros()}::bigint < ${after.k}::bigint or (${createdAtMicros()}::bigint = ${after.k}::bigint and ${formSubmissionModel.id} < ${after.i}::bigint))`,
       )
     }
     const rows = await tx
-      .select({ row: formSubmissionModel, k: createdAtMicros })
+      .select({ row: formSubmissionModel, k: createdAtMicros() })
       .from(formSubmissionModel)
       .where(and(...conditions))
       .orderBy(

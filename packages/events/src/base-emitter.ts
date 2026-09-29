@@ -79,7 +79,7 @@ export type DealMentionedMetadata = DealEventMetadata & {
   excerpt: string
 }
 
-/** A web form submission written to a contact (s200); `sourceId` = the form id. */
+/** A form submission written to a contact (s200); `sourceId` = the form id. */
 export type FormSubmittedMetadata = {
   formId: string
   formSlug: string
@@ -87,6 +87,12 @@ export type FormSubmittedMetadata = {
   definitionVersion: number
   /** Visible, non-blank answers keyed by field key (strings, numbers, booleans, string lists). */
   values: Record<string, unknown>
+  /** Where it was answered (s219 A2-2); absent on events from before chat runs. */
+  channel?: "web" | "chat"
+  /** The conversation a chat run asked in; null on the web. */
+  conversationId?: string | null
+  /** Sum of the chosen options' points; null when the form is unscored. */
+  score?: number | null
 }
 
 /**

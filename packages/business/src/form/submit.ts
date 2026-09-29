@@ -21,6 +21,7 @@ import {
   type FormValues,
   formInputFields,
   formMapsToContact,
+  formScore,
   pruneFormValues,
   validateFormSubmission,
 } from "@chatbotx.io/database/partials"
@@ -174,7 +175,7 @@ const optionTargetText = (
 }
 
 type Identity = { phoneNumber: string | null; email: string | null }
-type PendingChanges = Awaited<
+export type PendingChanges = Awaited<
   ReturnType<typeof contactCustomFieldService.setValuesInTransaction>
 >
 
@@ -328,6 +329,8 @@ export class FormSubmitService {
             definitionVersion: form.definitionVersion,
             values: pruned,
             visibility,
+            channel: "web",
+            score: formScore(def, pruned, evaluation),
             ipHash,
             userAgent: input.userAgent?.slice(0, 500) ?? null,
             dedupHash,
@@ -446,16 +449,18 @@ export class FormSubmitService {
     return out
   }
 
-  /** The phone / email answers mapped to the contact, normalised. */
-  private async identityOf(props: {
+  /** The phone / email answers mapped to the contact, normalised. Shared with FormSessionService (s219 A2-2). */
+  async identityOf(props: {
     workspaceId: string
     def: FormDefinition
     values: FormValues
+    /** Inside a transaction, the workspace read MUST use it (one pool connection per tx). */
+    tx?: DatabaseClient
   }): Promise<
     | { identity: Identity; keys: { phone?: string; email?: string } }
     | { issue: FormValidationIssue }
   > {
-    const { workspaceId, def, values } = props
+    const { workspaceId, def, values, tx } = props
     let phoneKey: string | undefined
     let emailKey: string | undefined
     for (const field of formInputFields(def)) {
@@ -474,6 +479,7 @@ export class FormSubmitService {
     if (typeof rawPhone === "string" && rawPhone.trim() !== "") {
       const workspace = await workspaceService.find({
         where: { id: workspaceId },
+        tx,
       })
       const parsed = parsePhoneNumberFromString(
         rawPhone,
@@ -628,8 +634,8 @@ export class FormSubmitService {
     return out
   }
 
-  /** Non-blank mapped answers -> system fields and custom fields, inside `tx`. */
-  private async writeMappedFields(props: {
+  /** Non-blank mapped answers -> system fields and custom fields, inside `tx`. Shared with FormSessionService (s219 A2-2). */
+  async writeMappedFields(props: {
     workspaceId: string
     contactId: string
     def: FormDefinition
@@ -787,8 +793,8 @@ export class FormSubmitService {
     )
   }
 
-  /** What the contact already holds for the mapped fields (blank = absent). */
-  private async storedValues(props: {
+  /** What the contact already holds for the mapped fields (blank = absent). Shared with FormSessionService (s219 A2-2). */
+  async storedValues(props: {
     workspaceId: string
     contactId: string
     def: FormDefinition
@@ -839,11 +845,15 @@ export class FormSubmitService {
     return { system, custom }
   }
 
-  /** Events and tags only after the row is committed; a failure is logged, never surfaced. */
-  private async afterCommit(props: {
+  /**
+   * Events and tags only after the row is committed; a failure is logged,
+   * never surfaced. Shared by the web submit and the chat run (s219 A2-2), so
+   * both channels tag and trigger alike.
+   */
+  async afterCommit(props: {
     workspaceId: string
     contactId: string
-    form: NormalizedForm
+    form: Pick<NormalizedForm, "id" | "slug" | "settings">
     submission: FormSubmissionModel
     values: FormValues
     pending: PendingChanges
@@ -870,8 +880,11 @@ export class FormSubmitService {
       formId: form.id,
       formSlug: form.slug,
       submissionId: submission.id,
-      definitionVersion: form.definitionVersion,
+      definitionVersion: submission.definitionVersion,
       values,
+      channel: submission.channel,
+      conversationId: submission.conversationId ?? null,
+      score: submission.score ?? null,
     }).catch(warn("formSubmitted event"))
   }
 }

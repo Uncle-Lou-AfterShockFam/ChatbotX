@@ -15,6 +15,7 @@ import { aiSpeechToTextStep } from "./ai-speech-to-text"
 import { aiTextToSpeechStep } from "./ai-text-to-speech"
 import { appointmentSchedulingStep } from "./appointment-scheduling"
 import { archiveConversationStep } from "./archive-conversation"
+import { askFormStep } from "./ask-form"
 import { assignConversationStep } from "./assign-conversation"
 import { autoAssignConversationStep } from "./auto-assign-conversation"
 import { blockContactStep } from "./block-contact"
@@ -108,6 +109,7 @@ export const allSteps: Record<StepType, StepDefinition<any> | undefined> = {
   [stepTypes.enum.sendCard]: sendCarouselStep,
   [stepTypes.enum.sendCarousel]: sendCarouselStep,
   [stepTypes.enum.getUserData]: getUserDataStep,
+  [stepTypes.enum.askForm]: askFormStep,
   [stepTypes.enum.sendVideo]: sendVideoStep,
   [stepTypes.enum.sendWaTemplateMessage]: sendWaTemplateMessageStep,
   [stepTypes.enum.sendGif]: sendGifStep,

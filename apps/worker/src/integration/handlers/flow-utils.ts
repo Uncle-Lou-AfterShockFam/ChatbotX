@@ -46,6 +46,12 @@ export type ExecuteMultipleStepsProps = {
   nodeVisits?: NodeVisits
   triggerMessageId?: string
   triggerMessageCreatedAt?: Date
+  /**
+   * The step this job was dispatched to START at (a re-entry: challenge
+   * resume, picker submit, sweep). A step that reads `metadata` meant for it
+   * checks this, because `metadata` rides on into every later step.
+   */
+  startFromStepId?: string
   commentAnchor?: CommentAnchor
   appointmentId?: string
   flowExecutionKey?: string

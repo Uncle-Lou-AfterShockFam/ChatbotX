@@ -107,6 +107,10 @@ vi.mock("../src/smart-delay/service", () => ({
     hasActiveForCompany: mockHasActiveForCompany,
   },
 }))
+const formRuns = vi.hoisted(() => ({
+  cancelForContacts: vi.fn().mockResolvedValue([{ id: "run-1" }]),
+}))
+vi.mock("../src/form/session", () => ({ formSessionService: formRuns }))
 vi.mock("../src/broadcast/service", () => ({
   broadcastService: { markContactsFailedForContacts: mockMarkBroadcastFailed },
 }))

@@ -303,4 +303,5 @@ export type ContactDocumentModel =
   typeof schema.contactDocumentModel.$inferSelect
 export type FormModel = typeof schema.formModel.$inferSelect
 export type FormSubmissionModel = typeof schema.formSubmissionModel.$inferSelect
+export type FormSessionModel = typeof schema.formSessionModel.$inferSelect
 export type NotificationModel = typeof schema.notificationModel.$inferSelect

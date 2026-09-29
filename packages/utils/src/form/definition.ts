@@ -263,6 +263,34 @@ export const formFieldChat = z
   .strict()
 export type FormFieldChat = z.infer<typeof formFieldChat>
 
+export const MAX_FORM_PROFILE_SUBMISSIONS = 100
+
+/**
+ * Progressive profiling (s219 A2-2, Mautic `Field::showForContact`): which
+ * fields a KNOWN contact is asked. Only a chat run knows its contact, so the
+ * web page ignores these until it can identify the visitor.
+ */
+export const formFieldProfile = z
+  .object({
+    /** false = do not ask when the contact already holds this answer. */
+    showWhenKnown: z.boolean().optional(),
+    /** Ask only once the contact has submitted this form N times. */
+    showAfterSubmissions: z
+      .number()
+      .int()
+      .min(0)
+      .max(MAX_FORM_PROFILE_SUBMISSIONS)
+      .optional(),
+    /**
+     * Never cut by the `profilingLimit` budget (counted against it first).
+     * The two rules above still apply: this bypasses the budget only
+     * (Mautic DisplayManager semantics).
+     */
+    alwaysDisplay: z.boolean().optional(),
+  })
+  .strict()
+export type FormFieldProfile = z.infer<typeof formFieldProfile>
+
 export const formField = z
   .object({
     key: z.string().regex(FORM_FIELD_KEY_REGEX),
@@ -279,9 +307,17 @@ export const formField = z
     mapTo: formFieldMapTo.optional(),
     visibleWhen: formConditionGroup.optional(),
     chat: formFieldChat.optional(),
+    profile: formFieldProfile.optional(),
   })
   .strict()
   .superRefine((field, ctx) => {
+    if (field.profile && !isFormInputFieldType(field.type)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["profile"],
+        message: `A ${field.type} block asks nothing, so it has no profiling rule.`,
+      })
+    }
     if (FORM_CHAT_ONLY_FIELD_TYPES.has(field.type)) {
       for (const prop of ["pattern", "min", "max", "defaultValue"] as const) {
         if (field[prop] !== undefined) {
@@ -401,7 +437,8 @@ export const formRule = z
   .strict()
 export type FormRule = z.infer<typeof formRule>
 
-const collectRuleKeys = (
+/** Every field key a condition group reads, depth-first (duplicates kept). */
+export const collectRuleKeys = (
   group: FormConditionGroup,
   into: string[],
 ): string[] => {

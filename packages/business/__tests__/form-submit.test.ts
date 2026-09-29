@@ -524,8 +524,12 @@ describe("formSubmitService.submit (s200)", () => {
         email: "ADA@Example.com",
         size: "L",
       },
+      channel: "web",
+      conversationId: null,
+      score: null,
     })
     expect(m.state.inserted[0]).toMatchObject({
+      channel: "web",
       contactId: "c-new",
       definitionVersion: 2,
       dedupHash: expect.any(String),
