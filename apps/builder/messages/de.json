@@ -4792,7 +4792,7 @@
       "settings": "Settings",
       "preview": "Preview",
       "steps": "Steps",
-      "step": "Step",
+      "step": "Schrittweite",
       "stepTitle": "Step title",
       "stepPosition": "Step {current} of {total}",
       "noStep": "Add a step to start placing fields.",
@@ -4833,7 +4833,18 @@
       "previewBack": "Back",
       "previewNext": "Next",
       "previewSubmit": "Submit (preview)",
-      "previewSubmitted": "Preview submitted. Nothing is stored from the preview."
+      "previewSubmitted": "Preview submitted. Nothing is stored from the preview.",
+      "stars": "Anzahl Sterne",
+      "optionPoints": "Punkte",
+      "chatSection": "Im Chat",
+      "chatPrompt": "Fragetext im Chat (leer = die Bezeichnung)",
+      "chatRetry": "Nachricht, wenn eine Antwort nicht passt",
+      "chatMediaUrl": "Bild zur Frage (https-Link)",
+      "askWhenKnown": "Auch fragen, wenn bekannt",
+      "askWhenKnownHint": "Aus: Ein Chat überspringt die Frage, wenn der Kontakt die Antwort schon hat.",
+      "alwaysAsk": "Nie vom Fragenlimit gekürzt",
+      "askAfterSubmissions": "Fragen ab Einsendung Nr.",
+      "askAfterSubmissionsHint": "Progressive Profilierung: erst fragen, wenn der Kontakt das Formular so oft eingesendet hat. Leer = immer."
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4852,7 +4863,12 @@
       "time": "Time",
       "heading": "Heading",
       "paragraph": "Paragraph",
-      "divider": "Divider"
+      "divider": "Divider",
+      "slider": "Schieberegler",
+      "rating": "Bewertung",
+      "image": "Foto",
+      "file": "Datei",
+      "location": "Standort"
     },
     "ops": {
       "eq": "is",
@@ -4925,7 +4941,18 @@
       "submissionLimit": "Einsendungslimit",
       "submissionLimitHint": "Nach so vielen Einsendungen (Web und Chat) keine Antworten mehr annehmen. Das Löschen einer Einsendung gibt einen Platz frei. Leer = kein Limit.",
       "blockedEmailDomains": "Gesperrte E-Mail-Domains",
-      "blockedEmailDomainsHint": "Eine pro Zeile, z. B. example.com. Subdomains werden ebenfalls gesperrt."
+      "blockedEmailDomainsHint": "Eine pro Zeile, z. B. example.com. Subdomains werden ebenfalls gesperrt.",
+      "channels": "Wo es läuft",
+      "channel": {
+        "web": "Webseite und Einbettung",
+        "chat": "Im Chat (Flow-Schritt)"
+      },
+      "channelHint": {
+        "web": "Öffentlicher Link und Einbettungscode.",
+        "chat": "Frage für Frage über einen Formular-Schritt."
+      },
+      "profilingLimit": "Fragen pro Chat",
+      "profilingLimitHint": "Progressive Profilierung: höchstens so viele Fragen pro Durchlauf. Leer = alles fragen."
     },
     "submitActions": {
       "title": "Actions after submit",

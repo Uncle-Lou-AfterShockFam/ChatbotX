@@ -71,6 +71,21 @@ describe("editor ops (s200)", () => {
     expect(uniqueFieldKey(def, "x".repeat(80)).length).toBeLessThanOrEqual(40)
   })
 
+  test("newField: a slider starts valid (0..10 step 1), a rating at 5 stars (s220c A2-4)", () => {
+    const def = { steps: [{ id: "s1", title: "", fields: [] }], rules: [] }
+    expect(newField(def, "slider", "Mood")).toMatchObject({
+      type: "slider",
+      min: 0,
+      max: 10,
+      step: 1,
+    })
+    expect(newField(def, "rating", "Stars")).toMatchObject({
+      type: "rating",
+      max: 5,
+    })
+    expect(newField(def, "rating", "Stars")).not.toHaveProperty("min")
+  })
+
   test("newField gives option types two options; addField respects the cap", () => {
     const def = base()
     const f = newField(def, "radio", "Pick")

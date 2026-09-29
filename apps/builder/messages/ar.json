@@ -4792,7 +4792,7 @@
       "settings": "Settings",
       "preview": "Preview",
       "steps": "Steps",
-      "step": "Step",
+      "step": "الخطوة",
       "stepTitle": "Step title",
       "stepPosition": "Step {current} of {total}",
       "noStep": "Add a step to start placing fields.",
@@ -4833,7 +4833,18 @@
       "previewBack": "Back",
       "previewNext": "Next",
       "previewSubmit": "Submit (preview)",
-      "previewSubmitted": "Preview submitted. Nothing is stored from the preview."
+      "previewSubmitted": "Preview submitted. Nothing is stored from the preview.",
+      "stars": "عدد النجوم",
+      "optionPoints": "النقاط",
+      "chatSection": "في الدردشة",
+      "chatPrompt": "نص السؤال في الدردشة (فارغ = العنوان)",
+      "chatRetry": "رسالة عندما لا يناسب الرد",
+      "chatMediaUrl": "صورة تُرسل مع السؤال (رابط https)",
+      "askWhenKnown": "اسأل حتى لو كانت الإجابة معروفة",
+      "askWhenKnownHint": "عند الإيقاف: تتخطى الدردشة هذا السؤال إذا كانت الإجابة لدى جهة الاتصال بالفعل.",
+      "alwaysAsk": "لا يُحذف بسبب حد الأسئلة",
+      "askAfterSubmissions": "اسأل بدءًا من رقم الإرسال",
+      "askAfterSubmissionsHint": "التنميط التدريجي: اسأل فقط بعد أن ترسل جهة الاتصال هذا النموذج هذا العدد من المرات. فارغ = دائمًا."
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4852,7 +4863,12 @@
       "time": "Time",
       "heading": "Heading",
       "paragraph": "Paragraph",
-      "divider": "Divider"
+      "divider": "Divider",
+      "slider": "شريط تمرير",
+      "rating": "تقييم",
+      "image": "صورة",
+      "file": "ملف",
+      "location": "موقع"
     },
     "ops": {
       "eq": "is",
@@ -4925,7 +4941,18 @@
       "submissionLimit": "حد الإرسال",
       "submissionLimitHint": "التوقف عن قبول الإجابات بعد هذا العدد من الإرسالات (الويب والدردشة). حذف إرسال يحرر مكانًا. فارغ = بلا حد.",
       "blockedEmailDomains": "نطاقات البريد المحظورة",
-      "blockedEmailDomainsHint": "واحد في كل سطر، مثل example.com. النطاقات الفرعية محظورة أيضًا."
+      "blockedEmailDomainsHint": "واحد في كل سطر، مثل example.com. النطاقات الفرعية محظورة أيضًا.",
+      "channels": "أين يعمل",
+      "channel": {
+        "web": "صفحة الويب والتضمين",
+        "chat": "في دردشة (خطوة في المسار)"
+      },
+      "channelHint": {
+        "web": "رابط عام ورمز تضمين.",
+        "chat": "يُطرح سؤالًا بسؤال عبر خطوة طرح النموذج."
+      },
+      "profilingLimit": "عدد الأسئلة في كل دردشة",
+      "profilingLimitHint": "التنميط التدريجي: بحد أقصى هذا العدد من الأسئلة في الجولة الواحدة. فارغ = اسأل كل شيء."
     },
     "submitActions": {
       "title": "Actions after submit",

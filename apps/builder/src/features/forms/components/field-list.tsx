@@ -30,6 +30,8 @@ import { addField, moveField, newField, removeField } from "../lib/editor-ops"
 
 /** The fields of the selected step: drag to reorder, click to inspect, add by type. */
 export function FieldList(props: {
+  /** s220c A2-4: a chat-only form may use the chat-only types (photo, file, location). */
+  channels: readonly string[]
   definition: FormDefinition
   step: FormStep
   selectedKey: string | null
@@ -126,10 +128,16 @@ export function FieldList(props: {
           }
         />
         <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
-          {/* Chat-only types (photo, file, location) join the picker with the
-              chat editor (s219 A2-4); the web page cannot render them. */}
+          {/* Chat-only types (photo, file, location): only on a form that
+              does not run on the web (the page cannot render them). */}
           {webFormFieldTypes.options
-            .filter((type) => !FORM_CHAT_ONLY_FIELD_TYPES.has(type))
+            .filter(
+              (type) =>
+                !(
+                  FORM_CHAT_ONLY_FIELD_TYPES.has(type) &&
+                  props.channels.includes("web")
+                ),
+            )
             .map((type) => (
               <DropdownMenuItem
                 data-testid={`add-field-${type}`}

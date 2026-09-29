@@ -223,6 +223,46 @@ describe("askForm handler", () => {
     expect(text.startsWith("Pick 1 or 2.\n\n")).toBe(true)
   })
 
+  test("a slider / rating question carries its range; the reply is a number (s220c A2-4)", async () => {
+    for (const [field, suffix] of [
+      [
+        {
+          key: "stars",
+          type: "rating",
+          label: "Rate us",
+          required: true,
+          max: 4,
+        },
+        "Rate us (1-4)",
+      ],
+      [
+        {
+          key: "mood",
+          type: "slider",
+          label: "Mood",
+          required: true,
+          min: 0,
+          max: 10,
+        },
+        "Mood (0-10)",
+      ],
+    ] as const) {
+      mocks.chatQueueAdd.mockClear()
+      mocks.start.mockResolvedValue({
+        kind: "ask",
+        session: session(),
+        field,
+        preface: [],
+        retry: false,
+      })
+      await askForm(props())
+      const text = (
+        mocks.chatQueueAdd.mock.calls[0]?.[1] as { data: { text: string } }
+      ).data.text
+      expect(text.startsWith(suffix)).toBe(true)
+    }
+  })
+
   test("a date field on a link-capable channel sends the signed picker", async () => {
     mocks.start.mockResolvedValue({
       kind: "ask",

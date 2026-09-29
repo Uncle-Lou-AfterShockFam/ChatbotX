@@ -4792,7 +4792,7 @@
       "settings": "Settings",
       "preview": "Preview",
       "steps": "Steps",
-      "step": "Step",
+      "step": "Stap",
       "stepTitle": "Step title",
       "stepPosition": "Step {current} of {total}",
       "noStep": "Add a step to start placing fields.",
@@ -4833,7 +4833,18 @@
       "previewBack": "Back",
       "previewNext": "Next",
       "previewSubmit": "Submit (preview)",
-      "previewSubmitted": "Preview submitted. Nothing is stored from the preview."
+      "previewSubmitted": "Preview submitted. Nothing is stored from the preview.",
+      "stars": "Aantal sterren",
+      "optionPoints": "Punten",
+      "chatSection": "In de chat",
+      "chatPrompt": "Vraagtekst in de chat (leeg = het label)",
+      "chatRetry": "Bericht als een antwoord niet past",
+      "chatMediaUrl": "Afbeelding bij de vraag (https-link)",
+      "askWhenKnown": "Ook vragen als het bekend is",
+      "askWhenKnownHint": "Uit: een chat slaat de vraag over als het contact het antwoord al heeft.",
+      "alwaysAsk": "Nooit ingekort door de vragenlimiet",
+      "askAfterSubmissions": "Vragen vanaf inzending nr.",
+      "askAfterSubmissionsHint": "Progressieve profilering: pas vragen als het contact het formulier zo vaak heeft ingestuurd. Leeg = altijd."
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4852,7 +4863,12 @@
       "time": "Time",
       "heading": "Heading",
       "paragraph": "Paragraph",
-      "divider": "Divider"
+      "divider": "Divider",
+      "slider": "Schuifregelaar",
+      "rating": "Beoordeling",
+      "image": "Foto",
+      "file": "Bestand",
+      "location": "Locatie"
     },
     "ops": {
       "eq": "is",
@@ -4925,7 +4941,18 @@
       "submissionLimit": "Limiet voor inzendingen",
       "submissionLimitHint": "Stop met antwoorden aannemen na zoveel inzendingen (web en chat). Een inzending verwijderen maakt een plek vrij. Leeg = geen limiet.",
       "blockedEmailDomains": "Geblokkeerde e-maildomeinen",
-      "blockedEmailDomainsHint": "Eén per regel, bijv. example.com. Subdomeinen worden ook geblokkeerd."
+      "blockedEmailDomainsHint": "Eén per regel, bijv. example.com. Subdomeinen worden ook geblokkeerd.",
+      "channels": "Waar het draait",
+      "channel": {
+        "web": "Webpagina en insluiten",
+        "chat": "In een chat (flowstap)"
+      },
+      "channelHint": {
+        "web": "Openbare link en insluitcode.",
+        "chat": "Vraag voor vraag gesteld door een Formulier-vragen-stap."
+      },
+      "profilingLimit": "Vragen per chat",
+      "profilingLimitHint": "Progressieve profilering: hoogstens zoveel vragen per doorloop. Leeg = alles vragen."
     },
     "submitActions": {
       "title": "Actions after submit",

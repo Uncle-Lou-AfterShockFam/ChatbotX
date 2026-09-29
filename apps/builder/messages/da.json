@@ -4792,7 +4792,7 @@
       "settings": "Settings",
       "preview": "Preview",
       "steps": "Steps",
-      "step": "Step",
+      "step": "Trin",
       "stepTitle": "Step title",
       "stepPosition": "Step {current} of {total}",
       "noStep": "Add a step to start placing fields.",
@@ -4833,7 +4833,18 @@
       "previewBack": "Back",
       "previewNext": "Next",
       "previewSubmit": "Submit (preview)",
-      "previewSubmitted": "Preview submitted. Nothing is stored from the preview."
+      "previewSubmitted": "Preview submitted. Nothing is stored from the preview.",
+      "stars": "Antal stjerner",
+      "optionPoints": "Point",
+      "chatSection": "I chat",
+      "chatPrompt": "Spørgsmålstekst i chat (tom = etiketten)",
+      "chatRetry": "Besked når et svar ikke passer",
+      "chatMediaUrl": "Billede sendt med spørgsmålet (https-link)",
+      "askWhenKnown": "Spørg også hvis svaret er kendt",
+      "askWhenKnownHint": "Fra: en chat springer spørgsmålet over, når kontakten allerede har svaret.",
+      "alwaysAsk": "Skæres aldrig af spørgsmålsgrænsen",
+      "askAfterSubmissions": "Spørg fra indsendelse nummer",
+      "askAfterSubmissionsHint": "Progressiv profilering: spørg først når kontakten har indsendt formularen så mange gange. Tom = altid."
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4852,7 +4863,12 @@
       "time": "Time",
       "heading": "Heading",
       "paragraph": "Paragraph",
-      "divider": "Divider"
+      "divider": "Divider",
+      "slider": "Skyder",
+      "rating": "Bedømmelse",
+      "image": "Foto",
+      "file": "Fil",
+      "location": "Placering"
     },
     "ops": {
       "eq": "is",
@@ -4925,7 +4941,18 @@
       "submissionLimit": "Grænse for indsendelser",
       "submissionLimitHint": "Stop med at modtage svar efter så mange indsendelser (web og chat). Sletning af en indsendelse frigiver en plads. Tom = ingen grænse.",
       "blockedEmailDomains": "Blokerede e-maildomæner",
-      "blockedEmailDomainsHint": "Et pr. linje, f.eks. example.com. Underdomæner blokeres også."
+      "blockedEmailDomainsHint": "Et pr. linje, f.eks. example.com. Underdomæner blokeres også.",
+      "channels": "Hvor den kører",
+      "channel": {
+        "web": "Webside og indlejring",
+        "chat": "I en chat (flowtrin)"
+      },
+      "channelHint": {
+        "web": "Offentligt link og indlejringskode.",
+        "chat": "Stilles spørgsmål for spørgsmål af et Spørg-formular-trin."
+      },
+      "profilingLimit": "Spørgsmål pr. chat",
+      "profilingLimitHint": "Progressiv profilering: højst så mange spørgsmål pr. gennemløb. Tom = spørg om alt."
     },
     "submitActions": {
       "title": "Actions after submit",

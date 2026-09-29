@@ -2,6 +2,8 @@ import {
   collectRuleKeys,
   FORM_LIST_FIELD_TYPES,
   FORM_OPTION_FIELD_TYPES,
+  FORM_RATING_DEFAULT_STARS,
+  FORM_SCALE_FIELD_TYPES,
   type FormConditionGroup,
   type FormConditionOp,
   type FormConditionRule,
@@ -406,6 +408,52 @@ const isLocation = (value: string): boolean => {
  * caller's: see `validateFormSubmission`). A chat run checks each reply with
  * this before storing it, so a chat answer and a web answer pass the same rule.
  */
+/** The bounds a slider / rating answer must fall in (a rating is 1..max stars). */
+export function formScaleBounds(
+  field: Pick<FormField, "type" | "min" | "max" | "step">,
+): {
+  min: number
+  max: number
+  step: number
+} {
+  if (field.type === "rating") {
+    return { min: 1, max: field.max ?? FORM_RATING_DEFAULT_STARS, step: 1 }
+  }
+  return { min: field.min ?? 0, max: field.max ?? 100, step: field.step ?? 1 }
+}
+
+/**
+ * Float slack when checking a value against its step, RELATIVE to the step
+ * count so a wide range with a fractional step (0..1e12 by 0.3) is not
+ * refused for rounding noise (skeptic s220c); 0.1 + 0.2 steps pass too.
+ */
+const STEP_EPSILON = 1e-9
+const STEP_RELATIVE_SLACK = 1e-12
+
+/** s220c A2-4: a slider / rating answer is a number on the scale, on a step. */
+function validateScale(
+  field: FormField,
+  value: FormValue,
+): FormValidationIssue["code"] | null {
+  const n = toNumber(value)
+  if (n === null) {
+    return "number"
+  }
+  const { min, max, step } = formScaleBounds(field)
+  if (n < min) {
+    return "min"
+  }
+  if (n > max) {
+    return "max"
+  }
+  const steps = (n - min) / step
+  // absolute floor for small counts, a tiny relative share for huge ones
+  // (doubles carry ~1e-16 relative error; 1e-12 leaves a wide margin and
+  // still refuses a half step at 3e9 steps)
+  const slack = Math.max(STEP_EPSILON, STEP_RELATIVE_SLACK * Math.abs(steps))
+  return Math.abs(steps - Math.round(steps)) <= slack ? null : "number"
+}
+
 export function validateFormField(
   field: FormField,
   value: FormValue,
@@ -419,6 +467,9 @@ export function validateFormField(
   }
   if (field.type === "checkbox") {
     return typeof value === "boolean" ? null : "type"
+  }
+  if (FORM_SCALE_FIELD_TYPES.has(field.type)) {
+    return validateScale(field, value)
   }
   if (field.type === "number") {
     const n = toNumber(value)

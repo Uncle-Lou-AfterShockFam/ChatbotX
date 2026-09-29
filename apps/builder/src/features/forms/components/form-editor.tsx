@@ -334,6 +334,7 @@ export function FormEditor(props: { workspaceId: string; id: string }) {
                     step={step}
                   />
                   <FieldList
+                    channels={draft.settings.channels}
                     definition={def}
                     onChange={setDefinition}
                     onSelect={setFieldKey}
@@ -350,6 +351,7 @@ export function FormEditor(props: { workspaceId: string; id: string }) {
             <div className="min-w-0 rounded-md border p-3">
               {field ? (
                 <FieldInspector
+                  chatEnabled={draft.settings.channels.includes("chat")}
                   definition={def}
                   field={field}
                   key={field.key}

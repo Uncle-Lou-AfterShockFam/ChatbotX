@@ -4831,7 +4831,7 @@
       "settings": "Settings",
       "preview": "Preview",
       "steps": "Steps",
-      "step": "Step",
+      "step": "Bước",
       "stepTitle": "Step title",
       "stepPosition": "Step {current} of {total}",
       "noStep": "Add a step to start placing fields.",
@@ -4872,7 +4872,18 @@
       "previewBack": "Back",
       "previewNext": "Next",
       "previewSubmit": "Submit (preview)",
-      "previewSubmitted": "Preview submitted. Nothing is stored from the preview."
+      "previewSubmitted": "Preview submitted. Nothing is stored from the preview.",
+      "stars": "Số sao",
+      "optionPoints": "Điểm",
+      "chatSection": "Trong chat",
+      "chatPrompt": "Nội dung câu hỏi trong chat (trống = nhãn)",
+      "chatRetry": "Tin nhắn khi câu trả lời không hợp lệ",
+      "chatMediaUrl": "Ảnh gửi kèm câu hỏi (liên kết https)",
+      "askWhenKnown": "Vẫn hỏi dù đã biết",
+      "askWhenKnownHint": "Tắt: chat bỏ qua câu hỏi nếu liên hệ đã có câu trả lời.",
+      "alwaysAsk": "Không bao giờ bị cắt bởi giới hạn câu hỏi",
+      "askAfterSubmissions": "Hỏi từ lần gửi thứ",
+      "askAfterSubmissionsHint": "Hồ sơ lũy tiến: chỉ hỏi sau khi liên hệ đã gửi biểu mẫu này đủ số lần. Trống = luôn hỏi."
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4891,7 +4902,12 @@
       "time": "Time",
       "heading": "Heading",
       "paragraph": "Paragraph",
-      "divider": "Divider"
+      "divider": "Divider",
+      "slider": "Thanh trượt",
+      "rating": "Đánh giá",
+      "image": "Ảnh",
+      "file": "Tệp",
+      "location": "Vị trí"
     },
     "ops": {
       "eq": "is",
@@ -4964,7 +4980,18 @@
       "submissionLimit": "Giới hạn lượt gửi",
       "submissionLimitHint": "Ngừng nhận câu trả lời sau số lượt gửi này (web và chat). Xóa một lượt gửi sẽ trống ra một chỗ. Để trống = không giới hạn.",
       "blockedEmailDomains": "Tên miền email bị chặn",
-      "blockedEmailDomainsHint": "Mỗi dòng một tên miền, ví dụ example.com. Tên miền con cũng bị chặn."
+      "blockedEmailDomainsHint": "Mỗi dòng một tên miền, ví dụ example.com. Tên miền con cũng bị chặn.",
+      "channels": "Nơi sử dụng",
+      "channel": {
+        "web": "Trang web và nhúng",
+        "chat": "Trong chat (bước của luồng)"
+      },
+      "channelHint": {
+        "web": "Liên kết công khai và mã nhúng.",
+        "chat": "Hỏi từng câu bằng bước Hỏi biểu mẫu."
+      },
+      "profilingLimit": "Số câu hỏi mỗi lượt chat",
+      "profilingLimitHint": "Hồ sơ lũy tiến: tối đa số câu hỏi này mỗi lượt. Trống = hỏi tất cả."
     },
     "submitActions": {
       "title": "Actions after submit",

@@ -5064,7 +5064,18 @@
       "previewBack": "Back",
       "previewNext": "Next",
       "previewSubmit": "Submit (preview)",
-      "previewSubmitted": "Preview submitted. Nothing is stored from the preview."
+      "previewSubmitted": "Preview submitted. Nothing is stored from the preview.",
+      "stars": "Number of stars",
+      "optionPoints": "Points",
+      "chatSection": "In chat",
+      "chatPrompt": "Question text in chat (empty = the label)",
+      "chatRetry": "Message when a reply does not fit",
+      "chatMediaUrl": "Image sent with the question (https link)",
+      "askWhenKnown": "Ask even if already known",
+      "askWhenKnownHint": "Off: a chat run skips this question when the contact already has the answer.",
+      "alwaysAsk": "Never cut by the question limit",
+      "askAfterSubmissions": "Ask from submission number",
+      "askAfterSubmissionsHint": "Progressive profiling: ask only once the contact has submitted this form this many times. Empty = always."
     },
     "fieldTypes": {
       "text": "Short text",
@@ -5083,7 +5094,12 @@
       "time": "Time",
       "heading": "Heading",
       "paragraph": "Paragraph",
-      "divider": "Divider"
+      "divider": "Divider",
+      "slider": "Slider",
+      "rating": "Rating",
+      "image": "Photo",
+      "file": "File",
+      "location": "Location"
     },
     "ops": {
       "eq": "is",
@@ -5156,7 +5172,18 @@
       "submissionLimit": "Submission limit",
       "submissionLimitHint": "Stop accepting answers after this many submissions (web and chat). Deleting a submission frees a place. Empty = no limit.",
       "blockedEmailDomains": "Blocked email domains",
-      "blockedEmailDomainsHint": "One per line, e.g. example.com. Subdomains are blocked too."
+      "blockedEmailDomainsHint": "One per line, e.g. example.com. Subdomains are blocked too.",
+      "channels": "Where it runs",
+      "channel": {
+        "web": "Web page and embed",
+        "chat": "In a chat (flow step)"
+      },
+      "channelHint": {
+        "web": "Public link and embed code.",
+        "chat": "Asked question by question by an Ask form step."
+      },
+      "profilingLimit": "Questions per chat run",
+      "profilingLimitHint": "Progressive profiling: at most this many questions in one run. Empty = ask everything."
     },
     "submitActions": {
       "title": "Actions after submit",

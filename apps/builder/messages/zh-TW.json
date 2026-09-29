@@ -4825,7 +4825,7 @@
       "settings": "Settings",
       "preview": "Preview",
       "steps": "Steps",
-      "step": "Step",
+      "step": "步長",
       "stepTitle": "Step title",
       "stepPosition": "Step {current} of {total}",
       "noStep": "Add a step to start placing fields.",
@@ -4866,7 +4866,18 @@
       "previewBack": "Back",
       "previewNext": "Next",
       "previewSubmit": "Submit (preview)",
-      "previewSubmitted": "Preview submitted. Nothing is stored from the preview."
+      "previewSubmitted": "Preview submitted. Nothing is stored from the preview.",
+      "stars": "星星數量",
+      "optionPoints": "分數",
+      "chatSection": "聊天中",
+      "chatPrompt": "聊天中的問題文字（留空 = 標籤）",
+      "chatRetry": "回答不符合時的提示",
+      "chatMediaUrl": "隨問題傳送的圖片（https 連結）",
+      "askWhenKnown": "已知時也詢問",
+      "askWhenKnownHint": "關閉：若聯絡人已有答案，聊天會略過此問題。",
+      "alwaysAsk": "不受問題數量上限裁剪",
+      "askAfterSubmissions": "從第幾次提交起詢問",
+      "askAfterSubmissionsHint": "漸進式輪廓：聯絡人提交此表單達到該次數後才詢問。留空 = 一律詢問。"
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4885,7 +4896,12 @@
       "time": "Time",
       "heading": "Heading",
       "paragraph": "Paragraph",
-      "divider": "Divider"
+      "divider": "Divider",
+      "slider": "滑桿",
+      "rating": "評分",
+      "image": "照片",
+      "file": "檔案",
+      "location": "位置"
     },
     "ops": {
       "eq": "is",
@@ -4958,7 +4974,18 @@
       "submissionLimit": "提交上限",
       "submissionLimitHint": "達到此提交數（網頁與聊天）後停止接收回答。刪除一筆提交會空出一個名額。留空 = 不限。",
       "blockedEmailDomains": "封鎖的電子郵件網域",
-      "blockedEmailDomainsHint": "每行一個，例如 example.com。子網域也會被封鎖。"
+      "blockedEmailDomainsHint": "每行一個，例如 example.com。子網域也會被封鎖。",
+      "channels": "使用管道",
+      "channel": {
+        "web": "網頁與嵌入",
+        "chat": "聊天中（流程步驟）"
+      },
+      "channelHint": {
+        "web": "公開連結與嵌入程式碼。",
+        "chat": "由「詢問表單」步驟逐題提問。"
+      },
+      "profilingLimit": "每次聊天的問題數",
+      "profilingLimitHint": "漸進式輪廓：每次最多詢問這麼多問題。留空 = 全部詢問。"
     },
     "submitActions": {
       "title": "Actions after submit",

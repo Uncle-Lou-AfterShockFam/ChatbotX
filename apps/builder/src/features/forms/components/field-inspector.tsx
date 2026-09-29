@@ -20,9 +20,14 @@ import type {
 } from "@chatbotx.io/utils/form"
 import {
   FORM_OPTION_FIELD_TYPES,
+  FORM_RATING_DEFAULT_STARS,
+  FORM_RATING_MAX_STARS,
+  FORM_RATING_MIN_STARS,
+  FORM_SCALE_FIELD_TYPES,
   formMappingIssue,
   formSystemFieldKeys,
   isFormInputFieldType,
+  MAX_FORM_OPTION_POINTS,
   MAX_FORM_OPTIONS,
 } from "@chatbotx.io/utils/form"
 import { PlusIcon, Trash2Icon } from "lucide-react"
@@ -63,12 +68,15 @@ export function FieldInspector(props: {
   definition: FormDefinition
   field: FormField
   onChange: (definition: FormDefinition) => void
+  /** s220c A2-4: the form runs in chat, so the chat wording and profiling apply. */
+  chatEnabled: boolean
 }) {
   const { definition, field, onChange } = props
   const t = useTranslations()
   const customFields = useCustomFieldStore((s) => s.customFields)
   const [keyDraft, setKeyDraft] = useState(field.key)
   const isInput = isFormInputFieldType(field.type)
+  const isScale = FORM_SCALE_FIELD_TYPES.has(field.type)
   const sources = conditionSourcesBefore(definition, field.key)
   const patch = (p: Partial<Omit<FormField, "key">>) =>
     onChange(updateField(definition, field.key, p))
@@ -83,10 +91,13 @@ export function FieldInspector(props: {
     : null
   const mapItems = [
     { value: MAP_NONE, label: t("forms.editor.mapNone") },
-    ...formSystemFieldKeys.options.map((k) => ({
-      value: `system:${k}`,
-      label: `${t("forms.editor.mapSystem")}: ${t(`forms.systemKeys.${k}`)}`,
-    })),
+    // a slider / rating is a number: never a name, email or phone
+    ...(isScale
+      ? []
+      : formSystemFieldKeys.options.map((k) => ({
+          value: `system:${k}`,
+          label: `${t("forms.editor.mapSystem")}: ${t(`forms.systemKeys.${k}`)}`,
+        }))),
     ...customFields
       .filter((cf) => {
         if (MAPPABLE_TYPES.has(cf.type)) {
@@ -146,7 +157,7 @@ export function FieldInspector(props: {
               value={keyDraft}
             />
           </div>
-          {field.type !== "checkbox" && field.type !== "hidden" ? (
+          {field.type !== "checkbox" && field.type !== "hidden" && !isScale ? (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="fi-placeholder">
                 {t("forms.editor.placeholder")}
@@ -190,7 +201,48 @@ export function FieldInspector(props: {
               onCheckedChange={(required) => patch({ required })}
             />
           </div>
+          {field.type === "rating" ? (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="fi-stars">{t("forms.editor.stars")}</Label>
+              <Input
+                id="fi-stars"
+                max={FORM_RATING_MAX_STARS}
+                min={FORM_RATING_MIN_STARS}
+                onChange={(e) =>
+                  patch({
+                    max:
+                      e.target.value === ""
+                        ? undefined
+                        : Number.parseInt(e.target.value, 10),
+                  })
+                }
+                type="number"
+                value={field.max ?? FORM_RATING_DEFAULT_STARS}
+              />
+            </div>
+          ) : null}
+          {field.type === "slider" ? (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="fi-step">{t("forms.editor.step")}</Label>
+              <Input
+                id="fi-step"
+                min={0}
+                onChange={(e) =>
+                  patch({
+                    step:
+                      e.target.value === "" || Number(e.target.value) <= 0
+                        ? undefined
+                        : Number(e.target.value),
+                  })
+                }
+                step="any"
+                type="number"
+                value={field.step ?? ""}
+              />
+            </div>
+          ) : null}
           {field.type === "number" ||
+          field.type === "slider" ||
           field.type === "text" ||
           field.type === "textarea" ? (
             <div className="grid grid-cols-2 gap-2">
@@ -298,6 +350,9 @@ export function FieldInspector(props: {
               </span>
             ) : null}
           </div>
+          {props.chatEnabled && field.type !== "hidden" ? (
+            <ChatSettings field={field} patch={patch} />
+          ) : null}
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <Label>{t("forms.editor.visibleWhen")}</Label>
@@ -348,7 +403,7 @@ function OptionsEditor(props: {
   const options = props.field.options ?? []
   const set = (
     index: number,
-    patch: Partial<{ value: string; label: string }>,
+    patch: Partial<{ value: string; label: string; points: number }>,
   ) =>
     props.onChange(
       options.map((o, i) => (i === index ? { ...o, ...patch } : o)),
@@ -375,6 +430,29 @@ function OptionsEditor(props: {
             onChange={(e) => set(i, { value: e.target.value })}
             placeholder={t("forms.editor.optionValue")}
             value={o.value}
+          />
+          <Input
+            aria-label={t("forms.editor.optionPoints")}
+            className="h-8 w-20 shrink-0"
+            max={MAX_FORM_OPTION_POINTS}
+            min={-MAX_FORM_OPTION_POINTS}
+            onChange={(e) => {
+              const n = Number.parseInt(e.target.value, 10)
+              const next = { ...o }
+              if (Number.isNaN(n)) {
+                // biome-ignore lint/performance/noDelete: an unscored option carries no key
+                delete next.points
+              } else {
+                next.points = Math.max(
+                  -MAX_FORM_OPTION_POINTS,
+                  Math.min(MAX_FORM_OPTION_POINTS, n),
+                )
+              }
+              props.onChange(options.map((x, j) => (j === i ? next : x)))
+            }}
+            placeholder={t("forms.editor.optionPoints")}
+            type="number"
+            value={o.points ?? ""}
           />
           <Button
             aria-label={t("actions.delete")}
@@ -408,4 +486,125 @@ function OptionsEditor(props: {
       </Button>
     </div>
   )
+}
+
+/**
+ * s220c A2-4: how the question reads in a chat run and when a chat run may
+ * skip it (progressive profiling). The web page ignores both until it can
+ * identify the visitor (signed form links, PR 4).
+ */
+function ChatSettings(props: {
+  field: FormField
+  patch: (p: Partial<Omit<FormField, "key">>) => void
+}) {
+  const { field, patch } = props
+  const t = useTranslations()
+  const chat = field.chat ?? {}
+  const profile = field.profile ?? {}
+  const setChat = (next: NonNullable<FormField["chat"]>) =>
+    patch({ chat: pruneEmpty(next) })
+  const setProfile = (next: NonNullable<FormField["profile"]>) =>
+    patch({ profile: pruneEmpty(next) })
+  return (
+    <fieldset
+      className="flex flex-col gap-3 rounded-md border px-3 py-3"
+      data-testid="fi-chat"
+    >
+      <legend className="px-1 font-medium text-sm">
+        {t("forms.editor.chatSection")}
+      </legend>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="fi-chat-prompt">{t("forms.editor.chatPrompt")}</Label>
+        <Textarea
+          id="fi-chat-prompt"
+          onChange={(e) =>
+            setChat({ ...chat, prompt: e.target.value || undefined })
+          }
+          placeholder={field.label}
+          rows={2}
+          value={chat.prompt ?? ""}
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="fi-chat-retry">{t("forms.editor.chatRetry")}</Label>
+        <Input
+          id="fi-chat-retry"
+          onChange={(e) =>
+            setChat({ ...chat, retryMessage: e.target.value || undefined })
+          }
+          value={chat.retryMessage ?? ""}
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="fi-chat-media">{t("forms.editor.chatMediaUrl")}</Label>
+        <Input
+          id="fi-chat-media"
+          onChange={(e) =>
+            setChat({ ...chat, mediaUrl: e.target.value || undefined })
+          }
+          placeholder="https://"
+          value={chat.mediaUrl ?? ""}
+        />
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <Label htmlFor="fi-profile-known">
+            {t("forms.editor.askWhenKnown")}
+          </Label>
+          <span className="text-muted-foreground text-xs">
+            {t("forms.editor.askWhenKnownHint")}
+          </span>
+        </div>
+        <Switch
+          checked={profile.showWhenKnown !== false}
+          id="fi-profile-known"
+          onCheckedChange={(on) =>
+            setProfile({ ...profile, showWhenKnown: on ? undefined : false })
+          }
+        />
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <Label htmlFor="fi-profile-always">{t("forms.editor.alwaysAsk")}</Label>
+        <Switch
+          checked={profile.alwaysDisplay === true}
+          id="fi-profile-always"
+          onCheckedChange={(on) =>
+            setProfile({ ...profile, alwaysDisplay: on ? true : undefined })
+          }
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="fi-profile-after">
+          {t("forms.editor.askAfterSubmissions")}
+        </Label>
+        <Input
+          id="fi-profile-after"
+          max={100}
+          min={0}
+          onChange={(e) => {
+            const n = Number.parseInt(e.target.value, 10)
+            setProfile({
+              ...profile,
+              showAfterSubmissions: Number.isNaN(n)
+                ? undefined
+                : Math.max(0, Math.min(100, n)),
+            })
+          }}
+          type="number"
+          value={profile.showAfterSubmissions ?? ""}
+        />
+        <span className="text-muted-foreground text-xs">
+          {t("forms.editor.askAfterSubmissionsHint")}
+        </span>
+      </div>
+    </fieldset>
+  )
+}
+
+/** `undefined` for an object with no set key (the schema stores no empty `chat` / `profile`). */
+function pruneEmpty<T extends Record<string, unknown>>(
+  value: T,
+): T | undefined {
+  const entries = Object.entries(value).filter(([, v]) => v !== undefined)
+  return entries.length === 0 ? undefined : (Object.fromEntries(entries) as T)
 }

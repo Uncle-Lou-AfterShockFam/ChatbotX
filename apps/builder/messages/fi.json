@@ -4792,7 +4792,7 @@
       "settings": "Settings",
       "preview": "Preview",
       "steps": "Steps",
-      "step": "Step",
+      "step": "Askel",
       "stepTitle": "Step title",
       "stepPosition": "Step {current} of {total}",
       "noStep": "Add a step to start placing fields.",
@@ -4833,7 +4833,18 @@
       "previewBack": "Back",
       "previewNext": "Next",
       "previewSubmit": "Submit (preview)",
-      "previewSubmitted": "Preview submitted. Nothing is stored from the preview."
+      "previewSubmitted": "Preview submitted. Nothing is stored from the preview.",
+      "stars": "Tähtien määrä",
+      "optionPoints": "Pisteet",
+      "chatSection": "Chatissa",
+      "chatPrompt": "Kysymysteksti chatissa (tyhjä = otsikko)",
+      "chatRetry": "Viesti, kun vastaus ei sovi",
+      "chatMediaUrl": "Kysymyksen mukana lähetettävä kuva (https-linkki)",
+      "askWhenKnown": "Kysy vaikka vastaus tiedetään",
+      "askWhenKnownHint": "Pois: chat ohittaa kysymyksen, jos yhteystiedolla on jo vastaus.",
+      "alwaysAsk": "Kysymysraja ei koskaan karsi",
+      "askAfterSubmissions": "Kysy lähetyksestä numero",
+      "askAfterSubmissionsHint": "Progressiivinen profilointi: kysy vasta kun yhteystieto on lähettänyt lomakkeen näin monta kertaa. Tyhjä = aina."
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4852,7 +4863,12 @@
       "time": "Time",
       "heading": "Heading",
       "paragraph": "Paragraph",
-      "divider": "Divider"
+      "divider": "Divider",
+      "slider": "Liukusäädin",
+      "rating": "Arvio",
+      "image": "Kuva",
+      "file": "Tiedosto",
+      "location": "Sijainti"
     },
     "ops": {
       "eq": "is",
@@ -4925,7 +4941,18 @@
       "submissionLimit": "Lähetysraja",
       "submissionLimitHint": "Lopeta vastausten vastaanotto näin monen lähetyksen jälkeen (verkko ja chat). Lähetyksen poistaminen vapauttaa paikan. Tyhjä = ei rajaa.",
       "blockedEmailDomains": "Estetyt sähköpostiverkkotunnukset",
-      "blockedEmailDomainsHint": "Yksi riviä kohden, esim. example.com. Myös aliverkkotunnukset estetään."
+      "blockedEmailDomainsHint": "Yksi riviä kohden, esim. example.com. Myös aliverkkotunnukset estetään.",
+      "channels": "Missä toimii",
+      "channel": {
+        "web": "Verkkosivu ja upotus",
+        "chat": "Chatissa (työnkulun vaihe)"
+      },
+      "channelHint": {
+        "web": "Julkinen linkki ja upotuskoodi.",
+        "chat": "Kysytään kysymys kerrallaan Kysy lomake -vaiheella."
+      },
+      "profilingLimit": "Kysymyksiä per chat",
+      "profilingLimitHint": "Progressiivinen profilointi: enintään näin monta kysymystä kerralla. Tyhjä = kysy kaikki."
     },
     "submitActions": {
       "title": "Actions after submit",

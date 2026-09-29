@@ -4792,7 +4792,7 @@
       "settings": "Settings",
       "preview": "Preview",
       "steps": "Steps",
-      "step": "Step",
+      "step": "Pas",
       "stepTitle": "Step title",
       "stepPosition": "Step {current} of {total}",
       "noStep": "Add a step to start placing fields.",
@@ -4833,7 +4833,18 @@
       "previewBack": "Back",
       "previewNext": "Next",
       "previewSubmit": "Submit (preview)",
-      "previewSubmitted": "Preview submitted. Nothing is stored from the preview."
+      "previewSubmitted": "Preview submitted. Nothing is stored from the preview.",
+      "stars": "Număr de stele",
+      "optionPoints": "Puncte",
+      "chatSection": "În chat",
+      "chatPrompt": "Textul întrebării în chat (gol = eticheta)",
+      "chatRetry": "Mesaj când un răspuns nu se potrivește",
+      "chatMediaUrl": "Imagine trimisă cu întrebarea (link https)",
+      "askWhenKnown": "Întreabă chiar dacă e cunoscut",
+      "askWhenKnownHint": "Oprit: chatul sare peste întrebare dacă contactul are deja răspunsul.",
+      "alwaysAsk": "Niciodată tăiat de limita de întrebări",
+      "askAfterSubmissions": "Întreabă de la trimiterea nr.",
+      "askAfterSubmissionsHint": "Profilare progresivă: întreabă doar după ce contactul a trimis formularul de atâtea ori. Gol = mereu."
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4852,7 +4863,12 @@
       "time": "Time",
       "heading": "Heading",
       "paragraph": "Paragraph",
-      "divider": "Divider"
+      "divider": "Divider",
+      "slider": "Glisor",
+      "rating": "Evaluare",
+      "image": "Fotografie",
+      "file": "Fișier",
+      "location": "Locație"
     },
     "ops": {
       "eq": "is",
@@ -4925,7 +4941,18 @@
       "submissionLimit": "Limită de trimiteri",
       "submissionLimitHint": "Nu mai accepta răspunsuri după acest număr de trimiteri (web și chat). Ștergerea unei trimiteri eliberează un loc. Gol = fără limită.",
       "blockedEmailDomains": "Domenii de e-mail blocate",
-      "blockedEmailDomainsHint": "Unul pe rând, de ex. example.com. Și subdomeniile sunt blocate."
+      "blockedEmailDomainsHint": "Unul pe rând, de ex. example.com. Și subdomeniile sunt blocate.",
+      "channels": "Unde rulează",
+      "channel": {
+        "web": "Pagină web și încorporare",
+        "chat": "Într-un chat (pas din flux)"
+      },
+      "channelHint": {
+        "web": "Link public și cod de încorporare.",
+        "chat": "Întrebat pe rând de un pas Întreabă formular."
+      },
+      "profilingLimit": "Întrebări per chat",
+      "profilingLimitHint": "Profilare progresivă: cel mult atâtea întrebări per rulare. Gol = întreabă tot."
     },
     "submitActions": {
       "title": "Actions after submit",
