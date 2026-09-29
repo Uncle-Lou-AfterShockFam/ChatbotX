@@ -1,4 +1,7 @@
+import { sql } from "drizzle-orm"
 import {
+  boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -9,12 +12,19 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core"
 import type {
+  FormChannel,
   FormDefinition,
+  FormSessionProfile,
+  FormSessionStatus,
   FormSettings,
   FormStatus,
   FormSubmissionVisibility,
 } from "../partials/form"
-import { formStatuses } from "../partials/form"
+import {
+  formChannels,
+  formSessionStatuses,
+  formStatuses,
+} from "../partials/form"
 import {
   bigintAsString,
   sharedColumns,
@@ -22,12 +32,24 @@ import {
 } from "../partials/shared"
 import { userModel } from "./auth-user"
 import { contactModel } from "./contact"
+import { conversationModel } from "./conversation"
+import { flowModel } from "./flow"
 import { inboxModel } from "./inbox"
 import { workspaceModel } from "./workspace"
 
 export const formStatus = pgEnum(
   "formStatus",
   formStatuses.options as [FormStatus, ...FormStatus[]],
+)
+
+export const formChannel = pgEnum(
+  "formChannel",
+  formChannels.options as [FormChannel, ...FormChannel[]],
+)
+
+export const formSessionStatus = pgEnum(
+  "formSessionStatus",
+  formSessionStatuses.options as [FormSessionStatus, ...FormSessionStatus[]],
 )
 
 /**
@@ -77,6 +99,10 @@ export const formModel = pgTable(
  * answers), `visibility` = the step / field ids visible at answer time, so a
  * row stays readable after the form changes. `dedupHash` (form + canonical
  * values + ipHash) folds an identical resubmit within the dedup window.
+ *
+ * A chat submission (s219 A2-2) has no ip: `ipHash` / `dedupHash` are web
+ * only (the check keeps a web row from losing them), and `formSessionId` is
+ * UNIQUE, so a retried finish can never insert twice.
  */
 export const formSubmissionModel = pgTable(
   "FormSubmission",
@@ -85,9 +111,13 @@ export const formSubmissionModel = pgTable(
     definitionVersion: integer().notNull(),
     values: jsonb().$type<Record<string, unknown>>().notNull(),
     visibility: jsonb().$type<FormSubmissionVisibility>().notNull(),
-    ipHash: text().notNull(),
+    channel: formChannel().notNull().default("web"),
+    ipHash: text(),
     userAgent: text(),
-    dedupHash: text().notNull(),
+    dedupHash: text(),
+    score: integer(),
+    /** A mapped email / phone answer belongs to another contact: not written. */
+    identityConflict: boolean().notNull().default(false),
     workspaceId: bigintAsString()
       .notNull()
       .references(() => workspaceModel.id, {
@@ -104,8 +134,21 @@ export const formSubmissionModel = pgTable(
       onDelete: "set null",
       onUpdate: "cascade",
     }),
+    conversationId: bigintAsString().references(() => conversationModel.id, {
+      onDelete: "set null",
+      onUpdate: "cascade",
+    }),
+    formSessionId: bigintAsString().references(() => formSessionModel.id, {
+      onDelete: "set null",
+      onUpdate: "cascade",
+    }),
   },
   (table) => [
+    check(
+      "FormSubmission_web_hashes_check",
+      sql`${table.channel} <> 'web' OR (${table.ipHash} IS NOT NULL AND ${table.dedupHash} IS NOT NULL)`,
+    ),
+    uniqueIndex("FormSubmission_formSessionId_key").on(table.formSessionId),
     index("FormSubmission_formId_createdAt_idx").on(
       table.formId,
       table.createdAt,
@@ -123,6 +166,89 @@ export const formSubmissionModel = pgTable(
     index("FormSubmission_workspaceId_contactId_idx").on(
       table.workspaceId,
       table.contactId,
+    ),
+  ],
+)
+
+/**
+ * One chat run of a published form (s219 A2-2): the flow step asks one
+ * question per message and this row is the only state. It pins the
+ * definition it started with, so a republish mid-conversation cannot change
+ * the questions under a contact.
+ *
+ * Concurrency: every answer locks the row (`FOR UPDATE`) and is accepted only
+ * when the reply's message id is newer than `askMarker` (a snowflake minted
+ * when the current question was asked; insertion order, never the channel's
+ * own timestamp, which can be minute-granular), so a duplicate delivery or a
+ * reply racing the next question is a no-op. `challengeId` names the current
+ * question in the conversation challenge. At most one `inProgress` row per
+ * contact (partial unique index).
+ */
+export const formSessionModel = pgTable(
+  "FormSession",
+  {
+    ...sharedColumns,
+    workspaceId: bigintAsString()
+      .notNull()
+      .references(() => workspaceModel.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    formId: bigintAsString()
+      .notNull()
+      .references(() => formModel.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    contactId: bigintAsString()
+      .notNull()
+      .references(() => contactModel.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    conversationId: bigintAsString()
+      .notNull()
+      .references(() => conversationModel.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    flowId: bigintAsString()
+      .notNull()
+      .references(() => flowModel.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    flowVersionId: bigintAsString(),
+    nodeId: text().notNull(),
+    stepId: text().notNull(),
+    status: formSessionStatus().notNull().default("inProgress"),
+    endReason: text(),
+    definitionVersion: integer().notNull(),
+    definition: jsonb().$type<FormDefinition>().notNull(),
+    profile: jsonb().$type<FormSessionProfile>().notNull(),
+    values: jsonb().$type<Record<string, unknown>>().notNull(),
+    /** Every key already sent: answered, skipped-optional, or a display block. */
+    asked: jsonb().$type<string[]>().notNull(),
+    currentFieldKey: text(),
+    askMarker: bigintAsString(),
+    challengeId: text(),
+    attempts: integer().notNull().default(0),
+    maxAttempts: integer().notNull(),
+    timeoutMinutes: integer().notNull(),
+    lastAnsweredMessageId: bigintAsString(),
+    expiresAt: timestamp(timestampConfig).notNull(),
+    endedAt: timestamp(timestampConfig),
+  },
+  (table) => [
+    uniqueIndex("FormSession_contactId_inProgress_key")
+      .on(table.contactId)
+      .where(sql`${table.status} = 'inProgress'`),
+    index("FormSession_expiresAt_inProgress_idx")
+      .on(table.expiresAt)
+      .where(sql`${table.status} = 'inProgress'`),
+    index("FormSession_workspaceId_formId_idx").on(
+      table.workspaceId,
+      table.formId,
     ),
   ],
 )

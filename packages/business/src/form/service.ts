@@ -287,6 +287,45 @@ export class FormService extends BaseService {
   }
 
   /**
+   * A PUBLISHED form a chat run may ask (s219 A2-2): its channels include
+   * `chat` and its live copy has an input field. Null otherwise, never a throw:
+   * the flow step routes a missing form to its skip branch.
+   */
+  async findPublishedForChat(props: {
+    workspaceId: string
+    id: string
+    tx?: DatabaseClient
+  }): Promise<NormalizedForm | null> {
+    const { workspaceId, id, tx = db } = props
+    if (!INT8_ID.test(id)) {
+      return null
+    }
+    const [row] = await tx
+      .select()
+      .from(formModel)
+      .where(
+        and(
+          eq(formModel.workspaceId, workspaceId),
+          eq(formModel.id, id),
+          eq(formModel.status, "published"),
+        ),
+      )
+      .limit(1)
+    if (!row || row.publishedDefinition === null) {
+      return null
+    }
+    const form = this.normalize(row)
+    if (
+      !form.settings.channels.includes("chat") ||
+      formInputFields(form.publishedDefinition ?? EMPTY_FORM_DEFINITION)
+        .length === 0
+    ) {
+      return null
+    }
+    return form
+  }
+
+  /**
    * The `embedOrigins` of a PUBLISHED form, for the `frame-ancestors` CSP the
    * proxy sets on `/forms/<ws>/<slug>`; null when there is no such form.
    */

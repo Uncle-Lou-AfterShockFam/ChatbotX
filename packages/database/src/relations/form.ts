@@ -30,5 +30,27 @@ export const formRelations = defineRelationsPart(schema, (r) => ({
       from: r.formSubmissionModel.contactId,
       to: r.contactModel.id,
     }),
+    session: r.one.formSessionModel({
+      from: r.formSubmissionModel.formSessionId,
+      to: r.formSessionModel.id,
+    }),
+  },
+  formSessionModel: {
+    workspace: r.one.workspaceModel({
+      from: r.formSessionModel.workspaceId,
+      to: r.workspaceModel.id,
+    }),
+    form: r.one.formModel({
+      from: r.formSessionModel.formId,
+      to: r.formModel.id,
+    }),
+    contact: r.one.contactModel({
+      from: r.formSessionModel.contactId,
+      to: r.contactModel.id,
+    }),
+    conversation: r.one.conversationModel({
+      from: r.formSessionModel.conversationId,
+      to: r.conversationModel.id,
+    }),
   },
 }))

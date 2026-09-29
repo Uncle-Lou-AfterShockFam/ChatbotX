@@ -36,7 +36,7 @@ export type FormEvaluation = {
   skipMap: Map<string, string>
 }
 
-const isEmptyValue = (value: FormValue): boolean =>
+export const isEmptyFormValue = (value: FormValue): boolean =>
   value === undefined ||
   value === null ||
   value === "" ||
@@ -90,9 +90,9 @@ export function compareFormValue(
 ): boolean {
   switch (op) {
     case "is_empty":
-      return isEmptyValue(actual)
+      return isEmptyFormValue(actual)
     case "is_not_empty":
-      return !isEmptyValue(actual)
+      return !isEmptyFormValue(actual)
     case "eq":
     case "neq": {
       const hit = Array.isArray(actual)
@@ -252,6 +252,37 @@ export function evaluateForm(
     visibleFields.delete(key)
   }
 
+  // A step jumped over by a `skip_to_step` is never shown, so it is hidden
+  // like a step whose own condition failed: its fields are neither required
+  // nor kept (s219 A2-2: a required field the contact never saw can never
+  // block the submit, on the web page or in chat).
+  const reached = new Set<string>()
+  let i = 0
+  while (i < def.steps.length) {
+    const step = def.steps[i]
+    if (!visibleSteps.has(step.id)) {
+      i++
+      continue
+    }
+    reached.add(step.id)
+    const jump = skipMap.get(step.id)
+    const target = jump ? def.steps.findIndex((s) => s.id === jump) : -1
+    // Publish refuses a backward or missing target; a lenient read must
+    // still never loop, so only a forward jump is followed.
+    i = target > i ? target : i + 1
+  }
+  for (const stepId of visibleSteps) {
+    if (!reached.has(stepId)) {
+      visibleSteps.delete(stepId)
+    }
+  }
+  for (const key of visibleFields) {
+    const stepId = fieldStep.get(key)
+    if (stepId && !reached.has(stepId)) {
+      visibleFields.delete(key)
+    }
+  }
+
   // Required: the field's own flag, then optional, then require (wins).
   for (const key of visibleFields) {
     const field = inputFields.get(key)
@@ -309,7 +340,12 @@ const isLocation = (value: string): boolean => {
   return Math.abs(lat) <= 90 && Math.abs(lng) <= 180
 }
 
-function validateOne(
+/**
+ * Type-check ONE non-empty answer against its field (required-ness is the
+ * caller's: see `validateFormSubmission`). A chat run checks each reply with
+ * this before storing it, so a chat answer and a web answer pass the same rule.
+ */
+export function validateFormField(
   field: FormField,
   value: FormValue,
 ): FormValidationIssue["code"] | null {
@@ -393,11 +429,17 @@ function validateOne(
  * Validate `values` against the definition for the given evaluation. Only
  * VISIBLE fields are checked; a required visible field with an empty answer
  * is `required`; a filled answer is type-checked per field type.
+ *
+ * `suppressed` = visible fields the contact was never asked (progressive
+ * profiling in a chat run): an empty answer there is not `required`, the
+ * Mautic "hidden required field" rule (SubmissionModel.php:205-209). The web
+ * page asks every visible field, so it passes none.
  */
 export function validateFormSubmission(
   def: FormDefinition,
   values: FormValues,
   evaluation: FormEvaluation = evaluateForm(def, values),
+  options: { suppressed?: ReadonlySet<string> } = {},
 ): FormValidationIssue[] {
   const issues: FormValidationIssue[] = []
   for (const field of formInputFields(def)) {
@@ -405,13 +447,16 @@ export function validateFormSubmission(
       continue
     }
     const value = readFormValue(values, field.key)
-    if (isEmptyValue(value)) {
-      if (evaluation.requiredFields.has(field.key)) {
+    if (isEmptyFormValue(value)) {
+      if (
+        evaluation.requiredFields.has(field.key) &&
+        !options.suppressed?.has(field.key)
+      ) {
         issues.push({ key: field.key, code: "required" })
       }
       continue
     }
-    const code = validateOne(field, value)
+    const code = validateFormField(field, value)
     if (code) {
       issues.push({ key: field.key, code })
     }
@@ -434,7 +479,7 @@ export function pruneFormValues(
       continue
     }
     const value = readFormValue(values, field.key)
-    if (!isEmptyValue(value)) {
+    if (!isEmptyFormValue(value)) {
       out[field.key] = value
     }
   }
