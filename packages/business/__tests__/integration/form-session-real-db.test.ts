@@ -451,6 +451,26 @@ describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
     expect(emitted.formAbandoned).toHaveLength(0)
   })
 
+  test("a window that closes mid-run ends the run 'closed' at the finish, with no submission (skeptic + blind probe s220c)", async () => {
+    const w = await seedWorld()
+    await start(w)
+    await answer(w, "Ada")
+    await answer(w, "2")
+    await answer(w, "ada@example.com")
+    const closedAt = JSON.stringify({
+      publishDown: new Date(Date.now() - 1000).toISOString(),
+    })
+    await asReplica(sql`
+      UPDATE "Form" SET settings = settings || ${closedAt}::jsonb WHERE id = ${w.formId}`)
+    const done = await answer(w, "skip")
+    expect(done.kind === "ended" && done.reason).toBe("closed")
+    await track(w)
+    expect(await submissions(w)).toHaveLength(0)
+    // the contact write inside the savepoint rolled back with the refusal
+    expect(await contactEmail(w.contactId)).toBeNull()
+    expect(emitted.formSubmitted).toHaveLength(0)
+  })
+
   test("blocked email domain (s220c A2-4): the reply is refused like a bad email and re-asked", async () => {
     const w = await seedWorld({
       settings: { blockedEmailDomains: ["example.com"] },

@@ -639,3 +639,31 @@ describe("isBlockedEmailDomain + validateFormSubmission", () => {
     expect(validateFormSubmission(d, { mail: "a@example.com" })).toEqual([])
   })
 })
+
+describe("blocked domains on an email-identity text field (skeptic s220c bypass)", () => {
+  test("a TEXT field that fills the contact's email is checked too; a plain text field is not", () => {
+    const d = formDefinition.parse({
+      steps: [
+        {
+          id: "s1",
+          fields: [
+            {
+              key: "addr",
+              type: "text",
+              label: "Email",
+              mapTo: { kind: "system", key: "email" },
+            },
+            { key: "other", type: "text", label: "Other" },
+          ],
+        },
+      ],
+      rules: [],
+    })
+    const values = { addr: "spam@example.com", other: "spam@example.com" }
+    expect(
+      validateFormSubmission(d, values, evaluateForm(d, values), {
+        blockedEmailDomains: ["example.com"],
+      }),
+    ).toEqual([{ key: "addr", code: "emailDomainBlocked" }])
+  })
+})

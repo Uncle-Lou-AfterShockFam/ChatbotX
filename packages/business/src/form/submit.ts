@@ -24,12 +24,14 @@ import {
   formMapsToContact,
   formScore,
   formWindowState,
+  normalizeFormSettings,
   pruneFormValues,
   validateFormSubmission,
 } from "@chatbotx.io/database/partials"
 import {
   contactCustomFieldModel,
   customFieldModel,
+  formModel,
   formSubmissionModel,
 } from "@chatbotx.io/database/schema"
 import type { FormSubmissionModel } from "@chatbotx.io/database/types"
@@ -190,6 +192,32 @@ export type PendingChanges = Awaited<
   ReturnType<typeof contactCustomFieldService.setValuesInTransaction>
 >
 
+/** The admission lock wait is 5 s (`admit`): a slow holder must not starve the pool. */
+const ADMISSION_RETRY_AFTER_SECONDS = 5
+/** Admission counts rows after taking its lock: never a snapshot older than the lock. */
+export const ADMISSION_ISOLATION = { isolationLevel: "read committed" } as const
+
+/** Thrown inside the submit / finish transaction to roll it back. */
+export class FormNotAdmittedError extends Error {
+  readonly reason: FormClosedReason
+  constructor(reason: FormClosedReason) {
+    super(`form submission not admitted: ${reason}`)
+    this.reason = reason
+  }
+}
+
+const LOCK_NOT_AVAILABLE = "55P03"
+/** A Postgres lock_timeout (driver errors may wrap it in `cause`). */
+export const isLockTimeout = (error: unknown): boolean => {
+  for (let e: unknown = error, depth = 0; e && depth < 4; depth++) {
+    if ((e as { code?: unknown }).code === LOCK_NOT_AVAILABLE) {
+      return true
+    }
+    e = (e as { cause?: unknown }).cause
+  }
+  return false
+}
+
 const closedResult = (
   settings: NormalizedForm["settings"],
   reason: FormClosedReason,
@@ -212,11 +240,6 @@ export class FormSubmitService {
     }
     const def = form.publishedDefinition ?? EMPTY_FORM_DEFINITION
     const settings = form.settings
-    const availability = formWindowState(settings, now)
-    if (availability !== "open") {
-      return closedResult(settings, availability)
-    }
-
     if (settings.honeypot && input.honeypotFilled) {
       logger.info(
         { workspaceId: input.workspaceId, formId: form.id },
@@ -272,11 +295,11 @@ export class FormSubmitService {
       return { kind: "rateLimited", retryAfter: FORM_BUDGET_WINDOW_SECONDS }
     }
 
-    // A full form refuses before any contact is created; the transaction
-    // below re-checks under the form's lock (this read can race).
-    const limit = settings.submissionLimit ?? null
-    if (limit !== null && (await this.countForForm(form.id)) >= limit) {
-      return closedResult(settings, "limit")
+    // After dedup (a double-click on the last place stays "ok") and before
+    // any contact is created; `admit` below is the authoritative check.
+    const closed = await this.availability(form, now)
+    if (closed !== null) {
+      return closedResult(settings, closed)
     }
 
     // Contact resolution runs BEFORE the transaction: attach / create have
@@ -321,13 +344,11 @@ export class FormSubmitService {
       return { kind: "invalid", issues: [identityIssue] }
     }
 
-    let persisted:
-      | {
-          row: FormSubmissionModel
-          pending: PendingChanges
-          duplicateOf: FormSubmissionModel | null
-        }
-      | { limitReached: true }
+    let persisted: {
+      row: FormSubmissionModel
+      pending: PendingChanges
+      duplicateOf: FormSubmissionModel | null
+    }
     try {
       persisted = await db.transaction(async (tx) => {
         // Serialise identical answers from one ip: two racing submits both
@@ -344,9 +365,6 @@ export class FormSubmitService {
         if (duplicateOf) {
           return { row: duplicateOf, pending: [], duplicateOf }
         }
-        if (!(await this.claimSlot(tx, form))) {
-          return { limitReached: true as const }
-        }
         const pending =
           contactId === null
             ? []
@@ -362,6 +380,12 @@ export class FormSubmitService {
                 fillBlanksOnly: !(contactCreated || settings.overwriteExisting),
                 tx,
               })
+        // Last, so the per-form lock is held only for count + insert +
+        // commit; a refusal rolls the contact writes above back.
+        const refused = await this.admit(tx, form.id)
+        if (refused !== null) {
+          throw new FormNotAdmittedError(refused)
+        }
         const [row] = await tx
           .insert(formSubmissionModel)
           .values({
@@ -380,8 +404,23 @@ export class FormSubmitService {
           })
           .returning()
         return { row, pending, duplicateOf: null }
-      })
+      }, ADMISSION_ISOLATION)
     } catch (error) {
+      if (error instanceof FormNotAdmittedError || isLockTimeout(error)) {
+        if (contactCreated) {
+          // resolveContact committed on its own: the contact (and its
+          // created events) stays, the submission does not. Only a submit
+          // that raced the last place or the close gets here; the
+          // pre-check above refuses every other one before any contact.
+          logger.warn(
+            { workspaceId: input.workspaceId, formId: form.id, contactId },
+            "form submit: not admitted after creating the contact",
+          )
+        }
+        return error instanceof FormNotAdmittedError
+          ? closedResult(settings, error.reason)
+          : { kind: "rateLimited", retryAfter: ADMISSION_RETRY_AFTER_SECONDS }
+      }
       if (contactCreated && contactId) {
         // The contact's own transaction committed before ours failed: name
         // the row so it is never a silent orphan.
@@ -398,15 +437,6 @@ export class FormSubmitService {
       throw error
     }
 
-    if ("limitReached" in persisted) {
-      if (contactCreated) {
-        logger.warn(
-          { workspaceId: input.workspaceId, formId: form.id, contactId },
-          "form submit: the limit filled while this submitter's contact was being created",
-        )
-      }
-      return closedResult(settings, "limit")
-    }
     if (persisted.duplicateOf) {
       return {
         kind: "ok",
@@ -471,24 +501,60 @@ export class FormSubmitService {
   }
 
   /**
-   * Inside the caller's transaction: may one more submission of this form be
-   * stored? With a limit, submits of the form serialise on a per-form
-   * advisory lock held to commit, so N racing submits against a limit of L
-   * store exactly min(N, L) rows (Mautic checks, then inserts, and
-   * overshoots). Shared by the web submit and the chat run.
+   * Why this form takes nothing at `now` (outside its window, or full), or
+   * null when it is open. A READ: the page, the web pre-check and the chat
+   * start use it; only `admit` is authoritative.
    */
-  async claimSlot(
-    tx: DatabaseClient,
+  async availability(
     form: Pick<NormalizedForm, "id" | "settings">,
-  ): Promise<boolean> {
-    const limit = form.settings.submissionLimit ?? null
-    if (limit === null) {
-      return true
+    now: Date,
+    tx: DatabaseClient = db,
+  ): Promise<FormClosedReason | null> {
+    const state = formWindowState(form.settings, now)
+    if (state !== "open") {
+      return state
     }
+    const limit = form.settings.submissionLimit ?? null
+    if (limit !== null && (await this.countForForm(form.id, tx)) >= limit) {
+      return "limit"
+    }
+    return null
+  }
+
+  /**
+   * The authoritative admission, inside the caller's transaction and right
+   * before its insert (web submit, chat finish). EVERY submission of the
+   * form takes the per-form advisory lock, held to commit, then re-reads the
+   * form's settings and the clock: so N racing submits against a limit of L
+   * store exactly min(N, L) rows (Mautic checks, then inserts, and
+   * overshoots), a limit saved while a submit was in flight still binds it
+   * (blind probe s220c), and a window that closed meanwhile refuses it. The
+   * lock wait is bounded (5 s lock_timeout); the caller maps a timeout
+   * to "try again". Callers run READ COMMITTED so the count after the lock
+   * sees every row the previous holder committed.
+   */
+  async admit(
+    tx: DatabaseClient,
+    formId: string,
+  ): Promise<FormClosedReason | null> {
+    // SET takes no bind parameters: the value is this module's constant.
+    await tx.execute(sql`set local lock_timeout = '5s'`)
     await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtextextended(${`form-limit:${form.id}`}, 0))`,
+      sql`select pg_advisory_xact_lock(hashtextextended(${`form-limit:${formId}`}, 0))`,
     )
-    return (await this.countForForm(form.id, tx)) < limit
+    await tx.execute(sql`set local lock_timeout to default`)
+    const [row] = await tx
+      .select({ settings: formModel.settings })
+      .from(formModel)
+      .where(eq(formModel.id, formId))
+    if (!row) {
+      return "closed"
+    }
+    return await this.availability(
+      { id: formId, settings: normalizeFormSettings(row.settings) },
+      new Date(),
+      tx,
+    )
   }
 
   private async countRecentByIp(props: {

@@ -31,6 +31,8 @@ export const FORM_MAX_PROFILING_LIMIT = 100
 /** s220c A2-4: the most submissions a form can be capped at. */
 export const FORM_MAX_SUBMISSION_LIMIT = 100_000
 export const FORM_MAX_BLOCKED_EMAIL_DOMAINS = 100
+/** What normalize keeps for a corrupt stored bound (never a valid instant). */
+const UNPARSEABLE_WINDOW_BOUND = "unparseable"
 /** Same key rule as a custom-field key / hub-connector field key. */
 const FORM_PREFILL_KEY_REGEX = /^[a-z][a-z0-9_]{0,39}$/
 /** `https://host[:port]` only: no path, no wildcard, no trailing slash. */
@@ -269,6 +271,18 @@ export function normalizeFormSettings(raw: unknown): FormSettings {
     ].safeParse(source[key])
     if (one.success && source[key] !== undefined) {
       out[key] = one.data
+    }
+  }
+  // A stored availability bound that no longer parses must keep the form
+  // CLOSED, not fall back to "open" (blind probe s220c): formWindowState
+  // reads this marker as unparseable.
+  for (const key of ["publishUp", "publishDown"] as const) {
+    if (
+      source[key] !== undefined &&
+      source[key] !== null &&
+      out[key] === null
+    ) {
+      out[key] = UNPARSEABLE_WINDOW_BOUND
     }
   }
   return out as FormSettings

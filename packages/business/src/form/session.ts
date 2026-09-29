@@ -24,8 +24,8 @@ import {
   type FormValues,
   formInputFields,
   formScore,
-  formWindowState,
   isBlockedEmailDomain,
+  isEmailAnswerField,
   isEmptyFormValue,
   isFormChatSkip,
   normalizeFormDefinition,
@@ -47,7 +47,12 @@ import { emitFormAbandoned } from "@chatbotx.io/events"
 import { createId, isPlainRecord } from "@chatbotx.io/utils"
 import { logger } from "../logger"
 import { formService, type NormalizedForm } from "./service"
-import { formSubmitService, type PendingChanges } from "./submit"
+import {
+  ADMISSION_ISOLATION,
+  FormNotAdmittedError,
+  formSubmitService,
+  type PendingChanges,
+} from "./submit"
 
 /**
  * The chat run of a form (s219 A2-2): the `form` flow step asks one question
@@ -256,12 +261,7 @@ export class FormSessionService {
         }
         // s220c A2-4: outside its window or full, the step takes its skip
         // edge before a question is asked (the finish re-checks the limit).
-        const limit = form.settings.submissionLimit ?? null
-        if (
-          formWindowState(form.settings, now) !== "open" ||
-          (limit !== null &&
-            (await formSubmitService.countForForm(form.id, tx)) >= limit)
-        ) {
+        if ((await formSubmitService.availability(form, now, tx)) !== null) {
           return { action: { kind: "unavailable", reason: "formClosed" } }
         }
         const current = await this.lockActive(tx, input)
@@ -330,7 +330,7 @@ export class FormSessionService {
           [],
           now,
         )
-      })
+      }, ADMISSION_ISOLATION)
     } catch (error) {
       // Two starts racing for one contact: the partial unique index lets one
       // insert win; the loser asks nothing (the winner already asked).
@@ -493,7 +493,7 @@ export class FormSessionService {
         now,
         messageId,
       )
-    })
+    }, ADMISSION_ISOLATION)
     return await this.settle(step)
   }
 
@@ -883,7 +883,7 @@ export class FormSessionService {
     text: unknown,
   ): Promise<ReturnType<typeof parseFormChatAnswer>> {
     const parsed = parseFormChatAnswer(field, text)
-    if (!parsed.ok || field.type !== "email") {
+    if (!(parsed.ok && isEmailAnswerField(field))) {
       return parsed
     }
     const form = await formService.get({
@@ -1008,9 +1008,61 @@ export class FormSessionService {
       id: session.formId,
       tx,
     })
-    // s220c A2-4: the same per-form limit lock as the web submit; a full
-    // form ends the run on its skip edge (never a formAbandoned: `closed`).
-    if (!(await formSubmitService.claimSlot(tx, form))) {
+    const pruned = pruneFormValues(def, values, plan.evaluation)
+    const conflicts = await this.identityConflicts(tx, session, def, pruned)
+    const writable: FormValues = { ...pruned }
+    for (const key of conflicts) {
+      delete writable[key]
+    }
+    const visibility: FormSubmissionVisibility = {
+      steps: [...plan.evaluation.visibleSteps],
+      fields: [...plan.evaluation.visibleFields],
+    }
+    // s220c A2-4: the contact writes, the admission (the per-form lock of
+    // the web submit, re-checking the window AND the limit) and the insert
+    // run in one savepoint: a form that closed or filled up mid-run rolls
+    // the writes back and ends the run on its skip edge (`closed`, never a
+    // formAbandoned).
+    let stored: { submission: FormSubmissionModel; pending: PendingChanges }
+    try {
+      stored = await tx.transaction(async (sp) => {
+        const pending = await formSubmitService.writeMappedFields({
+          workspaceId: session.workspaceId,
+          contactId: session.contactId,
+          def,
+          values: writable,
+          // The contact is the conversation's own: blank fields only, unless
+          // the form owner opted into overwriting (the web rule, s200).
+          fillBlanksOnly: !form.settings.overwriteExisting,
+          tx: sp,
+        })
+        const refused = await formSubmitService.admit(sp, form.id)
+        if (refused !== null) {
+          throw new FormNotAdmittedError(refused)
+        }
+        const [submission] = await sp
+          .insert(formSubmissionModel)
+          .values({
+            id: createId(),
+            workspaceId: session.workspaceId,
+            formId: session.formId,
+            contactId: session.contactId,
+            conversationId: session.conversationId,
+            formSessionId: session.id,
+            channel: "chat",
+            definitionVersion: session.definitionVersion,
+            values: pruned,
+            visibility,
+            score: formScore(def, pruned, plan.evaluation),
+            identityConflict: conflicts.length > 0,
+          })
+          .returning()
+        return { submission, pending }
+      })
+    } catch (error) {
+      if (!(error instanceof FormNotAdmittedError)) {
+        throw error
+      }
       const [ended] = await tx
         .update(formSessionModel)
         .set({
@@ -1031,43 +1083,7 @@ export class FormSessionService {
         ? { action: { kind: "ended", session: ended, reason: "closed" } }
         : { action: { kind: "ignored", reason: "noSession" } }
     }
-    const pruned = pruneFormValues(def, values, plan.evaluation)
-    const conflicts = await this.identityConflicts(tx, session, def, pruned)
-    const writable: FormValues = { ...pruned }
-    for (const key of conflicts) {
-      delete writable[key]
-    }
-    const pending = await formSubmitService.writeMappedFields({
-      workspaceId: session.workspaceId,
-      contactId: session.contactId,
-      def,
-      values: writable,
-      // The contact is the conversation's own: blank fields only, unless
-      // the form owner opted into overwriting (the web rule, s200).
-      fillBlanksOnly: !form.settings.overwriteExisting,
-      tx,
-    })
-    const visibility: FormSubmissionVisibility = {
-      steps: [...plan.evaluation.visibleSteps],
-      fields: [...plan.evaluation.visibleFields],
-    }
-    const [submission] = await tx
-      .insert(formSubmissionModel)
-      .values({
-        id: createId(),
-        workspaceId: session.workspaceId,
-        formId: session.formId,
-        contactId: session.contactId,
-        conversationId: session.conversationId,
-        formSessionId: session.id,
-        channel: "chat",
-        definitionVersion: session.definitionVersion,
-        values: pruned,
-        visibility,
-        score: formScore(def, pruned, plan.evaluation),
-        identityConflict: conflicts.length > 0,
-      })
-      .returning()
+    const { submission, pending } = stored
     const [completed] = await tx
       .update(formSessionModel)
       .set({

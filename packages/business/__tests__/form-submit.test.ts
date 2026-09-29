@@ -299,6 +299,9 @@ const submit = (values: unknown, over: Record<string, unknown> = {}) =>
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // The admission (lock + fresh settings + count) is real-Postgres behaviour:
+  // form-limit-real-db.test.ts. Here it admits unless a test says otherwise.
+  vi.spyOn(formSubmitService, "admit").mockResolvedValue(null)
   m.state.selects.length = 0
   m.state.inserted.length = 0
   m.state.calls.length = 0
@@ -893,6 +896,37 @@ describe("formSubmitService.submit (s200)", () => {
       queueClean()
       await submit({ phone: "(215) 555-0105", campaign: "" })
       expect(m.state.inserted[1].values).toMatchObject({ campaign: "none" })
+    })
+  })
+
+  describe("availability (s220c A2-4)", () => {
+    test("a refused admission rolls the transaction back: closed with the form's message, no row, no events", async () => {
+      queueClean()
+      vi.mocked(formSubmitService.admit).mockResolvedValue("limit")
+      m.findPublishedBySlug.mockResolvedValue(
+        FORM({ settings: { ...FORM().settings, closedMessage: "Full." } }),
+      )
+      const r = await submit({ phone: "(215) 555-0110" })
+      expect(r).toEqual({ kind: "closed", reason: "limit", message: "Full." })
+      expect(m.state.inserted).toHaveLength(0)
+      expect(m.emitFormSubmitted).not.toHaveBeenCalled()
+    })
+
+    test("a form outside its window refuses before any contact is resolved", async () => {
+      queueClean()
+      m.findPublishedBySlug.mockResolvedValue(
+        FORM({
+          settings: {
+            ...FORM().settings,
+            publishUp: "2999-01-01T00:00:00Z",
+            pendingMessage: "Soon.",
+          },
+        }),
+      )
+      const r = await submit({ phone: "(215) 555-0111" })
+      expect(r).toEqual({ kind: "closed", reason: "pending", message: "Soon." })
+      expect(m.createContactWithInbox).not.toHaveBeenCalled()
+      expect(m.state.inserted).toHaveLength(0)
     })
   })
 

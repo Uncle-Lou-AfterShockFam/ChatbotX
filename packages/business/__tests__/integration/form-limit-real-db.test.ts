@@ -27,6 +27,7 @@ vi.mock("../../src/logger", () => ({
 }))
 
 const { formSubmitService } = await import("../../src/form/submit")
+const { formService } = await import("../../src/form/service")
 
 const databaseUrl = requireRealDatabaseUrl()
 
@@ -145,11 +146,11 @@ describe.skipIf(!databaseUrl)("form submission limit (real Postgres)", () => {
     const w = await seedForm({ submissionLimit: 5 })
     // check-then-insert (Mautic's shape), with a pause between the two so
     // every racer reads the count before any of them commits
-    vi.spyOn(formSubmitService, "claimSlot").mockImplementation(
-      async (tx, form) => {
-        const n = await formSubmitService.countForForm(form.id, tx)
+    vi.spyOn(formSubmitService, "admit").mockImplementation(
+      async (tx, formId) => {
+        const n = await formSubmitService.countForForm(formId, tx)
         await new Promise((r) => setTimeout(r, 50))
-        return n < (form.settings.submissionLimit ?? Number.POSITIVE_INFINITY)
+        return n < 5 ? null : "limit"
       },
     )
     await submitMany(w, 20)
@@ -192,4 +193,63 @@ describe.skipIf(!databaseUrl)("form submission limit (real Postgres)", () => {
     })
     expect(await rowCount(past)).toBe(0)
   })
+
+  test("a limit saved while a submit was in flight still binds it (the admission re-reads the settings; blind probe s220c)", async () => {
+    const w = await seedForm({})
+    await submitMany(w, 1)
+    // the submit's early read still sees "no limit"...
+    const stale = await formService.findPublishedBySlug({
+      workspaceId: w.workspaceId,
+      slug: w.slug,
+    })
+    vi.spyOn(formService, "findPublishedBySlug").mockResolvedValue(stale)
+    // ...while the owner has since capped the form at 1 (already reached)
+    await asReplica(sql`
+      UPDATE "Form" SET settings = settings || '{"submissionLimit": 1}'::jsonb WHERE id = ${w.formId}`)
+    expect((await submitMany(w, 1, 1))[0]).toMatchObject({
+      kind: "closed",
+      reason: "limit",
+    })
+    expect(await rowCount(w)).toBe(1)
+  })
+
+  test("a window that closed while a submit was in flight refuses it (fresh clock + settings at admission)", async () => {
+    const w = await seedForm({})
+    const stale = await formService.findPublishedBySlug({
+      workspaceId: w.workspaceId,
+      slug: w.slug,
+    })
+    vi.spyOn(formService, "findPublishedBySlug").mockResolvedValue(stale)
+    const closedAt = JSON.stringify({
+      publishDown: new Date(Date.now() - 1000).toISOString(),
+    })
+    await asReplica(sql`
+      UPDATE "Form" SET settings = settings || ${closedAt}::jsonb WHERE id = ${w.formId}`)
+    expect((await submitMany(w, 1))[0]).toMatchObject({
+      kind: "closed",
+      reason: "closed",
+    })
+    expect(await rowCount(w)).toBe(0)
+  })
+
+  test("a lock held too long answers 'try again' (bounded wait) and stores nothing; the timeout never leaks", async () => {
+    const w = await seedForm({ submissionLimit: 5 })
+    const holder = await db.$client.connect()
+    try {
+      await holder.query("BEGIN")
+      await holder.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+        [`form-limit:${w.formId}`],
+      )
+      const started = Date.now()
+      const [r] = await submitMany(w, 1)
+      expect(r).toMatchObject({ kind: "rateLimited", retryAfter: 5 })
+      expect(Date.now() - started).toBeGreaterThanOrEqual(4500)
+    } finally {
+      await holder.query("ROLLBACK")
+      holder.release()
+    }
+    expect(await rowCount(w)).toBe(0)
+    expect((await submitMany(w, 1, 1))[0]).toMatchObject({ kind: "ok" })
+  }, 20_000)
 })

@@ -206,17 +206,28 @@ describe("form availability settings", () => {
     expect(parseFormSettings({ blockedEmailDomains: many }).success).toBe(false)
   })
 
-  test("normalize: a corrupt new key falls back to its default, the rest survives", () => {
+  test("normalize: a corrupt limit falls back to its default, the rest survives", () => {
     const n = normalizeFormSettings({
       submissionLimit: "lots",
-      publishUp: 5,
       closedMessage: "Gone.",
     })
-    expect(n).toMatchObject({
-      submissionLimit: null,
-      publishUp: null,
-      closedMessage: "Gone.",
-    })
+    expect(n).toMatchObject({ submissionLimit: null, closedMessage: "Gone." })
+  })
+
+  test("normalize: a corrupt stored window bound keeps the form CLOSED, never open (blind probe s220c)", () => {
+    const now = new Date("2026-10-01T12:00:00Z")
+    for (const raw of [
+      { publishUp: 5 },
+      { publishDown: "garbage" },
+      { publishUp: { a: 1 } },
+    ]) {
+      expect(formWindowState(normalizeFormSettings(raw), now)).toBe("closed")
+    }
+    // absent / null bounds stay open
+    expect(
+      formWindowState(normalizeFormSettings({ publishUp: null }), now),
+    ).toBe("open")
+    expect(formWindowState(normalizeFormSettings({}), now)).toBe("open")
   })
 
   test("formWindowState: publishUp inclusive, publishDown exclusive, null = open that side", () => {

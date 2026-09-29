@@ -348,6 +348,17 @@ export const FORM_EMAIL_DOMAIN_REGEX =
   /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/
 
 /**
+ * A field whose answer is an email address: an `email` field, or ANY field
+ * that fills the contact's email (a text field mapped to it must not slip
+ * past the blocked domains; skeptic s220c).
+ */
+export const isEmailAnswerField = (
+  field: Pick<FormField, "type" | "mapTo">,
+): boolean =>
+  field.type === "email" ||
+  (field.mapTo?.kind === "system" && field.mapTo.key === "email")
+
+/**
  * s220c A2-4: is the address's domain (or a parent of it) on the form's
  * block list? `example.com` blocks `a@example.com` and `a@mail.example.com`,
  * never `a@notexample.com`. A value that is not an address is never blocked
@@ -514,7 +525,7 @@ export function validateFormSubmission(
     if (code) {
       issues.push({ key: field.key, code })
     } else if (
-      field.type === "email" &&
+      isEmailAnswerField(field) &&
       isBlockedEmailDomain(value, options.blockedEmailDomains ?? [])
     ) {
       issues.push({ key: field.key, code: "emailDomainBlocked" })
