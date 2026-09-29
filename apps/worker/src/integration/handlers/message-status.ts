@@ -25,6 +25,7 @@ import {
 import { normalizeEpochTimestamp } from "../utils/message"
 import { applyBulktextVerdict, isBulktextLine } from "./bulktext-verdict"
 import { runFlowPostback } from "./flow"
+import { settleLineEmailStatus } from "./line-email-status"
 
 type StatusContactInboxWhere = { inboxId: string } & (
   | { sourceId: string }
@@ -97,6 +98,17 @@ export const handleMessageStatus = async (
   const { contact } = parsedMessage
 
   const eventStatus = String(payload.status).toLowerCase()
+
+  // B2 phase 4 (s222b): a queued email-step newsletter has no message row;
+  // its line's status settles the email-topic recipient. First, so a line
+  // contact with no conversation (thrown below) still settles it.
+  if (inbox.channel === "api") {
+    await settleLineEmailStatus({
+      inboxId: inbox.id,
+      messageId: String(payload.messageId),
+      status: eventStatus,
+    })
+  }
 
   try {
     const contactInbox = await resolveStatusContactInbox(

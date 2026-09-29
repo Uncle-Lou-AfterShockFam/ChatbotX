@@ -7631,7 +7631,11 @@
       "none": "Nenhum (usar os elementos abaixo)",
       "hint": "Um modelo guardado em Definições > Modelos de e-mail substitui os elementos abaixo.",
       "noTemplates": "Ainda não há modelos de e-mail.",
-      "clear": "Limpar"
+      "clear": "Limpar",
+      "line": "Linha de e-mail (bulktext)",
+      "lineHint": "Enviar por esta linha em vez de SMTP. A linha envia para o endereço do contacto nela, a partir do próprio endereço.",
+      "lineNone": "Nenhuma (enviar por SMTP)",
+      "noLines": "Ainda não existem caixas de canal API."
     }
   }
 }

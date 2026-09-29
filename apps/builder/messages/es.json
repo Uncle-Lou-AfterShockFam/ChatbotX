@@ -7631,7 +7631,11 @@
       "none": "Ninguna (usar los elementos de abajo)",
       "hint": "Una plantilla guardada desde Configuración > Plantillas de correo sustituye los elementos de abajo.",
       "noTemplates": "Aún no hay plantillas de correo.",
-      "clear": "Borrar"
+      "clear": "Borrar",
+      "line": "Línea de correo (bulktext)",
+      "lineHint": "Enviar por esta línea en lugar de SMTP. La línea escribe a la dirección del contacto en ella, desde su propia dirección.",
+      "lineNone": "Ninguna (enviar por SMTP)",
+      "noLines": "Aún no hay bandejas de canal API."
     }
   }
 }

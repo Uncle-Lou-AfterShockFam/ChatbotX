@@ -7631,7 +7631,11 @@
       "none": "Ingen (använd elementen nedan)",
       "hint": "En sparad mall från Inställningar > E-postmallar ersätter elementen nedan.",
       "noTemplates": "Inga e-postmallar ännu.",
-      "clear": "Rensa"
+      "clear": "Rensa",
+      "line": "E-postlinje (bulktext)",
+      "lineHint": "Skicka via den här linjen i stället för SMTP. Linjen mejlar kontaktens adress på linjen, från sin egen adress.",
+      "lineNone": "Ingen (skicka via SMTP)",
+      "noLines": "Inga API-kanalinkorgar ännu."
     }
   }
 }

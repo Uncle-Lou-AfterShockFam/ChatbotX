@@ -7631,7 +7631,11 @@
       "none": "Aucun (utiliser les éléments ci-dessous)",
       "hint": "Un modèle enregistré depuis Paramètres > Modèles d'e-mail remplace les éléments ci-dessous.",
       "noTemplates": "Aucun modèle d'e-mail pour l'instant.",
-      "clear": "Effacer"
+      "clear": "Effacer",
+      "line": "Ligne e-mail (bulktext)",
+      "lineHint": "Envoyer via cette ligne au lieu du SMTP. La ligne écrit à l'adresse du contact sur celle-ci, depuis sa propre adresse.",
+      "lineNone": "Aucune (envoi par SMTP)",
+      "noLines": "Aucune boîte de réception de canal API."
     }
   }
 }

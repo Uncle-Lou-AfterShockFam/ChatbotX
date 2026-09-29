@@ -7631,7 +7631,11 @@
       "none": "None (use the elements below)",
       "hint": "A saved template from Settings > Email templates replaces the elements below.",
       "noTemplates": "No email templates yet.",
-      "clear": "Clear"
+      "clear": "Clear",
+      "line": "Email line (bulktext)",
+      "lineHint": "Send through this line instead of SMTP. The line mails the contact's address on it, from its own address.",
+      "lineNone": "None (send over SMTP)",
+      "noLines": "No API-channel inboxes yet."
     }
   }
 }

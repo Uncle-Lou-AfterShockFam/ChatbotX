@@ -7631,7 +7631,11 @@
       "none": "Niciunul (folosește elementele de mai jos)",
       "hint": "Un șablon salvat din Setări > Șabloane de e-mail înlocuiește elementele de mai jos.",
       "noTemplates": "Încă nu există șabloane de e-mail.",
-      "clear": "Golește"
+      "clear": "Golește",
+      "line": "Linie de e-mail (bulktext)",
+      "lineHint": "Trimite prin această linie în loc de SMTP. Linia scrie la adresa contactului de pe ea, de la propria adresă.",
+      "lineNone": "Niciuna (trimite prin SMTP)",
+      "noLines": "Nu există încă inboxuri de canal API."
     }
   }
 }

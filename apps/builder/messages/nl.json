@@ -7631,7 +7631,11 @@
       "none": "Geen (gebruik de onderstaande elementen)",
       "hint": "Een opgeslagen sjabloon uit Instellingen > E-mailsjablonen vervangt de onderstaande elementen.",
       "noTemplates": "Nog geen e-mailsjablonen.",
-      "clear": "Wissen"
+      "clear": "Wissen",
+      "line": "E-maillijn (bulktext)",
+      "lineHint": "Verstuur via deze lijn in plaats van SMTP. De lijn mailt het adres van het contact op die lijn, vanaf haar eigen adres.",
+      "lineNone": "Geen (via SMTP versturen)",
+      "noLines": "Nog geen API-kanaalinboxen."
     }
   }
 }

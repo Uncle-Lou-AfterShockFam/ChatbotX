@@ -27,6 +27,7 @@ import { TiptapEditorField } from "@/components/tiptap/tiptap-editor-field"
 import { useEmailTemplates } from "@/features/email-templates/provider/email-template-hooks"
 import { useEmailTopicSelectOptions } from "@/features/email-topics/provider/email-topic-hook"
 import {
+  useInboxOptionsByChannel,
   useSmtpInboxFromAddressMap,
   useSmtpInboxOptions,
 } from "@/features/inboxes/provider/inbox-hook"
@@ -47,6 +48,11 @@ export default function EmailStepEditor(props: EmailStepEditorProps) {
   smtpFromAddressMapRef.current = smtpFromAddressMap
   const { control, setValue } = useFormContext()
   const emailTopicOptions = useEmailTopicSelectOptions()
+  // B2 phase 4 (s222b): a bulktext email line (an API-channel inbox) sends
+  // instead of SMTP; its own address is the sender and the contact's address
+  // on the line is the recipient, so From / To / SMTP do not apply.
+  const lineOptions = useInboxOptionsByChannel("api")
+  const lineInboxId = useWatch({ name: `${parentName}.lineInboxId` })
 
   const integrationSmtpId = useWatch({
     name: `${parentName}.integrationSmtpId`,
@@ -78,17 +84,45 @@ export default function EmailStepEditor(props: EmailStepEditorProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <SelectField
-        label={t("fields.smtpChannel.label")}
-        name={`${parentName}.integrationSmtpId`}
-        options={smtpInboxOptions}
-        triggerValueChange={(value) => {
-          setValue(
-            `${parentName}.from`,
-            smtpFromAddressMapRef.current[value ?? ""] ?? "",
-          )
-        }}
-      />
+      <div className="relative" data-testid="email-step-line">
+        <ComboboxField
+          description={t("emailTemplates.step.lineHint")}
+          emptyText={t("emailTemplates.step.noLines")}
+          label={t("emailTemplates.step.line")}
+          name={`${parentName}.lineInboxId`}
+          options={lineOptions}
+          placeholder={t("emailTemplates.step.lineNone")}
+          popoverClassName="w-[var(--anchor-width)]"
+        />
+        {lineInboxId ? (
+          <button
+            className="absolute end-0 top-[-2px] text-primary text-sm hover:underline"
+            data-testid="email-step-line-clear"
+            onClick={() =>
+              setValue(`${parentName}.lineInboxId`, undefined, {
+                shouldDirty: true,
+              })
+            }
+            type="button"
+          >
+            {t("emailTemplates.step.clear")}
+          </button>
+        ) : null}
+      </div>
+
+      {lineInboxId ? null : (
+        <SelectField
+          label={t("fields.smtpChannel.label")}
+          name={`${parentName}.integrationSmtpId`}
+          options={smtpInboxOptions}
+          triggerValueChange={(value) => {
+            setValue(
+              `${parentName}.from`,
+              smtpFromAddressMapRef.current[value ?? ""] ?? "",
+            )
+          }}
+        />
+      )}
 
       <div className="relative">
         <SelectField
@@ -107,18 +141,22 @@ export default function EmailStepEditor(props: EmailStepEditorProps) {
       {/* `from` is sent verbatim by the worker (send-email.ts falls back to
       the SMTP integration's own address, never interpolates it) — no bot
       field picker here since a token would never resolve. */}
-      <TiptapEditorField
-        key={`from-${integrationSmtpId}`}
-        label={t("fields.from.label")}
-        name={`${parentName}.from`}
-        required
-      />
-      <TiptapEditorField
-        includeBotFieldVariables
-        label={t("fields.to.label")}
-        name={`${parentName}.to`}
-        required
-      />
+      {lineInboxId ? null : (
+        <>
+          <TiptapEditorField
+            key={`from-${integrationSmtpId}`}
+            label={t("fields.from.label")}
+            name={`${parentName}.from`}
+            required
+          />
+          <TiptapEditorField
+            includeBotFieldVariables
+            label={t("fields.to.label")}
+            name={`${parentName}.to`}
+            required
+          />
+        </>
+      )}
       <TiptapEditorField
         includeBotFieldVariables
         label={t("fields.subject.label")}

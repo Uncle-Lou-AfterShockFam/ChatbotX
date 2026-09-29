@@ -285,11 +285,13 @@ describe("attachments (s221b)", () => {
         filename: "file-8.pdf",
         content: Buffer.from("bytes:public/space/ws-1/media/8"),
         contentType: "application/pdf",
+        key: "public/space/ws-1/media/8",
       },
       {
         filename: "file-7.pdf",
         content: Buffer.from("bytes:public/space/ws-1/media/7"),
         contentType: "application/pdf",
+        key: "public/space/ws-1/media/7",
       },
     ])
   })

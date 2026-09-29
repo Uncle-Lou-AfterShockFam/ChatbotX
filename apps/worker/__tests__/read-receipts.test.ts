@@ -64,6 +64,11 @@ vi.mock("@chatbotx.io/sdk", () => ({
   },
 }))
 
+// s222b: the email-line settler (its own suite: line-email-status.test.ts).
+vi.mock("../src/integration/handlers/line-email-status", () => ({
+  settleLineEmailStatus: vi.fn().mockResolvedValue(false),
+}))
+
 vi.mock("@chatbotx.io/flow-config", () => ({
   messageEventTypeSchema: {
     enum: {

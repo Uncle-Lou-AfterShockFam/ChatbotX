@@ -64,11 +64,16 @@ const BUTTON_STEPS = {
 type Variables = Awaited<ReturnType<typeof contactVariableService.getAll>>
 type MediaFile = Awaited<ReturnType<typeof mediaLibraryService.findFile>>
 
-/** A nodemailer attachment, fully buffered so a re-invoked send can resend it. */
+/**
+ * A nodemailer attachment, fully buffered so a re-invoked send can resend it.
+ * `key` is its workspace storage key: the email line (s222b) is handed a
+ * signed download of it instead of the bytes; SMTP never sees it.
+ */
 export type MailAttachment = {
   filename: string
   content: Buffer
   contentType: string
+  key: string
 }
 
 const MIME_TYPE = /^[\w.+-]{1,64}\/[\w.+-]{1,64}$/
@@ -156,6 +161,7 @@ export async function loadAttachments(
         contentType: MIME_TYPE.test(file.mimeType ?? "")
           ? file.mimeType
           : "application/octet-stream",
+        key: file.path,
       })
     } finally {
       signal.removeEventListener("abort", abort)

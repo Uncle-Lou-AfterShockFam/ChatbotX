@@ -45,6 +45,8 @@ export const REFERENCE_FIELD_ENTITY_KIND: Record<string, string> = {
   questionnaireId: "questionnaire",
   topicId: "couponTopic",
   inboxId: "inbox",
+  // The email step's bulktext email line (s222b).
+  lineInboxId: "inbox",
   personaId: "messengerPersona",
   spreadsheetId: "spreadsheet",
   // Deal steps (s191); an export warns about them like any other entity id.

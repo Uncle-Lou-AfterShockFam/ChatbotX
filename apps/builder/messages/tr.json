@@ -7631,7 +7631,11 @@
       "none": "Yok (aşağıdaki öğeleri kullan)",
       "hint": "Ayarlar > E-posta şablonları bölümünden kaydedilmiş bir şablon, aşağıdaki öğelerin yerini alır.",
       "noTemplates": "Henüz e-posta şablonu yok.",
-      "clear": "Temizle"
+      "clear": "Temizle",
+      "line": "E-posta hattı (bulktext)",
+      "lineHint": "SMTP yerine bu hat üzerinden gönder. Hat, kişinin bu hattaki adresine kendi adresinden e-posta gönderir.",
+      "lineNone": "Yok (SMTP ile gönder)",
+      "noLines": "Henüz API kanalı gelen kutusu yok."
     }
   }
 }

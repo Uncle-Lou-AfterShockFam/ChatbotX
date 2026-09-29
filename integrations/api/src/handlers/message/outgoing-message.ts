@@ -10,7 +10,7 @@ import { z } from "zod"
 import { postSignedEnvelope } from "../../lib/delivery"
 import { logger } from "../../lib/logger"
 import { shortenEnvelopeLinks } from "../../lib/short-links"
-import type { ApiAuthValue } from "../../schema"
+import type { ApiActions, ApiAuthValue } from "../../schema"
 
 // The queue contract (`IntegrationJobMessageStatus`) and the public
 // `delivery-status` route both name the message id `messageId`; this schema
@@ -181,6 +181,42 @@ export const sendFlowStep: MessageHandlers<ApiAuthValue>["sendFlowStep"] =
     assertNotRefused(response)
     return { messageIds: response?.messageId ? [response.messageId] : [] }
   }
+
+/**
+ * B2 phase 4 (s222b): the email step's rendered newsletter, queued for a
+ * bulktext email line. The mail rides in `contentAttributes.bulktext.email`;
+ * `text` is the subject, the line's display line. NOT link-shortened: the
+ * html's links are already tracked and signed.
+ *
+ * PULL mode only: the line's final delivered / failed status for
+ * `outbox:<id>` is what settles the email-topic recipient (the email step
+ * writes no message row a push-mode `msg:<n>` status could land on, and a
+ * push acceptance is not a delivery). A push-mode line fails the send closed
+ * (Codex probe s222b).
+ */
+export const sendEmail: ApiActions["sendEmail"] = async ({
+  ctx,
+  contact,
+  email,
+  ref,
+}) => {
+  if (!isPullMode(ctx)) {
+    throw new Error(
+      "a newsletter needs a pull-mode email line (Delivery mode: pull)",
+    )
+  }
+  return await enqueueForPull(ctx, contact.sourceId, {
+    event: "message_created",
+    timestamp: new Date().toISOString(),
+    contact: { id: contact.id, sourceId: contact.sourceId },
+    message: {
+      text: email.subject,
+      messageType: "outgoing",
+      contentType: contentTypes.enum.text,
+      contentAttributes: { bulktext: { ref, email } },
+    },
+  })
+}
 
 const fileTypeForStep = (
   stepType: SendFlowStepData["stepType"],
