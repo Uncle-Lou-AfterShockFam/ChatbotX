@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto"
 import { encryptedDataSchema, encryptUtils } from "@chatbotx.io/encryption"
 import { z } from "zod"
 
@@ -47,7 +46,8 @@ export async function signEmailFlowToken(input: {
     ...(input.nodeId ? { nid: input.nodeId } : {}),
     cid: input.contactId,
     ciid: input.contactInboxId,
-    lid: randomUUID(),
+    // Web Crypto, not node:crypto: the business barrel stays Edge-safe.
+    lid: globalThis.crypto.randomUUID(),
     exp: Date.now() + TOKEN_TTL_MS,
   })
   return Buffer.from(JSON.stringify(encrypted)).toString("base64url")
