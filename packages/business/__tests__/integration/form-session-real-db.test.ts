@@ -877,7 +877,7 @@ describe.skipIf(!databaseUrl)(
       expect((await sessionRow(w)).abandonEmittedAt).not.toBeNull()
     })
 
-    test("the catch-up leaves runs that ended over a day ago alone", async () => {
+    test("the catch-up gives up on runs that ended over a day ago: stamped, no event", async () => {
       const w = await seedWorld()
       await start(w)
       await makeDue(w)
@@ -888,6 +888,7 @@ describe.skipIf(!databaseUrl)(
       await formSessionService.emitPendingAbandons({ limit: 500 })
       await track(w)
       expect(abandonedFor(w)).toHaveLength(0)
+      expect((await sessionRow(w)).abandonEmittedAt).not.toBeNull()
     })
 
     test("an undelivered question expires without an event (not the contact's doing)", async () => {

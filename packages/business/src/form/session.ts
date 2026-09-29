@@ -654,13 +654,49 @@ export class FormSessionService {
   /**
    * Catch-up for runs that ended but were never claimed (the process died
    * between the end and the emit): abandoned runs that ended within the last
-   * `FORM_ABANDON_CATCHUP_MS`, oldest first, at most `limit`.
+   * `FORM_ABANDON_CATCHUP_MS`, oldest first, at most `limit`. Older ones are
+   * given up ON PURPOSE (a day-late "you left the form" would reach a contact
+   * who moved on): stamped without an event and logged once, so nothing sits
+   * unclaimed silently (skeptic, s220 A2-3).
    */
   async emitPendingAbandons(
     props: { now?: Date; limit?: number } = {},
   ): Promise<number> {
     const now = props.now ?? new Date()
     const limit = Math.max(1, Math.min(props.limit ?? 100, 500))
+    const cutoff = new Date(now.getTime() - FORM_ABANDON_CATCHUP_MS)
+    const aged = await db
+      .select({ id: formSessionModel.id })
+      .from(formSessionModel)
+      .where(
+        and(
+          isNull(formSessionModel.abandonEmittedAt),
+          abandonedRun(),
+          lte(formSessionModel.endedAt, cutoff),
+        ),
+      )
+      .limit(limit)
+    if (aged.length > 0) {
+      const givenUp = await db
+        .update(formSessionModel)
+        .set({ abandonEmittedAt: now })
+        .where(
+          and(
+            inArray(
+              formSessionModel.id,
+              aged.map((r) => r.id),
+            ),
+            isNull(formSessionModel.abandonEmittedAt),
+          ),
+        )
+        .returning({ id: formSessionModel.id })
+      if (givenUp.length > 0) {
+        logger.warn(
+          { formSessionIds: givenUp.map((r) => r.id) },
+          "form session: formAbandoned never went out within the catch-up window; given up",
+        )
+      }
+    }
     const rows = await db
       .select({
         id: formSessionModel.id,
@@ -671,10 +707,7 @@ export class FormSessionService {
         and(
           isNull(formSessionModel.abandonEmittedAt),
           abandonedRun(),
-          gt(
-            formSessionModel.endedAt,
-            new Date(now.getTime() - FORM_ABANDON_CATCHUP_MS),
-          ),
+          gt(formSessionModel.endedAt, cutoff),
         ),
       )
       .orderBy(formSessionModel.endedAt)

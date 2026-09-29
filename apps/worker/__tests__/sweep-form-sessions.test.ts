@@ -18,6 +18,17 @@ vi.mock("@chatbotx.io/business/form", () => ({
     emitPendingAbandons: mocks.emitPendingAbandons,
   },
 }))
+vi.mock("@chatbotx.io/events/context", async () => {
+  const { AsyncLocalStorage } = await import("node:async_hooks")
+  const store = new AsyncLocalStorage<{ source?: string }>()
+  return {
+    runWithWebhookExecutionContext: (
+      ctx: { source?: string },
+      fn: () => unknown,
+    ) => store.run(ctx, fn),
+    isWebhookContext: () => store.getStore()?.source === "webhook",
+  }
+})
 vi.mock("@chatbotx.io/redis", () => ({
   distributedLock: {
     runExclusive: ({ fn }: { fn: () => Promise<unknown> }) => fn(),
@@ -31,6 +42,9 @@ vi.mock("../src/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 
+const { isWebhookContext } = (await import(
+  "@chatbotx.io/events/context"
+)) as unknown as { isWebhookContext: () => boolean }
 const { sweepFormSessions } = await import(
   "../src/schedule/handlers/sweep-form-sessions"
 )
@@ -142,5 +156,25 @@ describe("sweepFormSessions", () => {
       abandonCatchUp: 1,
     })
     expect(mocks.emitAbandoned).not.toHaveBeenCalled()
+  })
+
+  test("abandon emits run in the channel (webhook) context; routing does not", async () => {
+    const seen: boolean[] = []
+    mocks.expireDue.mockResolvedValueOnce([row("s1")])
+    mocks.emitAbandoned.mockImplementationOnce(() => {
+      seen.push(isWebhookContext())
+      return Promise.resolve(true)
+    })
+    mocks.emitPendingAbandons.mockImplementationOnce(() => {
+      seen.push(isWebhookContext())
+      return Promise.resolve(0)
+    })
+    mocks.add.mockImplementationOnce(() => {
+      seen.push(isWebhookContext())
+      return Promise.resolve(undefined)
+    })
+    await sweepFormSessions()
+    // add (routing) first, then the claim, then the catch-up
+    expect(seen).toEqual([false, true, true])
   })
 })
