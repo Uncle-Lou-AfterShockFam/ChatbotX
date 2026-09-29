@@ -18,6 +18,27 @@ import { buildCopySource } from "./copy-source"
 import { uploaderLogger } from "./logger"
 
 const env = keys()
+const TRAILING_SLASHES = /\/+$/
+
+/**
+ * A signed upload URL as the browser must call it. The signature is computed
+ * for the internal endpoint (its host is a signed header); a configured
+ * public base only swaps the origin + bucket prefix, and the proxy behind it
+ * restores the endpoint's Host. A URL outside that prefix is returned as is.
+ */
+export function toPublicUploadUrl(
+  signedUrl: string,
+  config: { endpoint?: string; bucket: string; publicBase?: string },
+): string {
+  if (!(config.endpoint && config.publicBase)) {
+    return signedUrl
+  }
+  const internalPrefix = `${config.endpoint.replace(TRAILING_SLASHES, "")}/${config.bucket}/`
+  if (!signedUrl.startsWith(internalPrefix)) {
+    return signedUrl
+  }
+  return `${config.publicBase.replace(TRAILING_SLASHES, "")}/${signedUrl.slice(internalPrefix.length)}`
+}
 
 export class Uploader {
   readonly #client: S3Client
@@ -94,7 +115,7 @@ export class Uploader {
       secretAccessKey: env.S3_SECRET_ACCESS_KEY ?? "",
     })
 
-    return (
+    const signed = (
       await client.sign(
         new Request(
           `${env.S3_ENDPOINT}/${env.S3_BUCKET}/${filePath}?X-Amz-Expires=${5 * 60}`,
@@ -107,6 +128,11 @@ export class Uploader {
         },
       )
     ).url.toString()
+    return toPublicUploadUrl(signed, {
+      endpoint: env.S3_ENDPOINT,
+      bucket: env.S3_BUCKET,
+      publicBase: env.S3_PUBLIC_UPLOAD_URL,
+    })
   }
 
   async getPresignedDownload(
