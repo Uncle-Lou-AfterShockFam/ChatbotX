@@ -7518,5 +7518,106 @@
       "amount": "Fixed amount"
     },
     "paidSoFar": "{paid} paid"
+  },
+  "emailTemplates": {
+    "title": "قوالب البريد الإلكتروني",
+    "newTemplate": "قالب جديد",
+    "showArchived": "إظهار المؤرشف",
+    "noTemplates": "لا توجد قوالب بريد إلكتروني بعد.",
+    "archived": "مؤرشف",
+    "pickOrCreate": "اختر قالبًا أو أنشئ قالبًا جديدًا.",
+    "saved": "تم حفظ قالب البريد الإلكتروني",
+    "name": "الاسم",
+    "namePlaceholder": "مثال: النشرة الشهرية",
+    "deleteTitle": "حذف قالب البريد الإلكتروني هذا؟",
+    "deleteConfirm": "ستتوقف خطوات التدفق التي تستخدمه عن إرساله. لا يمكن التراجع عن هذا.",
+    "editor": {
+      "toolbar": {
+        "bold": "غامق",
+        "italic": "مائل",
+        "underline": "تسطير",
+        "bulletList": "قائمة نقطية",
+        "orderedList": "قائمة مرقمة",
+        "link": "رابط"
+      },
+      "linkInvalid": "يُسمح فقط بروابط https:// و http:// و mailto:.",
+      "apply": "تطبيق",
+      "insertField": "إدراج حقل",
+      "align": "المحاذاة",
+      "aligns": {
+        "left": "يسار",
+        "center": "وسط",
+        "right": "يمين"
+      },
+      "noFile": "لم يتم اختيار ملف",
+      "chooseFile": "اختيار ملف",
+      "level": "مستوى العنوان",
+      "image": "صورة",
+      "imageUrl": "أو رابط URL لصورة",
+      "alt": "النص البديل",
+      "href": "الرابط عند النقر",
+      "width": "العرض (px)",
+      "label": "التسمية",
+      "action": "عند النقر",
+      "actions": {
+        "url": "فتح رابط URL",
+        "flow": "بدء تدفق"
+      },
+      "url": "URL",
+      "flow": "تدفق",
+      "color": "اللون",
+      "height": "الارتفاع (px)",
+      "columnCount": "الأعمدة",
+      "html": "HTML",
+      "htmlNote": "يتم تنقية HTML المستوردة عند إرسالها: تُحذف صفحات الأنماط والفئات، وتبقى الألوان والأحجام المضمّنة. تحقق من المعاينة.",
+      "attachment": "ملف",
+      "attachmentNote": "يُرسل كمرفق بريد إلكتروني (حتى 10 ملفات، بحجم إجمالي 10 MB).",
+      "code": "الكود",
+      "noSettings": "لا توجد إعدادات لهذا العنصر.",
+      "reorder": "إعادة الترتيب",
+      "removeBlock": "إزالة العنصر",
+      "blocks": {
+        "heading": "عنوان",
+        "text": "نص",
+        "image": "صورة",
+        "button": "زر",
+        "divider": "خط فاصل",
+        "spacer": "مسافة",
+        "columns": "أعمدة",
+        "html": "HTML",
+        "attachment": "مرفق",
+        "code": "كود"
+      },
+      "columnN": "العمود {n}",
+      "addingToColumn": "إضافة عناصر إلى العمود {n}",
+      "addToRoot": "الإضافة إلى المستوى الأعلى بدلاً من ذلك",
+      "importHtml": "استيراد HTML",
+      "htmlTooLarge": "هذا الملف أكبر من {max} حرفًا.",
+      "htmlReadFailed": "تعذّرت قراءة الملف.",
+      "preheader": "النص التمهيدي",
+      "font": "الخط",
+      "fonts": {
+        "system": "النظام",
+        "arial": "Arial",
+        "georgia": "Georgia",
+        "helvetica": "Helvetica",
+        "times": "Times",
+        "verdana": "Verdana"
+      },
+      "background": "الخلفية",
+      "settings": "إعدادات البريد الإلكتروني",
+      "preview": "معاينة",
+      "previewUnavailable": "المعاينة غير متاحة الآن.",
+      "previewMissing": "غير موجود في المعاينة: {list}",
+      "previewPending": "جارٍ عرض المعاينة…",
+      "empty": "أضف عنصرًا للبدء."
+    },
+    "step": {
+      "template": "قالب النشرة",
+      "none": "بلا (استخدام العناصر أدناه)",
+      "hint": "القالب المحفوظ من الإعدادات > قوالب البريد الإلكتروني يستبدل العناصر أدناه.",
+      "noTemplates": "لا توجد قوالب بريد إلكتروني بعد.",
+      "clear": "إزالة"
+    }
   }
 }

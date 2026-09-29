@@ -1,18 +1,12 @@
 "use client"
 
 import { Button } from "@chatbotx.io/ui/components/ui/button"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@chatbotx.io/ui/components/ui/popover"
 import Mention from "@tiptap/extension-mention"
 import Placeholder from "@tiptap/extension-placeholder"
 import { EditorContent, useEditor } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import {
   BoldIcon,
-  CodeXmlIcon,
   Heading1Icon,
   Heading2Icon,
   ItalicIcon,
@@ -21,14 +15,14 @@ import {
   PenLineIcon,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef } from "react"
 import {
   escapeHtml,
   renderVariableMentionHTML,
   renderVariableMentionText,
-  toVariableMentionAttrs,
 } from "@/components/tiptap/extensions/variable-injection/mention"
 import variableInjectionSuggestion from "@/components/tiptap/extensions/variable-injection/suggestion"
+import { InsertFieldPopover } from "@/components/tiptap/insert-field-popover"
 import { usePromptVariableOptions } from "@/components/tiptap/use-prompt-variable-options"
 import "@/components/tiptap/tiptap-editor.css"
 
@@ -61,7 +55,6 @@ export function DocumentEditor({
   onChange: (html: string) => void
 }) {
   const t = useTranslations("documents")
-  const [variablesOpen, setVariablesOpen] = useState(false)
   const options = usePromptVariableOptions({})
   const optionsRef = useRef(options)
   useEffect(() => {
@@ -146,47 +139,11 @@ export function DocumentEditor({
             <tool.icon className="size-4" />
           </Button>
         ))}
-        <Popover onOpenChange={setVariablesOpen} open={variablesOpen}>
-          <PopoverTrigger
-            render={
-              <Button size="sm" type="button" variant="ghost">
-                <CodeXmlIcon className="me-1 size-4" />
-                {t("insertField")}
-              </Button>
-            }
-          />
-          <PopoverContent className="w-60 p-0">
-            <div className="max-h-72 overflow-y-auto">
-              {options.map((field, index) => (
-                <div key={field.value}>
-                  {field.group && options[index - 1]?.group !== field.group ? (
-                    <div className="px-2 pt-2 pb-1 font-medium text-muted-foreground text-xs">
-                      {field.group}
-                    </div>
-                  ) : null}
-                  <Button
-                    className="w-full justify-start rounded-none"
-                    onClick={() => {
-                      editor
-                        ?.chain()
-                        .insertContent({
-                          type: "mention",
-                          attrs: toVariableMentionAttrs(field),
-                        })
-                        .focus()
-                        .run()
-                      setVariablesOpen(false)
-                    }}
-                    type="button"
-                    variant="ghost"
-                  >
-                    {field.label}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
+        <InsertFieldPopover
+          editor={editor}
+          label={t("insertField")}
+          options={options}
+        />
         <Button
           data-testid="document-insert-signature"
           onClick={() =>

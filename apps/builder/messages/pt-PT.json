@@ -7518,5 +7518,106 @@
       "amount": "Fixed amount"
     },
     "paidSoFar": "{paid} paid"
+  },
+  "emailTemplates": {
+    "title": "Modelos de e-mail",
+    "newTemplate": "Novo modelo",
+    "showArchived": "Mostrar arquivados",
+    "noTemplates": "Ainda não há modelos de e-mail.",
+    "archived": "Arquivado",
+    "pickOrCreate": "Escolha um modelo ou crie um novo.",
+    "saved": "Modelo de e-mail guardado",
+    "name": "Nome",
+    "namePlaceholder": "por ex., Newsletter mensal",
+    "deleteTitle": "Eliminar este modelo de e-mail?",
+    "deleteConfirm": "As etapas de fluxo que o utilizam deixam de o enviar. Esta ação não pode ser anulada.",
+    "editor": {
+      "toolbar": {
+        "bold": "Negrito",
+        "italic": "Itálico",
+        "underline": "Sublinhado",
+        "bulletList": "Lista com marcadores",
+        "orderedList": "Lista numerada",
+        "link": "Ligação"
+      },
+      "linkInvalid": "Só são permitidas ligações https://, http:// e mailto:.",
+      "apply": "Aplicar",
+      "insertField": "Inserir campo",
+      "align": "Alinhamento",
+      "aligns": {
+        "left": "Esquerda",
+        "center": "Centro",
+        "right": "Direita"
+      },
+      "noFile": "Nenhum ficheiro escolhido",
+      "chooseFile": "Escolher ficheiro",
+      "level": "Nível do título",
+      "image": "Imagem",
+      "imageUrl": "Ou um URL de imagem",
+      "alt": "Texto alternativo",
+      "href": "Ligação ao clicar",
+      "width": "Largura (px)",
+      "label": "Etiqueta",
+      "action": "Ao clicar",
+      "actions": {
+        "url": "Abrir um URL",
+        "flow": "Iniciar um fluxo"
+      },
+      "url": "URL",
+      "flow": "Fluxo",
+      "color": "Cor",
+      "height": "Altura (px)",
+      "columnCount": "Colunas",
+      "html": "HTML",
+      "htmlNote": "O HTML importado é depurado ao ser enviado: as folhas de estilo e as classes são removidas, as cores e os tamanhos inline são mantidos. Verifique a pré-visualização.",
+      "attachment": "Ficheiro",
+      "attachmentNote": "Enviado como anexo de e-mail (até 10 ficheiros, 10 MB no total).",
+      "code": "Código",
+      "noSettings": "Este bloco não tem definições.",
+      "reorder": "Reordenar",
+      "removeBlock": "Remover bloco",
+      "blocks": {
+        "heading": "Título",
+        "text": "Texto",
+        "image": "Imagem",
+        "button": "Botão",
+        "divider": "Divisor",
+        "spacer": "Espaçador",
+        "columns": "Colunas",
+        "html": "HTML",
+        "attachment": "Anexo",
+        "code": "Código"
+      },
+      "columnN": "Coluna {n}",
+      "addingToColumn": "A adicionar blocos à coluna {n}",
+      "addToRoot": "Adicionar antes ao nível superior",
+      "importHtml": "Importar HTML",
+      "htmlTooLarge": "Esse ficheiro tem mais de {max} carateres.",
+      "htmlReadFailed": "Não foi possível ler o ficheiro.",
+      "preheader": "Pré-cabeçalho",
+      "font": "Tipo de letra",
+      "fonts": {
+        "system": "Sistema",
+        "arial": "Arial",
+        "georgia": "Georgia",
+        "helvetica": "Helvetica",
+        "times": "Times",
+        "verdana": "Verdana"
+      },
+      "background": "Fundo",
+      "settings": "Definições de e-mail",
+      "preview": "Pré-visualização",
+      "previewUnavailable": "A pré-visualização não está disponível neste momento.",
+      "previewMissing": "Não resolvido na pré-visualização: {list}",
+      "previewPending": "A gerar a pré-visualização…",
+      "empty": "Adicione um bloco para começar."
+    },
+    "step": {
+      "template": "Modelo de newsletter",
+      "none": "Nenhum (usar os elementos abaixo)",
+      "hint": "Um modelo guardado em Definições > Modelos de e-mail substitui os elementos abaixo.",
+      "noTemplates": "Ainda não há modelos de e-mail.",
+      "clear": "Limpar"
+    }
   }
 }

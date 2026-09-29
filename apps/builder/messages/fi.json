@@ -7518,5 +7518,106 @@
       "amount": "Fixed amount"
     },
     "paidSoFar": "{paid} paid"
+  },
+  "emailTemplates": {
+    "title": "Sähköpostipohjat",
+    "newTemplate": "Uusi pohja",
+    "showArchived": "Näytä arkistoidut",
+    "noTemplates": "Ei vielä sähköpostipohjia.",
+    "archived": "Arkistoitu",
+    "pickOrCreate": "Valitse pohja tai luo uusi.",
+    "saved": "Sähköpostipohja tallennettu",
+    "name": "Nimi",
+    "namePlaceholder": "esim. Kuukausittainen uutiskirje",
+    "deleteTitle": "Poistetaanko tämä sähköpostipohja?",
+    "deleteConfirm": "Sitä käyttävät kulkuaskeleet lopettavat sen lähettämisen. Tätä ei voi kumota.",
+    "editor": {
+      "toolbar": {
+        "bold": "Lihavointi",
+        "italic": "Kursiivi",
+        "underline": "Alleviivaus",
+        "bulletList": "Luettelomerkit",
+        "orderedList": "Numeroitu luettelo",
+        "link": "Linkki"
+      },
+      "linkInvalid": "Vain https://, http:// ja mailto:-linkit ovat sallittuja.",
+      "apply": "Käytä",
+      "insertField": "Lisää kenttä",
+      "align": "Tasaus",
+      "aligns": {
+        "left": "Vasen",
+        "center": "Keskitetty",
+        "right": "Oikea"
+      },
+      "noFile": "Ei valittua tiedostoa",
+      "chooseFile": "Valitse tiedosto",
+      "level": "Otsikkotaso",
+      "image": "Kuva",
+      "imageUrl": "Tai kuvan URL-osoite",
+      "alt": "Vaihtoehtoinen teksti",
+      "href": "Linkki napsautettaessa",
+      "width": "Leveys (px)",
+      "label": "Nimike",
+      "action": "Napsautettaessa",
+      "actions": {
+        "url": "Avaa URL-osoite",
+        "flow": "Käynnistä kulku"
+      },
+      "url": "URL-osoite",
+      "flow": "Kulku",
+      "color": "Väri",
+      "height": "Korkeus (px)",
+      "columnCount": "Sarakkeet",
+      "html": "HTML",
+      "htmlNote": "Tuotu HTML puhdistetaan lähetettäessä: tyylitiedostot ja luokat poistetaan, sisäiset värit ja koot säilyvät. Tarkista esikatselu.",
+      "attachment": "Tiedosto",
+      "attachmentNote": "Lähetetään sähköpostin liitteenä (enintään 10 tiedostoa, yhteensä 10 MB).",
+      "code": "Koodi",
+      "noSettings": "Tällä lohkolla ei ole asetuksia.",
+      "reorder": "Järjestä uudelleen",
+      "removeBlock": "Poista lohko",
+      "blocks": {
+        "heading": "Otsikko",
+        "text": "Teksti",
+        "image": "Kuva",
+        "button": "Painike",
+        "divider": "Erotinviiva",
+        "spacer": "Väli",
+        "columns": "Sarakkeet",
+        "html": "HTML",
+        "attachment": "Liite",
+        "code": "Koodi"
+      },
+      "columnN": "Sarake {n}",
+      "addingToColumn": "Lisätään lohkoja sarakkeeseen {n}",
+      "addToRoot": "Lisää ylätasolle sen sijaan",
+      "importHtml": "Tuo HTML",
+      "htmlTooLarge": "Tämä tiedosto on suurempi kuin {max} merkkiä.",
+      "htmlReadFailed": "Tiedostoa ei voitu lukea.",
+      "preheader": "Esiotsikko",
+      "font": "Fontti",
+      "fonts": {
+        "system": "Järjestelmä",
+        "arial": "Arial",
+        "georgia": "Georgia",
+        "helvetica": "Helvetica",
+        "times": "Times",
+        "verdana": "Verdana"
+      },
+      "background": "Tausta",
+      "settings": "Sähköpostiasetukset",
+      "preview": "Esikatselu",
+      "previewUnavailable": "Esikatselu ei ole juuri nyt käytettävissä.",
+      "previewMissing": "Ei ratkaistu esikatselussa: {list}",
+      "previewPending": "Esikatselua muodostetaan…",
+      "empty": "Lisää lohko aloittaaksesi."
+    },
+    "step": {
+      "template": "Uutiskirjepohja",
+      "none": "Ei mitään (käytä alla olevia elementtejä)",
+      "hint": "Tallennettu pohja kohdasta Asetukset > Sähköpostipohjat korvaa alla olevat elementit.",
+      "noTemplates": "Ei vielä sähköpostipohjia.",
+      "clear": "Tyhjennä"
+    }
   }
 }

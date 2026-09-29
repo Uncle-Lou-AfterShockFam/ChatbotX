@@ -7518,5 +7518,106 @@
       "amount": "Fixed amount"
     },
     "paidSoFar": "{paid} paid"
+  },
+  "emailTemplates": {
+    "title": "E-postmallar",
+    "newTemplate": "Ny mall",
+    "showArchived": "Visa arkiverade",
+    "noTemplates": "Inga e-postmallar ännu.",
+    "archived": "Arkiverad",
+    "pickOrCreate": "Välj en mall eller skapa en ny.",
+    "saved": "E-postmallen sparades",
+    "name": "Namn",
+    "namePlaceholder": "t.ex. Månatligt nyhetsbrev",
+    "deleteTitle": "Ta bort den här e-postmallen?",
+    "deleteConfirm": "Flödessteg som använder den slutar skicka den. Detta kan inte ångras.",
+    "editor": {
+      "toolbar": {
+        "bold": "Fet",
+        "italic": "Kursiv",
+        "underline": "Understruken",
+        "bulletList": "Punktlista",
+        "orderedList": "Numrerad lista",
+        "link": "Länk"
+      },
+      "linkInvalid": "Endast https://-, http://- och mailto:-länkar är tillåtna.",
+      "apply": "Tillämpa",
+      "insertField": "Infoga fält",
+      "align": "Justering",
+      "aligns": {
+        "left": "Vänster",
+        "center": "Centrerad",
+        "right": "Höger"
+      },
+      "noFile": "Ingen fil vald",
+      "chooseFile": "Välj fil",
+      "level": "Rubriknivå",
+      "image": "Bild",
+      "imageUrl": "Eller en bild-URL",
+      "alt": "Alt-text",
+      "href": "Länk vid klick",
+      "width": "Bredd (px)",
+      "label": "Etikett",
+      "action": "Vid klick",
+      "actions": {
+        "url": "Öppna en URL",
+        "flow": "Starta ett flöde"
+      },
+      "url": "URL",
+      "flow": "Flöde",
+      "color": "Färg",
+      "height": "Höjd (px)",
+      "columnCount": "Kolumner",
+      "html": "HTML",
+      "htmlNote": "Importerad HTML saneras när den skickas: stilmallar och klasser tas bort, infogade färger och storlekar behålls. Kontrollera förhandsgranskningen.",
+      "attachment": "Fil",
+      "attachmentNote": "Skickas som e-postbilaga (upp till 10 filer, totalt 10 MB).",
+      "code": "Kod",
+      "noSettings": "Det här blocket har inga inställningar.",
+      "reorder": "Ändra ordning",
+      "removeBlock": "Ta bort block",
+      "blocks": {
+        "heading": "Rubrik",
+        "text": "Text",
+        "image": "Bild",
+        "button": "Knapp",
+        "divider": "Avdelare",
+        "spacer": "Utfyllnad",
+        "columns": "Kolumner",
+        "html": "HTML",
+        "attachment": "Bilaga",
+        "code": "Kod"
+      },
+      "columnN": "Kolumn {n}",
+      "addingToColumn": "Lägger till block i kolumn {n}",
+      "addToRoot": "Lägg till på toppnivån istället",
+      "importHtml": "Importera HTML",
+      "htmlTooLarge": "Den filen är större än {max} tecken.",
+      "htmlReadFailed": "Filen kunde inte läsas.",
+      "preheader": "Förhandsrubrik",
+      "font": "Typsnitt",
+      "fonts": {
+        "system": "System",
+        "arial": "Arial",
+        "georgia": "Georgia",
+        "helvetica": "Helvetica",
+        "times": "Times",
+        "verdana": "Verdana"
+      },
+      "background": "Bakgrund",
+      "settings": "E-postinställningar",
+      "preview": "Förhandsgranskning",
+      "previewUnavailable": "Förhandsgranskningen är inte tillgänglig just nu.",
+      "previewMissing": "Inte matchat i förhandsgranskningen: {list}",
+      "previewPending": "Skapar förhandsgranskning…",
+      "empty": "Lägg till ett block för att börja."
+    },
+    "step": {
+      "template": "Nyhetsbrevsmall",
+      "none": "Ingen (använd elementen nedan)",
+      "hint": "En sparad mall från Inställningar > E-postmallar ersätter elementen nedan.",
+      "noTemplates": "Inga e-postmallar ännu.",
+      "clear": "Rensa"
+    }
   }
 }

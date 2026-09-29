@@ -1,6 +1,7 @@
 "use client"
 
 import type { PageElementSchema } from "@chatbotx.io/flow-config"
+import { ComboboxField } from "@chatbotx.io/ui/components/form/combobox-field"
 import { SelectField } from "@chatbotx.io/ui/components/form/select-field"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
 import { Card } from "@chatbotx.io/ui/components/ui/card"
@@ -20,9 +21,10 @@ import { MoveVerticalIcon, PlusIcon, XIcon } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useTranslations } from "next-intl"
-import { useCallback, useRef } from "react"
+import { useCallback, useMemo, useRef } from "react"
 import { useFieldArray, useFormContext, useWatch } from "react-hook-form"
 import { TiptapEditorField } from "@/components/tiptap/tiptap-editor-field"
+import { useEmailTemplates } from "@/features/email-templates/provider/email-template-hooks"
 import { useEmailTopicSelectOptions } from "@/features/email-topics/provider/email-topic-hook"
 import {
   useSmtpInboxFromAddressMap,
@@ -49,6 +51,18 @@ export default function EmailStepEditor(props: EmailStepEditorProps) {
   const integrationSmtpId = useWatch({
     name: `${parentName}.integrationSmtpId`,
   })
+  // B2 phase 3: a saved newsletter template replaces the inline elements
+  // (the worker's precedence: templateId, then document, then elements).
+  const templateId = useWatch({ name: `${parentName}.templateId` })
+  const templates = useEmailTemplates(params.workspaceId ?? "")
+  const templateOptions = useMemo(
+    () =>
+      (templates.data ?? []).map((template) => ({
+        label: template.name,
+        value: template.id,
+      })),
+    [templates.data],
+  )
 
   const { fields, append, move, remove } = useFieldArray({
     control,
@@ -117,76 +131,116 @@ export default function EmailStepEditor(props: EmailStepEditorProps) {
         name={`${parentName}.preheader`}
       />
 
-      <Card className="px-4">
-        <Sortable
-          getItemValue={(item) => item.id}
-          onMove={({ activeIndex, overIndex }) => move(activeIndex, overIndex)}
-          value={fields}
-        >
-          <SortableContent className="flex flex-col gap-2">
-            {(fields as PageElementSchema[]).map((field, index) => (
-              <SortableItem
-                key={field.id}
-                render={
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                      <PageElementBuilder
-                        parentName={`${parentName}.elements.${index}`}
-                        type={field.type}
-                      />
-                    </div>
-                    <div className="flex flex-col">
-                      <Button
-                        className="size-8 shrink-0"
-                        onClick={() => remove(index)}
-                        size="icon"
-                        type="button"
-                        variant="ghost"
-                      >
-                        <XIcon aria-hidden="true" className="size-4" />
-                      </Button>
-                      <SortableItemHandle
-                        render={
+      <div className="relative" data-testid="email-step-template">
+        <ComboboxField
+          description={t("emailTemplates.step.hint")}
+          emptyText={t("emailTemplates.step.noTemplates")}
+          label={t("emailTemplates.step.template")}
+          name={`${parentName}.templateId`}
+          options={templateOptions}
+          placeholder={t("emailTemplates.step.none")}
+          popoverClassName="w-[var(--anchor-width)]"
+        />
+        <div className="absolute end-0 top-[-2px] flex gap-3 text-sm">
+          {templateId ? (
+            <button
+              className="text-primary hover:underline"
+              data-testid="email-step-template-clear"
+              onClick={() =>
+                setValue(`${parentName}.templateId`, undefined, {
+                  shouldDirty: true,
+                })
+              }
+              type="button"
+            >
+              {t("emailTemplates.step.clear")}
+            </button>
+          ) : null}
+          <Link
+            className="text-primary hover:underline"
+            href={`/space/${params.workspaceId}/settings/email-templates`}
+          >
+            {t("actions.addNew")}
+          </Link>
+        </div>
+      </div>
+
+      {templateId ? null : (
+        <>
+          <Card className="px-4">
+            <Sortable
+              getItemValue={(item) => item.id}
+              onMove={({ activeIndex, overIndex }) =>
+                move(activeIndex, overIndex)
+              }
+              value={fields}
+            >
+              <SortableContent className="flex flex-col gap-2">
+                {(fields as PageElementSchema[]).map((field, index) => (
+                  <SortableItem
+                    key={field.id}
+                    render={
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <PageElementBuilder
+                            parentName={`${parentName}.elements.${index}`}
+                            type={field.type}
+                          />
+                        </div>
+                        <div className="flex flex-col">
                           <Button
-                            className="size-8"
+                            className="size-8 shrink-0"
+                            onClick={() => remove(index)}
                             size="icon"
+                            type="button"
                             variant="ghost"
                           >
-                            <MoveVerticalIcon className="h-4 w-4" />
+                            <XIcon aria-hidden="true" className="size-4" />
                           </Button>
-                        }
-                      />
-                    </div>
-                  </div>
-                }
-                value={field.id}
-              />
-            ))}
-          </SortableContent>
-        </Sortable>
-      </Card>
+                          <SortableItemHandle
+                            render={
+                              <Button
+                                className="size-8"
+                                size="icon"
+                                variant="ghost"
+                              >
+                                <MoveVerticalIcon className="h-4 w-4" />
+                              </Button>
+                            }
+                          />
+                        </div>
+                      </div>
+                    }
+                    value={field.id}
+                  />
+                ))}
+              </SortableContent>
+            </Sortable>
+          </Card>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button type="button" variant="outline">
-              <PlusIcon />
-              {t("actions.create")}
-            </Button>
-          }
-        />
-        <DropdownMenuContent>
-          {PAGE_ELEMENTS.map((item) => (
-            <DropdownMenuItem
-              key={item.stepType}
-              onClick={() => onAddNode(item.defaultFn)}
-            >
-              <item.icon className="size-4" />
-              {t(item.labelKey)}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button type="button" variant="outline">
+                  <PlusIcon />
+                  {t("actions.create")}
+                </Button>
+              }
+            />
+            <DropdownMenuContent>
+              {PAGE_ELEMENTS.map((item) => (
+                <DropdownMenuItem
+                  key={item.stepType}
+                  onClick={() => onAddNode(item.defaultFn)}
+                >
+                  <item.icon className="size-4" />
+                  {t(item.labelKey)}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      )}
     </div>
   )
 }

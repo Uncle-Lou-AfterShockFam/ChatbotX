@@ -7518,5 +7518,106 @@
       "amount": "Fixed amount"
     },
     "paidSoFar": "{paid} paid"
+  },
+  "emailTemplates": {
+    "title": "郵件範本",
+    "newTemplate": "新增範本",
+    "showArchived": "顯示已封存",
+    "noTemplates": "尚無郵件範本。",
+    "archived": "已封存",
+    "pickOrCreate": "選擇範本或建立新範本。",
+    "saved": "郵件範本已儲存",
+    "name": "名稱",
+    "namePlaceholder": "例如：月刊電子報",
+    "deleteTitle": "刪除此郵件範本？",
+    "deleteConfirm": "使用它的流程步驟將停止傳送。此操作無法復原。",
+    "editor": {
+      "toolbar": {
+        "bold": "粗體",
+        "italic": "斜體",
+        "underline": "底線",
+        "bulletList": "項目符號清單",
+        "orderedList": "編號清單",
+        "link": "連結"
+      },
+      "linkInvalid": "僅允許 https://、http:// 及 mailto: 連結。",
+      "apply": "套用",
+      "insertField": "插入欄位",
+      "align": "對齊方式",
+      "aligns": {
+        "left": "左",
+        "center": "中",
+        "right": "右"
+      },
+      "noFile": "未選擇檔案",
+      "chooseFile": "選擇檔案",
+      "level": "標題層級",
+      "image": "圖片",
+      "imageUrl": "或圖片 URL",
+      "alt": "替代文字",
+      "href": "點擊後前往的連結",
+      "width": "寬度 (px)",
+      "label": "標籤",
+      "action": "點擊時",
+      "actions": {
+        "url": "開啟 URL",
+        "flow": "啟動流程"
+      },
+      "url": "URL",
+      "flow": "流程",
+      "color": "顏色",
+      "height": "高度 (px)",
+      "columnCount": "欄數",
+      "html": "HTML",
+      "htmlNote": "匯入的 HTML 在傳送時會被清理：樣式表與類別會被移除，行內顏色與大小則會保留。請檢查預覽。",
+      "attachment": "檔案",
+      "attachmentNote": "以電子郵件附件方式傳送（最多 10 個檔案，總計 10 MB）。",
+      "code": "程式碼",
+      "noSettings": "此區塊沒有設定。",
+      "reorder": "重新排序",
+      "removeBlock": "移除區塊",
+      "blocks": {
+        "heading": "標題",
+        "text": "文字",
+        "image": "圖片",
+        "button": "按鈕",
+        "divider": "分隔線",
+        "spacer": "間隔",
+        "columns": "分欄",
+        "html": "HTML",
+        "attachment": "附件",
+        "code": "程式碼"
+      },
+      "columnN": "第 {n} 欄",
+      "addingToColumn": "正在將區塊加入第 {n} 欄",
+      "addToRoot": "改為加入頂層",
+      "importHtml": "匯入 HTML",
+      "htmlTooLarge": "該檔案超過 {max} 個字元。",
+      "htmlReadFailed": "無法讀取該檔案。",
+      "preheader": "預覽文字",
+      "font": "字型",
+      "fonts": {
+        "system": "系統",
+        "arial": "Arial",
+        "georgia": "Georgia",
+        "helvetica": "Helvetica",
+        "times": "Times",
+        "verdana": "Verdana"
+      },
+      "background": "背景",
+      "settings": "郵件設定",
+      "preview": "預覽",
+      "previewUnavailable": "目前無法使用預覽。",
+      "previewMissing": "預覽中未解析：{list}",
+      "previewPending": "正在產生預覽…",
+      "empty": "新增區塊以開始。"
+    },
+    "step": {
+      "template": "電子報範本",
+      "none": "無（使用下方元素）",
+      "hint": "在 設定 > 郵件範本 中儲存的範本會取代下方元素。",
+      "noTemplates": "尚無郵件範本。",
+      "clear": "清除"
+    }
   }
 }

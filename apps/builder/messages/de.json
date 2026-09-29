@@ -7518,5 +7518,106 @@
       "amount": "Fixed amount"
     },
     "paidSoFar": "{paid} paid"
+  },
+  "emailTemplates": {
+    "title": "E-Mail-Vorlagen",
+    "newTemplate": "Neue Vorlage",
+    "showArchived": "Archivierte anzeigen",
+    "noTemplates": "Noch keine E-Mail-Vorlagen.",
+    "archived": "Archiviert",
+    "pickOrCreate": "Wähle eine Vorlage oder erstelle eine neue.",
+    "saved": "E-Mail-Vorlage gespeichert",
+    "name": "Name",
+    "namePlaceholder": "z. B. Monatlicher Newsletter",
+    "deleteTitle": "Diese E-Mail-Vorlage löschen?",
+    "deleteConfirm": "Flow-Schritte, die sie verwenden, senden sie nicht mehr. Dies kann nicht rückgängig gemacht werden.",
+    "editor": {
+      "toolbar": {
+        "bold": "Fett",
+        "italic": "Kursiv",
+        "underline": "Unterstrichen",
+        "bulletList": "Aufzählung",
+        "orderedList": "Nummerierte Liste",
+        "link": "Link"
+      },
+      "linkInvalid": "Nur https://-, http://- und mailto:-Links sind erlaubt.",
+      "apply": "Übernehmen",
+      "insertField": "Feld einfügen",
+      "align": "Ausrichtung",
+      "aligns": {
+        "left": "Links",
+        "center": "Zentriert",
+        "right": "Rechts"
+      },
+      "noFile": "Keine Datei ausgewählt",
+      "chooseFile": "Datei auswählen",
+      "level": "Überschriftsebene",
+      "image": "Bild",
+      "imageUrl": "Oder eine Bild-URL",
+      "alt": "Alt-Text",
+      "href": "Link beim Klicken",
+      "width": "Breite (px)",
+      "label": "Beschriftung",
+      "action": "Beim Klicken",
+      "actions": {
+        "url": "Eine URL öffnen",
+        "flow": "Einen Flow starten"
+      },
+      "url": "URL",
+      "flow": "Flow",
+      "color": "Farbe",
+      "height": "Höhe (px)",
+      "columnCount": "Spalten",
+      "html": "HTML",
+      "htmlNote": "Importiertes HTML wird beim Senden bereinigt: Stylesheets und Klassen werden entfernt, inline gesetzte Farben und Größen bleiben erhalten. Prüfe die Vorschau.",
+      "attachment": "Datei",
+      "attachmentNote": "Wird als E-Mail-Anhang gesendet (bis zu 10 Dateien, insgesamt 10 MB).",
+      "code": "Code",
+      "noSettings": "Dieser Block hat keine Einstellungen.",
+      "reorder": "Neu anordnen",
+      "removeBlock": "Block entfernen",
+      "blocks": {
+        "heading": "Überschrift",
+        "text": "Text",
+        "image": "Bild",
+        "button": "Schaltfläche",
+        "divider": "Trennlinie",
+        "spacer": "Abstandshalter",
+        "columns": "Spalten",
+        "html": "HTML",
+        "attachment": "Anhang",
+        "code": "Code"
+      },
+      "columnN": "Spalte {n}",
+      "addingToColumn": "Blöcke werden zu Spalte {n} hinzugefügt",
+      "addToRoot": "Stattdessen auf oberster Ebene hinzufügen",
+      "importHtml": "HTML importieren",
+      "htmlTooLarge": "Diese Datei ist größer als {max} Zeichen.",
+      "htmlReadFailed": "Die Datei konnte nicht gelesen werden.",
+      "preheader": "Preheader",
+      "font": "Schriftart",
+      "fonts": {
+        "system": "System",
+        "arial": "Arial",
+        "georgia": "Georgia",
+        "helvetica": "Helvetica",
+        "times": "Times",
+        "verdana": "Verdana"
+      },
+      "background": "Hintergrund",
+      "settings": "E-Mail-Einstellungen",
+      "preview": "Vorschau",
+      "previewUnavailable": "Die Vorschau ist momentan nicht verfügbar.",
+      "previewMissing": "In der Vorschau nicht aufgelöst: {list}",
+      "previewPending": "Vorschau wird erstellt…",
+      "empty": "Füge einen Block hinzu, um zu beginnen."
+    },
+    "step": {
+      "template": "Newsletter-Vorlage",
+      "none": "Keine (die Elemente unten verwenden)",
+      "hint": "Eine gespeicherte Vorlage aus Einstellungen > E-Mail-Vorlagen ersetzt die Elemente unten.",
+      "noTemplates": "Noch keine E-Mail-Vorlagen.",
+      "clear": "Leeren"
+    }
   }
 }

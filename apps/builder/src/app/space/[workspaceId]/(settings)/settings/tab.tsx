@@ -47,6 +47,10 @@ export function SettingsTab({
         label: t("documents.title"),
         value: "documents",
       },
+      {
+        label: t("emailTemplates.title"),
+        value: "email-templates",
+      },
       // {
       //   label: t("billing.title"),
       //   value: "billing",

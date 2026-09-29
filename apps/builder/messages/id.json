@@ -7518,5 +7518,106 @@
       "amount": "Fixed amount"
     },
     "paidSoFar": "{paid} paid"
+  },
+  "emailTemplates": {
+    "title": "Template email",
+    "newTemplate": "Template baru",
+    "showArchived": "Tampilkan yang diarsipkan",
+    "noTemplates": "Belum ada template email.",
+    "archived": "Diarsipkan",
+    "pickOrCreate": "Pilih template atau buat yang baru.",
+    "saved": "Template email disimpan",
+    "name": "Nama",
+    "namePlaceholder": "misalnya Newsletter bulanan",
+    "deleteTitle": "Hapus template email ini?",
+    "deleteConfirm": "Langkah flow yang menggunakannya akan berhenti mengirimkannya. Tindakan ini tidak dapat dibatalkan.",
+    "editor": {
+      "toolbar": {
+        "bold": "Tebal",
+        "italic": "Miring",
+        "underline": "Garis bawah",
+        "bulletList": "Daftar berpoin",
+        "orderedList": "Daftar bernomor",
+        "link": "Tautan"
+      },
+      "linkInvalid": "Hanya tautan https://, http://, dan mailto: yang diperbolehkan.",
+      "apply": "Terapkan",
+      "insertField": "Sisipkan kolom",
+      "align": "Perataan",
+      "aligns": {
+        "left": "Kiri",
+        "center": "Tengah",
+        "right": "Kanan"
+      },
+      "noFile": "Belum ada file dipilih",
+      "chooseFile": "Pilih file",
+      "level": "Tingkat judul",
+      "image": "Gambar",
+      "imageUrl": "Atau URL gambar",
+      "alt": "Teks alternatif",
+      "href": "Tautan saat diklik",
+      "width": "Lebar (px)",
+      "label": "Label",
+      "action": "Saat diklik",
+      "actions": {
+        "url": "Buka URL",
+        "flow": "Mulai flow"
+      },
+      "url": "URL",
+      "flow": "Flow",
+      "color": "Warna",
+      "height": "Tinggi (px)",
+      "columnCount": "Kolom",
+      "html": "HTML",
+      "htmlNote": "HTML yang diimpor akan disanitasi saat dikirim: lembar gaya dan class dihapus, warna dan ukuran inline dipertahankan. Periksa pratinjau.",
+      "attachment": "File",
+      "attachmentNote": "Dikirim sebagai lampiran email (hingga 10 file, total 10 MB).",
+      "code": "Kode",
+      "noSettings": "Blok ini tidak memiliki pengaturan.",
+      "reorder": "Urutkan ulang",
+      "removeBlock": "Hapus blok",
+      "blocks": {
+        "heading": "Judul",
+        "text": "Teks",
+        "image": "Gambar",
+        "button": "Tombol",
+        "divider": "Pembatas",
+        "spacer": "Spasi",
+        "columns": "Kolom",
+        "html": "HTML",
+        "attachment": "Lampiran",
+        "code": "Kode"
+      },
+      "columnN": "Kolom {n}",
+      "addingToColumn": "Menambahkan blok ke kolom {n}",
+      "addToRoot": "Tambahkan ke tingkat atas sebagai gantinya",
+      "importHtml": "Impor HTML",
+      "htmlTooLarge": "File itu lebih besar dari {max} karakter.",
+      "htmlReadFailed": "File tidak dapat dibaca.",
+      "preheader": "Preheader",
+      "font": "Font",
+      "fonts": {
+        "system": "Sistem",
+        "arial": "Arial",
+        "georgia": "Georgia",
+        "helvetica": "Helvetica",
+        "times": "Times",
+        "verdana": "Verdana"
+      },
+      "background": "Latar belakang",
+      "settings": "Pengaturan email",
+      "preview": "Pratinjau",
+      "previewUnavailable": "Pratinjau tidak tersedia saat ini.",
+      "previewMissing": "Tidak teratasi dalam pratinjau: {list}",
+      "previewPending": "Membuat pratinjau…",
+      "empty": "Tambahkan blok untuk mulai."
+    },
+    "step": {
+      "template": "Template newsletter",
+      "none": "Tidak ada (gunakan elemen di bawah)",
+      "hint": "Template tersimpan dari Pengaturan > Template email menggantikan elemen di bawah.",
+      "noTemplates": "Belum ada template email.",
+      "clear": "Hapus"
+    }
   }
 }
