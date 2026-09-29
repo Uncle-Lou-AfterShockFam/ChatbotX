@@ -102,6 +102,25 @@ describe("mediaLibraryService.createFile", () => {
     expect(mocks.createFile).not.toHaveBeenCalled()
   })
 
+  test("s221b: rejects a prefix-matching path whose segments climb into another workspace", async () => {
+    for (const path of [
+      "workspaces/ws-1/../ws-2/documents/signed.pdf",
+      "public/space/ws-1/media/../../ws-2/x.png",
+      "workspaces/ws-1/%2e%2e/ws-2/x",
+    ]) {
+      await expect(
+        mediaLibraryService.createFile({
+          workspaceId: "ws-1",
+          name: "x",
+          path,
+          mimeType: "image/png",
+          size: 1,
+        }),
+      ).rejects.toMatchObject({ code: "invalidPath", httpStatusCode: 400 })
+    }
+    expect(mocks.createFile).not.toHaveBeenCalled()
+  })
+
   test("accepts a workspaces/<id>/ scoped path", async () => {
     mocks.createFile.mockResolvedValue({
       id: "file-1",

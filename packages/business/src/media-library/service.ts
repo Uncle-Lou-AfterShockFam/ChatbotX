@@ -9,7 +9,7 @@ import type {
   MediaLibraryFolderModel,
 } from "@chatbotx.io/database/types"
 import { uploader } from "@chatbotx.io/filesystem"
-import { createId } from "@chatbotx.io/utils"
+import { createId, isWorkspaceStorageKey } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
 import { ChatbotXException, notFoundException } from "../errors"
 import { fileService } from "../file/service"
@@ -143,10 +143,9 @@ class MediaLibraryService extends BaseService {
     // their own Media Library file, then delete it via
     // deleteMediaLibraryFileAction (see genericHandler's identical check in
     // apps/builder/src/lib/upload/handlers.ts).
-    const isWorkspaceScopedPath =
-      input.path.startsWith(`workspaces/${input.workspaceId}/`) ||
-      input.path.startsWith(`public/space/${input.workspaceId}/`)
-    if (!isWorkspaceScopedPath) {
+    // Segment-checked (s221b): `workspaces/<ws>/../<other>/...` passed the
+    // old prefix-only test and named another workspace's object.
+    if (!isWorkspaceStorageKey(input.path, input.workspaceId)) {
       throw new ChatbotXException("Invalid file path", "invalidPath", 400)
     }
 

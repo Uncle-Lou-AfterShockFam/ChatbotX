@@ -43,6 +43,7 @@ const {
   EmailContentError,
   MAX_ATTACHMENT_BYTES_TOTAL,
   MAX_ATTACHMENTS,
+  prepareStepDocument,
   renderStepDocument,
 } = await import("../src/integration/handlers/send-email-document")
 
@@ -89,8 +90,12 @@ const base = {
   unsubscribeUrl: "https://hub.test/unsubscribe?token=u",
 }
 
-const render = (step: object, token?: string) =>
-  renderStepDocument({ ...base, step: step as never, token })
+const render = async (step: object, token?: string) =>
+  renderStepDocument({
+    ...base,
+    prepared: await prepareStepDocument({ ...base, step: step as never }),
+    token,
+  })
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -369,6 +374,56 @@ describe("attachments (s221b)", () => {
     const [part] = (await render({ templateId: "77" })).attachments
     expect(part?.filename).toBe("paX-Evil: 1sswd.pdf")
     expect(part?.contentType).toBe("application/octet-stream")
+  })
+
+  test("tenancy probe: a row whose key climbs out of the workspace prefix fails closed and is never read", async () => {
+    for (const path of [
+      "workspaces/ws-1/../ws-2/documents/signed.pdf",
+      "public/space/ws-2/media/8",
+      "public/space/ws-1/media/%2e%2e/x",
+    ]) {
+      getDocument.mockResolvedValueOnce(attachmentDoc("8"))
+      findFile.mockResolvedValueOnce(mediaFile("8", { path }))
+      await expect(render({ templateId: "77" })).rejects.toBeInstanceOf(
+        EmailContentError,
+      )
+    }
+    expect(getObjectStream).not.toHaveBeenCalled()
+  })
+
+  test("stream probe: a hung read is aborted by the deadline and RETRIES (not fail closed); the stream is torn down", async () => {
+    getDocument.mockResolvedValueOnce(attachmentDoc("8"))
+    const controller = new AbortController()
+    const timeout = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(controller.signal)
+    const hung = new Readable({
+      read() {
+        // never pushes: a read that hangs
+      },
+    })
+    getObjectStream.mockResolvedValueOnce({ stream: hung })
+    const pending = render({ templateId: "77" }).catch((e: unknown) => e)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    controller.abort(new Error("attachment read timed out"))
+    const error = await pending
+    timeout.mockRestore()
+    expect(error).not.toBeInstanceOf(EmailContentError)
+    expect(String(error)).toContain("timed out")
+    expect(hung.destroyed).toBe(true)
+    expect(getObjectStream).toHaveBeenCalledWith(expect.any(String), {
+      abortSignal: controller.signal,
+    })
+  })
+
+  test("a name past 200 chars is cut but keeps its extension", async () => {
+    getDocument.mockResolvedValueOnce(attachmentDoc("8"))
+    findFile.mockResolvedValueOnce(
+      mediaFile("8", { name: `${"n".repeat(300)}.pdf` }),
+    )
+    const [part] = (await render({ templateId: "77" })).attachments
+    expect(part?.filename).toHaveLength(200)
+    expect(part?.filename.endsWith(".pdf")).toBe(true)
   })
 
   test("an empty stored name falls back to a stable name", async () => {

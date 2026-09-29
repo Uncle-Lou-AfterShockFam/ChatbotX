@@ -80,11 +80,13 @@ vi.mock("../../src/lib/logger", () => ({
 }))
 
 const renderStepDocumentMock = vi.fn()
+const prepareStepDocumentMock = vi.fn()
 const { ContentError } = vi.hoisted(() => ({
   ContentError: class extends Error {},
 }))
 vi.mock("../src/integration/handlers/send-email-document", () => ({
   EmailContentError: ContentError,
+  prepareStepDocument: (...args: unknown[]) => prepareStepDocumentMock(...args),
   renderStepDocument: (...args: unknown[]) => renderStepDocumentMock(...args),
 }))
 
@@ -117,6 +119,7 @@ function makeProps(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   createRecipient.mockResolvedValue({ token: "test-token-xyz" })
   runAction.mockResolvedValue(undefined)
+  prepareStepDocumentMock.mockResolvedValue({ prepared: true })
   renderDynamicEmailHtmlMock.mockReturnValue("<html/>")
 })
 
@@ -344,4 +347,50 @@ test("s220b review: a transient render error propagates (queue retry), nothing s
     sendEmail(makeProps({ templateId: "77", elements: [] }) as never),
   ).rejects.toThrow("connection reset")
   expect(runAction).not.toHaveBeenCalled()
+})
+
+describe("s221b skeptic HIGH: document reads happen before the tracking row", () => {
+  test("a transient read error retries with NO recipient row written (no double count)", async () => {
+    prepareStepDocumentMock.mockRejectedValueOnce(new Error("ECONNRESET"))
+    createRecipient.mockClear()
+    runAction.mockClear()
+    await expect(
+      sendEmail(makeProps({ templateId: "77", elements: [] }) as never),
+    ).rejects.toThrow("ECONNRESET")
+    expect(createRecipient).not.toHaveBeenCalled()
+    expect(runAction).not.toHaveBeenCalled()
+  })
+
+  test("unusable content is still counted once, then marked failed; nothing sent", async () => {
+    prepareStepDocumentMock.mockRejectedValueOnce(
+      new ContentError("attachment 8 is missing"),
+    )
+    createRecipient.mockClear()
+    markFailed.mockClear()
+    runAction.mockClear()
+    await sendEmail(makeProps({ templateId: "77", elements: [] }) as never)
+    expect(createRecipient).toHaveBeenCalledOnce()
+    expect(markFailed).toHaveBeenCalledWith("test-token-xyz")
+    expect(runAction).not.toHaveBeenCalled()
+    expect(renderStepDocumentMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ prepared: undefined }),
+    )
+  })
+
+  test("the prepared document is rendered with the new token", async () => {
+    renderStepDocumentMock.mockResolvedValueOnce({ html: "<p/>", text: "" })
+    await sendEmail(makeProps({ templateId: "77", elements: [] }) as never)
+    expect(renderStepDocumentMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        prepared: { prepared: true },
+        token: "test-token-xyz",
+      }),
+    )
+  })
+
+  test("a legacy elements step never prepares a document", async () => {
+    prepareStepDocumentMock.mockClear()
+    await sendEmail(makeProps() as never)
+    expect(prepareStepDocumentMock).not.toHaveBeenCalled()
+  })
 })

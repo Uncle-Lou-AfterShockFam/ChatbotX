@@ -4,6 +4,7 @@ import {
   uploadTypes,
 } from "@chatbotx.io/database/partials"
 import { getImportEntry } from "@chatbotx.io/imports"
+import { isWorkspaceStorageKey } from "@chatbotx.io/utils"
 
 export type UploadHandlerInput = {
   workspaceId?: string
@@ -77,10 +78,9 @@ const genericHandler: UploadHandler = (input) => {
   }
 
   if (input.workspaceId) {
-    const isValidPath =
-      input.path.startsWith(`workspaces/${input.workspaceId}/`) ||
-      input.path.startsWith(`public/space/${input.workspaceId}/`)
-    if (!isValidPath) {
+    // Segment-checked (s221b): a `..` segment after the prefix named another
+    // workspace's object.
+    if (!isWorkspaceStorageKey(input.path, input.workspaceId)) {
       return { ok: false, error: "Invalid path", status: 400 }
     }
     // A privileged sub-namespace (e.g. ads-creative) is only writable through
