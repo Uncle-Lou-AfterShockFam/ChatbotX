@@ -44,6 +44,7 @@ import {
   notFoundException,
   validationException,
 } from "../errors"
+import { assertFormActionRefs } from "./action-refs"
 
 const FORM_NOT_FOUND = "Form not found"
 const SUBMISSION_NOT_FOUND = "Submission not found"
@@ -443,6 +444,11 @@ export class FormService extends BaseService {
         )
       }
       patch.settings = parsed.data
+      await assertFormActionRefs({
+        tx,
+        workspaceId,
+        actions: parsed.data.actions,
+      })
     }
     const settings = patch.settings ?? current.settings
     const onWeb = settings.channels.includes("web")

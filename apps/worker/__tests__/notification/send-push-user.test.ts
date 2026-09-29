@@ -90,7 +90,38 @@ describe("notifyUser push", () => {
       dealId: "deal-1",
       taskId: "task-1",
       commentId: null,
+      formId: null,
+      formSubmissionId: null,
       notificationId: "n-1",
+    })
+  })
+
+  test("s220: a form submission pushes the form title + contact and deep-links the form", async () => {
+    findByUserIds.mockResolvedValue([{ token: "Expo[t3]" }])
+    sendPushNotificationsAsync.mockResolvedValue([{ status: "ok", id: "r" }])
+    workspaceFind.mockResolvedValue({ language: "en" })
+    await sendPushForNotificationJob(
+      userJob({
+        notificationType: "formSubmitted",
+        dealId: null,
+        taskId: null,
+        formSubmissionId: "sub-1",
+        payload: {
+          formId: "form-1",
+          formTitle: "Intake",
+          submissionId: "sub-1",
+          contactName: null,
+        },
+      }),
+    )
+    const [messages] = sendPushNotificationsAsync.mock.calls[0]
+    expect(messages[0].title).toBe("Intake")
+    expect(messages[0].body).toBe("New form submission")
+    expect(messages[0].data).toMatchObject({
+      kind: "formSubmitted",
+      dealId: null,
+      formId: "form-1",
+      formSubmissionId: "sub-1",
     })
   })
 

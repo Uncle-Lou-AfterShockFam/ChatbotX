@@ -6,7 +6,10 @@ import {
   inArray,
 } from "@chatbotx.io/database/client"
 import { contactCustomFieldRepository } from "@chatbotx.io/database/repositories"
-import { contactCustomFieldModel } from "@chatbotx.io/database/schema"
+import {
+  contactCustomFieldModel,
+  contactModel,
+} from "@chatbotx.io/database/schema"
 import { emitCustomFieldChanged } from "@chatbotx.io/events"
 import {
   FieldOperationType,
@@ -248,10 +251,14 @@ class ContactCustomFieldService extends BaseService {
     }>
   > {
     const { workspaceId, accessScope } = input
+    // Reads ride the caller's `tx`: a pooled `db` read while this transaction
+    // holds its connection starved the pool under concurrent calls (connect
+    // timeout, real-PG proof s220 A2-3).
     const contacts = await contactService.findManyByIds({
       workspaceId,
       ids: input.contactIds,
       accessScope,
+      tx,
     })
     if (contacts.length === 0) {
       return []
@@ -260,6 +267,7 @@ class ContactCustomFieldService extends BaseService {
     const [customField] = await customFieldService.findManyByIds({
       workspaceId,
       ids: [input.customFieldId],
+      tx,
     })
     if (!customField) {
       throw notFoundException("Custom field not found")
@@ -270,7 +278,19 @@ class ContactCustomFieldService extends BaseService {
       newValue: string
     }> = []
 
-    for (const contact of contacts) {
+    // Lock each contact row first, in id order (two bulk ops never lock in
+    // opposite orders): with no field row yet there is nothing for the
+    // `FOR UPDATE` below to lock, so two increments both read "empty" and
+    // one overwrote the other (lost points, real-PG proof s220 A2-3).
+    const ordered = [...contacts].sort((a, b) =>
+      BigInt(a.id) < BigInt(b.id) ? -1 : 1,
+    )
+    for (const contact of ordered) {
+      await tx
+        .select({ id: contactModel.id })
+        .from(contactModel)
+        .where(eq(contactModel.id, contact.id))
+        .for("update")
       const [contactCustomField] = await tx
         .select({
           value: contactCustomFieldModel.value,

@@ -13,12 +13,13 @@ import {
 const ROWS = [
   { group: "types", key: "taskAssigned" },
   { group: "types", key: "dealMentioned" },
+  { group: "types", key: "formSubmitted" },
   { group: "channels", key: "inApp" },
   { group: "channels", key: "push" },
 ] as const
 
 /**
- * A member's own notification preferences (s198): which deal events notify
+ * A member's own notification preferences (s198): which deal and form events notify
  * them and where. Each switch saves on its own; the legacy workspace
  * notification settings stay admin-only (Settings > Admins).
  */

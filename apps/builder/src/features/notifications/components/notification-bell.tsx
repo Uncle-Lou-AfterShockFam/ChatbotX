@@ -1,5 +1,6 @@
 "use client"
 
+import { isFormNotificationPayload } from "@chatbotx.io/database/partials"
 import { Badge } from "@chatbotx.io/ui/components/ui/badge"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
 import {
@@ -13,6 +14,7 @@ import {
   AtSignIcon,
   BellIcon,
   ClipboardCheckIcon,
+  FileTextIcon,
   SettingsIcon,
 } from "lucide-react"
 import Link from "next/link"
@@ -32,15 +34,43 @@ const BADGE_CAP = 99
 /**
  * Where a notification opens: the deal board on its pipeline with the drawer
  * open. `status=all` because the drawer finds the deal in the loaded columns
- * and a comment on a won / lost deal is normal (blind probe, s194).
+ * and a comment on a won / lost deal is normal (blind probe, s194). A form
+ * submission (s220) opens that form's submissions.
  */
 export const notificationHref = (
   workspaceId: string,
   n: Pick<NotificationResource, "dealId" | "payload">,
-) =>
-  `/space/${workspaceId}/deals?pipelineId=${encodeURIComponent(
+) => {
+  if (isFormNotificationPayload(n.payload)) {
+    return `/space/${workspaceId}/forms/${encodeURIComponent(
+      n.payload.formId,
+    )}/submissions`
+  }
+  return `/space/${workspaceId}/deals?pipelineId=${encodeURIComponent(
     n.payload.pipelineId,
-  )}&status=all&dealId=${encodeURIComponent(n.dealId)}`
+  )}&status=all&dealId=${encodeURIComponent(n.dealId ?? "")}`
+}
+
+/** The row's title and second line, per type. */
+const rowText = (
+  t: ReturnType<typeof useTranslations>,
+  n: Pick<NotificationResource, "type" | "payload">,
+): { title: string; detail: string } => {
+  const p = n.payload
+  if (isFormNotificationPayload(p)) {
+    return {
+      title: t("notifications.formSubmitted"),
+      detail: p.contactName ? `${p.formTitle} — ${p.contactName}` : p.formTitle,
+    }
+  }
+  return {
+    title:
+      n.type === "taskAssigned"
+        ? t("notifications.taskAssigned", { task: p.taskTitle ?? "" })
+        : t("notifications.dealMentioned"),
+    detail: `${p.dealTitle ?? ""}${p.excerpt ? ` — ${p.excerpt}` : ""}`,
+  }
+}
 
 export const badgeLabel = (count: number) =>
   count > BADGE_CAP ? `${BADGE_CAP}+` : String(count)
@@ -145,22 +175,21 @@ export function NotificationBell({ workspaceId }: { workspaceId: string }) {
                     onClick={() => openNotification(n)}
                     type="button"
                   >
-                    {n.type === "taskAssigned" ? (
+                    {n.type === "taskAssigned" && (
                       <ClipboardCheckIcon className="mt-0.5 size-4 shrink-0" />
-                    ) : (
+                    )}
+                    {n.type === "dealMentioned" && (
                       <AtSignIcon className="mt-0.5 size-4 shrink-0" />
+                    )}
+                    {n.type === "formSubmitted" && (
+                      <FileTextIcon className="mt-0.5 size-4 shrink-0" />
                     )}
                     <span className="flex min-w-0 flex-1 flex-col gap-1">
                       <span className="truncate font-medium">
-                        {n.type === "taskAssigned"
-                          ? t("notifications.taskAssigned", {
-                              task: n.payload.taskTitle ?? "",
-                            })
-                          : t("notifications.dealMentioned")}
+                        {rowText(t, n).title}
                       </span>
                       <span className="truncate text-muted-foreground">
-                        {n.payload.dealTitle ?? ""}
-                        {n.payload.excerpt ? ` — ${n.payload.excerpt}` : ""}
+                        {rowText(t, n).detail}
                       </span>
                       <span className="text-muted-foreground text-xs">
                         {format.relativeTime(new Date(n.createdAt), now)}

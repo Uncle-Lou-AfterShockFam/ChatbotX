@@ -17,6 +17,7 @@ import { useTranslations } from "next-intl"
 import { client } from "@/lib/orpc/orpc"
 import { orpc } from "@/lib/orpc/query"
 import { fetchAllListPages } from "@/lib/query/fetch-all-list-pages"
+import { FormActionsEditor } from "./form-actions-editor"
 
 const NO_INBOX = "__none__"
 
@@ -267,6 +268,11 @@ export function FormSettingsPanel(props: {
           {t("forms.settings.prefillKeysHint")}
         </span>
       </div>
+      <FormActionsEditor
+        actions={props.settings.actions}
+        onChange={(actions) => set({ actions })}
+        workspaceId={props.workspaceId}
+      />
     </div>
   )
 }

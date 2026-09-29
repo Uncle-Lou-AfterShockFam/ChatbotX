@@ -9,6 +9,7 @@ import {
   sql,
 } from "@chatbotx.io/database/client"
 import {
+  type DealNotificationPayload,
   MAX_NOTIFICATION_PAGE,
   type NotificationPayload,
   type NotificationType,
@@ -18,7 +19,10 @@ import {
   dealModel,
   notificationModel,
 } from "@chatbotx.io/database/schema"
-import type { NotificationModel } from "@chatbotx.io/database/types"
+import type {
+  FormSubmissionModel,
+  NotificationModel,
+} from "@chatbotx.io/database/types"
 import { RealtimeEventType } from "@chatbotx.io/partysocket-config"
 import { createId } from "@chatbotx.io/utils"
 import {
@@ -31,6 +35,10 @@ import { canViewPipeline, viewerOwnerFilter } from "../pipeline/access"
 import { pipelineService } from "../pipeline/service"
 import { sendToWorkspaceMember } from "../platform/realtime-broadcast"
 import { resolveMemberNotificationPrefs } from "../workspace-member/notification-prefs"
+import {
+  assignedOnlyUserId,
+  hasContactsAccess,
+} from "../workspace-member/permissions"
 import { workspaceMemberService } from "../workspace-member/service"
 
 /**
@@ -45,11 +53,34 @@ const CURSOR = /^([01]):(\d{1,30})$/
 export type NotifyInput = {
   workspaceId: string
   userId: string
-  type: NotificationType
+  type: Exclude<NotificationType, "formSubmitted">
   dealId: string
   taskId?: string | null
   commentId?: string | null
+  payload: DealNotificationPayload
+}
+
+/** One submission, the members a form's `notifyUsers` action names (s220). */
+export type NotifyFormSubmissionInput = {
+  workspaceId: string
+  contactId: string
+  userIds: string[]
+  formId: string
+  formTitle: string
+  submission: Pick<FormSubmissionModel, "id">
+}
+
+/** What `deliver` writes: exactly one subject, a deal OR a form submission. */
+type Delivery = {
+  workspaceId: string
+  userId: string
+  type: NotificationType
+  dealId: string | null
+  taskId: string | null
+  commentId: string | null
+  formSubmissionId: string | null
   payload: NotificationPayload
+  channels: { inApp: boolean; push: boolean }
 }
 
 export type NotifyOutcome = {
@@ -125,6 +156,110 @@ export class NotificationService extends BaseService {
       }
     }
 
+    return await this.deliver({
+      workspaceId,
+      userId,
+      type,
+      dealId,
+      taskId,
+      commentId,
+      formSubmissionId: null,
+      payload,
+      channels: prefs.channels,
+    })
+  }
+
+  /**
+   * A form's `notifyUsers` action (s220 A2-3): each named user gets one bell
+   * row per submission (partial unique on (formSubmissionId, userId), so a
+   * retried submit cannot notify twice) when they are still a member, keep
+   * `formSubmitted` on, have Contacts access, and, if they see only assigned
+   * contacts, the contact is theirs: the payload names the contact.
+   */
+  async notifyFormSubmission(
+    input: NotifyFormSubmissionInput,
+  ): Promise<NotifyOutcome[]> {
+    const { workspaceId, contactId, formId, formTitle, submission } = input
+    const outcomes: NotifyOutcome[] = []
+    for (const userId of [...new Set(input.userIds)]) {
+      const member = await workspaceMemberService.findByWorkspaceIdAndUserId({
+        workspaceId,
+        userId,
+      })
+      if (!member) {
+        logger.info(
+          { workspaceId, userId, formId },
+          "notification: not a member",
+        )
+        outcomes.push(NOTHING)
+        continue
+      }
+      const prefs = resolveMemberNotificationPrefs(member)
+      // no permissions object = no access (fail closed, never a throw mid-loop)
+      const permissions = member.permissions ?? {}
+      if (!(prefs.types.formSubmitted && hasContactsAccess(permissions))) {
+        outcomes.push(NOTHING)
+        continue
+      }
+      // the contacts list's assigned-only rule (contact/service.ts
+      // withContactAccessScope): only a contact whose conversation is theirs
+      const assignedTo = assignedOnlyUserId({
+        permissions,
+        userId,
+      })
+      const contact = await db.query.contactModel.findFirst({
+        where: assignedTo
+          ? {
+              id: contactId,
+              workspaceId,
+              conversation: { assignedUserId: assignedTo },
+            }
+          : { id: contactId, workspaceId },
+        columns: { fullName: true },
+      })
+      if (!contact) {
+        logger.info(
+          { workspaceId, userId, formId },
+          "notification: recipient cannot see the contact, skipped",
+        )
+        outcomes.push(NOTHING)
+        continue
+      }
+      outcomes.push(
+        await this.deliver({
+          workspaceId,
+          userId,
+          type: "formSubmitted",
+          dealId: null,
+          taskId: null,
+          commentId: null,
+          formSubmissionId: submission.id,
+          payload: {
+            formId,
+            formTitle,
+            submissionId: submission.id,
+            contactName: contact.fullName ?? null,
+          },
+          channels: prefs.channels,
+        }),
+      )
+    }
+    return outcomes
+  }
+
+  /** The in-app row, the push job and the realtime nudge, per the member's channels. */
+  private async deliver(input: Delivery): Promise<NotifyOutcome> {
+    const {
+      workspaceId,
+      userId,
+      type,
+      dealId,
+      taskId,
+      commentId,
+      formSubmissionId,
+      payload,
+    } = input
+    const prefs = { channels: input.channels }
     let notification: NotificationModel | null = null
     if (prefs.channels.inApp) {
       const [row] = await db
@@ -137,13 +272,14 @@ export class NotificationService extends BaseService {
           dealId,
           taskId,
           commentId,
+          formSubmissionId,
           // jsonb: written explicitly, never by a drizzle default (AGENTS.md)
           payload,
         })
         .onConflictDoNothing()
         .returning()
       if (!row) {
-        // the partial unique on (commentId, userId): already notified
+        // a partial unique on (commentId | formSubmissionId, userId): already notified
         return NOTHING
       }
       notification = row
@@ -157,7 +293,7 @@ export class NotificationService extends BaseService {
       // job is still retained.
       const jobId = notificationId
         ? `notify-user-${notificationId}`
-        : `notify-user-${workspaceId}-${userId}-${type}-${taskId ?? commentId ?? dealId}`
+        : `notify-user-${workspaceId}-${userId}-${type}-${taskId ?? commentId ?? formSubmissionId ?? dealId}`
       try {
         await notificationQueue.add(
           NotificationJobAction.notifyUser,
@@ -170,6 +306,7 @@ export class NotificationService extends BaseService {
               dealId,
               taskId,
               commentId,
+              formSubmissionId,
               notificationId,
               payload,
             },
@@ -197,6 +334,7 @@ export class NotificationService extends BaseService {
               dealId: notification.dealId,
               taskId: notification.taskId,
               commentId: notification.commentId,
+              formSubmissionId: notification.formSubmissionId,
               payload: notification.payload,
               createdAt: notification.createdAt.toISOString(),
             },

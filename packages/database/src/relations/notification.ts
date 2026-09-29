@@ -20,5 +20,9 @@ export const notificationRelations = defineRelationsPart(schema, (r) => ({
       from: r.notificationModel.commentId,
       to: r.dealCommentModel.id,
     }),
+    formSubmission: r.one.formSubmissionModel({
+      from: r.notificationModel.formSubmissionId,
+      to: r.formSubmissionModel.id,
+    }),
   },
 }))

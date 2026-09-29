@@ -449,7 +449,7 @@ export class WorkspaceMemberService extends BaseService {
     if (!patch) {
       throw validationException(
         "prefs",
-        "Only taskAssigned / dealMentioned and inApp / push can be changed, as true or false.",
+        "Only taskAssigned / dealMentioned / formSubmitted and inApp / push can be changed, as true or false.",
         { reason: "invalidPrefs" },
       )
     }

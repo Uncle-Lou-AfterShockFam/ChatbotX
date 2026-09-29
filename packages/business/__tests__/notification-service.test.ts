@@ -14,6 +14,10 @@ const m = vi.hoisted(() => {
     inserted: [] as Record<string, unknown>[],
     pipelineAccess: "workspace" as "workspace" | "members",
     pipelineMembers: [] as string[],
+    contact: { fullName: "Ada Lovelace" } as
+      | { fullName: string | null }
+      | undefined,
+    contactWhere: [] as unknown[],
   }
   const insertChain = () => {
     const self: Record<string, unknown> = {}
@@ -56,6 +60,14 @@ const m = vi.hoisted(() => {
     insert: () => insertChain(),
     update: (t: { _name: string }) => updateChain(t),
     select: () => selectChain(),
+    query: {
+      contactModel: {
+        findFirst: (q: { where: unknown }) => {
+          state.contactWhere.push(q.where)
+          return Promise.resolve(state.contact)
+        },
+      },
+    },
     transaction: async (fn: (tx: unknown) => Promise<unknown>) => await fn(db),
   }
   return {
@@ -194,6 +206,8 @@ beforeEach(() => {
   m.state.inserted.length = 0
   m.state.pipelineAccess = "workspace"
   m.state.pipelineMembers = []
+  m.state.contact = { fullName: "Ada Lovelace" }
+  m.state.contactWhere.length = 0
 })
 
 describe("notificationService.notify", () => {
@@ -225,6 +239,7 @@ describe("notificationService.notify", () => {
           dealId: "deal-1",
           taskId: "task-1",
           commentId: null,
+          formSubmissionId: null,
           notificationId: "n-1",
           payload: INPUT.payload,
         },
@@ -494,5 +509,115 @@ describe("notificationService reads + marks", () => {
       "update:Notification",
       "update:DealCommentMention",
     ])
+  })
+})
+
+describe("notificationService.notifyFormSubmission (s220 A2-3)", () => {
+  const FORM_INPUT = {
+    workspaceId: "ws-1",
+    contactId: "c-1",
+    userIds: ["u-2", "u-2"],
+    formId: "form-1",
+    formTitle: "Intake",
+    submission: { id: "sub-1" },
+  }
+  const FORM_ROW = {
+    ...ROW,
+    type: "formSubmitted",
+    dealId: null,
+    taskId: null,
+    formSubmissionId: "sub-1",
+  }
+  const contactsMember = (extra: Record<string, unknown> = {}) => ({
+    notificationTypes: {},
+    notificationChannels: {},
+    permissions: { contacts: true },
+    ...extra,
+  })
+
+  test("a member with Contacts access gets ONE row (duplicates collapsed): no deal, the submission as subject, the contact named", async () => {
+    m.state.member = contactsMember()
+    m.state.insertReturns = [{ ...FORM_ROW }]
+    const outcomes = await notificationService.notifyFormSubmission(FORM_INPUT)
+    expect(outcomes).toHaveLength(1)
+    expect(m.state.inserted).toHaveLength(1)
+    expect(m.state.inserted[0]).toMatchObject({
+      type: "formSubmitted",
+      dealId: null,
+      taskId: null,
+      commentId: null,
+      formSubmissionId: "sub-1",
+      payload: {
+        formId: "form-1",
+        formTitle: "Intake",
+        submissionId: "sub-1",
+        contactName: "Ada Lovelace",
+      },
+    })
+    expect(m.state.calls).toContain("onConflictDoNothing")
+    expect(m.queueAdd).toHaveBeenCalledWith(
+      "notifyUser",
+      expect.objectContaining({
+        data: expect.objectContaining({
+          notificationType: "formSubmitted",
+          dealId: null,
+          formSubmissionId: "sub-1",
+        }),
+      }),
+      { jobId: "notify-user-n-1" },
+    )
+    expect(m.sendToMember).toHaveBeenCalledWith(
+      { workspaceId: "ws-1", userId: "u-2" },
+      expect.objectContaining({
+        data: expect.objectContaining({ formSubmissionId: "sub-1" }),
+      }),
+    )
+  })
+
+  test("no Contacts access, the type off, or not a member = nothing (a form never leaks a contact name)", async () => {
+    m.state.member = { notificationTypes: {}, notificationChannels: {} }
+    await notificationService.notifyFormSubmission(FORM_INPUT)
+    m.state.member = contactsMember({
+      notificationTypes: { formSubmitted: false },
+    })
+    await notificationService.notifyFormSubmission(FORM_INPUT)
+    m.state.member = undefined
+    await notificationService.notifyFormSubmission(FORM_INPUT)
+    expect(m.state.inserted).toHaveLength(0)
+    expect(m.queueAdd).not.toHaveBeenCalled()
+  })
+
+  test("an assigned-only recipient: the contact read is scoped to their conversations; not theirs = nothing", async () => {
+    m.state.member = contactsMember({
+      permissions: { onlyAssignedContacts: true },
+    })
+    m.state.contact = undefined
+    await notificationService.notifyFormSubmission(FORM_INPUT)
+    expect(m.state.contactWhere[0]).toEqual({
+      id: "c-1",
+      workspaceId: "ws-1",
+      conversation: { assignedUserId: "u-2" },
+    })
+    expect(m.state.inserted).toHaveLength(0)
+  })
+
+  test("a full-access recipient reads the contact unscoped; a nameless contact is named null", async () => {
+    m.state.member = contactsMember()
+    m.state.contact = { fullName: null }
+    m.state.insertReturns = [{ ...FORM_ROW }]
+    await notificationService.notifyFormSubmission({
+      ...FORM_INPUT,
+      userIds: ["u-2"],
+    })
+    expect(m.state.contactWhere[0]).toEqual({ id: "c-1", workspaceId: "ws-1" })
+    expect(m.state.inserted[0]?.payload).toMatchObject({ contactName: null })
+  })
+
+  test("already notified for this submission (partial unique conflict) = no push, no realtime", async () => {
+    m.state.member = contactsMember()
+    m.state.insertReturns = []
+    await notificationService.notifyFormSubmission(FORM_INPUT)
+    expect(m.queueAdd).not.toHaveBeenCalled()
+    expect(m.sendToMember).not.toHaveBeenCalled()
   })
 })

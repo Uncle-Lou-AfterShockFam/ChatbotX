@@ -35,6 +35,7 @@ const DEFAULT_TYPES = {
   newOrder: false,
   taskAssigned: true,
   dealMentioned: true,
+  formSubmitted: true,
 }
 const DEFAULT_CHANNELS = {
   messenger: false,
@@ -259,6 +260,12 @@ export function UpdateWorkspaceMemberForm({
               formItemClassName="flex flex-row-reverse items-center justify-end gap-2"
               label={t("fields.notificationType.dealMentioned")}
               name="notificationTypes.dealMentioned"
+              required
+            />
+            <SwitchField
+              formItemClassName="flex flex-row-reverse items-center justify-end gap-2"
+              label={t("fields.notificationType.formSubmitted")}
+              name="notificationTypes.formSubmitted"
               required
             />
           </div>

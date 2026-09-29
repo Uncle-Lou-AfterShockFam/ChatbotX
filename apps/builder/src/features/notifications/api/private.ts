@@ -104,7 +104,11 @@ const privateMarkAllNotificationsReadAPI = authorizedAPI
 
 /** The caller's self-service preferences (s198); closed on every level. */
 const ownNotificationPrefsResource = z.object({
-  types: z.object({ taskAssigned: z.boolean(), dealMentioned: z.boolean() }),
+  types: z.object({
+    taskAssigned: z.boolean(),
+    dealMentioned: z.boolean(),
+    formSubmitted: z.boolean(),
+  }),
   channels: z.object({ inApp: z.boolean(), push: z.boolean() }),
 })
 export const updateOwnNotificationPrefsRequest = z
@@ -114,6 +118,7 @@ export const updateOwnNotificationPrefsRequest = z
       .object({
         taskAssigned: z.boolean().optional(),
         dealMentioned: z.boolean().optional(),
+        formSubmitted: z.boolean().optional(),
       })
       .strict()
       .optional(),

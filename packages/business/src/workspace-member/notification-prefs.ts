@@ -45,6 +45,7 @@ export const resolveMemberNotificationPrefs = (
       newOrder: bool(types.newOrder, false),
       taskAssigned: bool(types.taskAssigned, true),
       dealMentioned: bool(types.dealMentioned, true),
+      formSubmitted: bool(types.formSubmitted, true),
     },
     channels: {
       messenger: bool(channels.messenger, false),
@@ -63,7 +64,11 @@ export const resolveMemberNotificationPrefs = (
  * stay admin-only in Settings > Admins.
  */
 export type OwnNotificationPrefs = {
-  types: { taskAssigned: boolean; dealMentioned: boolean }
+  types: {
+    taskAssigned: boolean
+    dealMentioned: boolean
+    formSubmitted: boolean
+  }
   channels: { inApp: boolean; push: boolean }
 }
 export type OwnNotificationPrefsPatch = {
@@ -72,7 +77,7 @@ export type OwnNotificationPrefsPatch = {
 }
 
 const OWN_KEYS = {
-  types: ["taskAssigned", "dealMentioned"],
+  types: ["taskAssigned", "dealMentioned", "formSubmitted"],
   channels: ["inApp", "push"],
 } as const
 
@@ -84,6 +89,7 @@ export const ownNotificationPrefs = (
     types: {
       taskAssigned: types.taskAssigned,
       dealMentioned: types.dealMentioned,
+      formSubmitted: types.formSubmitted,
     },
     channels: { inApp: channels.inApp, push: channels.push },
   }

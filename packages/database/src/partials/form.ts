@@ -45,6 +45,55 @@ const httpsUrl = z
     }
   }, "Redirect URL must be https.")
 
+export const FORM_MAX_ACTIONS = 20
+export const FORM_MAX_ACTION_TAGS = 20
+export const FORM_MAX_NOTIFY_USERS = 10
+export const FORM_MAX_SET_FIELD_VALUE = 500
+const FORM_ENTITY_ID = z.string().regex(/^\d{1,19}$/, "Pick one.")
+
+/**
+ * What a submission does after it is written (s220 A2-3, the first cut of
+ * Mautic's form-action catalogue; tags keep their own `tags` key). Closed:
+ * an unknown action type or key refuses the save. Runs once per submission,
+ * web and chat alike, after the commit; an action whose reference went
+ * stale (a deleted field / user) is skipped with a log, never fails the
+ * submission.
+ */
+export const formActionSchema = z.discriminatedUnion("type", [
+  /** Add the submission's score to a number custom field (contact-level scoring). */
+  z
+    .object({ type: z.literal("addPoints"), customFieldId: FORM_ENTITY_ID })
+    .strict(),
+  z
+    .object({
+      type: z.literal("setField"),
+      customFieldId: FORM_ENTITY_ID,
+      value: z.string().max(FORM_MAX_SET_FIELD_VALUE),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("removeTags"),
+      names: z
+        .array(z.string().trim().min(1).max(50))
+        .min(1)
+        .max(FORM_MAX_ACTION_TAGS),
+    })
+    .strict(),
+  /** In-app bell + push to workspace members. */
+  z
+    .object({
+      type: z.literal("notifyUsers"),
+      userIds: z
+        .array(FORM_ENTITY_ID)
+        .min(1)
+        .max(FORM_MAX_NOTIFY_USERS)
+        .refine((v) => new Set(v).size === v.length, "Duplicate user."),
+    })
+    .strict(),
+])
+export type FormAction = z.infer<typeof formActionSchema>
+
 export const formChannels = z.enum(["web", "chat"])
 export type FormChannel = z.infer<typeof formChannels>
 
@@ -98,6 +147,7 @@ export const formSettingsSchema = z
       .max(FORM_MAX_PROFILING_LIMIT)
       .nullable()
       .default(null),
+    actions: z.array(formActionSchema).max(FORM_MAX_ACTIONS).default([]),
   })
   .strict()
 export type FormSettings = z.infer<typeof formSettingsSchema>

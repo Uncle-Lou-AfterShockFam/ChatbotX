@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm"
 import {
+  check,
   index,
   jsonb,
   pgEnum,
@@ -21,6 +22,7 @@ import { userModel } from "./auth-user"
 import { dealModel } from "./deal"
 import { dealCommentModel } from "./deal-comment"
 import { dealTaskModel } from "./deal-task"
+import { formSubmissionModel } from "./form"
 import { workspaceModel } from "./workspace"
 
 export const notificationType = pgEnum(
@@ -56,12 +58,11 @@ export const notificationModel = pgTable(
         onDelete: "cascade",
         onUpdate: "cascade",
       }),
-    dealId: bigintAsString()
-      .notNull()
-      .references(() => dealModel.id, {
-        onDelete: "cascade",
-        onUpdate: "cascade",
-      }),
+    // null on a form notification (s220); a CHECK keeps exactly one subject
+    dealId: bigintAsString().references(() => dealModel.id, {
+      onDelete: "cascade",
+      onUpdate: "cascade",
+    }),
     // cascade: a deleted task / comment retracts what was pushed about it
     taskId: bigintAsString().references(() => dealTaskModel.id, {
       onDelete: "cascade",
@@ -71,6 +72,11 @@ export const notificationModel = pgTable(
       onDelete: "cascade",
       onUpdate: "cascade",
     }),
+    // cascade: a deleted submission retracts its notifications (s220)
+    formSubmissionId: bigintAsString().references(
+      () => formSubmissionModel.id,
+      { onDelete: "cascade", onUpdate: "cascade" },
+    ),
   },
   (table) => [
     index("Notification_userId_workspaceId_readAt_createdAt_idx").on(
@@ -83,5 +89,13 @@ export const notificationModel = pgTable(
     uniqueIndex("Notification_commentId_userId_key")
       .on(table.commentId, table.userId)
       .where(sql`"commentId" IS NOT NULL`),
+    // one bell row per (submission, user): a retried submit cannot notify twice
+    uniqueIndex("Notification_formSubmissionId_userId_key")
+      .on(table.formSubmissionId, table.userId)
+      .where(sql`"formSubmissionId" IS NOT NULL`),
+    check(
+      "Notification_subject_check",
+      sql`("dealId" IS NOT NULL) <> ("formSubmissionId" IS NOT NULL)`,
+    ),
   ],
 )
