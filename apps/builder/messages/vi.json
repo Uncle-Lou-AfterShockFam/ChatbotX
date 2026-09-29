@@ -7632,7 +7632,11 @@
       "none": "Không (dùng các thành phần bên dưới)",
       "hint": "Mẫu đã lưu trong Cài đặt > Mẫu email sẽ thay thế các thành phần bên dưới.",
       "noTemplates": "Chưa có mẫu email nào.",
-      "clear": "Xóa"
+      "clear": "Xóa",
+      "line": "Kênh email (bulktext)",
+      "lineHint": "Gửi qua kênh này thay vì SMTP. Kênh gửi tới địa chỉ của liên hệ trên kênh, từ địa chỉ riêng của kênh.",
+      "lineNone": "Không (gửi qua SMTP)",
+      "noLines": "Chưa có hộp thư kênh API nào."
     }
   }
 }

@@ -90,7 +90,23 @@ vi.mock("../src/integration/handlers/send-email-document", () => ({
   renderStepDocument: (...args: unknown[]) => renderStepDocumentMock(...args),
 }))
 
+// s222b: the email line (bulktext) transport; its own logic is covered by
+// send-email-line.test.ts, here only the branch and its ordering.
+const resolveEmailLineMock = vi.fn()
+const buildLineEmailMock = vi.fn()
+vi.mock("../src/integration/handlers/send-email-line", () => ({
+  resolveEmailLine: (...args: unknown[]) => resolveEmailLineMock(...args),
+  buildLineEmail: (...args: unknown[]) => buildLineEmailMock(...args),
+}))
+const lineRunAction = vi.fn()
+const resolveLineContext = vi.fn()
+vi.mock("../src/services/integrations", () => ({
+  resolveIntegrationContextFromContactInbox: (...args: unknown[]) =>
+    resolveLineContext(...args),
+}))
+
 const { sendEmail } = await import("../../src/integration/handlers/send-email")
+const { integrationSmtpService } = await import("@chatbotx.io/business")
 
 // ── shared fixture ──────────────────────────────────────────────────────────
 function makeProps(overrides: Record<string, unknown> = {}) {
@@ -121,6 +137,20 @@ beforeEach(() => {
   runAction.mockResolvedValue(undefined)
   prepareStepDocumentMock.mockResolvedValue({ prepared: true })
   renderDynamicEmailHtmlMock.mockReturnValue("<html/>")
+  resolveEmailLineMock.mockResolvedValue({
+    id: "ci-line",
+    inboxId: "line-1",
+    sourceId: "jane@example.com",
+  })
+  buildLineEmailMock.mockImplementation(async (mail) => ({
+    ...mail,
+    attachments: [],
+  }))
+  lineRunAction.mockResolvedValue({ messageIds: ["outbox:1"] })
+  resolveLineContext.mockResolvedValue({
+    integration: { runAction: lineRunAction },
+    ctx: { line: true },
+  })
 })
 
 describe("with topicId", () => {
@@ -315,6 +345,7 @@ describe("s220b phase 2b: template / document steps", () => {
         filename: "a.pdf",
         content: Buffer.from("%PDF"),
         contentType: "application/pdf",
+        key: "public/space/ws-1/media/a.pdf",
       },
     ]
     renderStepDocumentMock.mockResolvedValueOnce({
@@ -326,7 +357,14 @@ describe("s220b phase 2b: template / document steps", () => {
     const args = runAction.mock.calls.at(-1)?.[1] as {
       attachments: unknown
     }
-    expect(args.attachments).toBe(attachments)
+    // s222b: the storage key is for the email line only; SMTP gets the part.
+    expect(args.attachments).toEqual([
+      {
+        filename: "a.pdf",
+        content: Buffer.from("%PDF"),
+        contentType: "application/pdf",
+      },
+    ])
   })
 
   test("an unrenderable template fails closed: nothing is sent, the topic row is marked failed", async () => {
@@ -393,4 +431,128 @@ describe("s221b skeptic HIGH: document reads happen before the tracking row", ()
     await sendEmail(makeProps() as never)
     expect(prepareStepDocumentMock).not.toHaveBeenCalled()
   })
+})
+
+const UUID_REF = /^email:u:[0-9a-f-]{36}$/
+
+describe("s222b B2 phase 4: a step with an email line sends through bulktext, not SMTP", () => {
+  const lineStep = { lineInboxId: "line-1", templateId: "77", elements: [] }
+
+  beforeEach(() => {
+    vi.mocked(integrationSmtpService.find).mockClear()
+    runAction.mockClear()
+    createRecipient.mockClear()
+    markFailed.mockClear()
+    markDelivered.mockClear()
+    renderStepDocumentMock.mockResolvedValue({
+      html: "<p>doc</p>",
+      text: "doc",
+      attachments: [],
+    })
+  })
+
+  test("the rendered mail goes to the line with the unsubscribe pair and a token ref; the recipient is the line address; the QUEUED send stays open for the line's status", async () => {
+    await sendEmail(makeProps(lineStep) as never)
+    expect(integrationSmtpService.find).not.toHaveBeenCalled()
+    expect(runAction).not.toHaveBeenCalled()
+    expect(resolveEmailLineMock).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      contactId: "contact-1",
+      lineInboxId: "line-1",
+    })
+    expect(createRecipient).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "jane@example.com" }),
+    )
+    expect(buildLineEmailMock).toHaveBeenCalledWith({
+      appUrl: "https://app.test",
+      subject: "Hello",
+      html: "<p>doc</p>",
+      text: "doc",
+      headers: {
+        "List-Unsubscribe":
+          "<https://app.test/unsubscribe/one-click?token=unsub>",
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      },
+      attachments: [],
+    })
+    expect(resolveLineContext).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      contactInbox: expect.objectContaining({ id: "ci-line" }),
+    })
+    expect(lineRunAction).toHaveBeenCalledWith("sendEmail", {
+      ctx: { line: true },
+      contact: { id: "ci-line", sourceId: "jane@example.com" },
+      email: expect.objectContaining({ subject: "Hello", html: "<p>doc</p>" }),
+      ref: "email:t:test-token-xyz",
+    })
+    // Enqueued is not delivered: the line's own status settles it.
+    expect(markDelivered).not.toHaveBeenCalled()
+    expect(markFailed).not.toHaveBeenCalled()
+  })
+
+  test("a line the contact cannot be reached on is resolved BEFORE the tracking row: counted once, failed, nothing rendered or sent", async () => {
+    resolveEmailLineMock.mockRejectedValueOnce(
+      new ContentError("contact contact-1 has no email address on line line-1"),
+    )
+    renderStepDocumentMock.mockClear()
+    prepareStepDocumentMock.mockClear()
+    await sendEmail(makeProps(lineStep) as never)
+    expect(prepareStepDocumentMock).not.toHaveBeenCalled()
+    expect(createRecipient).toHaveBeenCalledOnce()
+    expect(markFailed).toHaveBeenCalledWith("test-token-xyz")
+    expect(renderStepDocumentMock).not.toHaveBeenCalled()
+    expect(lineRunAction).not.toHaveBeenCalled()
+  })
+
+  test("a transient line lookup error retries with NO tracking row written", async () => {
+    resolveEmailLineMock.mockRejectedValueOnce(new Error("ECONNRESET"))
+    await expect(sendEmail(makeProps(lineStep) as never)).rejects.toThrow(
+      "ECONNRESET",
+    )
+    expect(createRecipient).not.toHaveBeenCalled()
+  })
+
+  test("a mail past the line caps, or a line refusal, marks the send failed (never delivered)", async () => {
+    buildLineEmailMock.mockRejectedValueOnce(
+      new ContentError("the rendered email exceeds 524288 bytes"),
+    )
+    lineRunAction.mockClear()
+    await sendEmail(makeProps(lineStep) as never)
+    expect(lineRunAction).not.toHaveBeenCalled()
+    expect(markFailed).toHaveBeenCalledTimes(1)
+
+    lineRunAction.mockRejectedValueOnce(
+      new Error("bulktext refused the send (media-fetch)"),
+    )
+    await sendEmail(makeProps(lineStep) as never)
+    expect(markFailed).toHaveBeenCalledTimes(2)
+    expect(markDelivered).not.toHaveBeenCalled()
+  })
+
+  test("a legacy elements step can use the line too (brand falls back to the workspace)", async () => {
+    await sendEmail(makeProps({ lineInboxId: "line-1" }) as never)
+    expect(runAction).not.toHaveBeenCalled()
+    expect(lineRunAction).toHaveBeenCalledWith(
+      "sendEmail",
+      expect.objectContaining({ ref: "email:t:test-token-xyz" }),
+    )
+  })
+
+  test("no topic: the ref is still unique per send", async () => {
+    await sendEmail(makeProps({ ...lineStep, topicId: undefined }) as never)
+    const ref = (lineRunAction.mock.calls.at(-1)?.[1] as { ref: string }).ref
+    expect(ref).toMatch(UUID_REF)
+  })
+})
+
+test("s222b Codex probe: bad stored SMTP auth throws BEFORE the tracking row (no orphan recipient per retry)", async () => {
+  const { smtpAuthSchema } = await import("@chatbotx.io/integration-smtp")
+  vi.mocked(smtpAuthSchema.parse).mockImplementationOnce(() => {
+    throw new Error("host: required")
+  })
+  createRecipient.mockClear()
+  await expect(sendEmail(makeProps() as never)).rejects.toThrow(
+    "host: required",
+  )
+  expect(createRecipient).not.toHaveBeenCalled()
 })

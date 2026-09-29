@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import { emailTopicAnalyticsService } from "@chatbotx.io/analytics"
 import {
   buildContext,
@@ -35,7 +36,9 @@ import {
 import { contactVariableService } from "@chatbotx.io/variables"
 import { resolveButtonUrl } from "../../lib/convert-button"
 import { logger } from "../../lib/logger"
+import { resolveIntegrationContextFromContactInbox } from "../../services/integrations"
 import type { ExecuteStepProps } from "./flow"
+import { lineEmailRef } from "./line-email-status"
 import {
   EmailContentError,
   type MailAttachment,
@@ -43,6 +46,7 @@ import {
   prepareStepDocument,
   renderStepDocument,
 } from "./send-email-document"
+import { buildLineEmail, resolveEmailLine } from "./send-email-line"
 
 async function resolveElements({
   appUrl,
@@ -177,6 +181,121 @@ async function renderLegacyElements(props: {
   }
 }
 
+type RenderedMail = {
+  html: string
+  text: string
+  attachments?: MailAttachment[]
+}
+
+/** Hub SMTP. False when the send failed (logged; the caller marks it). */
+async function sendViaSmtp(props: {
+  workspaceId: string
+  smtpIntegration: NonNullable<
+    Awaited<ReturnType<typeof integrationSmtpService.find>>
+  >
+  auth: ReturnType<typeof smtpAuthSchema.parse>
+  from: string
+  to: string
+  subject: string
+  body: RenderedMail
+  headers: Record<string, string>
+}): Promise<boolean> {
+  const { smtpIntegration, body } = props
+  const botContext = await buildContext({
+    workspaceId: props.workspaceId,
+    integrationType: "smtp",
+    integration: { ...smtpIntegration, auth: props.auth },
+  })
+  try {
+    await integrationSmtp.runAction("sendMail", {
+      ctx: botContext,
+      from: props.from || smtpIntegration.fromAddress,
+      to: props.to,
+      subject: props.subject,
+      html: body.html,
+      text: body.text,
+      attachments: body.attachments?.map(
+        ({ filename, content, contentType }) => ({
+          filename,
+          content,
+          contentType,
+        }),
+      ),
+      headers: props.headers,
+    })
+    return true
+  } catch (err) {
+    logger.error(
+      {
+        err,
+        integrationSmtpId: smtpIntegration.id,
+        workspaceId: props.workspaceId,
+      },
+      "handleSendEmail: SMTP send failed",
+    )
+    return false
+  }
+}
+
+/**
+ * B2 phase 4 (s222b): queue the rendered mail for the bulktext email line
+ * (pull mode; the line's final status settles it later). A mail past the
+ * line's caps is unusable content (logged, false); a push-mode or unreachable
+ * line fails the send the same way SMTP does.
+ */
+async function sendViaLine(props: {
+  workspaceId: string
+  appUrl: string
+  lineContactInbox: Awaited<ReturnType<typeof resolveEmailLine>>
+  subject: string
+  body: RenderedMail
+  headers: Record<string, string>
+  ref: string
+}): Promise<boolean> {
+  const { lineContactInbox } = props
+  const log = {
+    workspaceId: props.workspaceId,
+    lineInboxId: lineContactInbox.inboxId,
+  }
+  let email: Awaited<ReturnType<typeof buildLineEmail>>
+  try {
+    email = await buildLineEmail({
+      appUrl: props.appUrl,
+      subject: props.subject,
+      html: props.body.html,
+      text: props.body.text,
+      headers: props.headers,
+      attachments: props.body.attachments ?? [],
+    })
+  } catch (err) {
+    if (!(err instanceof EmailContentError)) {
+      throw err
+    }
+    logger.error(
+      { err, ...log },
+      "handleSendEmail: too large for the email line",
+    )
+    return false
+  }
+  try {
+    const { integration, ctx } =
+      await resolveIntegrationContextFromContactInbox({
+        workspaceId: props.workspaceId,
+        contactInbox: lineContactInbox,
+      })
+    await integration.runAction("sendEmail", {
+      ctx,
+      contact: { id: lineContactInbox.id, sourceId: lineContactInbox.sourceId },
+      email,
+      ref: props.ref,
+    })
+    return true
+  } catch (err) {
+    logger.error({ err, ...log }, "handleSendEmail: the email line send failed")
+    return false
+  }
+}
+
 export async function sendEmail({
   conversation,
   flowVersion,
@@ -195,23 +314,32 @@ export async function sendEmail({
     return
   }
 
-  const smtpIntegration = await integrationSmtpService.find({
-    where: {
-      workspaceId: conversation.workspaceId,
-      id: step.integrationSmtpId,
-    },
-  })
-  if (!smtpIntegration) {
+  // B2 phase 4 (s222b): a step with an email LINE sends through that
+  // API-channel inbox (bulktext) instead of hub SMTP; everything up to the
+  // rendered mail is shared.
+  const lineInboxId = step.lineInboxId || undefined
+  const smtpIntegration = lineInboxId
+    ? undefined
+    : await integrationSmtpService.find({
+        where: {
+          workspaceId: conversation.workspaceId,
+          id: step.integrationSmtpId,
+        },
+      })
+  if (!(lineInboxId || smtpIntegration)) {
     logger.warn(
       `handleSendEmail: smtp integration ${step.integrationSmtpId} not found`,
     )
     return
   }
-
-  const auth = smtpAuthSchema.parse({
-    authType: "custom",
-    ...(smtpIntegration.auth as Record<string, unknown>),
-  })
+  // Validated BEFORE the tracking row: bad stored auth must not leave an
+  // unsettled recipient behind on every retry (Codex probe s222b).
+  const smtpAuth = smtpIntegration
+    ? smtpAuthSchema.parse({
+        authType: "custom",
+        ...(smtpIntegration.auth as Record<string, unknown>),
+      })
+    : undefined
 
   const workspace = await workspaceService.findById({
     id: conversation.workspaceId,
@@ -248,11 +376,28 @@ export async function sendEmail({
 
   // B2 (s220b/s221b): a template or inline document is READ before the
   // tracking row is written (a transient read error retries with nothing
-  // written); unusable content is still counted, then marked failed.
+  // written); unusable content is still counted, then marked failed. The
+  // email line (s222b) is resolved here too: its address IS the recipient.
   const isDocument = Boolean(step.templateId || step.document)
   let prepared: PreparedDocument | undefined
   let contentError: EmailContentError | undefined
-  if (isDocument) {
+  let lineContactInbox: Awaited<ReturnType<typeof resolveEmailLine>> | undefined
+  if (lineInboxId) {
+    try {
+      lineContactInbox = await resolveEmailLine({
+        workspaceId: conversation.workspaceId,
+        contactId: conversation.contactId,
+        lineInboxId,
+      })
+    } catch (err) {
+      if (!(err instanceof EmailContentError)) {
+        throw err
+      }
+      contentError = err
+    }
+  }
+  const recipient = lineContactInbox?.sourceId ?? to
+  if (isDocument && !contentError) {
     try {
       prepared = await prepareStepDocument({
         step,
@@ -281,10 +426,26 @@ export async function sendEmail({
       contactId: conversation.contactId,
       conversationId: conversation.id,
       contactInboxId: broadcast?.contactInboxId ?? contactInbox.id,
-      email: to,
+      email: recipient,
       broadcastId: broadcast?.broadcastId ?? null,
     })
     token = result.token
+  }
+
+  if (contentError) {
+    logger.error(
+      {
+        err: contentError,
+        workspaceId: conversation.workspaceId,
+        templateId: step.templateId,
+        lineInboxId,
+      },
+      "handleSendEmail: email content could not be prepared",
+    )
+    if (token) {
+      await emailTopicAnalyticsService.markFailed(token)
+    }
+    return
   }
 
   // Legacy `elements` keep the original path (no try: its errors propagate
@@ -292,9 +453,6 @@ export async function sendEmail({
   let body: { html: string; text: string; attachments?: MailAttachment[] }
   if (isDocument) {
     try {
-      if (contentError) {
-        throw contentError
-      }
       body = await renderStepDocument({
         prepared: prepared as PreparedDocument,
         workspaceId: conversation.workspaceId,
@@ -333,49 +491,50 @@ export async function sendEmail({
       unsubscribeUrl,
       token,
       workspaceId: conversation.workspaceId,
-      brandName: workspace.name ?? smtpIntegration.name,
+      brandName: workspace.name ?? smtpIntegration?.name ?? "",
       subject,
       preheader,
     })
   }
 
-  const botContext = await buildContext({
-    workspaceId: workspace.id,
-    integrationType: "smtp",
-    integration: { ...smtpIntegration, auth },
-  })
-
   // RFC 8058 one-click: the mail client POSTs to this URL; the /unsubscribe
   // page itself only unsubscribes after a confirm (link scanners GET it).
   const oneClickUrl = new URL(unsubscribeUrl)
   oneClickUrl.pathname = "/unsubscribe/one-click"
+  const headers = {
+    "List-Unsubscribe": `<${oneClickUrl.toString()}>`,
+    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+  }
 
-  try {
-    await integrationSmtp.runAction("sendMail", {
-      ctx: botContext,
-      from: step.from || smtpIntegration.fromAddress,
-      to,
-      subject,
-      html: body.html,
-      text: body.text,
-      attachments: body.attachments,
-      headers: {
-        "List-Unsubscribe": `<${oneClickUrl.toString()}>`,
-        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-      },
-    })
-  } catch (err) {
-    logger.error(
-      {
-        err,
-        integrationSmtpId: smtpIntegration.id,
+  const sent = lineContactInbox
+    ? await sendViaLine({
         workspaceId: conversation.workspaceId,
-      },
-      "handleSendEmail: SMTP send failed",
-    )
+        appUrl,
+        lineContactInbox,
+        subject,
+        body,
+        headers,
+        ref: lineEmailRef(token, randomUUID()),
+      })
+    : await sendViaSmtp({
+        workspaceId: workspace.id,
+        smtpIntegration: smtpIntegration as NonNullable<typeof smtpIntegration>,
+        auth: smtpAuth as NonNullable<typeof smtpAuth>,
+        from: step.from,
+        to,
+        subject,
+        body,
+        headers,
+      })
+  if (!sent) {
     if (token) {
       await emailTopicAnalyticsService.markFailed(token)
     }
+    return
+  }
+  // The line only QUEUED it: its own delivered / failed status settles the
+  // row (line-email-status.ts), since failed never overrides delivered.
+  if (lineContactInbox) {
     return
   }
 

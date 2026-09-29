@@ -21,7 +21,8 @@ const env = keys()
 const TRAILING_SLASHES = /\/+$/
 
 /**
- * A signed upload URL as the browser must call it. The signature is computed
+ * A signed upload or download URL as the browser must call it (download:
+ * s222b, the same self-host gap #131 closed for uploads). The signature is computed
  * for the internal endpoint (its host is a signed header); a configured
  * public base only swaps the origin + bucket prefix, and the proxy behind it
  * restores the endpoint's Host. A URL outside that prefix is returned as is.
@@ -108,6 +109,22 @@ export class Uploader {
   }
 
   async getPresignedUpload(filePath: string): Promise<string> {
+    return await this.#presign("PUT", filePath, 5 * 60)
+  }
+
+  async getPresignedDownload(
+    filePath: string,
+    expiresInSeconds = 60 * 60,
+  ): Promise<string> {
+    return await this.#presign("GET", filePath, expiresInSeconds)
+  }
+
+  /** A query-signed URL for the endpoint, as the browser must call it. */
+  async #presign(
+    method: "GET" | "PUT",
+    filePath: string,
+    expiresInSeconds: number,
+  ): Promise<string> {
     const client = new AwsClient({
       service: "s3",
       region: env.S3_REGION,
@@ -118,10 +135,8 @@ export class Uploader {
     const signed = (
       await client.sign(
         new Request(
-          `${env.S3_ENDPOINT}/${env.S3_BUCKET}/${filePath}?X-Amz-Expires=${5 * 60}`,
-          {
-            method: "PUT",
-          },
+          `${env.S3_ENDPOINT}/${env.S3_BUCKET}/${filePath}?X-Amz-Expires=${expiresInSeconds}`,
+          { method },
         ),
         {
           aws: { signQuery: true },
@@ -133,32 +148,6 @@ export class Uploader {
       bucket: env.S3_BUCKET,
       publicBase: env.S3_PUBLIC_UPLOAD_URL,
     })
-  }
-
-  async getPresignedDownload(
-    filePath: string,
-    expiresInSeconds = 60 * 60,
-  ): Promise<string> {
-    const client = new AwsClient({
-      service: "s3",
-      region: env.S3_REGION,
-      accessKeyId: env.S3_ACCESS_KEY_ID ?? "",
-      secretAccessKey: env.S3_SECRET_ACCESS_KEY ?? "",
-    })
-
-    return (
-      await client.sign(
-        new Request(
-          `${env.S3_ENDPOINT}/${env.S3_BUCKET}/${filePath}?X-Amz-Expires=${expiresInSeconds}`,
-          {
-            method: "GET",
-          },
-        ),
-        {
-          aws: { signQuery: true },
-        },
-      )
-    ).url.toString()
   }
 
   async headObject(path: string) {

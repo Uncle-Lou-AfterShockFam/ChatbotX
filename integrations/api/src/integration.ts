@@ -7,6 +7,7 @@ import {
 } from "@chatbotx.io/sdk"
 import { conversationHandlers } from "./handlers/conversation"
 import { messageHandlers } from "./handlers/message"
+import { sendEmail } from "./handlers/message/outgoing-message"
 import type { ApiActions, ApiAuthValue } from "./schema"
 
 const config: IntegrationDefinition<BaseConfig, ApiAuthValue, ApiActions> = {
@@ -17,7 +18,9 @@ const config: IntegrationDefinition<BaseConfig, ApiAuthValue, ApiActions> = {
       conversation: conversationHandlers,
     },
   },
-  actions: {},
+  actions: {
+    sendEmail,
+  },
   handleRequest(
     _props: HandleRequestProps<BaseConfig>,
   ): Promise<string | number | Oauth2AuthValue> {

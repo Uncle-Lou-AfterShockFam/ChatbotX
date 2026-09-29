@@ -125,6 +125,14 @@ export const emailStepSchema = z.object({
   templateId: zodBigintAsString().optional(),
   document: z.record(z.string(), z.unknown()).optional(),
   elements: z.array(pageElementSchema).default([]),
+  /**
+   * B2 phase 4 (s222b): send through a bulktext email LINE (an API-channel
+   * inbox) instead of `integrationSmtpId`. The hub still renders; the line
+   * relays the rendered mail to the contact's address on that inbox (its
+   * ContactInbox sourceId), from the line's own address. Optional: saved
+   * versions are re-parsed on publish.
+   */
+  lineInboxId: zodBigintAsString().optional(),
 })
 export type EmailStepSchema = z.infer<typeof emailStepSchema>
 

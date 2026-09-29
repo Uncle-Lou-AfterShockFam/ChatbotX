@@ -7632,7 +7632,11 @@
       "none": "Ingen (brug elementerne nedenfor)",
       "hint": "En gemt skabelon fra Indstillinger > E-mailskabeloner erstatter elementerne nedenfor.",
       "noTemplates": "Ingen e-mailskabeloner endnu.",
-      "clear": "Ryd"
+      "clear": "Ryd",
+      "line": "E-maillinje (bulktext)",
+      "lineHint": "Send via denne linje i stedet for SMTP. Linjen mailer kontaktens adresse på linjen fra sin egen adresse.",
+      "lineNone": "Ingen (send via SMTP)",
+      "noLines": "Ingen API-kanalindbakker endnu."
     }
   }
 }

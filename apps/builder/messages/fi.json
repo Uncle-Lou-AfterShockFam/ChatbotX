@@ -7632,7 +7632,11 @@
       "none": "Ei mitään (käytä alla olevia elementtejä)",
       "hint": "Tallennettu pohja kohdasta Asetukset > Sähköpostipohjat korvaa alla olevat elementit.",
       "noTemplates": "Ei vielä sähköpostipohjia.",
-      "clear": "Tyhjennä"
+      "clear": "Tyhjennä",
+      "line": "Sähköpostilinja (bulktext)",
+      "lineHint": "Lähetä tämän linjan kautta SMTP:n sijaan. Linja lähettää yhteystiedon osoitteeseen omasta osoitteestaan.",
+      "lineNone": "Ei mitään (lähetä SMTP:llä)",
+      "noLines": "Ei vielä API-kanavan saapuneita-kansioita."
     }
   }
 }

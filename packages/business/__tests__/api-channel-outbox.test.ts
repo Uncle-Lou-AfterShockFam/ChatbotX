@@ -178,3 +178,29 @@ describe("service", () => {
     ).toEqual({ outcome: "not-found" })
   })
 })
+
+describe("newsletterRef (s222b): the ref of a queued email-step newsletter, else null", () => {
+  test("only a row whose envelope carries bulktext.email and a string ref yields it", async () => {
+    const env = (bulktext: unknown) => [
+      { envelope: { message: { contentAttributes: { bulktext } } } },
+    ]
+    mockReturning.mockResolvedValueOnce(
+      env({ ref: "email:t:tok", email: { subject: "s" } }),
+    )
+    expect(
+      await apiChannelOutboxService.newsletterRef({ inboxId: "i", id: "a" }),
+    ).toBe("email:t:tok")
+    for (const rows of [
+      [],
+      env({ ref: "flow-ref" }),
+      env({ email: { subject: "s" } }),
+      env({ ref: 5, email: {} }),
+      [{ envelope: null }],
+    ]) {
+      mockReturning.mockResolvedValueOnce(rows)
+      expect(
+        await apiChannelOutboxService.newsletterRef({ inboxId: "i", id: "a" }),
+      ).toBeNull()
+    }
+  })
+})

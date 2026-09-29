@@ -1,4 +1,4 @@
-import type { BaseConfig } from "@chatbotx.io/sdk"
+import type { BaseConfig, Context } from "@chatbotx.io/sdk"
 import { customAuthSchema } from "@chatbotx.io/sdk"
 import { z } from "zod"
 
@@ -34,4 +34,33 @@ export const apiAuthSchema = customAuthSchema.extend({
 })
 export type ApiAuthValue = z.infer<typeof apiAuthSchema>
 
-export type ApiActions = Record<string, never>
+/**
+ * B2 phase 4 (s222b): a newsletter the hub rendered, relayed by a bulktext
+ * email line as `contentAttributes.bulktext.email`. The line validates this
+ * shape CLOSED with the same caps (bulktext `src/email/document-mail.mjs`);
+ * attachments travel as signed downloads on the hub's own origin, never bytes.
+ */
+export type LineEmail = {
+  subject: string
+  html: string
+  text: string
+  headers: Record<string, string>
+  /** `sha256` of the bytes: the line verifies the download and caches by it. */
+  attachments: {
+    url: string
+    name: string
+    mimeType: string
+    size: number
+    sha256: string
+  }[]
+}
+
+export type ApiActions<IAuth extends ApiAuthValue = ApiAuthValue> = {
+  sendEmail: (props: {
+    ctx: Context<IAuth>
+    contact: { id: string; sourceId: string }
+    email: LineEmail
+    /** The line's idempotency key for this send (<= 120 chars). */
+    ref: string
+  }) => Promise<{ messageIds: string[] }>
+}

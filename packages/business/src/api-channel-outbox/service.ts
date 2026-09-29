@@ -177,6 +177,39 @@ class ApiChannelOutboxService extends BaseService {
       .limit(1)
     return { outcome: existing ? "already-settled" : "not-found" }
   }
+
+  /**
+   * B2 phase 4 (s222b): the `ref` of a queued email-step newsletter (an
+   * envelope carrying `contentAttributes.bulktext.email`), or null for any
+   * other row. Scoped to the inbox whose status names it, so one inbox's
+   * status can never settle another inbox's send.
+   */
+  async newsletterRef(input: {
+    inboxId: string
+    id: string
+  }): Promise<string | null> {
+    const [row] = await db
+      .select({ envelope: apiChannelOutboxModel.envelope })
+      .from(apiChannelOutboxModel)
+      .where(
+        and(
+          eq(apiChannelOutboxModel.id, input.id),
+          eq(apiChannelOutboxModel.inboxId, input.inboxId),
+        ),
+      )
+      .limit(1)
+    const bulktext = (
+      row?.envelope as
+        | { message?: { contentAttributes?: { bulktext?: unknown } } }
+        | undefined
+    )?.message?.contentAttributes?.bulktext as
+      | { ref?: unknown; email?: unknown }
+      | undefined
+    if (!bulktext?.email || typeof bulktext.ref !== "string") {
+      return null
+    }
+    return bulktext.ref
+  }
 }
 
 export const apiChannelOutboxService = new ApiChannelOutboxService()

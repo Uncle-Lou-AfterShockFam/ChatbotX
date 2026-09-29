@@ -7632,7 +7632,11 @@
       "none": "Keine (die Elemente unten verwenden)",
       "hint": "Eine gespeicherte Vorlage aus Einstellungen > E-Mail-Vorlagen ersetzt die Elemente unten.",
       "noTemplates": "Noch keine E-Mail-Vorlagen.",
-      "clear": "Leeren"
+      "clear": "Leeren",
+      "line": "E-Mail-Leitung (bulktext)",
+      "lineHint": "Über diese Leitung statt über SMTP senden. Die Leitung schreibt an die Adresse des Kontakts auf ihr, von ihrer eigenen Adresse.",
+      "lineNone": "Keine (über SMTP senden)",
+      "noLines": "Noch keine API-Kanal-Posteingänge."
     }
   }
 }

@@ -25,7 +25,7 @@ vi.mock("@chatbotx.io/business", async () => ({
   trackedLinkService: { mint: mockMint },
 }))
 
-const { sendFlowStep, sendMessage } = await import(
+const { sendEmail, sendFlowStep, sendMessage } = await import(
   "../src/handlers/message/outgoing-message"
 )
 
@@ -569,6 +569,78 @@ describe("api short links (fork, s170)", () => {
         },
       } as never),
     ).rejects.toThrow("db down")
+    expect(mockPostSignedEnvelope).not.toHaveBeenCalled()
+    expect(mockEnqueue).not.toHaveBeenCalled()
+  })
+})
+
+describe("api sendEmail (s222b, B2 phase 4): the rendered newsletter for a bulktext email line", () => {
+  const email = {
+    subject: "September newsletter",
+    html: '<p>Hi</p><a href="https://app.test/email-topic/click?r=t&u=s">Start</a>',
+    text: "Hi\nStart: https://app.test/email-topic/click?r=t&u=s",
+    headers: {
+      "List-Unsubscribe": "<https://app.test/unsubscribe/one-click?token=u>",
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+    attachments: [
+      {
+        url: "https://app.test/storage/public/space/ws-1/media/a.pdf?X-Amz-Signature=x",
+        name: "a.pdf",
+        mimeType: "application/pdf",
+        size: 4,
+        sha256: "a".repeat(64),
+      },
+    ],
+  }
+  const lineContact = { id: "ci-9", sourceId: "jane@example.com" }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPostSignedEnvelope.mockResolvedValue({ messageId: "msg:5" })
+    mockEnqueue.mockResolvedValue("ob_7")
+  })
+
+  test("pull: the mail rides contentAttributes.bulktext.email VERBATIM with its ref, text = subject, never link-shortened; answered outbox:<id>", async () => {
+    const pullCtx = {
+      auth: { callbackUrl: null, signingSecret: "s", deliveryMode: "pull" },
+      integrationDetail: { inboxId: "inbox-9", workspaceId: "ws-1" },
+    } as never
+    const result = await sendEmail({
+      ctx: pullCtx,
+      contact: lineContact,
+      email,
+      ref: "email:tok",
+    } as never)
+    expect(mockPostSignedEnvelope).not.toHaveBeenCalled()
+    const [args] = mockEnqueue.mock.calls[0]
+    expect(args.contactSourceId).toBe("jane@example.com")
+    expect(args.envelope.event).toBe("message_created")
+    expect(args.envelope.contact).toEqual(lineContact)
+    expect(args.envelope.message).toEqual({
+      text: "September newsletter",
+      messageType: "outgoing",
+      contentType: "text",
+      contentAttributes: { bulktext: { ref: "email:tok", email } },
+    })
+    expect(mockMint).not.toHaveBeenCalled()
+    expect(result).toEqual({ messageIds: ["outbox:ob_7"] })
+  })
+
+  test("a push-mode line fails the newsletter closed: nothing posted, nothing queued (its later status could never settle the recipient)", async () => {
+    for (const pushCtx of [
+      ctx,
+      { auth: { callbackUrl: null, signingSecret: "s" } } as never,
+    ]) {
+      await expect(
+        sendEmail({
+          ctx: pushCtx,
+          contact: lineContact,
+          email,
+          ref: "r",
+        } as never),
+      ).rejects.toThrow("pull-mode email line")
+    }
     expect(mockPostSignedEnvelope).not.toHaveBeenCalled()
     expect(mockEnqueue).not.toHaveBeenCalled()
   })

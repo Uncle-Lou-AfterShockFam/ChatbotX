@@ -7632,7 +7632,11 @@
       "none": "Tidak ada (gunakan elemen di bawah)",
       "hint": "Template tersimpan dari Pengaturan > Template email menggantikan elemen di bawah.",
       "noTemplates": "Belum ada template email.",
-      "clear": "Hapus"
+      "clear": "Hapus",
+      "line": "Jalur email (bulktext)",
+      "lineHint": "Kirim melalui jalur ini alih-alih SMTP. Jalur mengirim ke alamat kontak di jalur itu, dari alamatnya sendiri.",
+      "lineNone": "Tidak ada (kirim lewat SMTP)",
+      "noLines": "Belum ada kotak masuk kanal API."
     }
   }
 }

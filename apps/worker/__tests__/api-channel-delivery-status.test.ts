@@ -58,6 +58,14 @@ vi.mock("@chatbotx.io/sdk", () => ({
   },
 }))
 
+// s222b: the email-line settler (its own suite: line-email-status.test.ts).
+const { mockSettleLineEmail } = vi.hoisted(() => ({
+  mockSettleLineEmail: vi.fn().mockResolvedValue(false),
+}))
+vi.mock("../src/integration/handlers/line-email-status", () => ({
+  settleLineEmailStatus: mockSettleLineEmail,
+}))
+
 vi.mock("@chatbotx.io/flow-config", () => ({
   messageEventTypeSchema: {
     enum: {
@@ -232,6 +240,18 @@ describe("API channel delivery status reaches the message", () => {
       handleMessageStatus(apiStatusJob("delivered", "+15550009999") as never),
     ).rejects.toThrow("Unable to find conversation")
     expect(mockEmit).not.toHaveBeenCalled()
+  })
+
+  test("s222b: an API status is offered to the email-line settler FIRST, even when no conversation resolves", async () => {
+    mockSettleLineEmail.mockClear()
+    await expect(
+      handleMessageStatus(apiStatusJob("failed", "+15550009999") as never),
+    ).rejects.toThrow("Unable to find conversation")
+    expect(mockSettleLineEmail).toHaveBeenCalledWith({
+      inboxId: "inbox-1",
+      messageId: "msg:57",
+      status: "failed",
+    })
   })
 
   test("an unknown messageId still records the conversation-level event without a message", async () => {
