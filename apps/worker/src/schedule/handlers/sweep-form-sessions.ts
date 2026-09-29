@@ -135,9 +135,10 @@ async function emitAbandoned(row: FormSessionModel): Promise<void> {
 
 /**
  * The web half: claim-then-emit in batches, inside the same contact-event
- * webhook context as chat (the visitor stopped, like a chat timeout). One
- * failing batch is logged and left for the next minute; it never blocks the
- * chat half above.
+ * webhook context as chat (the visitor stopped, like a chat timeout). A
+ * failed claim is retried next minute; a claimed visit whose emit fails is
+ * lost and logged (at most once, as chat). The prune runs on its own, so a
+ * failed pass never stops it, and neither blocks the chat half above.
  */
 async function sweepWebVisits(): Promise<{ claimed: number; emitted: number }> {
   let claimed = 0
@@ -153,12 +154,19 @@ async function sweepWebVisits(): Promise<{ claimed: number; emitted: number }> {
         break
       }
     }
-    await formVisitService.pruneClosed()
   } catch (error) {
     logger.error(
       { err: normalizeError(error) },
       "form session sweep: web visit pass failed",
     )
   }
+  await formVisitService
+    .pruneClosed()
+    .catch((error: unknown) =>
+      logger.error(
+        { err: normalizeError(error) },
+        "form session sweep: web visit prune failed",
+      ),
+    )
   return { claimed, emitted }
 }

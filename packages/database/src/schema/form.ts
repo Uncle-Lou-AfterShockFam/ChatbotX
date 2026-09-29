@@ -331,7 +331,11 @@ export const formVisitModel = pgTable(
       .where(
         sql`${table.submittedAt} is null and ${table.abandonEmittedAt} is null`,
       ),
-    index("FormVisit_createdAt_idx").on(table.createdAt),
+    index("FormVisit_createdAt_closed_idx")
+      .on(table.createdAt)
+      .where(
+        sql`${table.submittedAt} is not null or ${table.abandonEmittedAt} is not null`,
+      ),
     index("FormVisit_contactId_idx").on(table.contactId),
   ],
 )

@@ -268,6 +268,21 @@ const closedResult = (
 })
 
 /**
+ * One (form, contact)'s visit lifecycle, serialised: `start` and every
+ * close take this transaction-scoped lock first. Taken last by a submit
+ * (after the dedup and admission locks), never before them, so no cycle.
+ */
+export async function lockFormVisits(
+  tx: DatabaseClient,
+  formId: string,
+  contactId: string,
+): Promise<void> {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${`form-visit:${formId}:${contactId}`}, 0))`,
+  )
+}
+
+/**
  * The contact answered the form (web or chat): its open web visit is done
  * and must never read as abandoned (s224a A2-4). Conditional on the visit
  * still being open, so it serialises with the sweep's claim on the row:
@@ -286,6 +301,9 @@ export async function closeFormVisits(
     interactionId?: string
   },
 ): Promise<void> {
+  // The same lock `start` takes, held to the caller's commit: a beacon can
+  // never insert between this close and the commit (Codex probe s224a).
+  await lockFormVisits(tx, props.formId, props.contactId)
   await tx
     .update(formVisitModel)
     .set({ submittedAt: props.now })
@@ -395,13 +413,16 @@ export class FormSubmitService {
     if (duplicate) {
       if (duplicate.contactId !== null) {
         // A visit opened after the first copy went in is answered by it too.
-        await closeFormVisits(db, {
-          workspaceId: input.workspaceId,
-          formId: form.id,
-          contactId: duplicate.contactId,
-          now,
-          interactionId: linkedInteraction,
-        })
+        const contactOfDuplicate = duplicate.contactId
+        await db.transaction((tx) =>
+          closeFormVisits(tx, {
+            workspaceId: input.workspaceId,
+            formId: form.id,
+            contactId: contactOfDuplicate,
+            now,
+            interactionId: linkedInteraction,
+          }),
+        )
       }
       return {
         kind: "ok",

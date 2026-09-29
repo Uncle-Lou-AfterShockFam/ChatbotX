@@ -478,7 +478,7 @@ describe.skipIf(!databaseUrl)("web form visits (real Postgres)", () => {
 
   test("beacon and submit of ONE page load racing: never an open visit left behind", async () => {
     const ws = await Promise.all(
-      Array.from({ length: 6 }, () => seed({ abandonAfterMinutes: 5 })),
+      Array.from({ length: 30 }, () => seed({ abandonAfterMinutes: 5 })),
     )
     await Promise.all(
       ws.flatMap((w, i) => {
@@ -565,5 +565,38 @@ describe.skipIf(!databaseUrl)("web form visits (real Postgres)", () => {
     })
     const [row] = await visits(w.formId)
     expect(row?.abandonAt.getTime()).toBe(t0.getTime() + 1440 * MIN)
+  })
+
+  test("an uncommitted close (chat-shaped, no marker) holds the (form, contact) lock: a beacon waits for its commit (Codex probe s224a)", async () => {
+    const w = await seed({ abandonAfterMinutes: 5 })
+    const { closeFormVisits } = await import("../../src/form/submit")
+    let release: () => void = () => undefined
+    const held = new Promise<void>((r) => {
+      release = r
+    })
+    let beaconDone = false
+    const submitTx = db.transaction(async (tx) => {
+      await closeFormVisits(tx, {
+        workspaceId: w.workspaceId,
+        formId: w.formId,
+        contactId: w.contactId,
+        now: new Date(),
+      })
+      await held
+    })
+    await new Promise((r) => setTimeout(r, 50))
+    const beacon = formVisitService
+      .start({ form: w.form, formLinkToken: w.k, interactionId: randomUUID() })
+      .then(() => {
+        beaconDone = true
+      })
+    await new Promise((r) => setTimeout(r, 300))
+    // Without the lock the beacon would have inserted between the close's
+    // UPDATE and its commit, a row the close never saw.
+    expect(beaconDone).toBe(false)
+    release()
+    await submitTx
+    await beacon
+    expect(beaconDone).toBe(true)
   })
 })

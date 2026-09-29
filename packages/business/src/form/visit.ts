@@ -20,7 +20,7 @@ import { alias } from "drizzle-orm/pg-core"
 import { logger } from "../logger"
 import { formService, type NormalizedForm } from "./service"
 import { FORM_ABANDON_CATCHUP_MS } from "./session"
-import { formSubmitService } from "./submit"
+import { formSubmitService, lockFormVisits } from "./submit"
 
 /**
  * Web `formAbandoned` (s224a A2-4, owner: signed links only). A visitor a
@@ -83,51 +83,54 @@ export class FormVisitService {
     const abandonAt = new Date(
       now.getTime() + form.settings.abandonAfterMinutes * 60_000,
     )
-    const inserted = await db
-      .insert(formVisitModel)
-      .values({
-        id: createId(),
-        workspaceId: form.workspaceId,
-        formId: form.id,
-        contactId,
-        interactionId: props.interactionId,
-        startedAt: now,
-        lastActivityAt: now,
-        abandonAt,
-      })
-      // Either unique index: the interaction exists, or an open visit does.
-      .onConflictDoNothing()
-      .returning({ id: formVisitModel.id })
-    if (inserted.length === 0) {
-      await db
-        .update(formVisitModel)
-        // Refreshes never push past FORM_MAX_ABANDON_MINUTES from the first
-        // interaction: repeated beacons cannot hold an abandon off forever
-        // (skeptic s224a).
-        .set({
+    await db.transaction(async (tx) => {
+      await lockFormVisits(tx, form.id, contactId)
+      const inserted = await tx
+        .insert(formVisitModel)
+        .values({
+          id: createId(),
+          workspaceId: form.workspaceId,
+          formId: form.id,
+          contactId,
+          interactionId: props.interactionId,
+          startedAt: now,
           lastActivityAt: now,
-          abandonAt: sql`least(${abandonAt}, ${formVisitModel.startedAt} + make_interval(mins => ${FORM_MAX_ABANDON_MINUTES}))`,
+          abandonAt,
         })
-        .where(
-          and(
-            eq(formVisitModel.formId, form.id),
-            eq(formVisitModel.contactId, contactId),
-            openVisit(),
-            notExists(
-              db
-                .select({ one: sql`1` })
-                .from(interaction)
-                .where(
-                  and(
-                    eq(interaction.formId, form.id),
-                    eq(interaction.contactId, contactId),
-                    eq(interaction.interactionId, props.interactionId),
+        // Either unique index: the interaction exists, or an open visit does.
+        .onConflictDoNothing()
+        .returning({ id: formVisitModel.id })
+      if (inserted.length === 0) {
+        await tx
+          .update(formVisitModel)
+          // Refreshes never push past FORM_MAX_ABANDON_MINUTES from the first
+          // interaction: repeated beacons cannot hold an abandon off forever
+          // (skeptic s224a).
+          .set({
+            lastActivityAt: now,
+            abandonAt: sql`least(${abandonAt}, ${formVisitModel.startedAt} + make_interval(mins => ${FORM_MAX_ABANDON_MINUTES}))`,
+          })
+          .where(
+            and(
+              eq(formVisitModel.formId, form.id),
+              eq(formVisitModel.contactId, contactId),
+              openVisit(),
+              notExists(
+                tx
+                  .select({ one: sql`1` })
+                  .from(interaction)
+                  .where(
+                    and(
+                      eq(interaction.formId, form.id),
+                      eq(interaction.contactId, contactId),
+                      eq(interaction.interactionId, props.interactionId),
+                    ),
                   ),
-                ),
+              ),
             ),
-          ),
-        )
-    }
+          )
+      }
+    })
     return { kind: "started" }
   }
 
@@ -180,8 +183,17 @@ export class FormVisitService {
         givenUp.push(visit.id)
         continue
       }
-      if (await this.emitAbandoned(visit)) {
-        emitted++
+      // One visit's failure (its form lookup, the emit) never costs the rest
+      // of the claimed batch; the claim is committed, so it is lost, logged.
+      try {
+        if (await this.emitAbandoned(visit)) {
+          emitted++
+        }
+      } catch (error) {
+        logger.warn(
+          { err: error, formVisitId: visit.id },
+          "form visit: formAbandoned lost after claim",
+        )
       }
     }
     if (givenUp.length > 0) {
@@ -211,27 +223,19 @@ export class FormVisitService {
     ) {
       return false
     }
-    try {
-      await emitFormAbandoned(visit.workspaceId, visit.contactId, {
-        formId: visit.formId,
-        formVisitId: visit.id,
-        channel: "web",
-        reason: "timeout",
-        lastFieldKey: null,
-        askedCount: 0,
-        occurredAt: visit.abandonAt.toISOString(),
-      })
-      return true
-    } catch (error) {
-      logger.warn(
-        { err: error, formVisitId: visit.id },
-        "form visit: formAbandoned event failed after claim",
-      )
-      return false
-    }
+    await emitFormAbandoned(visit.workspaceId, visit.contactId, {
+      formId: visit.formId,
+      formVisitId: visit.id,
+      channel: "web",
+      reason: "timeout",
+      lastFieldKey: null,
+      askedCount: 0,
+      occurredAt: visit.abandonAt.toISOString(),
+    })
+    return true
   }
 
-  /** Delete closed visits past retention, at most `limit` per call. */
+  /** Delete visits CREATED before retention and since closed, oldest first, at most `limit` per call. */
   async pruneClosed(
     props: { now?: Date; limit?: number } = {},
   ): Promise<number> {
@@ -250,6 +254,7 @@ export class FormVisitService {
           ),
         ),
       )
+      .orderBy(formVisitModel.createdAt)
       .limit(limit)
     const rows = await db
       .delete(formVisitModel)

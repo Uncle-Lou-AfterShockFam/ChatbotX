@@ -235,6 +235,17 @@ describe("sweepFormSessions", () => {
       webAbandoned: 0,
     })
     expect(mocks.add).toHaveBeenCalledTimes(1)
-    expect(mocks.pruneClosed).not.toHaveBeenCalled()
+    // The prune runs on its own (Codex probe s224a).
+    expect(mocks.pruneClosed).toHaveBeenCalledTimes(1)
+  })
+
+  test("a failing prune is logged and the sweep result stands", async () => {
+    mocks.expireDue.mockResolvedValueOnce([])
+    mocks.pruneClosed.mockRejectedValueOnce(new Error("db down"))
+    expect(await sweepFormSessions()).toEqual({
+      expired: 0,
+      abandonCatchUp: 0,
+      webAbandoned: 0,
+    })
   })
 })

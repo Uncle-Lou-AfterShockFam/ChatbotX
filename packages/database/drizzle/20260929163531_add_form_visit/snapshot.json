@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "b7528237-f141-4300-bc45-fa4bf0f2fa36",
+  "id": "ab798c22-5297-4ba6-a8eb-ff38b393bfb8",
   "prevIds": [
     "48340c8b-6e60-4f29-ba6c-b576f4752263"
   ],
@@ -40157,11 +40157,11 @@
         }
       ],
       "isUnique": false,
-      "where": null,
+      "where": "\"submittedAt\" is not null or \"abandonEmittedAt\" is not null",
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "FormVisit_createdAt_idx",
+      "name": "FormVisit_createdAt_closed_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "FormVisit"
