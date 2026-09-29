@@ -1,8 +1,10 @@
 import { emailTemplateService } from "@chatbotx.io/business/email-templates"
 import { emailTemplateStatuses } from "@chatbotx.io/database/partials"
 import { zodBigintAsString } from "@chatbotx.io/utils"
+import { ORPCError } from "@orpc/server"
 import z from "zod"
 import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
+import { checkEmailPreviewRateLimit } from "@/lib/rate-limit/email-preview-rate-limit"
 import { workspaceAuthorizedMidddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
 import {
@@ -129,14 +131,22 @@ const privatePreviewEmailTemplateAPI = authorizedAPI
   .input(withWorkspaceIdSchema.and(emailTemplatePreviewInput))
   .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
   .output(emailTemplatePreviewResource)
-  .handler(
-    async ({ input }) =>
-      await emailTemplateService.preview({
-        workspaceId: input.workspaceId,
-        document: input.document,
-        vars: input.vars,
-      }),
-  )
+  .handler(async ({ input, context }) => {
+    const { limited, retryAfter } = await checkEmailPreviewRateLimit({
+      userId: String(context.user.id),
+    })
+    if (limited) {
+      throw new ORPCError("TOO_MANY_REQUESTS", {
+        status: 429,
+        message: `Too many previews, retry in ${retryAfter}s`,
+      })
+    }
+    return await emailTemplateService.preview({
+      workspaceId: input.workspaceId,
+      document: input.document,
+      vars: input.vars,
+    })
+  })
 
 export const privateEmailTemplatesAPI = {
   privatePreviewEmailTemplateAPI,
