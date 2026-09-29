@@ -36,6 +36,51 @@ export const emailTemplateData = z
   })
   .strict()
 
+/** Sample merge values for a preview: bounded, never a contact's data. */
+const PREVIEW_MAX_VARS = 50
+const PREVIEW_MAX_VAR_LENGTH = 1000
+
+export const emailTemplatePreviewInput = z
+  .object({
+    document: z
+      .unknown()
+      .describe(
+        "A draft EmailDocument v1; validated by the service, issues come back with their path.",
+      ),
+    vars: z
+      .record(z.string().max(200), z.string().max(PREVIEW_MAX_VAR_LENGTH))
+      .refine((vars) => Object.keys(vars).length <= PREVIEW_MAX_VARS, {
+        message: `At most ${PREVIEW_MAX_VARS} sample values`,
+      })
+      .optional()
+      .describe("Sample merge values keyed by token name."),
+  })
+  .strict()
+
+const renderAsset = z.object({
+  url: z.string(),
+  name: z.string(),
+  size: z.number(),
+  mimeType: z.string(),
+})
+
+export const emailTemplatePreviewResource = z.discriminatedUnion("ok", [
+  z.object({
+    ok: z.literal(true),
+    html: z.string(),
+    text: z.string(),
+    missing: z.array(z.string()),
+    assets: z.record(z.string(), renderAsset),
+  }),
+  z.object({
+    ok: z.literal(false),
+    issues: z.array(z.object({ path: z.string(), message: z.string() })),
+  }),
+])
+export type EmailTemplatePreviewResource = z.infer<
+  typeof emailTemplatePreviewResource
+>
+
 /**
  * `includeArchived` from a JSON body (a boolean) or a query string, where
  * ONLY "true" / "false" are accepted: z.coerce.boolean() would turn

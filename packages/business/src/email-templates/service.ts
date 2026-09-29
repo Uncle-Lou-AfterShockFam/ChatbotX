@@ -22,15 +22,35 @@ import {
   DocumentValidationError,
   type EmailDocument,
   parseDocument,
+  type RenderAsset,
 } from "@chatbotx.io/email-document"
+import { renderEmail } from "@chatbotx.io/email-document/render-email"
 import { createId } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
 import { notFoundException, validationException } from "../errors"
+import { resolveTenantSettings } from "../platform/settings"
+import { getPublicFileUrl } from "../utils"
 
 const TEMPLATE_NOT_FOUND = "Email template not found"
 const MAX_BIGINT = 9_223_372_036_854_775_807n
 
 export type EmailTemplateData = { name: unknown; document: unknown }
+
+/** One schema miss, addressed by its path in the document. */
+export type DocumentIssue = { path: string; message: string }
+
+export type EmailTemplatePreview =
+  | {
+      ok: true
+      html: string
+      text: string
+      missing: string[]
+      assets: Record<string, RenderAsset>
+    }
+  | { ok: false; issues: DocumentIssue[] }
+
+/** Issues returned to the editor per preview (the first ones are enough). */
+const MAX_PREVIEW_ISSUES = 20
 
 /**
  * The only write path for a template: a trimmed 1..120 name and a document
@@ -80,25 +100,9 @@ async function assertAssetsOwned(
   tx: DatabaseClient,
 ): Promise<void> {
   const { assetIds } = collectRenderInputs(document)
-  if (assetIds.length === 0) {
-    return
-  }
-  // The schema allows 20 digits; a bigint column holds 19. An id past it
-  // matches no row, and must not reach Postgres as an out-of-range 500.
-  const queryable = assetIds.filter((id) => BigInt(id) <= MAX_BIGINT)
-  const owned =
-    queryable.length === 0
-      ? []
-      : await tx
-          .select({ id: mediaLibraryFileModel.id })
-          .from(mediaLibraryFileModel)
-          .where(
-            and(
-              eq(mediaLibraryFileModel.workspaceId, workspaceId),
-              inArray(mediaLibraryFileModel.id, queryable),
-            ),
-          )
-  const found = new Set(owned.map((row) => row.id))
+  const found = new Set(
+    (await ownedFiles(workspaceId, assetIds, tx)).map((row) => row.id),
+  )
   const missing = assetIds.find((id) => !found.has(id))
   if (missing !== undefined) {
     throw validationException(
@@ -106,6 +110,35 @@ async function assertAssetsOwned(
       `Media file ${missing} is not in this workspace's media library`,
     )
   }
+}
+
+/** The workspace's media rows among `ids` (a foreign id matches nothing). */
+async function ownedFiles(
+  workspaceId: string,
+  ids: string[],
+  tx: DatabaseClient,
+) {
+  // The schema allows 20 digits; a bigint column holds 19. An id past it
+  // matches no row, and must not reach Postgres as an out-of-range 500.
+  const queryable = ids.filter((id) => BigInt(id) <= MAX_BIGINT)
+  if (queryable.length === 0) {
+    return []
+  }
+  return await tx
+    .select({
+      id: mediaLibraryFileModel.id,
+      name: mediaLibraryFileModel.name,
+      path: mediaLibraryFileModel.path,
+      size: mediaLibraryFileModel.size,
+      mimeType: mediaLibraryFileModel.mimeType,
+    })
+    .from(mediaLibraryFileModel)
+    .where(
+      and(
+        eq(mediaLibraryFileModel.workspaceId, workspaceId),
+        inArray(mediaLibraryFileModel.id, queryable),
+      ),
+    )
 }
 
 function nameTaken(error: unknown): never {
@@ -217,6 +250,69 @@ export class EmailTemplateService extends BaseService {
     }
     await this.audit("update", `updated an email template (#${row.id})`)
     return row
+  }
+
+  /**
+   * Renders a draft exactly as a send would (renderEmail: MJML, sanitized),
+   * with sample merge values and none of the per-recipient callbacks, so
+   * tracked links stay raw and flow buttons render as "#". A schema miss is
+   * NOT an error here: the editor calls this on every change and highlights
+   * each issue's path. Assets resolve only from this workspace's library;
+   * any other id is reported in `missing`, never rendered.
+   */
+  async preview(props: {
+    workspaceId: string
+    document: unknown
+    vars?: Record<string, string>
+    tx?: DatabaseClient
+  }): Promise<EmailTemplatePreview> {
+    const { workspaceId, tx = db } = props
+    let document: EmailDocument
+    try {
+      document = parseDocument(props.document)
+    } catch (error) {
+      if (error instanceof DocumentTooLargeError) {
+        return {
+          ok: false,
+          issues: [{ path: "", message: "The email document is too large" }],
+        }
+      }
+      if (error instanceof DocumentValidationError) {
+        return {
+          ok: false,
+          issues: error.issues.slice(0, MAX_PREVIEW_ISSUES).map((issue) => ({
+            path: issue.path.map(String).join("."),
+            message: issue.message,
+          })),
+        }
+      }
+      throw error
+    }
+    const { assetIds } = collectRenderInputs(document)
+    const rows = await ownedFiles(workspaceId, assetIds, tx)
+    const assets: Record<string, RenderAsset> = {}
+    if (rows.length > 0) {
+      const { storageUrl } = await resolveTenantSettings({ workspaceId })
+      for (const row of rows) {
+        assets[row.id] = {
+          url: getPublicFileUrl(row.path, storageUrl),
+          name: row.name,
+          size: row.size,
+          mimeType: row.mimeType,
+        }
+      }
+    }
+    const rendered = await renderEmail(document, {
+      vars: props.vars ?? {},
+      assets,
+    })
+    return {
+      ok: true,
+      html: rendered.html,
+      text: rendered.text,
+      missing: rendered.missing,
+      assets,
+    }
   }
 
   async setStatus(props: {
