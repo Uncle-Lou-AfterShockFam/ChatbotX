@@ -130,6 +130,7 @@ function TemplateEditor({
   const setStatus = useSetEmailTemplateStatus()
   const remove = useDeleteEmailTemplate()
   const saving = create.isPending || update.isPending
+  const [valid, setValid] = useState(false)
 
   const save = async () => {
     const body = document as unknown as Record<string, unknown>
@@ -178,7 +179,10 @@ function TemplateEditor({
           <Button
             data-testid="email-template-save"
             disabled={
-              saving || name.trim() === "" || document.blocks.length === 0
+              saving ||
+              !valid ||
+              name.trim() === "" ||
+              document.blocks.length === 0
             }
             onClick={save}
           >
@@ -226,6 +230,7 @@ function TemplateEditor({
       </Card>
       <EmailDocumentEditor
         onChange={setDocument}
+        onValidChange={setValid}
         value={document}
         workspaceId={workspaceId}
       />

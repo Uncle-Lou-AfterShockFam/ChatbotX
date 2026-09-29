@@ -206,7 +206,13 @@ export function BlockInspector({
           />
           <Field label={t("imageUrl")}>
             <Input
-              onChange={(e) => onPatch({ src: e.target.value })}
+              onChange={(e) => {
+                // Clearing the URL keeps the picked media file (an empty
+                // src is never valid).
+                if (e.target.value !== "" || typeof block.src === "string") {
+                  onPatch({ src: e.target.value })
+                }
+              }}
               placeholder="https://"
               value={typeof block.src === "string" ? block.src : ""}
             />
@@ -264,7 +270,7 @@ export function BlockInspector({
                 onPatch({
                   action:
                     kind === "url"
-                      ? { kind: "url", url: "https://" }
+                      ? { kind: "url", url: "" }
                       : {
                           kind: "flow",
                           beforeStep: {
@@ -334,7 +340,11 @@ export function BlockInspector({
           <Input
             max={96}
             min={4}
-            onChange={(e) => onPatch({ height: Number(e.target.value) })}
+            onChange={(e) =>
+              onPatch({
+                height: Math.min(96, Math.max(4, Number(e.target.value) || 4)),
+              })
+            }
             type="number"
             value={block.height}
           />

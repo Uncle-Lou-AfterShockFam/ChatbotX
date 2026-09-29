@@ -41,6 +41,7 @@ import {
   BLOCK_TYPES,
   type BlockType,
   blockIdAtPath,
+  blocksAt,
   type Container,
   findBlock,
   insertBlock,
@@ -446,14 +447,20 @@ export function EmailDocumentEditor({
   workspaceId,
   value,
   onChange,
+  onValidChange,
 }: {
   workspaceId: string
   value: EmailDocument
   onChange: (doc: EmailDocument) => void
+  /** False while the current draft is unrendered or has schema issues. */
+  onValidChange?: (valid: boolean) => void
 }) {
   const t = useTranslations("emailTemplates.editor")
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [target, setTarget] = useState<Container>(ROOT)
+  const [chosenTarget, setTarget] = useState<Container>(ROOT)
+  // A column target whose column is gone (3 -> 2 columns, block removed)
+  // falls back to the top level: inserting there would be a silent no-op.
+  const target = blocksAt(value, chosenTarget) ? chosenTarget : ROOT
   const [assets, setAssets] = useState<Record<string, AssetInfo>>({})
   const [previewDoc, setPreviewDoc] = useState<EmailDocument>(value)
   const schedulePreview = useDebouncedCallback(
@@ -477,6 +484,16 @@ export function EmailDocumentEditor({
       setAssets((current) => ({ ...result.assets, ...current }))
     }
   }, [result])
+
+  // Save waits for a render of THIS draft that passed; a preview outage
+  // (network, 429) does not block it, the server validates again.
+  const valid =
+    previewDoc === value &&
+    !preview.isFetching &&
+    (result?.ok === true || preview.isError === true)
+  useEffect(() => {
+    onValidChange?.(valid)
+  }, [valid, onValidChange])
 
   const invalidIds = useMemo(() => {
     const ids = new Set<string>()

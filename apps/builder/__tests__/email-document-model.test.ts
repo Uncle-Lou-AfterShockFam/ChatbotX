@@ -8,6 +8,7 @@ import { describe, expect, test } from "vitest"
 import {
   BLOCK_TYPES,
   blockIdAtPath,
+  blocksAt,
   emptyDocument,
   findBlock,
   insertBlock,
@@ -21,8 +22,13 @@ import {
   updateBlock,
 } from "@/features/email-templates/lib/document-model"
 
-const make = (type: Block["type"]) =>
-  newBlock(type, { fileId: "123", html: "<p>imported</p>" })
+/** A new block as a user leaves it valid (a new button has no URL yet). */
+const make = (type: Block["type"]): Block => {
+  const block = newBlock(type, { fileId: "123", html: "<p>imported</p>" })
+  return block.type === "button"
+    ? { ...block, action: { kind: "url", url: "https://x.test" } }
+    : block
+}
 
 const withAll = (): EmailDocument =>
   BLOCK_TYPES.reduce(
@@ -49,6 +55,22 @@ describe("email document model (B2 phase 3)", () => {
     const doc = withAll()
     expect(() => parseDocument(doc)).not.toThrow()
     expect(new Set(doc.blocks.map((b) => b.id)).size).toBe(BLOCK_TYPES.length)
+  })
+
+  test("skeptic MEDIUM: a new button has NO url, so the preview flags it until one is set", () => {
+    const doc = insertBlock(emptyDocument(), ROOT, newBlock("button"))
+    expect(() => parseDocument(doc)).toThrow()
+  })
+
+  test("skeptic HIGH: a column target that no longer exists resolves to nothing (the editor falls back to the top level)", () => {
+    const columns = newBlock("columns")
+    let doc = insertBlock(emptyDocument(), ROOT, columns)
+    doc = setColumnCount(doc, columns.id, 3)
+    const third = { kind: "column" as const, columnsId: columns.id, column: 2 }
+    expect(blocksAt(doc, third)).toEqual([])
+    doc = setColumnCount(doc, columns.id, 2)
+    expect(blocksAt(doc, third)).toBeUndefined()
+    expect(blocksAt(removeBlock(doc, columns.id), third)).toBeUndefined()
   })
 
   test("a media block without a file is refused (it could never be valid)", () => {

@@ -74,6 +74,8 @@ export const useEmailTemplatePreview = (
       enabled,
       placeholderData: (previous) => previous,
       staleTime: Number.POSITIVE_INFINITY,
+      // A 429 must not be retried against the window that refused it.
+      retry: false,
     }),
   )
 

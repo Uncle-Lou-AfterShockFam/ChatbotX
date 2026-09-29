@@ -75,7 +75,9 @@ export function newBlock(
         id,
         type,
         label: "Learn more",
-        action: { kind: "url", url: "https://" },
+        // Empty on purpose: the preview flags it until a real URL is set
+        // (a bare "https://" passes the schema and ships a dead button).
+        action: { kind: "url", url: "" },
       }
     case "divider":
       return { id, type }

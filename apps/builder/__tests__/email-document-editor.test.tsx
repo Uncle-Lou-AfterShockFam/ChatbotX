@@ -3,6 +3,11 @@ import { act, useState } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 
+// Effects (the validity callback) must flush inside act().
+;(
+  globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true
+
 const { preview } = vi.hoisted(() => ({ preview: { current: {} as object } }))
 
 vi.mock("next-intl", () => ({
@@ -53,6 +58,7 @@ const { emptyDocument } = await import(
 let container: HTMLDivElement | null = null
 let root: Root | null = null
 let latest: EmailDocument = emptyDocument()
+let validity: boolean[] = []
 
 function Harness({ initial }: { initial: EmailDocument }) {
   const [doc, setDoc] = useState(initial)
@@ -63,6 +69,7 @@ function Harness({ initial }: { initial: EmailDocument }) {
         latest = next
         setDoc(next)
       }}
+      onValidChange={(v) => validity.push(v)}
       value={doc}
       workspaceId="1"
     />
@@ -88,6 +95,7 @@ const click = (el: Element | null | undefined) => {
 
 beforeEach(() => {
   preview.current = {}
+  validity = []
 })
 
 afterEach(() => {
@@ -113,7 +121,13 @@ describe("EmailDocumentEditor (B2 phase 3)", () => {
     expect(latest.blocks[4]).toMatchObject({
       asset: { kind: "media", fileId: "77" },
     })
-    expect(() => parseDocument(latest)).not.toThrow()
+    // The new button has no URL yet (skeptic MEDIUM): set one, then it parses.
+    const button = latest.blocks[2]
+    expect(button?.type === "button" && button.action).toEqual({
+      kind: "url",
+      url: "",
+    })
+    expect(() => parseDocument(latest)).toThrow()
     // The canvas names the attachment by its picked file, not its id.
     expect(el.textContent).toContain("a.pdf")
   })
@@ -179,5 +193,90 @@ describe("EmailDocumentEditor (B2 phase 3)", () => {
     click(el.querySelector('[aria-label="removeBlock"]'))
     expect(latest.blocks).toEqual([])
     expect(el.querySelector('[data-testid="email-block-inspector"]')).toBeNull()
+  })
+
+  test("skeptic HIGH: shrinking columns past the target sends new blocks to the top level, never nowhere", () => {
+    const el = mount()
+    click(el.querySelector('[data-testid="email-add-columns"]'))
+    const columnsId = latest.blocks[0]?.id as string
+    act(() => {
+      root?.render(
+        <Harness
+          initial={{
+            version: 1,
+            settings: {},
+            blocks: [
+              {
+                id: columnsId,
+                type: "columns",
+                columns: [{ blocks: [] }, { blocks: [] }, { blocks: [] }],
+              },
+            ],
+          }}
+          key="three"
+        />,
+      )
+    })
+    click(el.querySelector('[data-testid="email-column-target-2"]'))
+    // Column 3 is dropped by the inspector (2 columns).
+    click(
+      el.querySelector(
+        '[data-testid="email-block-columns"] button:not([aria-label])',
+      ),
+    )
+    const before = latest.blocks.length
+    act(() => {
+      root?.render(
+        <Harness
+          initial={{
+            version: 1,
+            settings: {},
+            blocks: [
+              {
+                id: columnsId,
+                type: "columns",
+                columns: [{ blocks: [] }, { blocks: [] }],
+              },
+            ],
+          }}
+          key="two"
+        />,
+      )
+    })
+    click(el.querySelector('[data-testid="email-add-divider"]'))
+    expect(latest.blocks.length).toBe(before + 1)
+    expect(latest.blocks.at(-1)?.type).toBe("divider")
+  })
+
+  test("skeptic HIGH: Save waits for a passing render of THIS draft; a preview outage does not block it", () => {
+    const doc = {
+      version: 1 as const,
+      settings: {},
+      blocks: [{ id: "5", type: "divider" as const }],
+    }
+    preview.current = {
+      data: { ok: false, issues: [{ path: "blocks.0", message: "bad" }] },
+      isFetching: false,
+    }
+    mount(doc)
+    expect(validity.at(-1)).toBe(false)
+    act(() => root?.unmount())
+    preview.current = {
+      data: { ok: true, html: "", text: "", missing: [], assets: {} },
+      isFetching: false,
+    }
+    mount(doc)
+    expect(validity.at(-1)).toBe(true)
+    act(() => root?.unmount())
+    preview.current = { isError: true, isFetching: false }
+    mount(doc)
+    expect(validity.at(-1)).toBe(true)
+    act(() => root?.unmount())
+    preview.current = {
+      data: { ok: true, html: "", text: "", missing: [], assets: {} },
+      isFetching: true,
+    }
+    mount(doc)
+    expect(validity.at(-1)).toBe(false)
   })
 })
