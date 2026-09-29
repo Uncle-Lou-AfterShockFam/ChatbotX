@@ -202,6 +202,18 @@ export async function POST(req: NextRequest, ctx: Params) {
     switch (result.kind) {
       case "notFound":
         return json({ ok: false, errors: [] }, 404, headers)
+      case "closed":
+        // s220c A2-4: outside the window or full. 410 + the form's own words.
+        return json(
+          {
+            ok: false,
+            errors: [],
+            closed: result.reason,
+            message: result.message,
+          },
+          410,
+          headers,
+        )
       case "invalid":
         return json({ ok: false, errors: result.issues }, 400, headers)
       case "rateLimited": {

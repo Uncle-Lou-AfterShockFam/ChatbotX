@@ -4894,7 +4894,8 @@
       "max": "Too large or too long.",
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
-      "date": "Enter a valid date or time."
+      "date": "Enter a valid date or time.",
+      "emailDomainBlocked": "E-mailadresser fra dette domæne accepteres ikke."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -4914,7 +4915,17 @@
       "prefillKeysHint": "Field keys that accept a value from the URL, e.g. ?first_name=Ada.",
       "embedSnippet": "Embed on another site",
       "embedUnpublished": "Publish the form to get its link and embed code.",
-      "publicUrl": "Public link"
+      "publicUrl": "Public link",
+      "availability": "Tilgængelighed",
+      "publishUp": "Åbner",
+      "publishDown": "Lukker",
+      "windowHint": "Tidspunkter er i {zone}. Lad stå tomt for at holde formularen åben.",
+      "pendingMessage": "Besked før den åbner",
+      "closedMessage": "Besked når den er lukket eller fuld",
+      "submissionLimit": "Grænse for indsendelser",
+      "submissionLimitHint": "Stop med at modtage svar efter så mange indsendelser (web og chat). Sletning af en indsendelse frigiver en plads. Tom = ingen grænse.",
+      "blockedEmailDomains": "Blokerede e-maildomæner",
+      "blockedEmailDomainsHint": "Et pr. linje, f.eks. example.com. Underdomæner blokeres også."
     },
     "submitActions": {
       "title": "Actions after submit",

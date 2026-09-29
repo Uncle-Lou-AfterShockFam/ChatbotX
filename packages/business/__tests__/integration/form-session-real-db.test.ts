@@ -143,6 +143,7 @@ async function seedWorld(
     contactEmail?: string
     channels?: string[]
     definition?: unknown
+    settings?: Record<string, unknown>
   } = {},
 ): Promise<World> {
   const workspaceId = mintId()
@@ -171,7 +172,10 @@ async function seedWorld(
   await asReplica(sql`
     INSERT INTO "Flow" (id, name, "workspaceId") VALUES (${flowId}, 'a2-2', ${workspaceId})`)
   seeded.Flow?.push(flowId)
-  const settings = JSON.stringify({ channels: props.channels ?? ["chat"] })
+  const settings = JSON.stringify({
+    channels: props.channels ?? ["chat"],
+    ...props.settings,
+  })
   const def = JSON.stringify(props.definition ?? DEFINITION)
   await asReplica(sql`
     INSERT INTO "Form" (id, title, slug, status, definition, "publishedDefinition",
@@ -390,6 +394,131 @@ describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
     expect(emitted.formSubmitted[0]?.[2]).toMatchObject({
       values: { source: "chat-bot", mail: "ada@example.com" },
     })
+  })
+
+  test("availability (s220c A2-4): before publishUp / after publishDown the step skips; no run starts", async () => {
+    for (const settings of [
+      { publishUp: new Date(Date.now() + 3_600_000).toISOString() },
+      { publishDown: new Date(Date.now() - 1000).toISOString() },
+    ]) {
+      const w = await seedWorld({ settings })
+      const r = await start(w)
+      expect(r).toEqual({ kind: "unavailable", reason: "formClosed" })
+      await track(w)
+      const runs = await db.execute(sql`
+        SELECT id FROM "FormSession" WHERE "contactId" = ${w.contactId}`)
+      expect(runs.rows).toHaveLength(0)
+    }
+  })
+
+  test("submission limit (s220c A2-4): a full form skips at start; filling up mid-run ends the run 'closed' with no submission and no formAbandoned", async () => {
+    const full = await seedWorld({ settings: { submissionLimit: 1 } })
+    await asReplica(sql`
+      INSERT INTO "FormSubmission" (id, "workspaceId", "formId", "definitionVersion", values, visibility, channel)
+      VALUES (${mintId()}, ${full.workspaceId}, ${full.formId}, 1, '{}'::jsonb, '{"steps":[],"fields":[]}'::jsonb, 'chat')`)
+    expect(await start(full)).toEqual({
+      kind: "unavailable",
+      reason: "formClosed",
+    })
+    await track(full)
+
+    const w = await seedWorld({ settings: { submissionLimit: 1 } })
+    await start(w)
+    await answer(w, "Ada")
+    await answer(w, "2")
+    await answer(w, "ada@example.com")
+    // the last place goes to someone else while this run is still asking
+    await asReplica(sql`
+      INSERT INTO "FormSubmission" (id, "workspaceId", "formId", "definitionVersion", values, visibility, channel)
+      VALUES (${mintId()}, ${w.workspaceId}, ${w.formId}, 1, '{}'::jsonb, '{"steps":[],"fields":[]}'::jsonb, 'chat')`)
+    const done = await answer(w, "skip")
+    expect(done.kind === "ended" && done.reason).toBe("closed")
+    await track(w)
+    const rows = await submissions(w)
+    expect(rows).toHaveLength(1) // only the seeded one
+    const run = await db.execute<{ status: string; endReason: string }>(sql`
+      SELECT status, "endReason" FROM "FormSession" WHERE "contactId" = ${w.contactId}`)
+    expect(run.rows[0]).toEqual({ status: "skipped", endReason: "closed" })
+    expect(emitted.formSubmitted).toHaveLength(0)
+    const abandoned = await formSessionService.emitAbandoned({
+      id: (
+        await db.execute<{ id: string }>(sql`
+          SELECT id::text FROM "FormSession" WHERE "contactId" = ${w.contactId}`)
+      ).rows[0]?.id as string,
+      workspaceId: w.workspaceId,
+    })
+    expect(abandoned).toBe(false)
+    expect(emitted.formAbandoned).toHaveLength(0)
+  })
+
+  test("a window that closes mid-run ends the run 'closed' at the finish, with no submission (skeptic + blind probe s220c)", async () => {
+    const w = await seedWorld()
+    await start(w)
+    await answer(w, "Ada")
+    await answer(w, "2")
+    await answer(w, "ada@example.com")
+    const closedAt = JSON.stringify({
+      publishDown: new Date(Date.now() - 1000).toISOString(),
+    })
+    await asReplica(sql`
+      UPDATE "Form" SET settings = settings || ${closedAt}::jsonb WHERE id = ${w.formId}`)
+    const done = await answer(w, "skip")
+    expect(done.kind === "ended" && done.reason).toBe("closed")
+    await track(w)
+    expect(await submissions(w)).toHaveLength(0)
+    // the contact write inside the savepoint rolled back with the refusal
+    expect(await contactEmail(w.contactId)).toBeNull()
+    expect(emitted.formSubmitted).toHaveLength(0)
+  })
+
+  test("a final answer whose admission lock wait times out is retried and completes (blind probe s220c)", async () => {
+    const w = await seedWorld()
+    await start(w)
+    await answer(w, "Ada")
+    await answer(w, "2")
+    await answer(w, "ada@example.com")
+    const holder = await db.$client.connect()
+    await holder.query("BEGIN")
+    await holder.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+      [`form-limit:${w.formId}`],
+    )
+    // released after the first 5 s wait timed out, before the second ends
+    const released = new Promise<void>((resolve) => {
+      setTimeout(() => {
+        holder
+          .query("ROLLBACK")
+          .finally(() => holder.release())
+          .then(
+            () => resolve(),
+            () => resolve(),
+          )
+      }, 6500)
+    })
+    try {
+      const done = await answer(w, "skip")
+      expect(done.kind).toBe("completed")
+    } finally {
+      await released
+    }
+    await track(w)
+    expect(await submissions(w)).toHaveLength(1)
+  }, 30_000)
+
+  test("blocked email domain (s220c A2-4): the reply is refused like a bad email and re-asked", async () => {
+    const w = await seedWorld({
+      settings: { blockedEmailDomains: ["example.com"] },
+    })
+    await start(w)
+    await answer(w, "Ada")
+    await answer(w, "2")
+    const refused = await answer(w, "ada@mail.example.com")
+    expect(refused.kind === "ask" && refused.retry && refused.field.key).toBe(
+      "email",
+    )
+    const next = await answer(w, "ada@ok.org")
+    expect(next.kind === "ask" && next.field.key).toBe("notes")
+    await track(w)
   })
 
   test("a redelivered message and a reply older than the question are ignored", async () => {

@@ -24,6 +24,8 @@ import {
   type FormValues,
   formInputFields,
   formScore,
+  isBlockedEmailDomain,
+  isEmailAnswerField,
   isEmptyFormValue,
   isFormChatSkip,
   normalizeFormDefinition,
@@ -45,7 +47,13 @@ import { emitFormAbandoned } from "@chatbotx.io/events"
 import { createId, isPlainRecord } from "@chatbotx.io/utils"
 import { logger } from "../logger"
 import { formService, type NormalizedForm } from "./service"
-import { formSubmitService, type PendingChanges } from "./submit"
+import {
+  ADMISSION_ISOLATION,
+  FormNotAdmittedError,
+  formSubmitService,
+  type PendingChanges,
+  retryOnLockTimeout,
+} from "./submit"
 
 /**
  * The chat run of a form (s219 A2-2): the `form` flow step asks one question
@@ -82,8 +90,8 @@ export type FormChatAction =
       preface: FormField[]
       replaced?: ReplacedRun
     }
-  | { kind: "ended"; session: FormSessionModel; reason: "attempts" }
-  | { kind: "unavailable"; reason: "formNotFound" | "busy" }
+  | { kind: "ended"; session: FormSessionModel; reason: "attempts" | "closed" }
+  | { kind: "unavailable"; reason: "formNotFound" | "formClosed" | "busy" }
   | {
       kind: "ignored"
       reason:
@@ -243,82 +251,89 @@ export class FormSessionService {
     let step: Step
     let replaced: ReplacedRun | undefined
     try {
-      step = await db.transaction(async (tx): Promise<Step> => {
-        const form = await formService.findPublishedForChat({
-          workspaceId: input.workspaceId,
-          id: input.formId,
-          tx,
-        })
-        if (!form?.publishedDefinition) {
-          return { action: { kind: "unavailable", reason: "formNotFound" } }
-        }
-        const current = await this.lockActive(tx, input)
-        if (current) {
-          const sameStep =
-            current.formId === input.formId &&
-            current.flowId === input.flowId &&
-            current.stepId === input.stepId &&
-            current.conversationId === input.conversationId
-          if (sameStep && current.currentFieldKey) {
-            const field = this.fieldOf(current, current.currentFieldKey)
-            if (field) {
-              return {
-                action: {
-                  kind: "ask",
-                  session: current,
-                  field,
-                  preface: [],
-                  retry: false,
-                },
+      step = await retryOnLockTimeout(() =>
+        db.transaction(async (tx): Promise<Step> => {
+          const form = await formService.findPublishedForChat({
+            workspaceId: input.workspaceId,
+            id: input.formId,
+            tx,
+          })
+          if (!form?.publishedDefinition) {
+            return { action: { kind: "unavailable", reason: "formNotFound" } }
+          }
+          // s220c A2-4: outside its window or full, the step takes its skip
+          // edge before a question is asked (the finish re-checks the limit).
+          if ((await formSubmitService.availability(form, now, tx)) !== null) {
+            return { action: { kind: "unavailable", reason: "formClosed" } }
+          }
+          const current = await this.lockActive(tx, input)
+          if (current) {
+            const sameStep =
+              current.formId === input.formId &&
+              current.flowId === input.flowId &&
+              current.stepId === input.stepId &&
+              current.conversationId === input.conversationId
+            if (sameStep && current.currentFieldKey) {
+              const field = this.fieldOf(current, current.currentFieldKey)
+              if (field) {
+                return {
+                  action: {
+                    kind: "ask",
+                    session: current,
+                    field,
+                    preface: [],
+                    retry: false,
+                  },
+                }
               }
             }
+            await this.end(tx, current.id, "canceled", "replaced", now)
+            replaced = {
+              conversationId: current.conversationId,
+              stepId: current.stepId,
+              challengeId: current.challengeId,
+            }
           }
-          await this.end(tx, current.id, "canceled", "replaced", now)
-          replaced = {
-            conversationId: current.conversationId,
-            stepId: current.stepId,
-            challengeId: current.challengeId,
-          }
-        }
-        const profile = await this.profileFor(tx, {
-          workspaceId: input.workspaceId,
-          contactId: input.contactId,
-          form,
-        })
-        const [session] = await tx
-          .insert(formSessionModel)
-          .values({
-            id: createId(),
+          const profile = await this.profileFor(tx, {
             workspaceId: input.workspaceId,
-            formId: form.id,
             contactId: input.contactId,
-            conversationId: input.conversationId,
-            contactInboxId: input.contactInboxId,
-            runStartedAt: input.runStartedAt ?? null,
-            flowId: input.flowId,
-            flowVersionId: input.flowVersionId,
-            nodeId: input.nodeId,
-            stepId: input.stepId,
-            definitionVersion: form.definitionVersion,
-            definition: form.publishedDefinition,
-            profile,
-            values: {},
-            asked: [],
-            maxAttempts,
-            timeoutMinutes,
-            expiresAt: addMinutes(now, timeoutMinutes),
+            form,
           })
-          .returning()
-        return await this.advance(
-          tx,
-          session,
-          // hidden fields are never asked: their defaults are the run's
-          // starting values (the answer path re-applies them per reply)
-          applyHiddenDefaults(this.definitionOf(session), {}),
-          [],
-          now,
-        )
-      })
+          const [session] = await tx
+            .insert(formSessionModel)
+            .values({
+              id: createId(),
+              workspaceId: input.workspaceId,
+              formId: form.id,
+              contactId: input.contactId,
+              conversationId: input.conversationId,
+              contactInboxId: input.contactInboxId,
+              runStartedAt: input.runStartedAt ?? null,
+              flowId: input.flowId,
+              flowVersionId: input.flowVersionId,
+              nodeId: input.nodeId,
+              stepId: input.stepId,
+              definitionVersion: form.definitionVersion,
+              definition: form.publishedDefinition,
+              profile,
+              values: {},
+              asked: [],
+              maxAttempts,
+              timeoutMinutes,
+              expiresAt: addMinutes(now, timeoutMinutes),
+            })
+            .returning()
+          return await this.advance(
+            tx,
+            session,
+            // hidden fields are never asked: their defaults are the run's
+            // starting values (the answer path re-applies them per reply)
+            applyHiddenDefaults(this.definitionOf(session), {}),
+            [],
+            now,
+          )
+        }, ADMISSION_ISOLATION),
+      )
     } catch (error) {
       // Two starts racing for one contact: the partial unique index lets one
       // insert win; the loser asks nothing (the winner already asked).
@@ -346,142 +361,152 @@ export class FormSessionService {
    */
   async answer(input: AnswerFormSessionInput): Promise<FormChatAction> {
     const now = input.now ?? new Date()
-    const step = await db.transaction(async (tx): Promise<Step> => {
-      const session = await this.lockActive(tx, input)
-      if (!session?.currentFieldKey) {
-        return { action: { kind: "ignored", reason: "noSession" } }
-      }
-      if (session.stepId !== input.stepId) {
-        return { action: { kind: "ignored", reason: "otherStep" } }
-      }
-      if (
-        session.conversationId !== input.conversationId ||
-        session.contactInboxId !== input.contactInboxId
-      ) {
-        // Asked on one channel, answered on another (a merged contact): the
-        // reply never saw this question's buttons or numbering (skeptic).
-        return { action: { kind: "ignored", reason: "otherConversation" } }
-      }
-      if (session.expiresAt.getTime() <= now.getTime()) {
-        // Past its timeout: the sweep ends it and routes skip; a late reply
-        // must not revive it in between.
-        return { action: { kind: "ignored", reason: "expired" } }
-      }
-      const verdict = this.acceptReply(session, input.reply)
-      if (
-        verdict === "stale" &&
-        session.askMarker === FORM_ASK_PENDING_MARKER &&
-        now.getTime() - session.updatedAt.getTime() > FORM_UNDELIVERED_REASK_MS
-      ) {
-        // The worker never confirmed this question (it died mid-send): the
-        // contact is replying to nothing, so ask it again rather than wait
-        // out the whole timeout (blind probe, s219 A2-2).
-        const field = this.fieldOf(session, session.currentFieldKey)
-        if (field) {
-          return {
-            action: { kind: "ask", session, field, preface: [], retry: false },
+    const step = await retryOnLockTimeout(() =>
+      db.transaction(async (tx): Promise<Step> => {
+        const session = await this.lockActive(tx, input)
+        if (!session?.currentFieldKey) {
+          return { action: { kind: "ignored", reason: "noSession" } }
+        }
+        if (session.stepId !== input.stepId) {
+          return { action: { kind: "ignored", reason: "otherStep" } }
+        }
+        if (
+          session.conversationId !== input.conversationId ||
+          session.contactInboxId !== input.contactInboxId
+        ) {
+          // Asked on one channel, answered on another (a merged contact): the
+          // reply never saw this question's buttons or numbering (skeptic).
+          return { action: { kind: "ignored", reason: "otherConversation" } }
+        }
+        if (session.expiresAt.getTime() <= now.getTime()) {
+          // Past its timeout: the sweep ends it and routes skip; a late reply
+          // must not revive it in between.
+          return { action: { kind: "ignored", reason: "expired" } }
+        }
+        const verdict = this.acceptReply(session, input.reply)
+        if (
+          verdict === "stale" &&
+          session.askMarker === FORM_ASK_PENDING_MARKER &&
+          now.getTime() - session.updatedAt.getTime() >
+            FORM_UNDELIVERED_REASK_MS
+        ) {
+          // The worker never confirmed this question (it died mid-send): the
+          // contact is replying to nothing, so ask it again rather than wait
+          // out the whole timeout (blind probe, s219 A2-2).
+          const field = this.fieldOf(session, session.currentFieldKey)
+          if (field) {
+            return {
+              action: {
+                kind: "ask",
+                session,
+                field,
+                preface: [],
+                retry: false,
+              },
+            }
           }
         }
-      }
-      if (verdict) {
-        return { action: { kind: "ignored", reason: verdict } }
-      }
-      const field = this.fieldOf(session, session.currentFieldKey)
-      if (!field) {
-        // A pinned definition always holds its own current field; a row
-        // that does not is corrupt: end it rather than ask forever.
-        await this.end(tx, session.id, "canceled", "fieldMissing", now)
-        return { action: { kind: "ignored", reason: "noSession" } }
-      }
-      // Hidden defaults before the required check too: a rule may read them.
-      const values = applyHiddenDefaults(
-        this.definitionOf(session),
-        readValues(session.values),
-      )
-      const asked = readAsked(session.asked)
-      const messageId =
-        "messageId" in input.reply ? input.reply.messageId : null
-      const text =
-        "messageId" in input.reply
-          ? await input.reply.read(field)
-          : input.reply.text
-      const required = evaluateForm(
-        this.definitionOf(session),
-        values,
-      ).requiredFields.has(field.key)
+        if (verdict) {
+          return { action: { kind: "ignored", reason: verdict } }
+        }
+        const field = this.fieldOf(session, session.currentFieldKey)
+        if (!field) {
+          // A pinned definition always holds its own current field; a row
+          // that does not is corrupt: end it rather than ask forever.
+          await this.end(tx, session.id, "canceled", "fieldMissing", now)
+          return { action: { kind: "ignored", reason: "noSession" } }
+        }
+        // Hidden defaults before the required check too: a rule may read them.
+        const values = applyHiddenDefaults(
+          this.definitionOf(session),
+          readValues(session.values),
+        )
+        const asked = readAsked(session.asked)
+        const messageId =
+          "messageId" in input.reply ? input.reply.messageId : null
+        const text =
+          "messageId" in input.reply
+            ? await input.reply.read(field)
+            : input.reply.text
+        const required = evaluateForm(
+          this.definitionOf(session),
+          values,
+        ).requiredFields.has(field.key)
 
-      if (typeof text === "string" && isFormChatSkip(text) && !required) {
+        if (typeof text === "string" && isFormChatSkip(text) && !required) {
+          return await this.advance(
+            tx,
+            session,
+            values,
+            [...asked, field.key],
+            now,
+            messageId,
+          )
+        }
+        const parsed = await this.parseAnswer(tx, session, field, text)
+        if (!parsed.ok) {
+          const attempts = session.attempts + 1
+          if (attempts >= session.maxAttempts) {
+            const [ended] = await tx
+              .update(formSessionModel)
+              .set({
+                status: "skipped",
+                endReason: "attempts",
+                attempts,
+                lastAnsweredMessageId:
+                  messageId ?? session.lastAnsweredMessageId,
+                currentFieldKey: null,
+                lastFieldKey: session.currentFieldKey,
+                endedAt: now,
+              })
+              .where(
+                and(
+                  eq(formSessionModel.id, session.id),
+                  eq(formSessionModel.status, "inProgress"),
+                ),
+              )
+              .returning()
+            if (!ended) {
+              return { action: { kind: "ignored", reason: "noSession" } }
+            }
+            return {
+              action: { kind: "ended", session: ended, reason: "attempts" },
+            }
+          }
+          const [retried] = await tx
+            .update(formSessionModel)
+            .set({
+              attempts,
+              // The retry is a new question: nothing answers it until it is
+              // delivered (a second bad answer in flight is stale), and a new
+              // challenge id retires the previous picker link (skeptic, s219).
+              askMarker: FORM_ASK_PENDING_MARKER,
+              challengeId: createId(),
+              lastAnsweredMessageId: messageId ?? session.lastAnsweredMessageId,
+              expiresAt: addMinutes(now, session.timeoutMinutes),
+            })
+            .where(eq(formSessionModel.id, session.id))
+            .returning()
+          return {
+            action: {
+              kind: "ask",
+              session: retried,
+              field,
+              preface: [],
+              retry: true,
+            },
+          }
+        }
         return await this.advance(
           tx,
           session,
-          values,
+          { ...values, [field.key]: parsed.value },
           [...asked, field.key],
           now,
           messageId,
         )
-      }
-      const parsed = parseFormChatAnswer(field, text)
-      if (!parsed.ok) {
-        const attempts = session.attempts + 1
-        if (attempts >= session.maxAttempts) {
-          const [ended] = await tx
-            .update(formSessionModel)
-            .set({
-              status: "skipped",
-              endReason: "attempts",
-              attempts,
-              lastAnsweredMessageId: messageId ?? session.lastAnsweredMessageId,
-              currentFieldKey: null,
-              lastFieldKey: session.currentFieldKey,
-              endedAt: now,
-            })
-            .where(
-              and(
-                eq(formSessionModel.id, session.id),
-                eq(formSessionModel.status, "inProgress"),
-              ),
-            )
-            .returning()
-          if (!ended) {
-            return { action: { kind: "ignored", reason: "noSession" } }
-          }
-          return {
-            action: { kind: "ended", session: ended, reason: "attempts" },
-          }
-        }
-        const [retried] = await tx
-          .update(formSessionModel)
-          .set({
-            attempts,
-            // The retry is a new question: nothing answers it until it is
-            // delivered (a second bad answer in flight is stale), and a new
-            // challenge id retires the previous picker link (skeptic, s219).
-            askMarker: FORM_ASK_PENDING_MARKER,
-            challengeId: createId(),
-            lastAnsweredMessageId: messageId ?? session.lastAnsweredMessageId,
-            expiresAt: addMinutes(now, session.timeoutMinutes),
-          })
-          .where(eq(formSessionModel.id, session.id))
-          .returning()
-        return {
-          action: {
-            kind: "ask",
-            session: retried,
-            field,
-            preface: [],
-            retry: true,
-          },
-        }
-      }
-      return await this.advance(
-        tx,
-        session,
-        { ...values, [field.key]: parsed.value },
-        [...asked, field.key],
-        now,
-        messageId,
-      )
-    })
+      }, ADMISSION_ISOLATION),
+    )
     return await this.settle(step)
   }
 
@@ -859,6 +884,34 @@ export class FormSessionService {
     )
   }
 
+  /**
+   * One chat reply as an answer to `field`; an email on one of the form's
+   * blocked domains is refused like any bad answer (s220c A2-4). The live
+   * settings are read only for an email question.
+   */
+  private async parseAnswer(
+    tx: DatabaseClient,
+    session: FormSessionModel,
+    field: FormField,
+    text: unknown,
+  ): Promise<ReturnType<typeof parseFormChatAnswer>> {
+    const parsed = parseFormChatAnswer(field, text)
+    if (!(parsed.ok && isEmailAnswerField(field))) {
+      return parsed
+    }
+    const form = await formService.get({
+      workspaceId: session.workspaceId,
+      id: session.formId,
+      tx,
+    })
+    return isBlockedEmailDomain(
+      parsed.value,
+      form.settings.blockedEmailDomains ?? [],
+    )
+      ? { ok: false, code: "emailDomainBlocked" }
+      : parsed
+  }
+
   private async end(
     tx: DatabaseClient,
     id: string,
@@ -974,37 +1027,76 @@ export class FormSessionService {
     for (const key of conflicts) {
       delete writable[key]
     }
-    const pending = await formSubmitService.writeMappedFields({
-      workspaceId: session.workspaceId,
-      contactId: session.contactId,
-      def,
-      values: writable,
-      // The contact is the conversation's own: blank fields only, unless
-      // the form owner opted into overwriting (the web rule, s200).
-      fillBlanksOnly: !form.settings.overwriteExisting,
-      tx,
-    })
     const visibility: FormSubmissionVisibility = {
       steps: [...plan.evaluation.visibleSteps],
       fields: [...plan.evaluation.visibleFields],
     }
-    const [submission] = await tx
-      .insert(formSubmissionModel)
-      .values({
-        id: createId(),
-        workspaceId: session.workspaceId,
-        formId: session.formId,
-        contactId: session.contactId,
-        conversationId: session.conversationId,
-        formSessionId: session.id,
-        channel: "chat",
-        definitionVersion: session.definitionVersion,
-        values: pruned,
-        visibility,
-        score: formScore(def, pruned, plan.evaluation),
-        identityConflict: conflicts.length > 0,
+    // s220c A2-4: the contact writes, the admission (the per-form lock of
+    // the web submit, re-checking the window AND the limit) and the insert
+    // run in one savepoint: a form that closed or filled up mid-run rolls
+    // the writes back and ends the run on its skip edge (`closed`, never a
+    // formAbandoned).
+    let stored: { submission: FormSubmissionModel; pending: PendingChanges }
+    try {
+      stored = await tx.transaction(async (sp) => {
+        const pending = await formSubmitService.writeMappedFields({
+          workspaceId: session.workspaceId,
+          contactId: session.contactId,
+          def,
+          values: writable,
+          // The contact is the conversation's own: blank fields only, unless
+          // the form owner opted into overwriting (the web rule, s200).
+          fillBlanksOnly: !form.settings.overwriteExisting,
+          tx: sp,
+        })
+        const refused = await formSubmitService.admit(sp, form.id)
+        if (refused !== null) {
+          throw new FormNotAdmittedError(refused)
+        }
+        const [submission] = await sp
+          .insert(formSubmissionModel)
+          .values({
+            id: createId(),
+            workspaceId: session.workspaceId,
+            formId: session.formId,
+            contactId: session.contactId,
+            conversationId: session.conversationId,
+            formSessionId: session.id,
+            channel: "chat",
+            definitionVersion: session.definitionVersion,
+            values: pruned,
+            visibility,
+            score: formScore(def, pruned, plan.evaluation),
+            identityConflict: conflicts.length > 0,
+          })
+          .returning()
+        return { submission, pending }
       })
-      .returning()
+    } catch (error) {
+      if (!(error instanceof FormNotAdmittedError)) {
+        throw error
+      }
+      const [ended] = await tx
+        .update(formSessionModel)
+        .set({
+          status: "skipped",
+          endReason: "closed",
+          currentFieldKey: null,
+          lastFieldKey: session.currentFieldKey,
+          endedAt: now,
+        })
+        .where(
+          and(
+            eq(formSessionModel.id, session.id),
+            eq(formSessionModel.status, "inProgress"),
+          ),
+        )
+        .returning()
+      return ended
+        ? { action: { kind: "ended", session: ended, reason: "closed" } }
+        : { action: { kind: "ignored", reason: "noSession" } }
+    }
+    const { submission, pending } = stored
     const [completed] = await tx
       .update(formSessionModel)
       .set({

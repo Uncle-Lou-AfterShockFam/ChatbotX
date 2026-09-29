@@ -5,6 +5,7 @@ import {
   FORM_EMBED_ORIGIN_REGEX,
   FORM_SLUG_REGEX,
   formSettingsSchema,
+  formWindowState,
   normalizeFormDefinition,
   normalizeFormSettings,
   parseFormDefinition,
@@ -130,5 +131,136 @@ describe("form partials", () => {
     expect(formModel.publishedDefinition.hasDefault).toBe(false)
     expect(formSubmissionModel.values.hasDefault).toBe(false)
     expect(formSubmissionModel.visibility.hasDefault).toBe(false)
+  })
+})
+
+// s220c A2-4: availability window, submission limit, blocked email domains.
+describe("form availability settings", () => {
+  test("defaults: open both sides, no limit, no blocked domains, default messages", () => {
+    expect(DEFAULT_FORM_SETTINGS).toMatchObject({
+      publishUp: null,
+      publishDown: null,
+      submissionLimit: null,
+      blockedEmailDomains: [],
+      pendingMessage: "This form is not open yet.",
+      closedMessage: "This form is closed.",
+    })
+  })
+
+  test("a window that closes before (or when) it opens is refused at write, with its path", () => {
+    const r = parseFormSettings({
+      publishUp: "2026-10-02T09:00:00Z",
+      publishDown: "2026-10-01T09:00:00Z",
+    })
+    expect(r).toMatchObject({ success: false, path: "publishDown" })
+    const same = parseFormSettings({
+      publishUp: "2026-10-02T09:00:00Z",
+      publishDown: "2026-10-02T09:00:00Z",
+    })
+    expect(same.success).toBe(false)
+    expect(
+      parseFormSettings({
+        publishUp: "2026-10-01T09:00:00-04:00",
+        publishDown: "2026-10-01T14:00:00Z",
+      }).success,
+    ).toBe(true)
+  })
+
+  test("a bound must be an instant WITH its offset (a bare local time is ambiguous)", () => {
+    expect(parseFormSettings({ publishUp: "2026-10-01T09:00" }).success).toBe(
+      false,
+    )
+    expect(parseFormSettings({ publishUp: "tomorrow" }).success).toBe(false)
+  })
+
+  test("submission limit: 1..100000 or null", () => {
+    expect(parseFormSettings({ submissionLimit: 0 }).success).toBe(false)
+    expect(parseFormSettings({ submissionLimit: 100_001 }).success).toBe(false)
+    expect(parseFormSettings({ submissionLimit: 2.5 }).success).toBe(false)
+    expect(parseFormSettings({ submissionLimit: 100_000 }).success).toBe(true)
+  })
+
+  test("blocked domains: lower-cased, bare domains only, no duplicates, at most 100", () => {
+    const ok = parseFormSettings({
+      blockedEmailDomains: [" Example.COM ", "mail.test.org"],
+    })
+    expect(ok.success && ok.data.blockedEmailDomains).toEqual([
+      "example.com",
+      "mail.test.org",
+    ])
+    for (const bad of [
+      "@example.com",
+      "https://example.com",
+      "*.example.com",
+      "example",
+      "exa mple.com",
+    ]) {
+      expect(parseFormSettings({ blockedEmailDomains: [bad] }).success).toBe(
+        false,
+      )
+    }
+    expect(
+      parseFormSettings({ blockedEmailDomains: ["a.com", "A.com"] }).success,
+    ).toBe(false)
+    const many = Array.from({ length: 101 }, (_, i) => `d${i}.com`)
+    expect(parseFormSettings({ blockedEmailDomains: many }).success).toBe(false)
+  })
+
+  test("normalize: a corrupt limit falls back to its default, the rest survives", () => {
+    const n = normalizeFormSettings({
+      submissionLimit: "lots",
+      closedMessage: "Gone.",
+    })
+    expect(n).toMatchObject({ submissionLimit: null, closedMessage: "Gone." })
+  })
+
+  test("normalize: a corrupt stored window bound keeps the form CLOSED, never open (blind probe s220c)", () => {
+    const now = new Date("2026-10-01T12:00:00Z")
+    for (const raw of [
+      { publishUp: 5 },
+      { publishDown: "garbage" },
+      { publishUp: { a: 1 } },
+    ]) {
+      expect(formWindowState(normalizeFormSettings(raw), now)).toBe("closed")
+    }
+    // absent / null bounds stay open
+    expect(
+      formWindowState(normalizeFormSettings({ publishUp: null }), now),
+    ).toBe("open")
+    expect(formWindowState(normalizeFormSettings({}), now)).toBe("open")
+  })
+
+  test("formWindowState: publishUp inclusive, publishDown exclusive, null = open that side", () => {
+    const w = {
+      publishUp: "2026-10-01T09:00:00Z",
+      publishDown: "2026-10-02T09:00:00Z",
+    }
+    expect(formWindowState(w, new Date("2026-10-01T08:59:59.999Z"))).toBe(
+      "pending",
+    )
+    expect(formWindowState(w, new Date("2026-10-01T09:00:00Z"))).toBe("open")
+    expect(formWindowState(w, new Date("2026-10-02T08:59:59.999Z"))).toBe(
+      "open",
+    )
+    expect(formWindowState(w, new Date("2026-10-02T09:00:00Z"))).toBe("closed")
+    expect(
+      formWindowState({ publishUp: null, publishDown: null }, new Date(0)),
+    ).toBe("open")
+    expect(
+      formWindowState(
+        { publishUp: null, publishDown: w.publishDown },
+        new Date("2020-01-01T00:00:00Z"),
+      ),
+    ).toBe("open")
+  })
+
+  test("formWindowState fails CLOSED on an unparseable bound (a hand-edited row), never open", () => {
+    const now = new Date("2026-10-01T12:00:00Z")
+    expect(
+      formWindowState({ publishUp: "garbage", publishDown: null }, now),
+    ).toBe("closed")
+    expect(
+      formWindowState({ publishUp: null, publishDown: "garbage" }, now),
+    ).toBe("closed")
   })
 })

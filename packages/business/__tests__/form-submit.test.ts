@@ -188,6 +188,7 @@ import {
   FORM_DEDUP_WINDOW_SECONDS,
   formSubmitService,
   hashClientIp,
+  retryOnLockTimeout,
 } from "../src/form/submit"
 
 const SUB_ID_RE = /^sub-\d+$/
@@ -299,6 +300,9 @@ const submit = (values: unknown, over: Record<string, unknown> = {}) =>
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // The admission (lock + fresh settings + count) is real-Postgres behaviour:
+  // form-limit-real-db.test.ts. Here it admits unless a test says otherwise.
+  vi.spyOn(formSubmitService, "admit").mockResolvedValue(null)
   m.state.selects.length = 0
   m.state.inserted.length = 0
   m.state.calls.length = 0
@@ -896,6 +900,37 @@ describe("formSubmitService.submit (s200)", () => {
     })
   })
 
+  describe("availability (s220c A2-4)", () => {
+    test("a refused admission rolls the transaction back: closed with the form's message, no row, no events", async () => {
+      queueClean()
+      vi.mocked(formSubmitService.admit).mockResolvedValue("limit")
+      m.findPublishedBySlug.mockResolvedValue(
+        FORM({ settings: { ...FORM().settings, closedMessage: "Full." } }),
+      )
+      const r = await submit({ phone: "(215) 555-0110" })
+      expect(r).toEqual({ kind: "closed", reason: "limit", message: "Full." })
+      expect(m.state.inserted).toHaveLength(0)
+      expect(m.emitFormSubmitted).not.toHaveBeenCalled()
+    })
+
+    test("a form outside its window refuses before any contact is resolved", async () => {
+      queueClean()
+      m.findPublishedBySlug.mockResolvedValue(
+        FORM({
+          settings: {
+            ...FORM().settings,
+            publishUp: "2999-01-01T00:00:00Z",
+            pendingMessage: "Soon.",
+          },
+        }),
+      )
+      const r = await submit({ phone: "(215) 555-0111" })
+      expect(r).toEqual({ kind: "closed", reason: "pending", message: "Soon." })
+      expect(m.createContactWithInbox).not.toHaveBeenCalled()
+      expect(m.state.inserted).toHaveLength(0)
+    })
+  })
+
   describe("typed select targets (s201)", () => {
     test("a select answer is stored in the field's canonical spelling", async () => {
       m.state.optionTargets = [
@@ -970,5 +1005,36 @@ describe("formSubmitService.submit (s200)", () => {
   test("the same answers from another ip are NOT a duplicate (ip is in the hash)", () => {
     expect(hashClientIp(WS, "1.1.1.1")).not.toBe(hashClientIp(WS, "2.2.2.2"))
     expect(hashClientIp(WS, "1.1.1.1")).toHaveLength(64)
+  })
+})
+
+describe("retryOnLockTimeout (s220c)", () => {
+  const timeout = () =>
+    Object.assign(new Error("lock"), { cause: { code: "55P03" } })
+  test("retries a lock timeout, then returns", async () => {
+    let calls = 0
+    const r = await retryOnLockTimeout(() => {
+      calls += 1
+      return calls < 3 ? Promise.reject(timeout()) : Promise.resolve("ok")
+    })
+    expect([r, calls]).toEqual(["ok", 3])
+  })
+  test("gives up after 3 attempts with the timeout; any other error is not retried", async () => {
+    let calls = 0
+    await expect(
+      retryOnLockTimeout(() => {
+        calls += 1
+        return Promise.reject(timeout())
+      }),
+    ).rejects.toThrow("lock")
+    expect(calls).toBe(3)
+    calls = 0
+    await expect(
+      retryOnLockTimeout(() => {
+        calls += 1
+        return Promise.reject(new Error("other"))
+      }),
+    ).rejects.toThrow("other")
+    expect(calls).toBe(1)
   })
 })

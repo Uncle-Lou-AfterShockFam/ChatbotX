@@ -2904,7 +2904,8 @@
       "max": "Too large or too long.",
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
-      "date": "Enter a valid date or time."
+      "date": "Enter a valid date or time.",
+      "emailDomainBlocked": "כתובות אימייל מהדומיין הזה אינן מתקבלות."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -2924,7 +2925,17 @@
       "prefillKeysHint": "Field keys that accept a value from the URL, e.g. ?first_name=Ada.",
       "embedSnippet": "Embed on another site",
       "embedUnpublished": "Publish the form to get its link and embed code.",
-      "publicUrl": "Public link"
+      "publicUrl": "Public link",
+      "availability": "זמינות",
+      "publishUp": "נפתח ב",
+      "publishDown": "נסגר ב",
+      "windowHint": "השעות לפי {zone}. השאירו ריק כדי שהטופס יישאר פתוח.",
+      "pendingMessage": "הודעה לפני הפתיחה",
+      "closedMessage": "הודעה כשהטופס סגור או מלא",
+      "submissionLimit": "מגבלת הגשות",
+      "submissionLimitHint": "הפסקת קבלת תשובות אחרי מספר הגשות זה (אינטרנט וצ'אט). מחיקת הגשה משחררת מקום. ריק = ללא מגבלה.",
+      "blockedEmailDomains": "דומיינים חסומים לאימייל",
+      "blockedEmailDomainsHint": "אחד בכל שורה, למשל example.com. גם תת-דומיינים נחסמים."
     },
     "submitActions": {
       "title": "Actions after submit",

@@ -244,6 +244,24 @@ describe("POST /api/forms/{ws}/{slug}/submit", () => {
     expect((await post({ values: {} })).status).toBe(404)
   })
 
+  test("closed (window or limit) -> 410 with the form's own message and reason (s220c A2-4)", async () => {
+    for (const reason of ["pending", "closed", "limit"] as const) {
+      m.submit.mockResolvedValue({
+        kind: "closed",
+        reason,
+        message: `msg-${reason}`,
+      })
+      const res = await post({ values: {} })
+      expect(res.status).toBe(410)
+      expect(await res.json()).toEqual({
+        ok: false,
+        errors: [],
+        closed: reason,
+        message: `msg-${reason}`,
+      })
+    }
+  })
+
   test("a thrown error never leaks its message: bare 500, closed CORS; a ChatbotXException keeps its status", async () => {
     m.submit.mockRejectedValue(
       new Error("invalid input syntax for type bigint"),

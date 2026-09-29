@@ -4894,7 +4894,8 @@
       "max": "Too large or too long.",
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
-      "date": "Enter a valid date or time."
+      "date": "Enter a valid date or time.",
+      "emailDomainBlocked": "Alamat email dari domain ini tidak diterima."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -4914,7 +4915,17 @@
       "prefillKeysHint": "Field keys that accept a value from the URL, e.g. ?first_name=Ada.",
       "embedSnippet": "Embed on another site",
       "embedUnpublished": "Publish the form to get its link and embed code.",
-      "publicUrl": "Public link"
+      "publicUrl": "Public link",
+      "availability": "Ketersediaan",
+      "publishUp": "Dibuka pada",
+      "publishDown": "Ditutup pada",
+      "windowHint": "Waktu dalam {zone}. Kosongkan agar formulir tetap terbuka.",
+      "pendingMessage": "Pesan sebelum dibuka",
+      "closedMessage": "Pesan saat ditutup atau penuh",
+      "submissionLimit": "Batas pengiriman",
+      "submissionLimitHint": "Berhenti menerima jawaban setelah sejumlah pengiriman ini (web dan chat). Menghapus pengiriman membebaskan satu tempat. Kosong = tanpa batas.",
+      "blockedEmailDomains": "Domain email yang diblokir",
+      "blockedEmailDomainsHint": "Satu per baris, mis. example.com. Subdomain juga diblokir."
     },
     "submitActions": {
       "title": "Actions after submit",

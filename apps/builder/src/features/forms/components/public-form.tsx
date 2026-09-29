@@ -20,6 +20,8 @@ export function PublicForm(props: {
   prefill: FormValues
   embed: boolean
   embedOrigins: string[]
+  /** s220c A2-4: set when the form is outside its window or full. */
+  closedMessage?: string | null
 }) {
   const { workspaceId, slug, title, definition, prefill, embed, embedOrigins } =
     props
@@ -28,6 +30,9 @@ export function PublicForm(props: {
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState<string | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
+  const [closed, setClosed] = useState<string | null>(
+    props.closedMessage ?? null,
+  )
   const root = useRef<HTMLDivElement>(null)
 
   const hostOrigin = useMemo(() => {
@@ -101,14 +106,23 @@ export function PublicForm(props: {
             ok: false
             errors?: { key: string; code: string }[]
             retryAfter?: number
+            message?: string
           }
         | null
+      if (res.status === 410 && body?.ok === false && body.message) {
+        // closed or filled up while the page was open
+        setClosed(body.message)
+        return
+      }
       if (body?.ok !== true) {
-        setFailure(
-          res.status === 429
-            ? t("forms.public.tooMany")
-            : t("forms.public.failed"),
-        )
+        // A server-only check (a blocked email domain) names its own issue.
+        let message = t("forms.public.failed")
+        if (res.status === 429) {
+          message = t("forms.public.tooMany")
+        } else if (body?.errors?.some((e) => e.code === "emailDomainBlocked")) {
+          message = t("forms.issues.emailDomainBlocked")
+        }
+        setFailure(message)
         return
       }
       if (embed && hostOrigin) {
@@ -140,9 +154,13 @@ export function PublicForm(props: {
       ref={root}
     >
       {embed ? null : <h1 className="mb-4 font-semibold text-xl">{title}</h1>}
-      {done ? (
-        <p className="text-sm" data-testid="public-form-done" role="status">
-          {done}
+      {closed || done ? (
+        <p
+          className="text-sm"
+          data-testid={closed ? "public-form-closed" : "public-form-done"}
+          role="status"
+        >
+          {closed ?? done}
         </p>
       ) : (
         <>

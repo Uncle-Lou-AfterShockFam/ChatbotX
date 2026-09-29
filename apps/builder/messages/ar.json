@@ -4894,7 +4894,8 @@
       "max": "Too large or too long.",
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
-      "date": "Enter a valid date or time."
+      "date": "Enter a valid date or time.",
+      "emailDomainBlocked": "عناوين البريد من هذا النطاق غير مقبولة."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -4914,7 +4915,17 @@
       "prefillKeysHint": "Field keys that accept a value from the URL, e.g. ?first_name=Ada.",
       "embedSnippet": "Embed on another site",
       "embedUnpublished": "Publish the form to get its link and embed code.",
-      "publicUrl": "Public link"
+      "publicUrl": "Public link",
+      "availability": "التوفر",
+      "publishUp": "يفتح في",
+      "publishDown": "يغلق في",
+      "windowHint": "الأوقات بتوقيت {zone}. اتركه فارغًا لإبقاء النموذج مفتوحًا.",
+      "pendingMessage": "رسالة قبل الفتح",
+      "closedMessage": "رسالة عند الإغلاق أو الامتلاء",
+      "submissionLimit": "حد الإرسال",
+      "submissionLimitHint": "التوقف عن قبول الإجابات بعد هذا العدد من الإرسالات (الويب والدردشة). حذف إرسال يحرر مكانًا. فارغ = بلا حد.",
+      "blockedEmailDomains": "نطاقات البريد المحظورة",
+      "blockedEmailDomainsHint": "واحد في كل سطر، مثل example.com. النطاقات الفرعية محظورة أيضًا."
     },
     "submitActions": {
       "title": "Actions after submit",

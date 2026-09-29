@@ -4894,7 +4894,8 @@
       "max": "Too large or too long.",
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
-      "date": "Enter a valid date or time."
+      "date": "Enter a valid date or time.",
+      "emailDomainBlocked": "Tämän verkkotunnuksen sähköpostiosoitteita ei hyväksytä."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -4914,7 +4915,17 @@
       "prefillKeysHint": "Field keys that accept a value from the URL, e.g. ?first_name=Ada.",
       "embedSnippet": "Embed on another site",
       "embedUnpublished": "Publish the form to get its link and embed code.",
-      "publicUrl": "Public link"
+      "publicUrl": "Public link",
+      "availability": "Saatavuus",
+      "publishUp": "Avautuu",
+      "publishDown": "Sulkeutuu",
+      "windowHint": "Ajat ovat aikavyöhykkeellä {zone}. Jätä tyhjäksi, jotta lomake pysyy auki.",
+      "pendingMessage": "Viesti ennen avautumista",
+      "closedMessage": "Viesti kun suljettu tai täynnä",
+      "submissionLimit": "Lähetysraja",
+      "submissionLimitHint": "Lopeta vastausten vastaanotto näin monen lähetyksen jälkeen (verkko ja chat). Lähetyksen poistaminen vapauttaa paikan. Tyhjä = ei rajaa.",
+      "blockedEmailDomains": "Estetyt sähköpostiverkkotunnukset",
+      "blockedEmailDomainsHint": "Yksi riviä kohden, esim. example.com. Myös aliverkkotunnukset estetään."
     },
     "submitActions": {
       "title": "Actions after submit",

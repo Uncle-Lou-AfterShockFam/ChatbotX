@@ -12,6 +12,7 @@ export * from "@chatbotx.io/utils/form"
 
 import {
   EMPTY_FORM_DEFINITION,
+  FORM_EMAIL_DOMAIN_REGEX,
   type FormDefinition,
   formDefinition,
 } from "@chatbotx.io/utils/form"
@@ -27,6 +28,11 @@ export const FORM_MAX_TAGS = 10
 export const FORM_MAX_EMBED_ORIGINS = 10
 export const FORM_MAX_PREFILL_KEYS = 20
 export const FORM_MAX_PROFILING_LIMIT = 100
+/** s220c A2-4: the most submissions a form can be capped at. */
+export const FORM_MAX_SUBMISSION_LIMIT = 100_000
+export const FORM_MAX_BLOCKED_EMAIL_DOMAINS = 100
+/** What normalize keeps for a corrupt stored bound (never a valid instant). */
+const UNPARSEABLE_WINDOW_BOUND = "unparseable"
 /** Same key rule as a custom-field key / hub-connector field key. */
 const FORM_PREFILL_KEY_REGEX = /^[a-z][a-z0-9_]{0,39}$/
 /** `https://host[:port]` only: no path, no wildcard, no trailing slash. */
@@ -148,6 +154,46 @@ export const formSettingsSchema = z
       .nullable()
       .default(null),
     actions: z.array(formActionSchema).max(FORM_MAX_ACTIONS).default([]),
+    /**
+     * Availability (s220c A2-4, Mautic publishUp / publishDown): before
+     * `publishUp` the form shows `pendingMessage`, from `publishDown` on
+     * `closedMessage`, on the web page and to a chat step alike. null = open
+     * that side. A published form outside its window accepts nothing.
+     */
+    publishUp: z.iso.datetime({ offset: true }).nullable().default(null),
+    publishDown: z.iso.datetime({ offset: true }).nullable().default(null),
+    pendingMessage: z
+      .string()
+      .max(FORM_MAX_SUCCESS_MESSAGE)
+      .default("This form is not open yet."),
+    closedMessage: z
+      .string()
+      .max(FORM_MAX_SUCCESS_MESSAGE)
+      .default("This form is closed."),
+    /**
+     * At most this many stored submissions (web + chat), enforced inside the
+     * submit transaction under a per-form lock (Mautic checks, then inserts,
+     * and overshoots under concurrency). A deleted submission frees a slot.
+     */
+    submissionLimit: z
+      .number()
+      .int()
+      .min(1)
+      .max(FORM_MAX_SUBMISSION_LIMIT)
+      .nullable()
+      .default(null),
+    /** Email answers on these domains (and their subdomains) are refused. */
+    blockedEmailDomains: z
+      .array(
+        z
+          .string()
+          .trim()
+          .toLowerCase()
+          .regex(FORM_EMAIL_DOMAIN_REGEX, "A domain like example.com."),
+      )
+      .max(FORM_MAX_BLOCKED_EMAIL_DOMAINS)
+      .refine((v) => new Set(v).size === v.length, "Duplicate domain.")
+      .default([]),
   })
   .strict()
 export type FormSettings = z.infer<typeof formSettingsSchema>
@@ -186,6 +232,18 @@ export function parseFormSettings(
 ): FormParseResult<FormSettings> {
   const parsed = formSettingsSchema.safeParse(input ?? {})
   if (parsed.success) {
+    const { publishUp, publishDown } = parsed.data
+    if (
+      publishUp !== null &&
+      publishDown !== null &&
+      Date.parse(publishDown) <= Date.parse(publishUp)
+    ) {
+      return {
+        success: false,
+        path: "publishDown",
+        message: "The form must close after it opens.",
+      }
+    }
     return { success: true, data: parsed.data }
   }
   const issue = parsed.error.issues[0]
@@ -213,6 +271,18 @@ export function normalizeFormSettings(raw: unknown): FormSettings {
     ].safeParse(source[key])
     if (one.success && source[key] !== undefined) {
       out[key] = one.data
+    }
+  }
+  // A stored availability bound that no longer parses must keep the form
+  // CLOSED, not fall back to "open" (blind probe s220c): formWindowState
+  // reads this marker as unparseable.
+  for (const key of ["publishUp", "publishDown"] as const) {
+    if (
+      source[key] !== undefined &&
+      source[key] !== null &&
+      out[key] === null
+    ) {
+      out[key] = UNPARSEABLE_WINDOW_BOUND
     }
   }
   return out as FormSettings
@@ -257,4 +327,38 @@ export type FormSessionProfile = {
 export type FormSubmissionVisibility = {
   steps: string[]
   fields: string[]
+}
+
+export type FormWindowState = "pending" | "open" | "closed"
+
+/**
+ * Where `now` falls in the form's availability window (s220c A2-4).
+ * `publishUp` is inclusive, `publishDown` exclusive; an unparseable bound
+ * (only a hand-edited row) closes the form rather than opening it.
+ */
+export function formWindowState(
+  settings: Pick<FormSettings, "publishUp" | "publishDown">,
+  now: Date,
+): FormWindowState {
+  const at = now.getTime()
+  // `?? null`: a settings object missing the keys (older rows are normalized,
+  // callers' fixtures may not be) reads as open, never as unparseable
+  const publishUp = settings.publishUp ?? null
+  const publishDown = settings.publishDown ?? null
+  if (publishUp !== null) {
+    const up = Date.parse(publishUp)
+    if (Number.isNaN(up)) {
+      return "closed"
+    }
+    if (at < up) {
+      return "pending"
+    }
+  }
+  if (publishDown !== null) {
+    const down = Date.parse(publishDown)
+    if (Number.isNaN(down) || at >= down) {
+      return "closed"
+    }
+  }
+  return "open"
 }

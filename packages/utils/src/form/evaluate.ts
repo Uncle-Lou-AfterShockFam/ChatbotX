@@ -338,6 +338,49 @@ export type FormValidationIssue = {
     | "length"
     | "date"
     | "location"
+    | "emailDomainBlocked"
+}
+
+const TRAILING_DOT_RE = /\.$/
+
+/** A bare domain (`example.com`), lower-case, no scheme / path / wildcard. */
+export const FORM_EMAIL_DOMAIN_REGEX =
+  /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/
+
+/**
+ * A field whose answer is an email address: an `email` field, or ANY field
+ * that fills the contact's email (a text field mapped to it must not slip
+ * past the blocked domains; skeptic s220c).
+ */
+export const isEmailAnswerField = (
+  field: Pick<FormField, "type" | "mapTo">,
+): boolean =>
+  field.type === "email" ||
+  (field.mapTo?.kind === "system" && field.mapTo.key === "email")
+
+/**
+ * s220c A2-4: is the address's domain (or a parent of it) on the form's
+ * block list? `example.com` blocks `a@example.com` and `a@mail.example.com`,
+ * never `a@notexample.com`. A value that is not an address is never blocked
+ * here (the email check reports it).
+ */
+export function isBlockedEmailDomain(
+  email: unknown,
+  blocked: readonly string[],
+): boolean {
+  if (typeof email !== "string" || blocked.length === 0) {
+    return false
+  }
+  const at = email.lastIndexOf("@")
+  if (at < 1) {
+    return false
+  }
+  const domain = email
+    .slice(at + 1)
+    .trim()
+    .toLowerCase()
+    .replace(TRAILING_DOT_RE, "")
+  return blocked.some((d) => domain === d || domain.endsWith(`.${d}`))
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -457,7 +500,11 @@ export function validateFormSubmission(
   def: FormDefinition,
   values: FormValues,
   evaluation: FormEvaluation = evaluateForm(def, values),
-  options: { suppressed?: ReadonlySet<string> } = {},
+  options: {
+    suppressed?: ReadonlySet<string>
+    /** s220c A2-4: the form's `blockedEmailDomains` (email-type fields only). */
+    blockedEmailDomains?: readonly string[]
+  } = {},
 ): FormValidationIssue[] {
   const issues: FormValidationIssue[] = []
   for (const field of formInputFields(def)) {
@@ -477,6 +524,11 @@ export function validateFormSubmission(
     const code = validateFormField(field, value)
     if (code) {
       issues.push({ key: field.key, code })
+    } else if (
+      isEmailAnswerField(field) &&
+      isBlockedEmailDomain(value, options.blockedEmailDomains ?? [])
+    ) {
+      issues.push({ key: field.key, code: "emailDomainBlocked" })
     }
   }
   return issues

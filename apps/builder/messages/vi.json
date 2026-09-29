@@ -4933,7 +4933,8 @@
       "max": "Too large or too long.",
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
-      "date": "Enter a valid date or time."
+      "date": "Enter a valid date or time.",
+      "emailDomainBlocked": "Không chấp nhận địa chỉ email từ tên miền này."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -4953,7 +4954,17 @@
       "prefillKeysHint": "Field keys that accept a value from the URL, e.g. ?first_name=Ada.",
       "embedSnippet": "Embed on another site",
       "embedUnpublished": "Publish the form to get its link and embed code.",
-      "publicUrl": "Public link"
+      "publicUrl": "Public link",
+      "availability": "Thời gian mở",
+      "publishUp": "Mở lúc",
+      "publishDown": "Đóng lúc",
+      "windowHint": "Thời gian theo {zone}. Để trống để biểu mẫu luôn mở.",
+      "pendingMessage": "Thông báo trước khi mở",
+      "closedMessage": "Thông báo khi đã đóng hoặc đã đủ",
+      "submissionLimit": "Giới hạn lượt gửi",
+      "submissionLimitHint": "Ngừng nhận câu trả lời sau số lượt gửi này (web và chat). Xóa một lượt gửi sẽ trống ra một chỗ. Để trống = không giới hạn.",
+      "blockedEmailDomains": "Tên miền email bị chặn",
+      "blockedEmailDomainsHint": "Mỗi dòng một tên miền, ví dụ example.com. Tên miền con cũng bị chặn."
     },
     "submitActions": {
       "title": "Actions after submit",

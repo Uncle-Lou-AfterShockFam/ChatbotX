@@ -5025,7 +5025,8 @@
       "max": "Too large or too long.",
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
-      "date": "Enter a valid date or time."
+      "date": "Enter a valid date or time.",
+      "emailDomainBlocked": "不接受该域名的邮箱地址。"
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -5045,7 +5046,17 @@
       "prefillKeysHint": "Field keys that accept a value from the URL, e.g. ?first_name=Ada.",
       "embedSnippet": "Embed on another site",
       "embedUnpublished": "Publish the form to get its link and embed code.",
-      "publicUrl": "Public link"
+      "publicUrl": "Public link",
+      "availability": "开放时间",
+      "publishUp": "开始时间",
+      "publishDown": "结束时间",
+      "windowHint": "时间按 {zone} 显示。留空则表单保持开放。",
+      "pendingMessage": "开放前的提示",
+      "closedMessage": "关闭或已满时的提示",
+      "submissionLimit": "提交上限",
+      "submissionLimitHint": "达到该提交数（网页和聊天）后停止接收回答。删除一条提交会空出一个名额。留空 = 不限。",
+      "blockedEmailDomains": "屏蔽的邮箱域名",
+      "blockedEmailDomainsHint": "每行一个，例如 example.com。子域名也会被屏蔽。"
     },
     "submitActions": {
       "title": "Actions after submit",
