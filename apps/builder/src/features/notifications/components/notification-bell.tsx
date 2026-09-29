@@ -8,7 +8,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@chatbotx.io/ui/components/ui/popover"
-import { ScrollArea } from "@chatbotx.io/ui/components/ui/scroll-area"
 import { cn } from "@chatbotx.io/ui/lib/utils"
 import {
   AtSignIcon,
@@ -126,9 +125,17 @@ export function NotificationBell({ workspaceId }: { workspaceId: string }) {
           </Badge>
         ) : null}
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-96 p-0">
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <span className="font-medium text-sm">
+      {/* 16 px from every viewport edge (Base UI's default is 5), never wider
+          than the screen, and never taller than the room below the bell: the
+          list scrolls inside the panel instead of painting over the page. */}
+      <PopoverContent
+        align="start"
+        className="max-h-[min(32rem,var(--available-height))] w-[min(24rem,calc(100vw-2rem))] gap-0 p-0"
+        collisionPadding={16}
+        data-testid="notification-panel"
+      >
+        <div className="flex shrink-0 items-center gap-1 border-b py-2 pr-2 pl-4">
+          <span className="min-w-0 flex-1 truncate font-medium text-sm">
             {t("notifications.title")}
           </span>
           <Button
@@ -154,7 +161,10 @@ export function NotificationBell({ workspaceId }: { workspaceId: string }) {
             <SettingsIcon className="size-4" />
           </Button>
         </div>
-        <ScrollArea className="max-h-96">
+        <div
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+          data-testid="notification-scroll"
+        >
           {rows.length === 0 ? (
             <p className="px-4 py-6 text-muted-foreground text-sm">
               {list.isPending
@@ -200,7 +210,7 @@ export function NotificationBell({ workspaceId }: { workspaceId: string }) {
               ))}
             </ul>
           )}
-        </ScrollArea>
+        </div>
       </PopoverContent>
     </Popover>
   )

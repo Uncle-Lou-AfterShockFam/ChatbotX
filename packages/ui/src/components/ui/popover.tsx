@@ -20,12 +20,13 @@ function PopoverContent({
   side = "bottom",
   sideOffset = 4,
   anchor,
+  collisionPadding,
   portal = true,
   ...props
 }: PopoverPrimitive.Popup.Props &
   Pick<
     PopoverPrimitive.Positioner.Props,
-    "align" | "alignOffset" | "side" | "sideOffset" | "anchor"
+    "align" | "alignOffset" | "side" | "sideOffset" | "anchor" | "collisionPadding"
   > & { portal?: boolean }) {
   // Base UI's Positioner always requires a Portal ancestor, so when the
   // caller opts out of portaling to <body>, keep the Portal mounted but
@@ -41,6 +42,7 @@ function PopoverContent({
       side={side}
       sideOffset={sideOffset}
       anchor={anchor}
+      collisionPadding={collisionPadding}
       className="isolate z-50"
     >
       <PopoverPrimitive.Popup
