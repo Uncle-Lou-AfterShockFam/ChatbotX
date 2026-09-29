@@ -10,6 +10,7 @@ export type {
   DealTaskCompletedMetadata,
   DealTaskEventMetadata,
   DealValueChangedMetadata,
+  FormAbandonedMetadata,
   FormSubmittedMetadata,
   InvoiceEventMetadata,
 } from "./base-emitter"

@@ -36,6 +36,7 @@ export const EMITTED_EVENT_TYPES = [
   triggerEventTypes.enum.taskAssigned,
   triggerEventTypes.enum.dealMentioned,
   triggerEventTypes.enum.formSubmitted,
+  triggerEventTypes.enum.formAbandoned,
   triggerEventTypes.enum.invoiceCreated,
   triggerEventTypes.enum.invoicePaid,
   triggerEventTypes.enum.invoicePartiallyPaid,

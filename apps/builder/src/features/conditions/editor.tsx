@@ -97,6 +97,7 @@ export const ConditionEditor = ({
         />
       )
     case triggerEventTypes.enum.formSubmitted:
+    case triggerEventTypes.enum.formAbandoned:
       return (
         <ComboboxField
           emptyText={t("forms.empty")}

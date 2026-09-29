@@ -14,7 +14,7 @@ import {
   ticketStatusChanged,
   ticketValueChanged,
 } from "./deal-conditions"
-import { formSubmitted } from "./form-conditions"
+import { formAbandoned, formSubmitted } from "./form-conditions"
 import {
   invoiceCreated,
   invoicePaid,
@@ -67,6 +67,7 @@ export const allConditions = {
   taskAssigned,
   dealMentioned,
   formSubmitted,
+  formAbandoned,
   invoiceCreated,
   invoicePaid,
   invoicePartiallyPaid,

@@ -96,6 +96,24 @@ export type FormSubmittedMetadata = {
 }
 
 /**
+ * A chat form run the contact left (s220 A2-3): it timed out, or every
+ * attempt at one question failed. `sourceId` = the form id. Web forms keep
+ * no server state until submit, so they never emit it.
+ */
+export type FormAbandonedMetadata = {
+  formId: string
+  formSessionId: string
+  channel: "chat"
+  reason: "timeout" | "attempts"
+  /** The question the run was on; null when it ended between questions. */
+  lastFieldKey: string | null
+  /** Questions sent before it ended (answered, skipped or display blocks). */
+  askedCount: number
+  conversationId: string
+  flowId: string
+}
+
+/**
  * A hub invoice (s205b). `total` is the numeric(14,2) string, `currency` ISO
  * upper-case; `hostedUrl` is the provider pay page (null while draft).
  */
@@ -621,6 +639,18 @@ export abstract class BaseEventEmitter {
     metadata: FormSubmittedMetadata,
   ): Promise<void> {
     await this.emit(triggerEventTypes.enum.formSubmitted, {
+      workspaceId,
+      contactId,
+      metadata: { ...metadata, sourceId: metadata.formId },
+    })
+  }
+
+  async formAbandoned(
+    workspaceId: string,
+    contactId: string,
+    metadata: FormAbandonedMetadata,
+  ): Promise<void> {
+    await this.emit(triggerEventTypes.enum.formAbandoned, {
       workspaceId,
       contactId,
       metadata: { ...metadata, sourceId: metadata.formId },

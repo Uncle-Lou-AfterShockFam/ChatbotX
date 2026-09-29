@@ -250,6 +250,10 @@ export const formSessionModel = pgTable(
     endedAt: timestamp(timestampConfig),
     /** When an expired run's flow was routed down skip (at most once). */
     routedAt: timestamp(timestampConfig),
+    /** The question the run was on when it ended (`currentFieldKey` is cleared). */
+    lastFieldKey: text(),
+    /** When `formAbandoned` was claimed for this run (at most once, s220 A2-3). */
+    abandonEmittedAt: timestamp(timestampConfig),
   },
   (table) => [
     uniqueIndex("FormSession_contactId_inProgress_key")
@@ -258,6 +262,11 @@ export const formSessionModel = pgTable(
     index("FormSession_expiresAt_inProgress_idx")
       .on(table.expiresAt)
       .where(sql`${table.status} = 'inProgress'`),
+    index("FormSession_endedAt_abandonPending_idx")
+      .on(table.endedAt)
+      .where(
+        sql`${table.status} in ('expired', 'skipped') and ${table.abandonEmittedAt} is null`,
+      ),
     index("FormSession_workspaceId_formId_idx").on(
       table.workspaceId,
       table.formId,
