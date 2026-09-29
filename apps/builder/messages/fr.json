@@ -7709,6 +7709,19 @@
       "noLines": "Aucune boîte de réception de canal API."
     }
   },
+  "emailSuppression": {
+    "title": "Suppression d'e-mails",
+    "description": "L'étape e-mail n'envoie jamais à ces adresses ou domaines. Les envois rejetés sont ajoutés automatiquement. Une entrée de domaine ne correspond qu'à ce domaine exact.",
+    "placeholder": "nom@example.com ou @example.com",
+    "add": "Ajouter",
+    "empty": "Aucune adresse ni aucun domaine supprimé.",
+    "remove": "Retirer",
+    "removeConfirm": "Les e-mails vers cette entrée seront de nouveau envoyés.",
+    "reasonManual": "Ajouté manuellement",
+    "reasonUnreachable": "Rejeté",
+    "added": "Suppression ajoutée",
+    "loadMore": "Charger plus"
+  },
   "emailFlowPage": {
     "confirmTitle": "Continuer",
     "confirmDescription": "Appuyez sur le bouton pour continuer.",

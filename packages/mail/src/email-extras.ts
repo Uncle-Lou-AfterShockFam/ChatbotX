@@ -1,4 +1,5 @@
 import { htmlToText } from "html-to-text"
+import addressparser from "nodemailer/lib/addressparser"
 import type { MailElementSchema } from "./emails/dynamic-template"
 
 /** Longest element text the plain-text part carries (the HTML is unbounded). */
@@ -130,4 +131,16 @@ function decodeHtmlAttr(value: string): string {
 
 function encodeHtmlAttr(value: string): string {
   return value.replace(AMP, "&amp;").replace(QUOTE, "&quot;")
+}
+
+/**
+ * The mailbox addresses nodemailer will deliver a `to` field to: the SAME
+ * parser its mime-node runs on send (quoted names, groups, comments), groups
+ * flattened. An entry nodemailer cannot resolve comes back as "" so callers
+ * can fail closed on it.
+ */
+export function parseRecipientAddresses(to: string): string[] {
+  return addressparser(to, { flatten: true }).map((entry) =>
+    typeof entry.address === "string" ? entry.address.trim() : "",
+  )
 }

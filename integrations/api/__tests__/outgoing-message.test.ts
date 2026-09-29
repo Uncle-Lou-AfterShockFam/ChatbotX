@@ -25,6 +25,18 @@ vi.mock("@chatbotx.io/business", async () => ({
   trackedLinkService: { mint: mockMint },
 }))
 
+const { mockIsSuppressed } = vi.hoisted(() => ({
+  mockIsSuppressed: vi.fn(async () => false),
+}))
+vi.mock("@chatbotx.io/business/email-suppression", async () => ({
+  parseEmailSuppression: (
+    await vi.importActual<Record<string, unknown>>(
+      "../../../packages/database/src/partials/email-suppression",
+    )
+  ).parseEmailSuppression,
+  emailSuppressionService: { isSuppressed: mockIsSuppressed },
+}))
+
 const { sendEmail, sendFlowStep, sendMessage } = await import(
   "../src/handlers/message/outgoing-message"
 )
@@ -643,5 +655,68 @@ describe("api sendEmail (s222b, B2 phase 4): the rendered newsletter for a bulkt
     }
     expect(mockPostSignedEnvelope).not.toHaveBeenCalled()
     expect(mockEnqueue).not.toHaveBeenCalled()
+  })
+})
+
+describe("api sendFlowStep — s224b email suppression on an email line", () => {
+  const step = {
+    id: "step-1",
+    nodeId: "node-1",
+    stepType: "sendText",
+    text: "hi",
+  }
+  const lineCtx = {
+    auth: { callbackUrl: "https://example.com/callback", signingSecret: "s" },
+    integrationDetail: { workspaceId: "ws-1", inboxId: "in-1" },
+  } as never
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockIsSuppressed.mockResolvedValue(false)
+    mockPostSignedEnvelope.mockResolvedValue({ messageId: "m_1" })
+  })
+
+  test("a suppressed email identity is refused before anything is posted", async () => {
+    mockIsSuppressed.mockResolvedValue(true)
+    await expect(
+      sendFlowStep({
+        ctx: lineCtx,
+        data: {
+          contact: { id: "c-1", sourceId: "Bob@Blocked.com" },
+          quickReplies: [],
+          step,
+        },
+      } as never),
+    ).rejects.toThrow("bulktext refused the send (suppressed)")
+    expect(mockIsSuppressed).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      address: "bob@blocked.com",
+    })
+    expect(mockPostSignedEnvelope).not.toHaveBeenCalled()
+    expect(mockEnqueue).not.toHaveBeenCalled()
+  })
+
+  test("an unlisted address sends; a phone identity is never looked up", async () => {
+    for (const sourceId of ["ok@allowed.com", "+15550001234"]) {
+      await sendFlowStep({
+        ctx: lineCtx,
+        data: { contact: { id: "c-1", sourceId }, quickReplies: [], step },
+      } as never)
+    }
+    expect(mockIsSuppressed).toHaveBeenCalledOnce()
+    expect(mockPostSignedEnvelope).toHaveBeenCalledTimes(2)
+  })
+
+  test("an email identity with no workspace on the row fails closed", async () => {
+    await expect(
+      sendFlowStep({
+        ctx,
+        data: {
+          contact: { id: "c-1", sourceId: "bob@x.com" },
+          quickReplies: [],
+          step,
+        },
+      } as never),
+    ).rejects.toThrow("suppressed")
+    expect(mockPostSignedEnvelope).not.toHaveBeenCalled()
   })
 })

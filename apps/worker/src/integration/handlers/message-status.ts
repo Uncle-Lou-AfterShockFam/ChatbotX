@@ -104,9 +104,12 @@ export const handleMessageStatus = async (
   // contact with no conversation (thrown below) still settles it.
   if (inbox.channel === "api") {
     await settleLineEmailStatus({
+      workspaceId: inbox.workspaceId,
       inboxId: inbox.id,
       messageId: String(payload.messageId),
       status: eventStatus,
+      error: payload.error,
+      recipient: contact.sourceId,
     })
   }
 

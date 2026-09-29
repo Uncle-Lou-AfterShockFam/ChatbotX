@@ -7709,6 +7709,19 @@
       "noLines": "Aún no hay bandejas de canal API."
     }
   },
+  "emailSuppression": {
+    "title": "Supresión de correo",
+    "description": "El paso de correo nunca envía a estas direcciones o dominios. Los envíos rebotados se añaden automáticamente. Una entrada de dominio solo coincide con ese dominio exacto.",
+    "placeholder": "nombre@example.com o @example.com",
+    "add": "Añadir",
+    "empty": "No hay direcciones ni dominios suprimidos.",
+    "remove": "Quitar",
+    "removeConfirm": "Se volverá a enviar correo a esta entrada.",
+    "reasonManual": "Añadido manualmente",
+    "reasonUnreachable": "Rebotado",
+    "added": "Supresión añadida",
+    "loadMore": "Cargar más"
+  },
   "emailFlowPage": {
     "confirmTitle": "Continuar",
     "confirmDescription": "Pulsa el botón para continuar.",

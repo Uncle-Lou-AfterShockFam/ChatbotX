@@ -1,4 +1,8 @@
 import { apiChannelOutboxService } from "@chatbotx.io/business"
+import {
+  emailSuppressionService,
+  parseEmailSuppression,
+} from "@chatbotx.io/business/email-suppression"
 import { bulktextSendOptions, stepTypes } from "@chatbotx.io/flow-config"
 import {
   contentTypes,
@@ -132,6 +136,36 @@ export const sendMessage: MessageHandlers<ApiAuthValue>["sendMessage"] = async (
 }
 
 /**
+ * Outreach B-1 (s224b): an automated flow send (`bulktextSend`, any flow
+ * step) to a contact whose channel identity IS an email address - an email
+ * line - honours the workspace suppression list like the email step does.
+ * Phone identities are untouched; an operator's own inbox reply
+ * (`sendMessage`) is a deliberate act and is not checked. Throws the same
+ * terminal refusal a line would (`message:failed`, visible in the inbox).
+ */
+const assertFlowRecipientNotSuppressed = async (
+  ctx: { integrationDetail?: Record<string, unknown> },
+  sourceId: string,
+): Promise<void> => {
+  const parsed = parseEmailSuppression(sourceId)
+  if (!parsed.ok || parsed.kind !== "address") {
+    return
+  }
+  const workspaceId = ctx.integrationDetail?.workspaceId
+  if (typeof workspaceId !== "string" || workspaceId === "") {
+    throw new Error("bulktext refused the send (suppressed): no workspace")
+  }
+  if (
+    await emailSuppressionService.isSuppressed({
+      workspaceId,
+      address: parsed.value,
+    })
+  ) {
+    throw new Error("bulktext refused the send (suppressed)")
+  }
+}
+
+/**
  * Full rich parity is the point of this channel — unlike webchat, which
  * no-ops `sendFlowStep` entirely, every flow step variant is mapped onto the
  * same envelope shape as `sendMessage`, with `contentAttributes` carrying the
@@ -144,6 +178,7 @@ export const sendFlowStep: MessageHandlers<ApiAuthValue>["sendFlowStep"] =
       data: { contact, flowId, step, quickReplies },
     } = props
 
+    await assertFlowRecipientNotSuppressed(ctx, contact.sourceId)
     const { text, contentAttributes } = mapFlowStepToEnvelope(step)
     const envelope = await shortenEnvelopeLinks({
       ctx,

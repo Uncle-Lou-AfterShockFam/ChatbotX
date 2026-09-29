@@ -7709,6 +7709,19 @@
       "noLines": "Nog geen API-kanaalinboxen."
     }
   },
+  "emailSuppression": {
+    "title": "E-mailblokkering",
+    "description": "De e-mailstap verstuurt nooit naar deze adressen of domeinen. Gebouncete verzendingen worden automatisch toegevoegd. Een domeinvermelding geldt alleen voor precies dat domein.",
+    "placeholder": "naam@example.com of @example.com",
+    "add": "Toevoegen",
+    "empty": "Geen geblokkeerde adressen of domeinen.",
+    "remove": "Verwijderen",
+    "removeConfirm": "Mail naar deze vermelding wordt weer verstuurd.",
+    "reasonManual": "Handmatig toegevoegd",
+    "reasonUnreachable": "Gebounced",
+    "added": "Blokkering toegevoegd",
+    "loadMore": "Meer laden"
+  },
   "emailFlowPage": {
     "confirmTitle": "Doorgaan",
     "confirmDescription": "Tik op de knop om door te gaan.",

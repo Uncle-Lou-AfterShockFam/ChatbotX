@@ -7709,6 +7709,19 @@
       "noLines": "Ainda não existem caixas de canal API."
     }
   },
+  "emailSuppression": {
+    "title": "Supressão de e-mail",
+    "description": "O passo de e-mail nunca envia para estes endereços ou domínios. Envios devolvidos são adicionados automaticamente. Uma entrada de domínio corresponde apenas a esse domínio exato.",
+    "placeholder": "nome@example.com ou @example.com",
+    "add": "Adicionar",
+    "empty": "Nenhum endereço ou domínio suprimido.",
+    "remove": "Remover",
+    "removeConfirm": "Os e-mails para esta entrada voltarão a ser enviados.",
+    "reasonManual": "Adicionado manualmente",
+    "reasonUnreachable": "Devolvido",
+    "added": "Supressão adicionada",
+    "loadMore": "Carregar mais"
+  },
   "emailFlowPage": {
     "confirmTitle": "Continuar",
     "confirmDescription": "Toque no botão para continuar.",
