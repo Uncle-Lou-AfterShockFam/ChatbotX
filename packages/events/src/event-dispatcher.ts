@@ -13,6 +13,7 @@ import type {
   DealTaskCompletedMetadata,
   DealTaskEventMetadata,
   DealValueChangedMetadata,
+  FormAbandonedMetadata,
   FormSubmittedMetadata,
   IncomingCallMetadata,
   InvoiceEventMetadata,
@@ -427,6 +428,13 @@ export const emitFormSubmitted = async (
   contactId: string,
   metadata: FormSubmittedMetadata,
 ) => await emitToAllEmitters("formSubmitted", workspaceId, contactId, metadata)
+
+// Chat form runs (s220 A2-3)
+export const emitFormAbandoned = async (
+  workspaceId: string,
+  contactId: string,
+  metadata: FormAbandonedMetadata,
+) => await emitToAllEmitters("formAbandoned", workspaceId, contactId, metadata)
 
 // Hub invoicing (s205b)
 export const emitInvoiceCreated = async (

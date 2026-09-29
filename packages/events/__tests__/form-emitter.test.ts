@@ -2,6 +2,7 @@ import { triggerEventTypes } from "@chatbotx.io/database/partials"
 import { describe, expect, test, vi } from "vitest"
 import {
   BaseEventEmitter,
+  type FormAbandonedMetadata,
   type FormSubmittedMetadata,
 } from "../src/base-emitter"
 import {
@@ -55,6 +56,40 @@ describe("formSubmitted (s200)", () => {
   test("a contactless emit is dropped, never queued (triggers are contact-scoped)", async () => {
     const emitter = new RecordingEmitter()
     await emitter.formSubmitted("ws-1", "", META)
+    expect(emitter.queued).not.toHaveBeenCalled()
+  })
+})
+
+const ABANDONED: FormAbandonedMetadata = {
+  formId: "form-1",
+  formSessionId: "fs-1",
+  channel: "chat",
+  reason: "timeout",
+  lastFieldKey: "email",
+  askedCount: 2,
+  conversationId: "conv-1",
+  flowId: "flow-1",
+}
+
+describe("formAbandoned (s220 A2-3)", () => {
+  test("is emitted, matchable, and pinned to the form as sourceId", async () => {
+    expect(EMITTED_EVENT_TYPES).toContain("formAbandoned")
+    expect(isMatchableEventType("formAbandoned")).toBe(true)
+    const emitter = new RecordingEmitter()
+    await emitter.formAbandoned("ws-1", "contact-1", ABANDONED)
+    expect(emitter.queued).toHaveBeenCalledWith(
+      triggerEventTypes.enum.formAbandoned,
+      {
+        workspaceId: "ws-1",
+        contactId: "contact-1",
+        metadata: { ...ABANDONED, sourceId: "form-1" },
+      },
+    )
+  })
+
+  test("a contactless emit is dropped", async () => {
+    const emitter = new RecordingEmitter()
+    await emitter.formAbandoned("ws-1", "", ABANDONED)
     expect(emitter.queued).not.toHaveBeenCalled()
   })
 })

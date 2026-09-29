@@ -184,6 +184,17 @@ const EVENT_DATA_BY_TYPE: Record<string, Record<string, unknown>> = {
     sourceId: "form-1",
     values: { first_name: "Ada" },
   },
+  [triggerEventTypes.enum.formAbandoned]: {
+    formId: "form-1",
+    formSessionId: "fs-1",
+    channel: "chat",
+    reason: "timeout",
+    lastFieldKey: "email",
+    askedCount: 2,
+    conversationId: "conv-1",
+    flowId: "flow-1",
+    sourceId: "form-1",
+  },
   [triggerEventTypes.enum.invoiceCreated]: INVOICE_EVENT_DATA,
   [triggerEventTypes.enum.invoicePaid]: {
     ...INVOICE_EVENT_DATA,

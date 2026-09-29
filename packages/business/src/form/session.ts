@@ -4,11 +4,13 @@ import {
   db,
   desc,
   eq,
+  gt,
   inArray,
   isNull,
   isUniqueViolationError,
   lte,
   ne,
+  or,
   sql,
 } from "@chatbotx.io/database/client"
 import {
@@ -38,6 +40,7 @@ import type {
   FormSessionModel,
   FormSubmissionModel,
 } from "@chatbotx.io/database/types"
+import { emitFormAbandoned } from "@chatbotx.io/events"
 import { createId, isPlainRecord } from "@chatbotx.io/utils"
 import { logger } from "../logger"
 import { formService, type NormalizedForm } from "./service"
@@ -97,6 +100,22 @@ export type ReplacedRun = {
   stepId: string
   challengeId: string | null
 }
+
+/** How far back the sweep looks for ended runs whose `formAbandoned` never went out. */
+export const FORM_ABANDON_CATCHUP_MS = 24 * 60 * 60_000
+
+/** The ends that count as the contact abandoning the run (owner, s220). */
+const abandonedRun = () =>
+  or(
+    and(
+      eq(formSessionModel.status, "expired"),
+      eq(formSessionModel.endReason, "timeout"),
+    ),
+    and(
+      eq(formSessionModel.status, "skipped"),
+      eq(formSessionModel.endReason, "attempts"),
+    ),
+  )
 
 /** A question still pending delivery this long is re-asked on the next reply. */
 export const FORM_UNDELIVERED_REASK_MS = 2 * 60_000
@@ -400,10 +419,19 @@ export class FormSessionService {
               attempts,
               lastAnsweredMessageId: messageId ?? session.lastAnsweredMessageId,
               currentFieldKey: null,
+              lastFieldKey: session.currentFieldKey,
               endedAt: now,
             })
-            .where(eq(formSessionModel.id, session.id))
+            .where(
+              and(
+                eq(formSessionModel.id, session.id),
+                eq(formSessionModel.status, "inProgress"),
+              ),
+            )
             .returning()
+          if (!ended) {
+            return { action: { kind: "ignored", reason: "noSession" } }
+          }
           return {
             action: { kind: "ended", session: ended, reason: "attempts" },
           }
@@ -478,6 +506,8 @@ export class FormSessionService {
           status: "expired",
           endReason: sql`coalesce(${formSessionModel.endReason}, 'timeout')`,
           endedAt: now,
+          // SET reads the OLD row, so this keeps the question it timed out on.
+          lastFieldKey: sql`${formSessionModel.currentFieldKey}`,
           currentFieldKey: null,
         })
         .where(
@@ -509,6 +539,7 @@ export class FormSessionService {
         status: "canceled",
         endReason: props.reason.slice(0, 100),
         endedAt: props.now ?? new Date(),
+        lastFieldKey: sql`${formSessionModel.currentFieldKey}`,
         currentFieldKey: null,
       })
       .where(
@@ -573,6 +604,121 @@ export class FormSessionService {
       )
       .returning({ id: formSessionModel.id })
     return rows.length > 0
+  }
+
+  /**
+   * Emit `formAbandoned` for a run the contact left (s220 A2-3), at most once:
+   * the `abandonEmittedAt` compare-and-set is the claim, taken BEFORE the
+   * emit, so two sweeps or a sweep and the answer path never both emit. Only
+   * a timeout or used-up attempts qualify; a canceled, replaced or
+   * undelivered run is not the contact's doing. An emit that fails after the
+   * claim is logged and lost, the same guarantee `formSubmitted` has.
+   */
+  async emitAbandoned(
+    row: Pick<FormSessionModel, "id" | "workspaceId">,
+    now: Date = new Date(),
+  ): Promise<boolean> {
+    const [claimed] = await db
+      .update(formSessionModel)
+      .set({ abandonEmittedAt: now })
+      .where(
+        and(
+          eq(formSessionModel.workspaceId, row.workspaceId),
+          eq(formSessionModel.id, row.id),
+          isNull(formSessionModel.abandonEmittedAt),
+          abandonedRun(),
+        ),
+      )
+      .returning()
+    if (!claimed) {
+      return false
+    }
+    await emitFormAbandoned(claimed.workspaceId, claimed.contactId, {
+      formId: claimed.formId,
+      formSessionId: claimed.id,
+      channel: "chat",
+      reason: claimed.endReason === "attempts" ? "attempts" : "timeout",
+      lastFieldKey: claimed.lastFieldKey ?? null,
+      askedCount: readAsked(claimed.asked).length,
+      conversationId: claimed.conversationId,
+      flowId: claimed.flowId,
+    }).catch((error: unknown) =>
+      logger.warn(
+        { err: error, formSessionId: claimed.id },
+        "form session: formAbandoned event failed after claim",
+      ),
+    )
+    return true
+  }
+
+  /**
+   * Catch-up for runs that ended but were never claimed (the process died
+   * between the end and the emit): abandoned runs that ended within the last
+   * `FORM_ABANDON_CATCHUP_MS`, oldest first, at most `limit`. Older ones are
+   * given up ON PURPOSE (a day-late "you left the form" would reach a contact
+   * who moved on): stamped without an event and logged once, so nothing sits
+   * unclaimed silently (skeptic, s220 A2-3).
+   */
+  async emitPendingAbandons(
+    props: { now?: Date; limit?: number } = {},
+  ): Promise<number> {
+    const now = props.now ?? new Date()
+    const limit = Math.max(1, Math.min(props.limit ?? 100, 500))
+    const cutoff = new Date(now.getTime() - FORM_ABANDON_CATCHUP_MS)
+    const aged = await db
+      .select({ id: formSessionModel.id })
+      .from(formSessionModel)
+      .where(
+        and(
+          isNull(formSessionModel.abandonEmittedAt),
+          abandonedRun(),
+          lte(formSessionModel.endedAt, cutoff),
+        ),
+      )
+      .limit(limit)
+    if (aged.length > 0) {
+      const givenUp = await db
+        .update(formSessionModel)
+        .set({ abandonEmittedAt: now })
+        .where(
+          and(
+            inArray(
+              formSessionModel.id,
+              aged.map((r) => r.id),
+            ),
+            isNull(formSessionModel.abandonEmittedAt),
+          ),
+        )
+        .returning({ id: formSessionModel.id })
+      if (givenUp.length > 0) {
+        logger.warn(
+          { formSessionIds: givenUp.map((r) => r.id) },
+          "form session: formAbandoned never went out within the catch-up window; given up",
+        )
+      }
+    }
+    const rows = await db
+      .select({
+        id: formSessionModel.id,
+        workspaceId: formSessionModel.workspaceId,
+      })
+      .from(formSessionModel)
+      .where(
+        and(
+          isNull(formSessionModel.abandonEmittedAt),
+          abandonedRun(),
+          gt(formSessionModel.endedAt, cutoff),
+        ),
+      )
+      .orderBy(formSessionModel.endedAt)
+      .limit(limit)
+    let emitted = 0
+    for (const row of rows) {
+      if (await this.emitAbandoned(row, now)) {
+        emitted++
+      }
+    }
+    return emitted
   }
 
   /**
@@ -708,7 +854,13 @@ export class FormSessionService {
   ): Promise<void> {
     await tx
       .update(formSessionModel)
-      .set({ status, endReason: reason, endedAt: now, currentFieldKey: null })
+      .set({
+        status,
+        endReason: reason,
+        endedAt: now,
+        lastFieldKey: sql`${formSessionModel.currentFieldKey}`,
+        currentFieldKey: null,
+      })
       .where(
         and(
           eq(formSessionModel.id, id),
@@ -869,6 +1021,9 @@ export class FormSessionService {
   /** After the commit: custom-field events, tags, `formSubmitted`. */
   private async settle(step: Step): Promise<FormChatAction> {
     if ("action" in step) {
+      if (step.action.kind === "ended") {
+        await this.emitAbandoned(step.action.session)
+      }
       return step.action
     }
     const { action, form, pending, values } = step.finished

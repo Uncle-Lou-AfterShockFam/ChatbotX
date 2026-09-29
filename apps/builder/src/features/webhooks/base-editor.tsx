@@ -85,6 +85,8 @@ export const BaseEditor = ({
         return t("trigger.conditions.dealMentioned")
       case triggerEventTypes.enum.formSubmitted:
         return t("trigger.conditions.formSubmitted")
+      case triggerEventTypes.enum.formAbandoned:
+        return t("trigger.conditions.formAbandoned")
       case triggerEventTypes.enum.invoiceCreated:
         return t("trigger.conditions.invoiceCreated")
       case triggerEventTypes.enum.invoicePaid:

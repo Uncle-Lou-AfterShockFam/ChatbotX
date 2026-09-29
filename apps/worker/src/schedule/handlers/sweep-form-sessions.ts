@@ -1,6 +1,7 @@
 import { conversationService } from "@chatbotx.io/business"
 import { formSessionService } from "@chatbotx.io/business/form"
 import type { FormSessionModel } from "@chatbotx.io/database/types"
+import { runWithWebhookExecutionContext } from "@chatbotx.io/events/context"
 import { ASK_FORM_EXPIRED_PAYLOAD_TYPE } from "@chatbotx.io/flow-config"
 import { distributedLock } from "@chatbotx.io/redis"
 import {
@@ -22,6 +23,8 @@ const MAX_BATCHES_PER_RUN = 20
  * still that question (compare-and-clear on stepId + challengeId); then the
  * flow re-enters the askForm step with an `askFormExpired` marker under a
  * deterministic job id, so a re-run of this sweep never routes twice.
+ * A timed-out run also emits `formAbandoned` (s220 A2-3, claimed once per
+ * run); a last catch-up pass emits for runs that ended but never got it.
  */
 export async function sweepFormSessions() {
   return await distributedLock.runExclusive({
@@ -33,16 +36,26 @@ export async function sweepFormSessions() {
         const rows = await formSessionService.expireDue({ limit: BATCH_SIZE })
         for (const row of rows) {
           await routeExpired(row)
+          await emitAbandoned(row)
         }
         expired += rows.length
         if (rows.length < BATCH_SIZE) {
           break
         }
       }
-      if (expired > 0) {
-        logger.info({ expired }, "form session sweep")
+      const abandonCatchUp = await asContactEvent(() =>
+        formSessionService.emitPendingAbandons({ limit: BATCH_SIZE }),
+      ).catch((error: unknown) => {
+        logger.error(
+          { err: normalizeError(error) },
+          "form session sweep: formAbandoned catch-up failed",
+        )
+        return 0
+      })
+      if (expired > 0 || abandonCatchUp > 0) {
+        logger.info({ expired, abandonCatchUp }, "form session sweep")
       }
-      return { expired }
+      return { expired, abandonCatchUp }
     },
   })
 }
@@ -84,6 +97,28 @@ async function routeExpired(row: FormSessionModel): Promise<void> {
     logger.error(
       { err: normalizeError(error), formSessionId: row.id },
       "form session sweep: routing the expired run failed",
+    )
+  }
+}
+
+/**
+ * A timed-out run is the CONTACT's doing (they stopped replying on the
+ * channel), like the attempts end, which runs inside the received-message
+ * handler's webhook context. Without it the webhook emitter drops the event,
+ * so a `form_abandoned` webhook would see used-up attempts but never a
+ * timeout (Codex probe, s220 A2-3).
+ */
+const asContactEvent = <T>(fn: () => Promise<T>): Promise<T> =>
+  runWithWebhookExecutionContext({ source: "webhook" }, fn)
+
+async function emitAbandoned(row: FormSessionModel): Promise<void> {
+  try {
+    await asContactEvent(() => formSessionService.emitAbandoned(row))
+  } catch (error) {
+    // Unclaimed: the catch-up pass at the end of this sweep (or the next) retries it.
+    logger.error(
+      { err: normalizeError(error), formSessionId: row.id },
+      "form session sweep: formAbandoned claim failed",
     )
   }
 }

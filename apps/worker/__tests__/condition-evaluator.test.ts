@@ -366,10 +366,12 @@ describe("ConditionEvaluator deal (ticket*) events", () => {
   })
 })
 
-describe("ConditionEvaluator formSubmitted (s200)", () => {
+describe("ConditionEvaluator form events (s200, s220 A2-3)", () => {
   const evaluator = new ConditionEvaluator()
-  test("matches only the event's form (sourceId), never an empty condition", async () => {
-    const type = triggerEventTypes.enum.formSubmitted
+  test.each([
+    triggerEventTypes.enum.formSubmitted,
+    triggerEventTypes.enum.formAbandoned,
+  ])("%s matches only the event's form (sourceId), never an empty condition", async (type) => {
     await expect(
       evaluator.evaluate(
         buildContext({ type, sourceId: "form-1" }, { sourceId: "form-1" }),

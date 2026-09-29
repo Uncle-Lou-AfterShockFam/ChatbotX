@@ -15,11 +15,18 @@ import { createId } from "@chatbotx.io/utils"
 import { requireRealDatabaseUrl } from "@chatbotx.io/vitest-config/real-db"
 import { afterAll, afterEach, describe, expect, test, vi } from "vitest"
 
-const emitted = vi.hoisted(() => ({ formSubmitted: [] as unknown[] }))
+const emitted = vi.hoisted(() => ({
+  formSubmitted: [] as unknown[],
+  formAbandoned: [] as unknown[][],
+}))
 vi.mock("@chatbotx.io/events", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@chatbotx.io/events")>()),
   emitFormSubmitted: vi.fn((...args: unknown[]) => {
     emitted.formSubmitted.push(args)
+    return Promise.resolve()
+  }),
+  emitFormAbandoned: vi.fn((...args: unknown[]) => {
+    emitted.formAbandoned.push(args)
     return Promise.resolve()
   }),
   emitCustomFieldChanged: vi.fn().mockResolvedValue(undefined),
@@ -257,6 +264,7 @@ afterEach(async () => {
     return
   }
   emitted.formSubmitted.length = 0
+  emitted.formAbandoned.length = 0
   // Runs and submissions are the service's rows: sweep them by owner, so a
   // failed assertion (which skips track()) still leaves nothing behind.
   const contacts = seeded.Contact ?? []
@@ -754,3 +762,216 @@ describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
     ).rejects.toThrow()
   })
 })
+
+/** The abandon events this world's contact got (other files share the DB). */
+const abandonedFor = (w: World) =>
+  emitted.formAbandoned.filter((args) => args[1] === w.contactId)
+
+async function sessionRow(w: World) {
+  const rows = await db.execute<{
+    id: string
+    status: string
+    endReason: string | null
+    lastFieldKey: string | null
+    abandonEmittedAt: Date | null
+  }>(sql`
+    SELECT id::text, status, "endReason", "lastFieldKey", "abandonEmittedAt"
+      FROM "FormSession" WHERE "contactId" = ${w.contactId}
+     ORDER BY id DESC LIMIT 1`)
+  const row = rows.rows[0]
+  if (!row) {
+    throw new Error("no session row")
+  }
+  return row
+}
+
+/** Make the contact's running question due now, as time passing would. */
+async function makeDue(w: World): Promise<void> {
+  await db.execute(sql`
+    UPDATE "FormSession" SET "expiresAt" = now() - interval '1 second'
+     WHERE "contactId" = ${w.contactId} AND status = 'inProgress'`)
+}
+
+describe.skipIf(!databaseUrl)(
+  "formAbandoned (s220 A2-3, real Postgres)",
+  () => {
+    test("used-up attempts: ONE event naming the question it failed on", async () => {
+      const w = await seedWorld()
+      await start(w)
+      await answer(w, "Ada")
+      await answer(w, "green")
+      const ended = await answer(w, "purple")
+      expect(ended.kind).toBe("ended")
+      await track(w)
+      const row = await sessionRow(w)
+      expect(row).toMatchObject({
+        status: "skipped",
+        endReason: "attempts",
+        lastFieldKey: "color",
+      })
+      expect(row.abandonEmittedAt).not.toBeNull()
+      expect(abandonedFor(w)).toHaveLength(1)
+      expect(abandonedFor(w)[0]).toMatchObject([
+        w.workspaceId,
+        w.contactId,
+        {
+          formId: w.formId,
+          formSessionId: row.id,
+          channel: "chat",
+          reason: "attempts",
+          lastFieldKey: "color",
+          conversationId: w.conversationId,
+          flowId: w.flowId,
+        },
+      ])
+      // A retry (the sweep's catch-up) finds it claimed.
+      expect(
+        await formSessionService.emitAbandoned({
+          id: row.id,
+          workspaceId: w.workspaceId,
+        }),
+      ).toBe(false)
+      expect(abandonedFor(w)).toHaveLength(1)
+    })
+
+    test("timeout: two sweeps claiming the same expired run emit exactly once", async () => {
+      const w = await seedWorld()
+      await start(w)
+      await answer(w, "Ada")
+      await makeDue(w)
+      const expired = (
+        await formSessionService.expireDue({ limit: 500 })
+      ).filter((r) => r.contactId === w.contactId)
+      expect(expired).toHaveLength(1)
+      const target = expired[0]
+      if (!target) {
+        return
+      }
+      expect(target.lastFieldKey).toBe("color")
+      const claims = await Promise.all(
+        Array.from({ length: 5 }, () =>
+          formSessionService.emitAbandoned(target),
+        ),
+      )
+      expect(claims.filter(Boolean)).toHaveLength(1)
+      await track(w)
+      expect(abandonedFor(w)).toHaveLength(1)
+      expect(abandonedFor(w)[0]?.[2]).toMatchObject({
+        reason: "timeout",
+        lastFieldKey: "color",
+        askedCount: 2, // the paragraph + name
+      })
+    })
+
+    test("the catch-up emits for an ended run nobody claimed, once", async () => {
+      const w = await seedWorld()
+      await start(w)
+      await makeDue(w)
+      await formSessionService.expireDue({ limit: 500 })
+      // The process died here: nothing claimed it.
+      expect((await sessionRow(w)).abandonEmittedAt).toBeNull()
+      await formSessionService.emitPendingAbandons({ limit: 500 })
+      await formSessionService.emitPendingAbandons({ limit: 500 })
+      await track(w)
+      expect(abandonedFor(w)).toHaveLength(1)
+      expect((await sessionRow(w)).abandonEmittedAt).not.toBeNull()
+    })
+
+    test("the catch-up gives up on runs that ended over a day ago: stamped, no event", async () => {
+      const w = await seedWorld()
+      await start(w)
+      await makeDue(w)
+      await formSessionService.expireDue({ limit: 500 })
+      await db.execute(sql`
+      UPDATE "FormSession" SET "endedAt" = now() - interval '25 hours'
+       WHERE "contactId" = ${w.contactId}`)
+      await formSessionService.emitPendingAbandons({ limit: 500 })
+      await track(w)
+      expect(abandonedFor(w)).toHaveLength(0)
+      expect((await sessionRow(w)).abandonEmittedAt).not.toBeNull()
+    })
+
+    test("an undelivered question expires without an event (not the contact's doing)", async () => {
+      const w = await seedWorld()
+      const first = await formSessionService.start(startInput(w))
+      if (first.kind !== "ask" || !first.session.challengeId) {
+        throw new Error("expected an ask")
+      }
+      expect(
+        await formSessionService.markUndelivered({
+          workspaceId: w.workspaceId,
+          sessionId: first.session.id,
+          challengeId: first.session.challengeId,
+        }),
+      ).toBe(true)
+      const [row] = (await formSessionService.expireDue({ limit: 500 })).filter(
+        (r) => r.contactId === w.contactId,
+      )
+      expect(row?.endReason).toBe("undelivered")
+      if (row) {
+        expect(await formSessionService.emitAbandoned(row)).toBe(false)
+      }
+      await formSessionService.emitPendingAbandons({ limit: 500 })
+      await track(w)
+      expect(abandonedFor(w)).toHaveLength(0)
+    })
+
+    test("a run replaced by a newer one, or completed, never emits", async () => {
+      const w = await seedWorld({ contactEmail: "known@example.com" })
+      await start(w, "step-1")
+      await start(w, "step-2") // cancels step-1's run: replaced
+      const replaced = await db.execute<{ id: string; endReason: string }>(sql`
+      SELECT id::text, "endReason" FROM "FormSession"
+       WHERE "contactId" = ${w.contactId} AND status = 'canceled'`)
+      expect(replaced.rows[0]?.endReason).toBe("replaced")
+      const replacedId = replaced.rows[0]?.id
+      if (replacedId) {
+        expect(
+          await formSessionService.emitAbandoned({
+            id: replacedId,
+            workspaceId: w.workspaceId,
+          }),
+        ).toBe(false)
+      }
+      await formSessionService.emitPendingAbandons({ limit: 500 })
+      await track(w)
+      expect(abandonedFor(w)).toHaveLength(0)
+    })
+
+    test("a late answer racing the timeout sweep never advances; the run ends expired with ONE event", async () => {
+      const w = await seedWorld()
+      await start(w)
+      await makeDue(w)
+      const [late] = await Promise.all([
+        answer(w, "Ada"),
+        formSessionService
+          .expireDue({ limit: 500 })
+          .then((rows) =>
+            Promise.all(
+              rows
+                .filter((r) => r.contactId === w.contactId)
+                .map((r) => formSessionService.emitAbandoned(r)),
+            ),
+          ),
+      ])
+      await track(w)
+      // Past its timeout a reply never advances: it sees the run expired
+      // (answer first) or gone (sweep first).
+      expect(late.kind).toBe("ignored")
+      expect(["expired", "noSession"]).toContain(
+        late.kind === "ignored" ? late.reason : "",
+      )
+      // SKIP LOCKED: a sweep that met the answer's row lock skipped it this
+      // pass; the next minute's sweep ends it. Either way: ONE event.
+      for (const r of (
+        await formSessionService.expireDue({ limit: 500 })
+      ).filter((x) => x.contactId === w.contactId)) {
+        await formSessionService.emitAbandoned(r)
+      }
+      await track(w)
+      const row = await sessionRow(w)
+      expect(row.status).toBe("expired")
+      expect(abandonedFor(w)).toHaveLength(1)
+    })
+  },
+)
