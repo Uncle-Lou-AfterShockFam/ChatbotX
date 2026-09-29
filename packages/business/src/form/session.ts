@@ -14,6 +14,7 @@ import {
   sql,
 } from "@chatbotx.io/database/client"
 import {
+  applyHiddenDefaults,
   evaluateForm,
   type FormChatPlan,
   type FormDefinition,
@@ -384,7 +385,11 @@ export class FormSessionService {
         await this.end(tx, session.id, "canceled", "fieldMissing", now)
         return { action: { kind: "ignored", reason: "noSession" } }
       }
-      const values = readValues(session.values)
+      // Hidden defaults before the required check too: a rule may read them.
+      const values = applyHiddenDefaults(
+        this.definitionOf(session),
+        readValues(session.values),
+      )
       const asked = readAsked(session.asked)
       const messageId =
         "messageId" in input.reply ? input.reply.messageId : null
@@ -874,12 +879,15 @@ export class FormSessionService {
   private async advance(
     tx: DatabaseClient,
     session: FormSessionModel,
-    values: FormValues,
+    answers: FormValues,
     asked: string[],
     now: Date,
     messageId: string | null = null,
   ): Promise<Step> {
     const def = this.definitionOf(session)
+    // Hidden fields are never asked in chat: their defaults ride with the
+    // answers, so rules can read them and the submission stores them.
+    const values = applyHiddenDefaults(def, answers)
     const profile = readProfile(session.profile)
     const plan = planFormChat(def, values, new Set(asked), {
       known: new Set(profile.known),

@@ -10,6 +10,7 @@ import {
   sql,
 } from "@chatbotx.io/database/client"
 import {
+  applyHiddenDefaults,
   EMPTY_FORM_DEFINITION,
   evaluateForm,
   FORM_OPTION_FIELD_TYPES,
@@ -32,6 +33,7 @@ import {
 } from "@chatbotx.io/database/schema"
 import type { FormSubmissionModel } from "@chatbotx.io/database/types"
 import { emitFormSubmitted } from "@chatbotx.io/events"
+import { runWithWebhookExecutionContext } from "@chatbotx.io/events/context"
 import { createId, isPlainRecord } from "@chatbotx.io/utils"
 import {
   canonicalMultiSelectValue,
@@ -211,7 +213,11 @@ export class FormSubmitService {
     if (!isPlainRecord(input.values)) {
       return { kind: "invalid", issues: [{ key: "values", code: "type" }] }
     }
-    const values = coerceValues(input.values)
+    const values = applyHiddenDefaults(
+      def,
+      coerceValues(input.values),
+      new Set(settings.prefillKeys),
+    )
     const evaluation = evaluateForm(def, values)
     const issues = validateFormSubmission(def, values, evaluation)
     if (issues.length > 0) {
@@ -877,17 +883,22 @@ export class FormSubmitService {
         })
         .catch(warn("tags"))
     }
-    await emitFormSubmitted(workspaceId, contactId, {
-      formId: form.id,
-      formSlug: form.slug,
-      submissionId: submission.id,
-      definitionVersion: submission.definitionVersion,
-      values,
-      channel: submission.channel,
-      conversationId: submission.conversationId ?? null,
-      score: submission.score ?? null,
-      occurredAt: submission.createdAt.toISOString(),
-    }).catch(warn("formSubmitted event"))
+    // A submission is the CONTACT's act, like a channel message: without the
+    // webhook context the webhook emitter drops it (web `form_submitted`
+    // webhooks never fired; chat runs already had the context). s220c A2-4.
+    await runWithWebhookExecutionContext({ source: "webhook" }, () =>
+      emitFormSubmitted(workspaceId, contactId, {
+        formId: form.id,
+        formSlug: form.slug,
+        submissionId: submission.id,
+        definitionVersion: submission.definitionVersion,
+        values,
+        channel: submission.channel,
+        conversationId: submission.conversationId ?? null,
+        score: submission.score ?? null,
+        occurredAt: submission.createdAt.toISOString(),
+      }),
+    ).catch(warn("formSubmitted event"))
     // s220 A2-3: the form's action catalogue (points, fields, tags, notify).
     await runFormActions({
       db,
