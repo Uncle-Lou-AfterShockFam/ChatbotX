@@ -192,8 +192,10 @@ export type PendingChanges = Awaited<
   ReturnType<typeof contactCustomFieldService.setValuesInTransaction>
 >
 
-/** The admission lock wait is 5 s (`admit`): a slow holder must not starve the pool. */
+/** The admission lock wait: a slow holder must not starve the pool. */
+const ADMISSION_LOCK_TIMEOUT = "5s"
 const ADMISSION_RETRY_AFTER_SECONDS = 5
+const ADMISSION_ATTEMPTS = 3
 /** Admission counts rows after taking its lock: never a snapshot older than the lock. */
 export const ADMISSION_ISOLATION = { isolationLevel: "read committed" } as const
 
@@ -216,6 +218,25 @@ export const isLockTimeout = (error: unknown): boolean => {
     e = (e as { cause?: unknown }).cause
   }
   return false
+}
+
+/**
+ * Run a chat transaction again when its admission lock wait timed out
+ * (blind probe s220c: the worker swallows errors to avoid re-sending the
+ * question, so a single timeout would leave the contact's final answer
+ * unprocessed). Bounded; the last timeout is rethrown.
+ */
+export async function retryOnLockTimeout<T>(run: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await run()
+    } catch (error) {
+      if (!isLockTimeout(error) || attempt >= ADMISSION_ATTEMPTS) {
+        throw error
+      }
+      logger.warn({ attempt }, "form admission: lock wait timed out; retrying")
+    }
+  }
 }
 
 const closedResult = (
@@ -529,20 +550,31 @@ export class FormSubmitService {
    * store exactly min(N, L) rows (Mautic checks, then inserts, and
    * overshoots), a limit saved while a submit was in flight still binds it
    * (blind probe s220c), and a window that closed meanwhile refuses it. The
-   * lock wait is bounded (5 s lock_timeout); the caller maps a timeout
-   * to "try again". Callers run READ COMMITTED so the count after the lock
-   * sees every row the previous holder committed.
+   * lock wait is bounded (ADMISSION_LOCK_TIMEOUT); the web maps a timeout to
+   * "try again", chat retries (retryOnLockTimeout). Callers run READ
+   * COMMITTED so the count after the lock sees every row the previous holder
+   * committed. The settings are those committed when the lock was taken: a
+   * save that commits DURING the admission binds the next submission, not
+   * this one (the contract is admission time).
    */
   async admit(
     tx: DatabaseClient,
     formId: string,
   ): Promise<FormClosedReason | null> {
-    // SET takes no bind parameters: the value is this module's constant.
-    await tx.execute(sql`set local lock_timeout = '5s'`)
+    // Bound only this wait, then give the caller back ITS timeout (a reset
+    // to DEFAULT would drop a timeout the caller set; blind probe s220c).
+    const saved = await tx.execute<{ previous: string }>(
+      sql`select current_setting('lock_timeout') as previous`,
+    )
+    await tx.execute(
+      sql`select set_config('lock_timeout', ${ADMISSION_LOCK_TIMEOUT}, true)`,
+    )
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${`form-limit:${formId}`}, 0))`,
     )
-    await tx.execute(sql`set local lock_timeout to default`)
+    await tx.execute(
+      sql`select set_config('lock_timeout', ${saved.rows[0]?.previous ?? "0"}, true)`,
+    )
     const [row] = await tx
       .select({ settings: formModel.settings })
       .from(formModel)
@@ -550,11 +582,15 @@ export class FormSubmitService {
     if (!row) {
       return "closed"
     }
-    return await this.availability(
-      { id: formId, settings: normalizeFormSettings(row.settings) },
-      new Date(),
-      tx,
-    )
+    const settings = normalizeFormSettings(row.settings)
+    const limit = settings.submissionLimit ?? null
+    if (limit !== null && (await this.countForForm(formId, tx)) >= limit) {
+      return "limit"
+    }
+    // The clock LAST, after every await of the admission (blind probe s220c):
+    // the contract is "admitted before the close"; the insert follows at once.
+    const state = formWindowState(settings, new Date())
+    return state === "open" ? null : state
   }
 
   private async countRecentByIp(props: {

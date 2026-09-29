@@ -188,6 +188,7 @@ import {
   FORM_DEDUP_WINDOW_SECONDS,
   formSubmitService,
   hashClientIp,
+  retryOnLockTimeout,
 } from "../src/form/submit"
 
 const SUB_ID_RE = /^sub-\d+$/
@@ -1004,5 +1005,36 @@ describe("formSubmitService.submit (s200)", () => {
   test("the same answers from another ip are NOT a duplicate (ip is in the hash)", () => {
     expect(hashClientIp(WS, "1.1.1.1")).not.toBe(hashClientIp(WS, "2.2.2.2"))
     expect(hashClientIp(WS, "1.1.1.1")).toHaveLength(64)
+  })
+})
+
+describe("retryOnLockTimeout (s220c)", () => {
+  const timeout = () =>
+    Object.assign(new Error("lock"), { cause: { code: "55P03" } })
+  test("retries a lock timeout, then returns", async () => {
+    let calls = 0
+    const r = await retryOnLockTimeout(() => {
+      calls += 1
+      return calls < 3 ? Promise.reject(timeout()) : Promise.resolve("ok")
+    })
+    expect([r, calls]).toEqual(["ok", 3])
+  })
+  test("gives up after 3 attempts with the timeout; any other error is not retried", async () => {
+    let calls = 0
+    await expect(
+      retryOnLockTimeout(() => {
+        calls += 1
+        return Promise.reject(timeout())
+      }),
+    ).rejects.toThrow("lock")
+    expect(calls).toBe(3)
+    calls = 0
+    await expect(
+      retryOnLockTimeout(() => {
+        calls += 1
+        return Promise.reject(new Error("other"))
+      }),
+    ).rejects.toThrow("other")
+    expect(calls).toBe(1)
   })
 })

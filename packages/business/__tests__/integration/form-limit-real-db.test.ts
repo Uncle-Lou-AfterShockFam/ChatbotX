@@ -252,4 +252,17 @@ describe.skipIf(!databaseUrl)("form submission limit (real Postgres)", () => {
     expect(await rowCount(w)).toBe(0)
     expect((await submitMany(w, 1, 1))[0]).toMatchObject({ kind: "ok" })
   }, 20_000)
+
+  test("admission gives the caller back ITS lock_timeout, not the server default (blind probe s220c)", async () => {
+    const w = await seedForm({ submissionLimit: 5 })
+    const after = await db.transaction(async (tx) => {
+      await tx.execute(sql`set local lock_timeout = '2s'`)
+      await formSubmitService.admit(tx, w.formId)
+      const r = await tx.execute<{ t: string }>(
+        sql`select current_setting('lock_timeout') as t`,
+      )
+      return r.rows[0]?.t
+    })
+    expect(after).toBe("2s")
+  })
 })

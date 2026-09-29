@@ -471,6 +471,40 @@ describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
     expect(emitted.formSubmitted).toHaveLength(0)
   })
 
+  test("a final answer whose admission lock wait times out is retried and completes (blind probe s220c)", async () => {
+    const w = await seedWorld()
+    await start(w)
+    await answer(w, "Ada")
+    await answer(w, "2")
+    await answer(w, "ada@example.com")
+    const holder = await db.$client.connect()
+    await holder.query("BEGIN")
+    await holder.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+      [`form-limit:${w.formId}`],
+    )
+    // released after the first 5 s wait timed out, before the second ends
+    const released = new Promise<void>((resolve) => {
+      setTimeout(() => {
+        holder
+          .query("ROLLBACK")
+          .finally(() => holder.release())
+          .then(
+            () => resolve(),
+            () => resolve(),
+          )
+      }, 6500)
+    })
+    try {
+      const done = await answer(w, "skip")
+      expect(done.kind).toBe("completed")
+    } finally {
+      await released
+    }
+    await track(w)
+    expect(await submissions(w)).toHaveLength(1)
+  }, 30_000)
+
   test("blocked email domain (s220c A2-4): the reply is refused like a bad email and re-asked", async () => {
     const w = await seedWorld({
       settings: { blockedEmailDomains: ["example.com"] },
