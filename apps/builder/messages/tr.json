@@ -7708,7 +7708,11 @@
       "line": "E-posta hattı (bulktext)",
       "lineHint": "SMTP yerine bu hat üzerinden gönder. Hat, kişinin bu hattaki adresine kendi adresinden e-posta gönderir.",
       "lineNone": "Yok (SMTP ile gönder)",
-      "noLines": "Henüz API kanalı gelen kutusu yok."
+      "noLines": "Henüz API kanalı gelen kutusu yok.",
+      "format": "Biçim",
+      "formatHtml": "HTML (bülten)",
+      "formatText": "Düz metin (kişisel not)",
+      "formatHint": "Düz metinde açılma pikseli veya izlenen bağlantı yoktur; bir dizide her düz metin adımı ilkinin altında tek bir ileti dizisinde yanıtlanır."
     }
   },
   "emailSuppression": {

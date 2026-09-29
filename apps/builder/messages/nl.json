@@ -7708,7 +7708,11 @@
       "line": "E-maillijn (bulktext)",
       "lineHint": "Verstuur via deze lijn in plaats van SMTP. De lijn mailt het adres van het contact op die lijn, vanaf haar eigen adres.",
       "lineNone": "Geen (via SMTP versturen)",
-      "noLines": "Nog geen API-kanaalinboxen."
+      "noLines": "Nog geen API-kanaalinboxen.",
+      "format": "Opmaak",
+      "formatHtml": "HTML (nieuwsbrief)",
+      "formatText": "Platte tekst (persoonlijk bericht)",
+      "formatHint": "Platte tekst heeft geen openpixel of getrackte links; in een reeks antwoordt elke tekststap in één thread onder de eerste."
     }
   },
   "emailSuppression": {

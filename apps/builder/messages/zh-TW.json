@@ -7708,7 +7708,11 @@
       "line": "郵件線路 (bulktext)",
       "lineHint": "透過此線路而非 SMTP 傳送。線路從自己的地址寄到聯絡人在該線路上的地址。",
       "lineNone": "無（透過 SMTP 傳送）",
-      "noLines": "尚無 API 頻道收件匣。"
+      "noLines": "尚無 API 頻道收件匣。",
+      "format": "格式",
+      "formatHtml": "HTML(電子報)",
+      "formatText": "純文字(個人便條)",
+      "formatHint": "純文字不含開啟像素或追蹤連結;在序列中,每個純文字步驟都會在第一封郵件下的同一對話中回覆。"
     }
   },
   "emailSuppression": {

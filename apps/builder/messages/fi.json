@@ -7708,7 +7708,11 @@
       "line": "Sähköpostilinja (bulktext)",
       "lineHint": "Lähetä tämän linjan kautta SMTP:n sijaan. Linja lähettää yhteystiedon osoitteeseen omasta osoitteestaan.",
       "lineNone": "Ei mitään (lähetä SMTP:llä)",
-      "noLines": "Ei vielä API-kanavan saapuneita-kansioita."
+      "noLines": "Ei vielä API-kanavan saapuneita-kansioita.",
+      "format": "Muoto",
+      "formatHtml": "HTML (uutiskirje)",
+      "formatText": "Pelkkä teksti (henkilökohtainen viesti)",
+      "formatHint": "Pelkässä tekstissä ei ole avauspikseliä eikä seurattuja linkkejä; sarjassa jokainen tekstivaihe vastaa samassa ketjussa ensimmäisen alle."
     }
   },
   "emailSuppression": {

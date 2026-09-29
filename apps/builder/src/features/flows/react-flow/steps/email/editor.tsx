@@ -61,6 +61,15 @@ export default function EmailStepEditor(props: EmailStepEditorProps) {
   // (the worker's precedence: templateId, then document, then elements).
   const templateId = useWatch({ name: `${parentName}.templateId` })
   const templates = useEmailTemplates(params.workspaceId ?? "")
+  // Outreach B-1 (s225b): plain text reads as a personal note (no pixel,
+  // no tracked links) and threads a sequence's steps as one conversation.
+  const formatOptions = useMemo(
+    () => [
+      { label: t("emailTemplates.step.formatHtml"), value: "html" },
+      { label: t("emailTemplates.step.formatText"), value: "text" },
+    ],
+    [t],
+  )
   const templateOptions = useMemo(
     () =>
       (templates.data ?? []).map((template) => ({
@@ -98,17 +107,31 @@ export default function EmailStepEditor(props: EmailStepEditorProps) {
           <button
             className="absolute end-0 top-[-2px] text-primary text-sm hover:underline"
             data-testid="email-step-line-clear"
-            onClick={() =>
+            onClick={() => {
               setValue(`${parentName}.lineInboxId`, undefined, {
                 shouldDirty: true,
               })
-            }
+              // s225b: text format exists only on a line.
+              setValue(`${parentName}.format`, undefined, { shouldDirty: true })
+            }}
             type="button"
           >
             {t("emailTemplates.step.clear")}
           </button>
         ) : null}
       </div>
+
+      {lineInboxId ? (
+        <div data-testid="email-step-format">
+          <SelectField
+            description={t("emailTemplates.step.formatHint")}
+            label={t("emailTemplates.step.format")}
+            name={`${parentName}.format`}
+            options={formatOptions}
+            placeholder={t("emailTemplates.step.formatHtml")}
+          />
+        </div>
+      ) : null}
 
       {lineInboxId ? null : (
         <SelectField

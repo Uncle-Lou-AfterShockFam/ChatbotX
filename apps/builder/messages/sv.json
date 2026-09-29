@@ -7708,7 +7708,11 @@
       "line": "E-postlinje (bulktext)",
       "lineHint": "Skicka via den här linjen i stället för SMTP. Linjen mejlar kontaktens adress på linjen, från sin egen adress.",
       "lineNone": "Ingen (skicka via SMTP)",
-      "noLines": "Inga API-kanalinkorgar ännu."
+      "noLines": "Inga API-kanalinkorgar ännu.",
+      "format": "Format",
+      "formatHtml": "HTML (nyhetsbrev)",
+      "formatText": "Oformaterad text (personligt meddelande)",
+      "formatHint": "Oformaterad text har ingen öppningspixel eller spårade länkar; i en sekvens svarar varje textsteg i en tråd under det första."
     }
   },
   "emailSuppression": {

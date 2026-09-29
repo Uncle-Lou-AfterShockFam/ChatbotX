@@ -7708,7 +7708,11 @@
       "line": "Email line (bulktext)",
       "lineHint": "Send through this line instead of SMTP. The line mails the contact's address on it, from its own address.",
       "lineNone": "None (send over SMTP)",
-      "noLines": "No API-channel inboxes yet."
+      "noLines": "No API-channel inboxes yet.",
+      "format": "Format",
+      "formatHtml": "HTML (newsletter)",
+      "formatText": "Plain text (personal note)",
+      "formatHint": "Plain text has no open pixel or tracked links; in a sequence, every plain-text step replies in one thread under the first."
     }
   },
   "emailSuppression": {

@@ -7708,7 +7708,11 @@
       "line": "Jalur email (bulktext)",
       "lineHint": "Kirim melalui jalur ini alih-alih SMTP. Jalur mengirim ke alamat kontak di jalur itu, dari alamatnya sendiri.",
       "lineNone": "Tidak ada (kirim lewat SMTP)",
-      "noLines": "Belum ada kotak masuk kanal API."
+      "noLines": "Belum ada kotak masuk kanal API.",
+      "format": "Format",
+      "formatHtml": "HTML (buletin)",
+      "formatText": "Teks biasa (pesan pribadi)",
+      "formatHint": "Teks biasa tidak memiliki piksel pembukaan atau tautan terlacak; dalam urutan, setiap langkah teks membalas dalam satu utas di bawah yang pertama."
     }
   },
   "emailSuppression": {

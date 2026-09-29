@@ -7708,7 +7708,11 @@
       "line": "Linie de e-mail (bulktext)",
       "lineHint": "Trimite prin această linie în loc de SMTP. Linia scrie la adresa contactului de pe ea, de la propria adresă.",
       "lineNone": "Niciuna (trimite prin SMTP)",
-      "noLines": "Nu există încă inboxuri de canal API."
+      "noLines": "Nu există încă inboxuri de canal API.",
+      "format": "Format",
+      "formatHtml": "HTML (newsletter)",
+      "formatText": "Text simplu (notă personală)",
+      "formatHint": "Textul simplu nu are pixel de deschidere și nici linkuri urmărite; într-o secvență, fiecare pas text răspunde într-un singur fir sub primul."
     }
   },
   "emailSuppression": {

@@ -41,10 +41,22 @@ export type ApiAuthValue = z.infer<typeof apiAuthSchema>
  * attachments travel as signed downloads on the hub's own origin, never bytes.
  */
 export type LineEmail = {
+  /**
+   * Outreach B-1 (s225b): `text` = text/plain only, and `html` is then ABSENT
+   * (the line refuses it). Omitted = `html`, as before.
+   */
+  format?: "html" | "text"
   subject: string
-  html: string
+  html?: string
   text: string
   headers: Record<string, string>
+  /**
+   * s225b: the Message-ID LOCAL part the hub minted (8..64 of [A-Za-z0-9._-]);
+   * the line appends `@<its From domain>`. `threadKeys` are the earlier mails'
+   * keys, root first (<= 20): References, the last one as In-Reply-To.
+   */
+  messageKey?: string
+  threadKeys?: string[]
   /** `sha256` of the bytes: the line verifies the download and caches by it. */
   attachments: {
     url: string
