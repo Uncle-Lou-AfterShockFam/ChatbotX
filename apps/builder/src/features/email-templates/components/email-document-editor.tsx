@@ -605,7 +605,10 @@ export function EmailDocumentEditor({
     setAssets((current) => ({ ...current, [fileId]: asset }))
 
   // Drag handlers read the newest draft: a cross-container move during the
-  // drag re-renders before the next dragover arrives.
+  // drag re-renders before the next dragover arrives. This relies on the
+  // parent applying onChange synchronously (a controlled useState, as the
+  // template settings page does); a debounced or gated parent would leave
+  // the handlers on a stale draft.
   const valueRef = useRef(value)
   valueRef.current = value
   const sensors = useSensors(
@@ -615,13 +618,27 @@ export function EmailDocumentEditor({
     }),
   )
   const collision = useMemo(() => canvasCollision(() => valueRef.current), [])
+  // skeptic HIGH: after a cross-container move the lists re-flow under the
+  // pointer, and the next dragover could bounce the block straight back.
+  // One move per animation frame lets the layout settle first (dnd-kit's
+  // multi-container example guards the same way).
+  const justMoved = useRef(false)
   // Entering another list moves the block there at once, so the lists
   // re-flow under the pointer; the drop then orders it inside its list.
   const onDragOver = ({ active, over }: DragOverEvent) => {
     const doc = valueRef.current
     const from = findBlock(doc, String(active.id))
     const to = over ? dropTarget(doc, String(over.id)) : undefined
-    if (from && to && containerDropId(from.at) !== containerDropId(to.at)) {
+    if (
+      !justMoved.current &&
+      from &&
+      to &&
+      containerDropId(from.at) !== containerDropId(to.at)
+    ) {
+      justMoved.current = true
+      requestAnimationFrame(() => {
+        justMoved.current = false
+      })
       onChange(moveBlockTo(doc, String(active.id), to.at, to.index))
     }
   }
