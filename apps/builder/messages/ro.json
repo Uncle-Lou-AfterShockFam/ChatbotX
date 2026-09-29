@@ -4894,7 +4894,8 @@
       "max": "Too large or too long.",
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
-      "date": "Enter a valid date or time."
+      "date": "Enter a valid date or time.",
+      "emailDomainBlocked": "Adresele de e-mail de pe acest domeniu nu sunt acceptate."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -4914,7 +4915,17 @@
       "prefillKeysHint": "Field keys that accept a value from the URL, e.g. ?first_name=Ada.",
       "embedSnippet": "Embed on another site",
       "embedUnpublished": "Publish the form to get its link and embed code.",
-      "publicUrl": "Public link"
+      "publicUrl": "Public link",
+      "availability": "Disponibilitate",
+      "publishUp": "Se deschide la",
+      "publishDown": "Se închide la",
+      "windowHint": "Orele sunt în {zone}. Lasă gol pentru a păstra formularul deschis.",
+      "pendingMessage": "Mesaj înainte de deschidere",
+      "closedMessage": "Mesaj când este închis sau plin",
+      "submissionLimit": "Limită de trimiteri",
+      "submissionLimitHint": "Nu mai accepta răspunsuri după acest număr de trimiteri (web și chat). Ștergerea unei trimiteri eliberează un loc. Gol = fără limită.",
+      "blockedEmailDomains": "Domenii de e-mail blocate",
+      "blockedEmailDomainsHint": "Unul pe rând, de ex. example.com. Și subdomeniile sunt blocate."
     },
     "submitActions": {
       "title": "Actions after submit",

@@ -1,6 +1,9 @@
 "use client"
 
-import type { FormSettings } from "@chatbotx.io/database/partials"
+import {
+  FORM_MAX_SUBMISSION_LIMIT,
+  type FormSettings,
+} from "@chatbotx.io/database/partials"
 import { Input } from "@chatbotx.io/ui/components/ui/input"
 import { Label } from "@chatbotx.io/ui/components/ui/label"
 import {
@@ -13,7 +16,9 @@ import {
 import { Switch } from "@chatbotx.io/ui/components/ui/switch"
 import { Textarea } from "@chatbotx.io/ui/components/ui/textarea"
 import { useQuery } from "@tanstack/react-query"
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz"
 import { useTranslations } from "next-intl"
+import { useViewerTimeZone } from "@/hooks/use-viewer-time-zone"
 import { client } from "@/lib/orpc/orpc"
 import { orpc } from "@/lib/orpc/query"
 import { fetchAllListPages } from "@/lib/query/fetch-all-list-pages"
@@ -42,6 +47,33 @@ export const embedSnippet = (publicUrl: string, slug: string): string => {
   ].join("\n")
 }
 const LIST_SEPARATOR = /[\n,]+/
+const LOCAL_INPUT_FORMAT = "yyyy-MM-dd'T'HH:mm"
+
+/** A stored instant as a `datetime-local` value in the viewer's zone. */
+export const instantToLocalInput = (
+  iso: string | null,
+  zone: string,
+): string => {
+  if (iso === null) {
+    return ""
+  }
+  const at = new Date(iso)
+  return Number.isNaN(at.getTime())
+    ? ""
+    : formatInTimeZone(at, zone, LOCAL_INPUT_FORMAT)
+}
+
+/** A `datetime-local` value read in the viewer's zone, as an instant (null when empty). */
+export const localInputToInstant = (
+  value: string,
+  zone: string,
+): string | null => {
+  if (value === "") {
+    return null
+  }
+  const at = fromZonedTime(value, zone)
+  return Number.isNaN(at.getTime()) ? null : at.toISOString()
+}
 
 /** Title, slug, inbox and the settings jsonb of a form (s200). */
 export function FormSettingsPanel(props: {
@@ -62,6 +94,8 @@ export function FormSettingsPanel(props: {
   onSettings: (settings: FormSettings) => void
 }) {
   const t = useTranslations()
+  // zone: viewer (the window is typed and shown in the operator's own zone)
+  const zone = useViewerTimeZone()
   // Every inbox, not the default first page of 20 (s205).
   const inboxes = useQuery({
     queryKey: orpc.inboxesAPI.listInboxesAuthenticatedAPI.key({
@@ -216,6 +250,104 @@ export function FormSettingsPanel(props: {
           value={props.settings.submitLimitPerIpPerHour}
         />
       </div>
+      <fieldset
+        className="flex flex-col gap-3 rounded-md border px-3 py-3"
+        data-testid="fs-availability"
+      >
+        <legend className="px-1 font-medium text-sm">
+          {t("forms.settings.availability")}
+        </legend>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <Label htmlFor="fs-publish-up">
+              {t("forms.settings.publishUp")}
+            </Label>
+            <Input
+              id="fs-publish-up"
+              onChange={(e) =>
+                set({ publishUp: localInputToInstant(e.target.value, zone) })
+              }
+              type="datetime-local"
+              value={instantToLocalInput(props.settings.publishUp, zone)}
+            />
+          </div>
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <Label htmlFor="fs-publish-down">
+              {t("forms.settings.publishDown")}
+            </Label>
+            <Input
+              id="fs-publish-down"
+              onChange={(e) =>
+                set({ publishDown: localInputToInstant(e.target.value, zone) })
+              }
+              type="datetime-local"
+              value={instantToLocalInput(props.settings.publishDown, zone)}
+            />
+          </div>
+        </div>
+        <span className="text-muted-foreground text-xs">
+          {t("forms.settings.windowHint", { zone })}
+        </span>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="fs-pending">
+            {t("forms.settings.pendingMessage")}
+          </Label>
+          <Textarea
+            id="fs-pending"
+            onChange={(e) => set({ pendingMessage: e.target.value })}
+            rows={2}
+            value={props.settings.pendingMessage}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="fs-closed">{t("forms.settings.closedMessage")}</Label>
+          <Textarea
+            id="fs-closed"
+            onChange={(e) => set({ closedMessage: e.target.value })}
+            rows={2}
+            value={props.settings.closedMessage}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="fs-submission-limit">
+            {t("forms.settings.submissionLimit")}
+          </Label>
+          <Input
+            id="fs-submission-limit"
+            max={FORM_MAX_SUBMISSION_LIMIT}
+            min={1}
+            onChange={(e) => {
+              const n = Number.parseInt(e.target.value, 10)
+              set({ submissionLimit: Number.isNaN(n) ? null : Math.max(1, n) })
+            }}
+            type="number"
+            value={props.settings.submissionLimit ?? ""}
+          />
+          <span className="text-muted-foreground text-xs">
+            {t("forms.settings.submissionLimitHint")}
+          </span>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="fs-blocked-domains">
+            {t("forms.settings.blockedEmailDomains")}
+          </Label>
+          <Textarea
+            id="fs-blocked-domains"
+            onChange={(e) =>
+              set({
+                blockedEmailDomains: lines(e.target.value).map((d) =>
+                  d.toLowerCase(),
+                ),
+              })
+            }
+            placeholder="example.com"
+            value={props.settings.blockedEmailDomains.join("\n")}
+          />
+          <span className="text-muted-foreground text-xs">
+            {t("forms.settings.blockedEmailDomainsHint")}
+          </span>
+        </div>
+      </fieldset>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="fs-origins">{t("forms.settings.embedOrigins")}</Label>
         <Textarea

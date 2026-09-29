@@ -4894,7 +4894,8 @@
       "max": "Too large or too long.",
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
-      "date": "Enter a valid date or time."
+      "date": "Enter a valid date or time.",
+      "emailDomainBlocked": "Bu alan adından e-posta adresleri kabul edilmiyor."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -4914,7 +4915,17 @@
       "prefillKeysHint": "Field keys that accept a value from the URL, e.g. ?first_name=Ada.",
       "embedSnippet": "Embed on another site",
       "embedUnpublished": "Publish the form to get its link and embed code.",
-      "publicUrl": "Public link"
+      "publicUrl": "Public link",
+      "availability": "Erişilebilirlik",
+      "publishUp": "Açılış",
+      "publishDown": "Kapanış",
+      "windowHint": "Saatler {zone} saat dilimindedir. Formun açık kalması için boş bırakın.",
+      "pendingMessage": "Açılmadan önceki mesaj",
+      "closedMessage": "Kapalı veya dolu olduğunda mesaj",
+      "submissionLimit": "Gönderim sınırı",
+      "submissionLimitHint": "Bu sayıda gönderimden sonra (web ve sohbet) yanıt kabul etmeyi durdur. Bir gönderimi silmek bir yer açar. Boş = sınır yok.",
+      "blockedEmailDomains": "Engellenen e-posta alan adları",
+      "blockedEmailDomainsHint": "Satır başına bir tane, örn. example.com. Alt alan adları da engellenir."
     },
     "submitActions": {
       "title": "Actions after submit",

@@ -7,6 +7,7 @@ import {
   type FormDefinitionInput,
   formDefinition,
   formScore,
+  isBlockedEmailDomain,
   pruneFormValues,
   validateFormSubmission,
 } from "../src/form"
@@ -579,5 +580,62 @@ describe("validation of chat answers", () => {
     ["location", `${"1".repeat(3000)},0`, "length"],
   ])("%s refuses %j with %s", (type, value, code) => {
     expect(validate(type, value)).toEqual([{ key: "q", code }])
+  })
+})
+
+// s220c A2-4: blocked email domains.
+describe("isBlockedEmailDomain + validateFormSubmission", () => {
+  test("the domain and its subdomains are blocked, a lookalike is not", () => {
+    const blocked = ["example.com"]
+    expect(isBlockedEmailDomain("a@example.com", blocked)).toBe(true)
+    expect(isBlockedEmailDomain("a@MAIL.Example.com", blocked)).toBe(true)
+    expect(isBlockedEmailDomain("a@example.com.", blocked)).toBe(true)
+    expect(isBlockedEmailDomain("a@notexample.com", blocked)).toBe(false)
+    expect(isBlockedEmailDomain("a@example.co", blocked)).toBe(false)
+    // the LAST @ decides: a quoted local part cannot smuggle a domain
+    expect(isBlockedEmailDomain('"x@example.com"@ok.org', blocked)).toBe(false)
+  })
+
+  test("never throws on a hostile value; an empty list blocks nothing", () => {
+    for (const v of [
+      null,
+      undefined,
+      42,
+      ["a@example.com"],
+      { a: 1 },
+      "",
+      "@example.com",
+      "no-at",
+    ]) {
+      expect(isBlockedEmailDomain(v, ["example.com"])).toBe(false)
+    }
+    expect(isBlockedEmailDomain("a@example.com", [])).toBe(false)
+  })
+
+  test("only email-type fields get emailDomainBlocked; an invalid email keeps its own code", () => {
+    const d = formDefinition.parse({
+      steps: [
+        {
+          id: "s1",
+          fields: [
+            { key: "mail", type: "email", label: "Email" },
+            { key: "note", type: "text", label: "Note" },
+          ],
+        },
+      ],
+      rules: [],
+    })
+    const opts = { blockedEmailDomains: ["example.com"] }
+    const check = (values: Record<string, string>) =>
+      validateFormSubmission(d, values, evaluateForm(d, values), opts)
+    expect(check({ mail: "a@example.com", note: "b@example.com" })).toEqual([
+      { key: "mail", code: "emailDomainBlocked" },
+    ])
+    expect(check({ mail: "not-an-email" })).toEqual([
+      { key: "mail", code: "email" },
+    ])
+    expect(check({ mail: "a@ok.org" })).toEqual([])
+    // without the option nothing is blocked (the chat finish passes none)
+    expect(validateFormSubmission(d, { mail: "a@example.com" })).toEqual([])
   })
 })

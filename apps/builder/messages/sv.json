@@ -5025,7 +5025,8 @@
       "max": "Too large or too long.",
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
-      "date": "Enter a valid date or time."
+      "date": "Enter a valid date or time.",
+      "emailDomainBlocked": "E-postadresser från den här domänen accepteras inte."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -5045,7 +5046,17 @@
       "prefillKeysHint": "Field keys that accept a value from the URL, e.g. ?first_name=Ada.",
       "embedSnippet": "Embed on another site",
       "embedUnpublished": "Publish the form to get its link and embed code.",
-      "publicUrl": "Public link"
+      "publicUrl": "Public link",
+      "availability": "Tillgänglighet",
+      "publishUp": "Öppnar",
+      "publishDown": "Stänger",
+      "windowHint": "Tiderna är i {zone}. Lämna tomt för att hålla formuläret öppet.",
+      "pendingMessage": "Meddelande innan det öppnar",
+      "closedMessage": "Meddelande när det är stängt eller fullt",
+      "submissionLimit": "Gräns för inskick",
+      "submissionLimitHint": "Sluta ta emot svar efter så här många inskick (webb och chatt). Att radera ett inskick frigör en plats. Tomt = ingen gräns.",
+      "blockedEmailDomains": "Blockerade e-postdomäner",
+      "blockedEmailDomainsHint": "En per rad, t.ex. example.com. Underdomäner blockeras också."
     },
     "submitActions": {
       "title": "Actions after submit",

@@ -23,6 +23,7 @@ import {
   formInputFields,
   formMapsToContact,
   formScore,
+  formWindowState,
   pruneFormValues,
   validateFormSubmission,
 } from "@chatbotx.io/database/partials"
@@ -87,8 +88,15 @@ export type SubmitFormInput = {
   now?: Date
 }
 
+/**
+ * Why a published form takes nothing right now (s220c A2-4): outside its
+ * window, or its submission limit is reached. `message` is the form's own.
+ */
+export type FormClosedReason = "pending" | "closed" | "limit"
+
 export type SubmitFormResult =
   | { kind: "notFound" }
+  | { kind: "closed"; reason: FormClosedReason; message: string }
   | { kind: "invalid"; issues: FormValidationIssue[] }
   | { kind: "rateLimited"; retryAfter: number }
   | {
@@ -182,6 +190,16 @@ export type PendingChanges = Awaited<
   ReturnType<typeof contactCustomFieldService.setValuesInTransaction>
 >
 
+const closedResult = (
+  settings: NormalizedForm["settings"],
+  reason: FormClosedReason,
+): SubmitFormResult => ({
+  kind: "closed",
+  reason,
+  message:
+    reason === "pending" ? settings.pendingMessage : settings.closedMessage,
+})
+
 export class FormSubmitService {
   async submit(input: SubmitFormInput): Promise<SubmitFormResult> {
     const now = input.now ?? new Date()
@@ -194,6 +212,10 @@ export class FormSubmitService {
     }
     const def = form.publishedDefinition ?? EMPTY_FORM_DEFINITION
     const settings = form.settings
+    const availability = formWindowState(settings, now)
+    if (availability !== "open") {
+      return closedResult(settings, availability)
+    }
 
     if (settings.honeypot && input.honeypotFilled) {
       logger.info(
@@ -219,7 +241,9 @@ export class FormSubmitService {
       new Set(settings.prefillKeys),
     )
     const evaluation = evaluateForm(def, values)
-    const issues = validateFormSubmission(def, values, evaluation)
+    const issues = validateFormSubmission(def, values, evaluation, {
+      blockedEmailDomains: settings.blockedEmailDomains ?? [],
+    })
     if (issues.length > 0) {
       return { kind: "invalid", issues }
     }
@@ -246,6 +270,13 @@ export class FormSubmitService {
     const used = await this.countRecentByIp({ form, ipHash, now })
     if (used >= settings.submitLimitPerIpPerHour) {
       return { kind: "rateLimited", retryAfter: FORM_BUDGET_WINDOW_SECONDS }
+    }
+
+    // A full form refuses before any contact is created; the transaction
+    // below re-checks under the form's lock (this read can race).
+    const limit = settings.submissionLimit ?? null
+    if (limit !== null && (await this.countForForm(form.id)) >= limit) {
+      return closedResult(settings, "limit")
     }
 
     // Contact resolution runs BEFORE the transaction: attach / create have
@@ -290,11 +321,13 @@ export class FormSubmitService {
       return { kind: "invalid", issues: [identityIssue] }
     }
 
-    let persisted: {
-      row: FormSubmissionModel
-      pending: PendingChanges
-      duplicateOf: FormSubmissionModel | null
-    }
+    let persisted:
+      | {
+          row: FormSubmissionModel
+          pending: PendingChanges
+          duplicateOf: FormSubmissionModel | null
+        }
+      | { limitReached: true }
     try {
       persisted = await db.transaction(async (tx) => {
         // Serialise identical answers from one ip: two racing submits both
@@ -310,6 +343,9 @@ export class FormSubmitService {
         })
         if (duplicateOf) {
           return { row: duplicateOf, pending: [], duplicateOf }
+        }
+        if (!(await this.claimSlot(tx, form))) {
+          return { limitReached: true as const }
         }
         const pending =
           contactId === null
@@ -362,6 +398,15 @@ export class FormSubmitService {
       throw error
     }
 
+    if ("limitReached" in persisted) {
+      if (contactCreated) {
+        logger.warn(
+          { workspaceId: input.workspaceId, formId: form.id, contactId },
+          "form submit: the limit filled while this submitter's contact was being created",
+        )
+      }
+      return closedResult(settings, "limit")
+    }
     if (persisted.duplicateOf) {
       return {
         kind: "ok",
@@ -414,6 +459,36 @@ export class FormSubmitService {
       )
       .limit(1)
     return row
+  }
+
+  /** Stored submissions of one form (web + chat); index FormSubmission_formId_createdAt_idx. */
+  async countForForm(formId: string, tx: DatabaseClient = db): Promise<number> {
+    const [row] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(formSubmissionModel)
+      .where(eq(formSubmissionModel.formId, formId))
+    return row?.count ?? 0
+  }
+
+  /**
+   * Inside the caller's transaction: may one more submission of this form be
+   * stored? With a limit, submits of the form serialise on a per-form
+   * advisory lock held to commit, so N racing submits against a limit of L
+   * store exactly min(N, L) rows (Mautic checks, then inserts, and
+   * overshoots). Shared by the web submit and the chat run.
+   */
+  async claimSlot(
+    tx: DatabaseClient,
+    form: Pick<NormalizedForm, "id" | "settings">,
+  ): Promise<boolean> {
+    const limit = form.settings.submissionLimit ?? null
+    if (limit === null) {
+      return true
+    }
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${`form-limit:${form.id}`}, 0))`,
+    )
+    return (await this.countForForm(form.id, tx)) < limit
   }
 
   private async countRecentByIp(props: {

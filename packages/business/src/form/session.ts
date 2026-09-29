@@ -24,6 +24,8 @@ import {
   type FormValues,
   formInputFields,
   formScore,
+  formWindowState,
+  isBlockedEmailDomain,
   isEmptyFormValue,
   isFormChatSkip,
   normalizeFormDefinition,
@@ -82,8 +84,8 @@ export type FormChatAction =
       preface: FormField[]
       replaced?: ReplacedRun
     }
-  | { kind: "ended"; session: FormSessionModel; reason: "attempts" }
-  | { kind: "unavailable"; reason: "formNotFound" | "busy" }
+  | { kind: "ended"; session: FormSessionModel; reason: "attempts" | "closed" }
+  | { kind: "unavailable"; reason: "formNotFound" | "formClosed" | "busy" }
   | {
       kind: "ignored"
       reason:
@@ -251,6 +253,16 @@ export class FormSessionService {
         })
         if (!form?.publishedDefinition) {
           return { action: { kind: "unavailable", reason: "formNotFound" } }
+        }
+        // s220c A2-4: outside its window or full, the step takes its skip
+        // edge before a question is asked (the finish re-checks the limit).
+        const limit = form.settings.submissionLimit ?? null
+        if (
+          formWindowState(form.settings, now) !== "open" ||
+          (limit !== null &&
+            (await formSubmitService.countForForm(form.id, tx)) >= limit)
+        ) {
+          return { action: { kind: "unavailable", reason: "formClosed" } }
         }
         const current = await this.lockActive(tx, input)
         if (current) {
@@ -420,7 +432,7 @@ export class FormSessionService {
           messageId,
         )
       }
-      const parsed = parseFormChatAnswer(field, text)
+      const parsed = await this.parseAnswer(tx, session, field, text)
       if (!parsed.ok) {
         const attempts = session.attempts + 1
         if (attempts >= session.maxAttempts) {
@@ -859,6 +871,34 @@ export class FormSessionService {
     )
   }
 
+  /**
+   * One chat reply as an answer to `field`; an email on one of the form's
+   * blocked domains is refused like any bad answer (s220c A2-4). The live
+   * settings are read only for an email question.
+   */
+  private async parseAnswer(
+    tx: DatabaseClient,
+    session: FormSessionModel,
+    field: FormField,
+    text: unknown,
+  ): Promise<ReturnType<typeof parseFormChatAnswer>> {
+    const parsed = parseFormChatAnswer(field, text)
+    if (!parsed.ok || field.type !== "email") {
+      return parsed
+    }
+    const form = await formService.get({
+      workspaceId: session.workspaceId,
+      id: session.formId,
+      tx,
+    })
+    return isBlockedEmailDomain(
+      parsed.value,
+      form.settings.blockedEmailDomains ?? [],
+    )
+      ? { ok: false, code: "emailDomainBlocked" }
+      : parsed
+  }
+
   private async end(
     tx: DatabaseClient,
     id: string,
@@ -968,6 +1008,29 @@ export class FormSessionService {
       id: session.formId,
       tx,
     })
+    // s220c A2-4: the same per-form limit lock as the web submit; a full
+    // form ends the run on its skip edge (never a formAbandoned: `closed`).
+    if (!(await formSubmitService.claimSlot(tx, form))) {
+      const [ended] = await tx
+        .update(formSessionModel)
+        .set({
+          status: "skipped",
+          endReason: "closed",
+          currentFieldKey: null,
+          lastFieldKey: session.currentFieldKey,
+          endedAt: now,
+        })
+        .where(
+          and(
+            eq(formSessionModel.id, session.id),
+            eq(formSessionModel.status, "inProgress"),
+          ),
+        )
+        .returning()
+      return ended
+        ? { action: { kind: "ended", session: ended, reason: "closed" } }
+        : { action: { kind: "ignored", reason: "noSession" } }
+    }
     const pruned = pruneFormValues(def, values, plan.evaluation)
     const conflicts = await this.identityConflicts(tx, session, def, pruned)
     const writable: FormValues = { ...pruned }

@@ -60,6 +60,7 @@ export function FormPreview(props: {
             "pattern",
             "length",
             "date",
+            "emailDomainBlocked",
           ] as const
         ).map((code) => [code, t(`forms.issues.${code}`)]),
       ) as Record<FormValidationIssue["code"], string>,

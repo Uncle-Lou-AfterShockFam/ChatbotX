@@ -4894,7 +4894,8 @@
       "max": "Too large or too long.",
       "pattern": "This answer does not match the expected format.",
       "length": "This answer is too long.",
-      "date": "Enter a valid date or time."
+      "date": "Enter a valid date or time.",
+      "emailDomainBlocked": "Les adresses e-mail de ce domaine ne sont pas acceptées."
     },
     "settings": {
       "inbox": "Contact inbox",
@@ -4914,7 +4915,17 @@
       "prefillKeysHint": "Field keys that accept a value from the URL, e.g. ?first_name=Ada.",
       "embedSnippet": "Embed on another site",
       "embedUnpublished": "Publish the form to get its link and embed code.",
-      "publicUrl": "Public link"
+      "publicUrl": "Public link",
+      "availability": "Disponibilité",
+      "publishUp": "Ouvre le",
+      "publishDown": "Ferme le",
+      "windowHint": "Heures en {zone}. Laisser vide pour garder le formulaire ouvert.",
+      "pendingMessage": "Message avant l'ouverture",
+      "closedMessage": "Message une fois fermé ou complet",
+      "submissionLimit": "Limite d'envois",
+      "submissionLimitHint": "Ne plus accepter de réponses après ce nombre d'envois (web et chat). Supprimer un envoi libère une place. Vide = aucune limite.",
+      "blockedEmailDomains": "Domaines e-mail bloqués",
+      "blockedEmailDomainsHint": "Un par ligne, ex. example.com. Les sous-domaines sont aussi bloqués."
     },
     "submitActions": {
       "title": "Actions after submit",
