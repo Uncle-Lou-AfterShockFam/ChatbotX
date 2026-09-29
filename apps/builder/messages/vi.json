@@ -7518,5 +7518,106 @@
       "amount": "Fixed amount"
     },
     "paidSoFar": "{paid} paid"
+  },
+  "emailTemplates": {
+    "title": "Mẫu email",
+    "newTemplate": "Mẫu mới",
+    "showArchived": "Hiện mẫu đã lưu trữ",
+    "noTemplates": "Chưa có mẫu email nào.",
+    "archived": "Đã lưu trữ",
+    "pickOrCreate": "Chọn một mẫu hoặc tạo mẫu mới.",
+    "saved": "Đã lưu mẫu email",
+    "name": "Tên",
+    "namePlaceholder": "ví dụ: Bản tin hằng tháng",
+    "deleteTitle": "Xóa mẫu email này?",
+    "deleteConfirm": "Các bước trong luồng dùng mẫu này sẽ ngừng gửi. Không thể hoàn tác.",
+    "editor": {
+      "toolbar": {
+        "bold": "In đậm",
+        "italic": "In nghiêng",
+        "underline": "Gạch chân",
+        "bulletList": "Danh sách dấu chấm",
+        "orderedList": "Danh sách đánh số",
+        "link": "Liên kết"
+      },
+      "linkInvalid": "Chỉ cho phép liên kết https://, http:// và mailto:.",
+      "apply": "Áp dụng",
+      "insertField": "Chèn trường",
+      "align": "Căn lề",
+      "aligns": {
+        "left": "Trái",
+        "center": "Giữa",
+        "right": "Phải"
+      },
+      "noFile": "Chưa chọn tệp",
+      "chooseFile": "Chọn tệp",
+      "level": "Cấp tiêu đề",
+      "image": "Hình ảnh",
+      "imageUrl": "Hoặc URL hình ảnh",
+      "alt": "Văn bản thay thế",
+      "href": "Liên kết khi nhấp",
+      "width": "Chiều rộng (px)",
+      "label": "Nhãn",
+      "action": "Khi nhấp",
+      "actions": {
+        "url": "Mở URL",
+        "flow": "Bắt đầu luồng"
+      },
+      "url": "URL",
+      "flow": "Luồng",
+      "color": "Màu",
+      "height": "Chiều cao (px)",
+      "columnCount": "Số cột",
+      "html": "HTML",
+      "htmlNote": "HTML được nhập sẽ được làm sạch khi gửi: bảng kiểu và class bị xóa, màu và kích thước nội tuyến được giữ lại. Hãy kiểm tra bản xem trước.",
+      "attachment": "Tệp",
+      "attachmentNote": "Gửi dưới dạng tệp đính kèm email (tối đa 10 tệp, tổng 10 MB).",
+      "code": "Mã",
+      "noSettings": "Khối này không có cài đặt.",
+      "reorder": "Sắp xếp lại",
+      "removeBlock": "Xóa khối",
+      "blocks": {
+        "heading": "Tiêu đề",
+        "text": "Văn bản",
+        "image": "Hình ảnh",
+        "button": "Nút",
+        "divider": "Đường phân cách",
+        "spacer": "Khoảng trống",
+        "columns": "Cột",
+        "html": "HTML",
+        "attachment": "Tệp đính kèm",
+        "code": "Mã"
+      },
+      "columnN": "Cột {n}",
+      "addingToColumn": "Đang thêm khối vào cột {n}",
+      "addToRoot": "Thêm vào cấp trên cùng",
+      "importHtml": "Nhập HTML",
+      "htmlTooLarge": "Tệp lớn hơn {max} ký tự.",
+      "htmlReadFailed": "Không đọc được tệp.",
+      "preheader": "Dòng xem trước",
+      "font": "Phông chữ",
+      "fonts": {
+        "system": "Hệ thống",
+        "arial": "Arial",
+        "georgia": "Georgia",
+        "helvetica": "Helvetica",
+        "times": "Times",
+        "verdana": "Verdana"
+      },
+      "background": "Nền",
+      "settings": "Cài đặt email",
+      "preview": "Xem trước",
+      "previewUnavailable": "Hiện không thể xem trước.",
+      "previewMissing": "Chưa được giải quyết trong bản xem trước: {list}",
+      "previewPending": "Đang tạo bản xem trước…",
+      "empty": "Thêm một khối để bắt đầu."
+    },
+    "step": {
+      "template": "Mẫu bản tin",
+      "none": "Không (dùng các thành phần bên dưới)",
+      "hint": "Mẫu đã lưu trong Cài đặt > Mẫu email sẽ thay thế các thành phần bên dưới.",
+      "noTemplates": "Chưa có mẫu email nào.",
+      "clear": "Xóa"
+    }
   }
 }
