@@ -7518,5 +7518,106 @@
       "amount": "Fixed amount"
     },
     "paidSoFar": "{paid} paid"
+  },
+  "emailTemplates": {
+    "title": "E-mailskabeloner",
+    "newTemplate": "Ny skabelon",
+    "showArchived": "Vis arkiverede",
+    "noTemplates": "Ingen e-mailskabeloner endnu.",
+    "archived": "Arkiveret",
+    "pickOrCreate": "Vælg en skabelon, eller opret en ny.",
+    "saved": "E-mailskabelon gemt",
+    "name": "Navn",
+    "namePlaceholder": "f.eks. Månedligt nyhedsbrev",
+    "deleteTitle": "Slet denne e-mailskabelon?",
+    "deleteConfirm": "Flowtrin, der bruger den, stopper med at sende den. Dette kan ikke fortrydes.",
+    "editor": {
+      "toolbar": {
+        "bold": "Fed",
+        "italic": "Kursiv",
+        "underline": "Understreget",
+        "bulletList": "Punktliste",
+        "orderedList": "Nummereret liste",
+        "link": "Link"
+      },
+      "linkInvalid": "Kun https://, http:// og mailto:-links er tilladt.",
+      "apply": "Anvend",
+      "insertField": "Indsæt felt",
+      "align": "Justering",
+      "aligns": {
+        "left": "Venstre",
+        "center": "Centreret",
+        "right": "Højre"
+      },
+      "noFile": "Ingen fil valgt",
+      "chooseFile": "Vælg fil",
+      "level": "Overskriftsniveau",
+      "image": "Billede",
+      "imageUrl": "Eller en billed-URL",
+      "alt": "Alt-tekst",
+      "href": "Link ved klik",
+      "width": "Bredde (px)",
+      "label": "Etiket",
+      "action": "Ved klik",
+      "actions": {
+        "url": "Åbn en URL",
+        "flow": "Start et flow"
+      },
+      "url": "URL",
+      "flow": "Flow",
+      "color": "Farve",
+      "height": "Højde (px)",
+      "columnCount": "Kolonner",
+      "html": "HTML",
+      "htmlNote": "Importeret HTML renses, når den sendes: typografiark og klasser fjernes, indlejrede farver og størrelser bevares. Kontroller forhåndsvisningen.",
+      "attachment": "Fil",
+      "attachmentNote": "Sendes som e-mailvedhæftning (op til 10 filer, 10 MB i alt).",
+      "code": "Kode",
+      "noSettings": "Denne blok har ingen indstillinger.",
+      "reorder": "Omarranger",
+      "removeBlock": "Fjern blok",
+      "blocks": {
+        "heading": "Overskrift",
+        "text": "Tekst",
+        "image": "Billede",
+        "button": "Knap",
+        "divider": "Skillelinje",
+        "spacer": "Mellemrum",
+        "columns": "Kolonner",
+        "html": "HTML",
+        "attachment": "Vedhæftning",
+        "code": "Kode"
+      },
+      "columnN": "Kolonne {n}",
+      "addingToColumn": "Tilføjer blokke til kolonne {n}",
+      "addToRoot": "Tilføj til topniveauet i stedet",
+      "importHtml": "Importer HTML",
+      "htmlTooLarge": "Den fil er større end {max} tegn.",
+      "htmlReadFailed": "Filen kunne ikke læses.",
+      "preheader": "Preheader",
+      "font": "Skrifttype",
+      "fonts": {
+        "system": "System",
+        "arial": "Arial",
+        "georgia": "Georgia",
+        "helvetica": "Helvetica",
+        "times": "Times",
+        "verdana": "Verdana"
+      },
+      "background": "Baggrund",
+      "settings": "E-mailindstillinger",
+      "preview": "Forhåndsvisning",
+      "previewUnavailable": "Forhåndsvisningen er ikke tilgængelig lige nu.",
+      "previewMissing": "Ikke løst i forhåndsvisningen: {list}",
+      "previewPending": "Genererer forhåndsvisning…",
+      "empty": "Tilføj en blok for at starte."
+    },
+    "step": {
+      "template": "Nyhedsbrevsskabelon",
+      "none": "Ingen (brug elementerne nedenfor)",
+      "hint": "En gemt skabelon fra Indstillinger > E-mailskabeloner erstatter elementerne nedenfor.",
+      "noTemplates": "Ingen e-mailskabeloner endnu.",
+      "clear": "Ryd"
+    }
   }
 }

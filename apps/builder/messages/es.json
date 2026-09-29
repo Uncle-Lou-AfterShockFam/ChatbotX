@@ -7518,5 +7518,106 @@
       "amount": "Fixed amount"
     },
     "paidSoFar": "{paid} paid"
+  },
+  "emailTemplates": {
+    "title": "Plantillas de correo",
+    "newTemplate": "Nueva plantilla",
+    "showArchived": "Mostrar archivadas",
+    "noTemplates": "Aún no hay plantillas de correo.",
+    "archived": "Archivada",
+    "pickOrCreate": "Elige una plantilla o crea una nueva.",
+    "saved": "Plantilla de correo guardada",
+    "name": "Nombre",
+    "namePlaceholder": "p. ej. Boletín mensual",
+    "deleteTitle": "¿Eliminar esta plantilla de correo?",
+    "deleteConfirm": "Los pasos de flujo que la usan dejarán de enviarla. Esto no se puede deshacer.",
+    "editor": {
+      "toolbar": {
+        "bold": "Negrita",
+        "italic": "Cursiva",
+        "underline": "Subrayado",
+        "bulletList": "Lista con viñetas",
+        "orderedList": "Lista numerada",
+        "link": "Enlace"
+      },
+      "linkInvalid": "Solo se permiten enlaces https://, http:// y mailto:.",
+      "apply": "Aplicar",
+      "insertField": "Insertar campo",
+      "align": "Alineación",
+      "aligns": {
+        "left": "Izquierda",
+        "center": "Centro",
+        "right": "Derecha"
+      },
+      "noFile": "Ningún archivo elegido",
+      "chooseFile": "Elegir archivo",
+      "level": "Nivel de encabezado",
+      "image": "Imagen",
+      "imageUrl": "O una URL de imagen",
+      "alt": "Texto alternativo",
+      "href": "Enlace al hacer clic",
+      "width": "Ancho (px)",
+      "label": "Etiqueta",
+      "action": "Al hacer clic",
+      "actions": {
+        "url": "Abrir una URL",
+        "flow": "Iniciar un flujo"
+      },
+      "url": "URL",
+      "flow": "Flujo",
+      "color": "Color",
+      "height": "Alto (px)",
+      "columnCount": "Columnas",
+      "html": "HTML",
+      "htmlNote": "El HTML importado se sanea al enviarse: se eliminan las hojas de estilo y las clases, y se conservan los colores y tamaños en línea. Revisa la vista previa.",
+      "attachment": "Archivo",
+      "attachmentNote": "Se envía como archivo adjunto de correo (hasta 10 archivos, 10 MB en total).",
+      "code": "Código",
+      "noSettings": "Este bloque no tiene ajustes.",
+      "reorder": "Reordenar",
+      "removeBlock": "Quitar bloque",
+      "blocks": {
+        "heading": "Encabezado",
+        "text": "Texto",
+        "image": "Imagen",
+        "button": "Botón",
+        "divider": "Separador",
+        "spacer": "Espaciador",
+        "columns": "Columnas",
+        "html": "HTML",
+        "attachment": "Adjunto",
+        "code": "Código"
+      },
+      "columnN": "Columna {n}",
+      "addingToColumn": "Añadiendo bloques a la columna {n}",
+      "addToRoot": "Añadir al nivel superior en su lugar",
+      "importHtml": "Importar HTML",
+      "htmlTooLarge": "Ese archivo supera los {max} caracteres.",
+      "htmlReadFailed": "No se pudo leer el archivo.",
+      "preheader": "Preencabezado",
+      "font": "Fuente",
+      "fonts": {
+        "system": "Sistema",
+        "arial": "Arial",
+        "georgia": "Georgia",
+        "helvetica": "Helvetica",
+        "times": "Times",
+        "verdana": "Verdana"
+      },
+      "background": "Fondo",
+      "settings": "Ajustes de correo",
+      "preview": "Vista previa",
+      "previewUnavailable": "La vista previa no está disponible en este momento.",
+      "previewMissing": "No resuelto en la vista previa: {list}",
+      "previewPending": "Generando la vista previa…",
+      "empty": "Añade un bloque para empezar."
+    },
+    "step": {
+      "template": "Plantilla de boletín",
+      "none": "Ninguna (usar los elementos de abajo)",
+      "hint": "Una plantilla guardada desde Configuración > Plantillas de correo sustituye los elementos de abajo.",
+      "noTemplates": "Aún no hay plantillas de correo.",
+      "clear": "Borrar"
+    }
   }
 }

@@ -7518,5 +7518,106 @@
       "amount": "Fixed amount"
     },
     "paidSoFar": "{paid} paid"
+  },
+  "emailTemplates": {
+    "title": "邮件模板",
+    "newTemplate": "新建模板",
+    "showArchived": "显示已归档",
+    "noTemplates": "还没有邮件模板。",
+    "archived": "已归档",
+    "pickOrCreate": "选择一个模板或新建一个。",
+    "saved": "邮件模板已保存",
+    "name": "名称",
+    "namePlaceholder": "例如：月度通讯",
+    "deleteTitle": "删除此邮件模板？",
+    "deleteConfirm": "使用它的流程步骤将停止发送。此操作无法撤销。",
+    "editor": {
+      "toolbar": {
+        "bold": "粗体",
+        "italic": "斜体",
+        "underline": "下划线",
+        "bulletList": "项目符号列表",
+        "orderedList": "编号列表",
+        "link": "链接"
+      },
+      "linkInvalid": "仅允许 https://、http:// 和 mailto: 链接。",
+      "apply": "应用",
+      "insertField": "插入字段",
+      "align": "对齐方式",
+      "aligns": {
+        "left": "左对齐",
+        "center": "居中",
+        "right": "右对齐"
+      },
+      "noFile": "未选择文件",
+      "chooseFile": "选择文件",
+      "level": "标题级别",
+      "image": "图片",
+      "imageUrl": "或图片 URL",
+      "alt": "替代文本",
+      "href": "点击后跳转的链接",
+      "width": "宽度 (px)",
+      "label": "标签",
+      "action": "点击时",
+      "actions": {
+        "url": "打开一个 URL",
+        "flow": "启动一个流程"
+      },
+      "url": "URL",
+      "flow": "流程",
+      "color": "颜色",
+      "height": "高度 (px)",
+      "columnCount": "列数",
+      "html": "HTML",
+      "htmlNote": "导入的 HTML 在发送时会被净化：样式表和类会被移除，行内颜色和尺寸会被保留。请检查预览。",
+      "attachment": "文件",
+      "attachmentNote": "作为邮件附件发送（最多 10 个文件，总计 10 MB）。",
+      "code": "代码",
+      "noSettings": "此区块没有设置。",
+      "reorder": "重新排序",
+      "removeBlock": "移除区块",
+      "blocks": {
+        "heading": "标题",
+        "text": "文本",
+        "image": "图片",
+        "button": "按钮",
+        "divider": "分隔线",
+        "spacer": "间隔",
+        "columns": "分栏",
+        "html": "HTML",
+        "attachment": "附件",
+        "code": "代码"
+      },
+      "columnN": "第 {n} 栏",
+      "addingToColumn": "正在向第 {n} 栏添加区块",
+      "addToRoot": "改为添加到顶层",
+      "importHtml": "导入 HTML",
+      "htmlTooLarge": "该文件超过了 {max} 个字符。",
+      "htmlReadFailed": "无法读取该文件。",
+      "preheader": "预览文本",
+      "font": "字体",
+      "fonts": {
+        "system": "系统",
+        "arial": "Arial",
+        "georgia": "Georgia",
+        "helvetica": "Helvetica",
+        "times": "Times",
+        "verdana": "Verdana"
+      },
+      "background": "背景",
+      "settings": "邮件设置",
+      "preview": "预览",
+      "previewUnavailable": "预览目前不可用。",
+      "previewMissing": "预览中未解析：{list}",
+      "previewPending": "正在生成预览…",
+      "empty": "添加一个区块以开始。"
+    },
+    "step": {
+      "template": "通讯模板",
+      "none": "无（使用下方元素）",
+      "hint": "在 设置 > 邮件模板 中保存的模板会替代下方元素。",
+      "noTemplates": "还没有邮件模板。",
+      "clear": "清除"
+    }
   }
 }

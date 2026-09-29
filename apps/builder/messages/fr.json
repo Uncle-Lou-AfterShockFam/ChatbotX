@@ -7518,5 +7518,106 @@
       "amount": "Fixed amount"
     },
     "paidSoFar": "{paid} paid"
+  },
+  "emailTemplates": {
+    "title": "Modèles d'e-mail",
+    "newTemplate": "Nouveau modèle",
+    "showArchived": "Afficher les archivés",
+    "noTemplates": "Aucun modèle d'e-mail pour l'instant.",
+    "archived": "Archivé",
+    "pickOrCreate": "Choisissez un modèle ou créez-en un nouveau.",
+    "saved": "Modèle d'e-mail enregistré",
+    "name": "Nom",
+    "namePlaceholder": "ex. Newsletter mensuelle",
+    "deleteTitle": "Supprimer ce modèle d'e-mail ?",
+    "deleteConfirm": "Les étapes de flux qui l'utilisent arrêteront de l'envoyer. Cette action est irréversible.",
+    "editor": {
+      "toolbar": {
+        "bold": "Gras",
+        "italic": "Italique",
+        "underline": "Souligné",
+        "bulletList": "Liste à puces",
+        "orderedList": "Liste numérotée",
+        "link": "Lien"
+      },
+      "linkInvalid": "Seuls les liens https://, http:// et mailto: sont autorisés.",
+      "apply": "Appliquer",
+      "insertField": "Insérer un champ",
+      "align": "Alignement",
+      "aligns": {
+        "left": "Gauche",
+        "center": "Centre",
+        "right": "Droite"
+      },
+      "noFile": "Aucun fichier choisi",
+      "chooseFile": "Choisir un fichier",
+      "level": "Niveau de titre",
+      "image": "Image",
+      "imageUrl": "Ou une URL d'image",
+      "alt": "Texte alternatif",
+      "href": "Lien au clic",
+      "width": "Largeur (px)",
+      "label": "Libellé",
+      "action": "Au clic",
+      "actions": {
+        "url": "Ouvrir une URL",
+        "flow": "Démarrer un flux"
+      },
+      "url": "URL",
+      "flow": "Flux",
+      "color": "Couleur",
+      "height": "Hauteur (px)",
+      "columnCount": "Colonnes",
+      "html": "HTML",
+      "htmlNote": "Le HTML importé est nettoyé lors de l'envoi : les feuilles de style et les classes sont supprimées, les couleurs et tailles en ligne sont conservées. Vérifiez l'aperçu.",
+      "attachment": "Fichier",
+      "attachmentNote": "Envoyé comme pièce jointe (jusqu'à 10 fichiers, 10 MB au total).",
+      "code": "Code",
+      "noSettings": "Ce bloc n'a aucun paramètre.",
+      "reorder": "Réorganiser",
+      "removeBlock": "Supprimer le bloc",
+      "blocks": {
+        "heading": "Titre",
+        "text": "Texte",
+        "image": "Image",
+        "button": "Bouton",
+        "divider": "Séparateur",
+        "spacer": "Espacement",
+        "columns": "Colonnes",
+        "html": "HTML",
+        "attachment": "Pièce jointe",
+        "code": "Code"
+      },
+      "columnN": "Colonne {n}",
+      "addingToColumn": "Ajout de blocs dans la colonne {n}",
+      "addToRoot": "Ajouter au niveau supérieur à la place",
+      "importHtml": "Importer du HTML",
+      "htmlTooLarge": "Ce fichier dépasse {max} caractères.",
+      "htmlReadFailed": "Le fichier n'a pas pu être lu.",
+      "preheader": "Pré-en-tête",
+      "font": "Police",
+      "fonts": {
+        "system": "Système",
+        "arial": "Arial",
+        "georgia": "Georgia",
+        "helvetica": "Helvetica",
+        "times": "Times",
+        "verdana": "Verdana"
+      },
+      "background": "Arrière-plan",
+      "settings": "Paramètres de l'e-mail",
+      "preview": "Aperçu",
+      "previewUnavailable": "L'aperçu n'est pas disponible pour le moment.",
+      "previewMissing": "Non résolu dans l'aperçu : {list}",
+      "previewPending": "Génération de l'aperçu…",
+      "empty": "Ajoutez un bloc pour commencer."
+    },
+    "step": {
+      "template": "Modèle de newsletter",
+      "none": "Aucun (utiliser les éléments ci-dessous)",
+      "hint": "Un modèle enregistré depuis Paramètres > Modèles d'e-mail remplace les éléments ci-dessous.",
+      "noTemplates": "Aucun modèle d'e-mail pour l'instant.",
+      "clear": "Effacer"
+    }
   }
 }

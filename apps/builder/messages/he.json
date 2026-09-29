@@ -7518,5 +7518,106 @@
       "amount": "Fixed amount"
     },
     "paidSoFar": "{paid} paid"
+  },
+  "emailTemplates": {
+    "title": "תבניות דואר אלקטרוני",
+    "newTemplate": "תבנית חדשה",
+    "showArchived": "הצג בארכיון",
+    "noTemplates": "עדיין אין תבניות דואר אלקטרוני.",
+    "archived": "בארכיון",
+    "pickOrCreate": "בחרו תבנית או צרו תבנית חדשה.",
+    "saved": "תבנית הדואר האלקטרוני נשמרה",
+    "name": "שם",
+    "namePlaceholder": "למשל: ניוזלטר חודשי",
+    "deleteTitle": "למחוק את תבנית הדואר האלקטרוני הזו?",
+    "deleteConfirm": "שלבי תהליך שמשתמשים בה יפסיקו לשלוח אותה. לא ניתן לבטל פעולה זו.",
+    "editor": {
+      "toolbar": {
+        "bold": "מודגש",
+        "italic": "נטוי",
+        "underline": "קו תחתי",
+        "bulletList": "רשימת תבליטים",
+        "orderedList": "רשימה ממוספרת",
+        "link": "קישור"
+      },
+      "linkInvalid": "מותרים רק קישורי https://, http:// ו-mailto:.",
+      "apply": "החל",
+      "insertField": "הוספת שדה",
+      "align": "יישור",
+      "aligns": {
+        "left": "שמאל",
+        "center": "מרכז",
+        "right": "ימין"
+      },
+      "noFile": "לא נבחר קובץ",
+      "chooseFile": "בחירת קובץ",
+      "level": "רמת כותרת",
+      "image": "תמונה",
+      "imageUrl": "או כתובת URL של תמונה",
+      "alt": "טקסט חלופי",
+      "href": "קישור בלחיצה",
+      "width": "רוחב (px)",
+      "label": "תווית",
+      "action": "בעת לחיצה",
+      "actions": {
+        "url": "פתיחת כתובת URL",
+        "flow": "הפעלת תהליך"
+      },
+      "url": "URL",
+      "flow": "תהליך",
+      "color": "צבע",
+      "height": "גובה (px)",
+      "columnCount": "עמודות",
+      "html": "HTML",
+      "htmlNote": "HTML מיובא מטוהר בעת השליחה: גיליונות עיצוב ומחלקות מוסרים, צבעים וגדלים מוטבעים נשמרים. בדקו את התצוגה המקדימה.",
+      "attachment": "קובץ",
+      "attachmentNote": "נשלח כקובץ מצורף להודעת דואר אלקטרוני (עד 10 קבצים, 10 MB בסך הכול).",
+      "code": "קוד",
+      "noSettings": "לבלוק הזה אין הגדרות.",
+      "reorder": "סידור מחדש",
+      "removeBlock": "הסרת הבלוק",
+      "blocks": {
+        "heading": "כותרת",
+        "text": "טקסט",
+        "image": "תמונה",
+        "button": "כפתור",
+        "divider": "מפריד",
+        "spacer": "מרווח",
+        "columns": "עמודות",
+        "html": "HTML",
+        "attachment": "קובץ מצורף",
+        "code": "קוד"
+      },
+      "columnN": "עמודה {n}",
+      "addingToColumn": "מוסיפים בלוקים לעמודה {n}",
+      "addToRoot": "הוספה לרמה העליונה במקום זאת",
+      "importHtml": "ייבוא HTML",
+      "htmlTooLarge": "הקובץ הזה גדול מ-{max} תווים.",
+      "htmlReadFailed": "לא ניתן היה לקרוא את הקובץ.",
+      "preheader": "כותרת מקדימה",
+      "font": "גופן",
+      "fonts": {
+        "system": "מערכת",
+        "arial": "Arial",
+        "georgia": "Georgia",
+        "helvetica": "Helvetica",
+        "times": "Times",
+        "verdana": "Verdana"
+      },
+      "background": "רקע",
+      "settings": "הגדרות דואר אלקטרוני",
+      "preview": "תצוגה מקדימה",
+      "previewUnavailable": "התצוגה המקדימה אינה זמינה כרגע.",
+      "previewMissing": "לא נמצא פתרון בתצוגה המקדימה: {list}",
+      "previewPending": "התצוגה המקדימה נטענת…",
+      "empty": "הוסיפו בלוק כדי להתחיל."
+    },
+    "step": {
+      "template": "תבנית ניוזלטר",
+      "none": "ללא (שימוש באלמנטים שלמטה)",
+      "hint": "תבנית שמורה מהגדרות > תבניות דואר אלקטרוני מחליפה את האלמנטים שלמטה.",
+      "noTemplates": "עדיין אין תבניות דואר אלקטרוני.",
+      "clear": "ניקוי"
+    }
   }
 }

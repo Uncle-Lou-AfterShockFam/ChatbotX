@@ -7518,5 +7518,106 @@
       "amount": "Fixed amount"
     },
     "paidSoFar": "{paid} paid"
+  },
+  "emailTemplates": {
+    "title": "E-posta şablonları",
+    "newTemplate": "Yeni şablon",
+    "showArchived": "Arşivlenenleri göster",
+    "noTemplates": "Henüz e-posta şablonu yok.",
+    "archived": "Arşivlendi",
+    "pickOrCreate": "Bir şablon seçin veya yeni bir tane oluşturun.",
+    "saved": "E-posta şablonu kaydedildi",
+    "name": "Ad",
+    "namePlaceholder": "örn. Aylık bülten",
+    "deleteTitle": "Bu e-posta şablonu silinsin mi?",
+    "deleteConfirm": "Bunu kullanan akış adımları göndermeyi durduracak. Bu işlem geri alınamaz.",
+    "editor": {
+      "toolbar": {
+        "bold": "Kalın",
+        "italic": "İtalik",
+        "underline": "Alt çizili",
+        "bulletList": "Madde işaretli liste",
+        "orderedList": "Numaralı liste",
+        "link": "Bağlantı"
+      },
+      "linkInvalid": "Yalnızca https://, http:// ve mailto: bağlantılarına izin verilir.",
+      "apply": "Uygula",
+      "insertField": "Alan ekle",
+      "align": "Hizalama",
+      "aligns": {
+        "left": "Sol",
+        "center": "Orta",
+        "right": "Sağ"
+      },
+      "noFile": "Dosya seçilmedi",
+      "chooseFile": "Dosya seç",
+      "level": "Başlık düzeyi",
+      "image": "Görsel",
+      "imageUrl": "Veya bir görsel URL'si",
+      "alt": "Alternatif metin",
+      "href": "Tıklanınca gidilecek bağlantı",
+      "width": "Genişlik (px)",
+      "label": "Etiket",
+      "action": "Tıklanınca",
+      "actions": {
+        "url": "Bir URL aç",
+        "flow": "Bir akış başlat"
+      },
+      "url": "URL",
+      "flow": "Akış",
+      "color": "Renk",
+      "height": "Yükseklik (px)",
+      "columnCount": "Sütunlar",
+      "html": "HTML",
+      "htmlNote": "İçe aktarılan HTML gönderilirken temizlenir: stil sayfaları ve sınıflar kaldırılır, satır içi renkler ve boyutlar korunur. Önizlemeyi kontrol edin.",
+      "attachment": "Dosya",
+      "attachmentNote": "E-posta eki olarak gönderilir (toplam 10 MB'a kadar en fazla 10 dosya).",
+      "code": "Kod",
+      "noSettings": "Bu blokta ayar yok.",
+      "reorder": "Yeniden sırala",
+      "removeBlock": "Bloğu kaldır",
+      "blocks": {
+        "heading": "Başlık",
+        "text": "Metin",
+        "image": "Görsel",
+        "button": "Düğme",
+        "divider": "Ayırıcı",
+        "spacer": "Boşluk",
+        "columns": "Sütunlar",
+        "html": "HTML",
+        "attachment": "Ek",
+        "code": "Kod"
+      },
+      "columnN": "Sütun {n}",
+      "addingToColumn": "Bloklar sütun {n}'e ekleniyor",
+      "addToRoot": "Bunun yerine en üst düzeye ekle",
+      "importHtml": "HTML içe aktar",
+      "htmlTooLarge": "O dosya {max} karakterden daha büyük.",
+      "htmlReadFailed": "Dosya okunamadı.",
+      "preheader": "Ön başlık",
+      "font": "Yazı tipi",
+      "fonts": {
+        "system": "Sistem",
+        "arial": "Arial",
+        "georgia": "Georgia",
+        "helvetica": "Helvetica",
+        "times": "Times",
+        "verdana": "Verdana"
+      },
+      "background": "Arka plan",
+      "settings": "E-posta ayarları",
+      "preview": "Önizleme",
+      "previewUnavailable": "Önizleme şu anda kullanılamıyor.",
+      "previewMissing": "Önizlemede çözümlenmedi: {list}",
+      "previewPending": "Önizleme oluşturuluyor…",
+      "empty": "Başlamak için bir blok ekleyin."
+    },
+    "step": {
+      "template": "Bülten şablonu",
+      "none": "Yok (aşağıdaki öğeleri kullan)",
+      "hint": "Ayarlar > E-posta şablonları bölümünden kaydedilmiş bir şablon, aşağıdaki öğelerin yerini alır.",
+      "noTemplates": "Henüz e-posta şablonu yok.",
+      "clear": "Temizle"
+    }
   }
 }

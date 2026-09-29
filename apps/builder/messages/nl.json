@@ -7518,5 +7518,106 @@
       "amount": "Fixed amount"
     },
     "paidSoFar": "{paid} paid"
+  },
+  "emailTemplates": {
+    "title": "E-mailsjablonen",
+    "newTemplate": "Nieuwe sjabloon",
+    "showArchived": "Gearchiveerde tonen",
+    "noTemplates": "Nog geen e-mailsjablonen.",
+    "archived": "Gearchiveerd",
+    "pickOrCreate": "Kies een sjabloon of maak een nieuwe.",
+    "saved": "E-mailsjabloon opgeslagen",
+    "name": "Naam",
+    "namePlaceholder": "bijv. Maandelijkse nieuwsbrief",
+    "deleteTitle": "Deze e-mailsjabloon verwijderen?",
+    "deleteConfirm": "Flowstappen die hem gebruiken, stoppen met verzenden. Dit kan niet ongedaan worden gemaakt.",
+    "editor": {
+      "toolbar": {
+        "bold": "Vet",
+        "italic": "Cursief",
+        "underline": "Onderstrepen",
+        "bulletList": "Opsommingslijst",
+        "orderedList": "Genummerde lijst",
+        "link": "Link"
+      },
+      "linkInvalid": "Alleen https://, http:// en mailto:-links zijn toegestaan.",
+      "apply": "Toepassen",
+      "insertField": "Veld invoegen",
+      "align": "Uitlijning",
+      "aligns": {
+        "left": "Links",
+        "center": "Gecentreerd",
+        "right": "Rechts"
+      },
+      "noFile": "Geen bestand gekozen",
+      "chooseFile": "Bestand kiezen",
+      "level": "Kopniveau",
+      "image": "Afbeelding",
+      "imageUrl": "Of een afbeeldings-URL",
+      "alt": "Alt-tekst",
+      "href": "Link bij klikken",
+      "width": "Breedte (px)",
+      "label": "Label",
+      "action": "Bij klikken",
+      "actions": {
+        "url": "Een URL openen",
+        "flow": "Een flow starten"
+      },
+      "url": "URL",
+      "flow": "Flow",
+      "color": "Kleur",
+      "height": "Hoogte (px)",
+      "columnCount": "Kolommen",
+      "html": "HTML",
+      "htmlNote": "Geïmporteerde HTML wordt bij verzending opgeschoond: stylesheets en classes worden verwijderd, inline kleuren en formaten blijven behouden. Controleer de voorvertoning.",
+      "attachment": "Bestand",
+      "attachmentNote": "Verstuurd als e-mailbijlage (max. 10 bestanden, in totaal 10 MB).",
+      "code": "Code",
+      "noSettings": "Dit blok heeft geen instellingen.",
+      "reorder": "Volgorde wijzigen",
+      "removeBlock": "Blok verwijderen",
+      "blocks": {
+        "heading": "Kop",
+        "text": "Tekst",
+        "image": "Afbeelding",
+        "button": "Knop",
+        "divider": "Scheidingslijn",
+        "spacer": "Ruimte",
+        "columns": "Kolommen",
+        "html": "HTML",
+        "attachment": "Bijlage",
+        "code": "Code"
+      },
+      "columnN": "Kolom {n}",
+      "addingToColumn": "Blokken toevoegen aan kolom {n}",
+      "addToRoot": "In plaats daarvan toevoegen op het hoogste niveau",
+      "importHtml": "HTML importeren",
+      "htmlTooLarge": "Dat bestand is groter dan {max} tekens.",
+      "htmlReadFailed": "Het bestand kon niet worden gelezen.",
+      "preheader": "Preheader",
+      "font": "Lettertype",
+      "fonts": {
+        "system": "Systeem",
+        "arial": "Arial",
+        "georgia": "Georgia",
+        "helvetica": "Helvetica",
+        "times": "Times",
+        "verdana": "Verdana"
+      },
+      "background": "Achtergrond",
+      "settings": "E-mailinstellingen",
+      "preview": "Voorvertoning",
+      "previewUnavailable": "De voorvertoning is momenteel niet beschikbaar.",
+      "previewMissing": "Niet opgelost in de voorvertoning: {list}",
+      "previewPending": "Voorvertoning wordt gemaakt…",
+      "empty": "Voeg een blok toe om te beginnen."
+    },
+    "step": {
+      "template": "Nieuwsbriefsjabloon",
+      "none": "Geen (gebruik de onderstaande elementen)",
+      "hint": "Een opgeslagen sjabloon uit Instellingen > E-mailsjablonen vervangt de onderstaande elementen.",
+      "noTemplates": "Nog geen e-mailsjablonen.",
+      "clear": "Wissen"
+    }
   }
 }

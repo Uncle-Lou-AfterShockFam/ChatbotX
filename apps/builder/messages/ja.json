@@ -7518,5 +7518,106 @@
       "amount": "Fixed amount"
     },
     "paidSoFar": "{paid} paid"
+  },
+  "emailTemplates": {
+    "title": "メールテンプレート",
+    "newTemplate": "新しいテンプレート",
+    "showArchived": "アーカイブ済みを表示",
+    "noTemplates": "メールテンプレートはまだありません。",
+    "archived": "アーカイブ済み",
+    "pickOrCreate": "テンプレートを選ぶか、新しく作成してください。",
+    "saved": "メールテンプレートを保存しました",
+    "name": "名前",
+    "namePlaceholder": "例: 月刊ニュースレター",
+    "deleteTitle": "このメールテンプレートを削除しますか？",
+    "deleteConfirm": "これを使用しているフローのステップは送信を停止します。この操作は元に戻せません。",
+    "editor": {
+      "toolbar": {
+        "bold": "太字",
+        "italic": "斜体",
+        "underline": "下線",
+        "bulletList": "箇条書き",
+        "orderedList": "番号付きリスト",
+        "link": "リンク"
+      },
+      "linkInvalid": "https://、http://、mailto: のリンクのみ許可されています。",
+      "apply": "適用",
+      "insertField": "フィールドを挿入",
+      "align": "配置",
+      "aligns": {
+        "left": "左",
+        "center": "中央",
+        "right": "右"
+      },
+      "noFile": "ファイルが選択されていません",
+      "chooseFile": "ファイルを選択",
+      "level": "見出しレベル",
+      "image": "画像",
+      "imageUrl": "または画像の URL",
+      "alt": "代替テキスト",
+      "href": "クリック時のリンク先",
+      "width": "幅 (px)",
+      "label": "ラベル",
+      "action": "クリック時の動作",
+      "actions": {
+        "url": "URL を開く",
+        "flow": "フローを開始"
+      },
+      "url": "URL",
+      "flow": "フロー",
+      "color": "色",
+      "height": "高さ (px)",
+      "columnCount": "列数",
+      "html": "HTML",
+      "htmlNote": "インポートした HTML は送信時にサニタイズされます。スタイルシートとクラスは削除され、インラインの色とサイズは保持されます。プレビューを確認してください。",
+      "attachment": "ファイル",
+      "attachmentNote": "メールの添付ファイルとして送信されます(最大 10 ファイル、合計 10 MB まで)。",
+      "code": "コード",
+      "noSettings": "このブロックには設定がありません。",
+      "reorder": "並べ替え",
+      "removeBlock": "ブロックを削除",
+      "blocks": {
+        "heading": "見出し",
+        "text": "テキスト",
+        "image": "画像",
+        "button": "ボタン",
+        "divider": "区切り線",
+        "spacer": "スペーサー",
+        "columns": "列",
+        "html": "HTML",
+        "attachment": "添付ファイル",
+        "code": "コード"
+      },
+      "columnN": "列 {n}",
+      "addingToColumn": "列 {n} にブロックを追加中",
+      "addToRoot": "代わりに最上位レベルに追加",
+      "importHtml": "HTML をインポート",
+      "htmlTooLarge": "そのファイルは {max} 文字を超えています。",
+      "htmlReadFailed": "ファイルを読み込めませんでした。",
+      "preheader": "プリヘッダー",
+      "font": "フォント",
+      "fonts": {
+        "system": "システム",
+        "arial": "Arial",
+        "georgia": "Georgia",
+        "helvetica": "Helvetica",
+        "times": "Times",
+        "verdana": "Verdana"
+      },
+      "background": "背景",
+      "settings": "メール設定",
+      "preview": "プレビュー",
+      "previewUnavailable": "現在プレビューは利用できません。",
+      "previewMissing": "プレビューで解決されていません: {list}",
+      "previewPending": "プレビューを生成中…",
+      "empty": "ブロックを追加して開始してください。"
+    },
+    "step": {
+      "template": "ニュースレターテンプレート",
+      "none": "なし (以下の要素を使用)",
+      "hint": "設定 > メールテンプレート で保存したテンプレートは、以下の要素の代わりに使用されます。",
+      "noTemplates": "メールテンプレートはまだありません。",
+      "clear": "クリア"
+    }
   }
 }

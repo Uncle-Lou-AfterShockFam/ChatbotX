@@ -7518,5 +7518,106 @@
       "amount": "Fixed amount"
     },
     "paidSoFar": "{paid} paid"
+  },
+  "emailTemplates": {
+    "title": "Modelli email",
+    "newTemplate": "Nuovo modello",
+    "showArchived": "Mostra archiviati",
+    "noTemplates": "Nessun modello email al momento.",
+    "archived": "Archiviato",
+    "pickOrCreate": "Scegli un modello o creane uno nuovo.",
+    "saved": "Modello email salvato",
+    "name": "Nome",
+    "namePlaceholder": "es. Newsletter mensile",
+    "deleteTitle": "Eliminare questo modello email?",
+    "deleteConfirm": "I passaggi del flusso che lo usano smetteranno di inviarlo. Questa azione non può essere annullata.",
+    "editor": {
+      "toolbar": {
+        "bold": "Grassetto",
+        "italic": "Corsivo",
+        "underline": "Sottolineato",
+        "bulletList": "Elenco puntato",
+        "orderedList": "Elenco numerato",
+        "link": "Link"
+      },
+      "linkInvalid": "Sono consentiti solo link https://, http:// e mailto:.",
+      "apply": "Applica",
+      "insertField": "Inserisci campo",
+      "align": "Allineamento",
+      "aligns": {
+        "left": "Sinistra",
+        "center": "Centro",
+        "right": "Destra"
+      },
+      "noFile": "Nessun file scelto",
+      "chooseFile": "Scegli file",
+      "level": "Livello del titolo",
+      "image": "Immagine",
+      "imageUrl": "Oppure un URL immagine",
+      "alt": "Testo alternativo",
+      "href": "Link al clic",
+      "width": "Larghezza (px)",
+      "label": "Etichetta",
+      "action": "Al clic",
+      "actions": {
+        "url": "Apri un URL",
+        "flow": "Avvia un flusso"
+      },
+      "url": "URL",
+      "flow": "Flusso",
+      "color": "Colore",
+      "height": "Altezza (px)",
+      "columnCount": "Colonne",
+      "html": "HTML",
+      "htmlNote": "L'HTML importato viene sanificato all'invio: i fogli di stile e le classi vengono rimossi, i colori e le dimensioni inline vengono mantenuti. Controlla l'anteprima.",
+      "attachment": "File",
+      "attachmentNote": "Inviato come allegato email (fino a 10 file, 10 MB in totale).",
+      "code": "Codice",
+      "noSettings": "Questo blocco non ha impostazioni.",
+      "reorder": "Riordina",
+      "removeBlock": "Rimuovi blocco",
+      "blocks": {
+        "heading": "Titolo",
+        "text": "Testo",
+        "image": "Immagine",
+        "button": "Pulsante",
+        "divider": "Divisore",
+        "spacer": "Spaziatore",
+        "columns": "Colonne",
+        "html": "HTML",
+        "attachment": "Allegato",
+        "code": "Codice"
+      },
+      "columnN": "Colonna {n}",
+      "addingToColumn": "Aggiunta di blocchi alla colonna {n}",
+      "addToRoot": "Aggiungi invece al livello superiore",
+      "importHtml": "Importa HTML",
+      "htmlTooLarge": "Quel file supera i {max} caratteri.",
+      "htmlReadFailed": "Non è stato possibile leggere il file.",
+      "preheader": "Preheader",
+      "font": "Carattere",
+      "fonts": {
+        "system": "Sistema",
+        "arial": "Arial",
+        "georgia": "Georgia",
+        "helvetica": "Helvetica",
+        "times": "Times",
+        "verdana": "Verdana"
+      },
+      "background": "Sfondo",
+      "settings": "Impostazioni email",
+      "preview": "Anteprima",
+      "previewUnavailable": "L'anteprima non è disponibile al momento.",
+      "previewMissing": "Non risolto nell'anteprima: {list}",
+      "previewPending": "Generazione dell'anteprima…",
+      "empty": "Aggiungi un blocco per iniziare."
+    },
+    "step": {
+      "template": "Modello newsletter",
+      "none": "Nessuno (usa gli elementi sotto)",
+      "hint": "Un modello salvato da Impostazioni > Modelli email sostituisce gli elementi sotto.",
+      "noTemplates": "Nessun modello email al momento.",
+      "clear": "Cancella"
+    }
   }
 }

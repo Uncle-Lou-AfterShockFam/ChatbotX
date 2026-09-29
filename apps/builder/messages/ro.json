@@ -7518,5 +7518,106 @@
       "amount": "Fixed amount"
     },
     "paidSoFar": "{paid} paid"
+  },
+  "emailTemplates": {
+    "title": "Șabloane de e-mail",
+    "newTemplate": "Șablon nou",
+    "showArchived": "Afișează arhivatele",
+    "noTemplates": "Încă nu există șabloane de e-mail.",
+    "archived": "Arhivat",
+    "pickOrCreate": "Alege un șablon sau creează unul nou.",
+    "saved": "Șablonul de e-mail a fost salvat",
+    "name": "Nume",
+    "namePlaceholder": "ex. Buletin informativ lunar",
+    "deleteTitle": "Ștergi acest șablon de e-mail?",
+    "deleteConfirm": "Pașii de flux care îl folosesc vor opri trimiterea lui. Această acțiune nu poate fi anulată.",
+    "editor": {
+      "toolbar": {
+        "bold": "Aldin",
+        "italic": "Cursiv",
+        "underline": "Subliniat",
+        "bulletList": "Listă cu marcatori",
+        "orderedList": "Listă numerotată",
+        "link": "Link"
+      },
+      "linkInvalid": "Sunt permise doar linkuri https://, http:// și mailto:.",
+      "apply": "Aplică",
+      "insertField": "Inserează câmp",
+      "align": "Alinierea",
+      "aligns": {
+        "left": "Stânga",
+        "center": "Centru",
+        "right": "Dreapta"
+      },
+      "noFile": "Niciun fișier ales",
+      "chooseFile": "Alege fișier",
+      "level": "Nivel titlu",
+      "image": "Imagine",
+      "imageUrl": "Sau un URL de imagine",
+      "alt": "Text alternativ",
+      "href": "Link la clic",
+      "width": "Lățime (px)",
+      "label": "Etichetă",
+      "action": "La clic",
+      "actions": {
+        "url": "Deschide un URL",
+        "flow": "Pornește un flux"
+      },
+      "url": "URL",
+      "flow": "Flux",
+      "color": "Culoare",
+      "height": "Înălțime (px)",
+      "columnCount": "Coloane",
+      "html": "HTML",
+      "htmlNote": "HTML-ul importat este sanitizat la trimitere: foile de stil și clasele sunt eliminate, culorile și dimensiunile inline sunt păstrate. Verifică previzualizarea.",
+      "attachment": "Fișier",
+      "attachmentNote": "Trimis ca fișier atașat la e-mail (până la 10 fișiere, 10 MB în total).",
+      "code": "Cod",
+      "noSettings": "Acest bloc nu are setări.",
+      "reorder": "Reordonează",
+      "removeBlock": "Elimină blocul",
+      "blocks": {
+        "heading": "Titlu",
+        "text": "Text",
+        "image": "Imagine",
+        "button": "Buton",
+        "divider": "Separator",
+        "spacer": "Spațiu",
+        "columns": "Coloane",
+        "html": "HTML",
+        "attachment": "Fișier atașat",
+        "code": "Cod"
+      },
+      "columnN": "Coloana {n}",
+      "addingToColumn": "Se adaugă blocuri în coloana {n}",
+      "addToRoot": "Adaugă la nivelul de sus în schimb",
+      "importHtml": "Importă HTML",
+      "htmlTooLarge": "Acel fișier are mai mult de {max} caractere.",
+      "htmlReadFailed": "Fișierul nu a putut fi citit.",
+      "preheader": "Preheader",
+      "font": "Font",
+      "fonts": {
+        "system": "Sistem",
+        "arial": "Arial",
+        "georgia": "Georgia",
+        "helvetica": "Helvetica",
+        "times": "Times",
+        "verdana": "Verdana"
+      },
+      "background": "Fundal",
+      "settings": "Setări e-mail",
+      "preview": "Previzualizare",
+      "previewUnavailable": "Previzualizarea nu este disponibilă acum.",
+      "previewMissing": "Nerezolvat în previzualizare: {list}",
+      "previewPending": "Se generează previzualizarea…",
+      "empty": "Adaugă un bloc pentru a începe."
+    },
+    "step": {
+      "template": "Șablon de buletin informativ",
+      "none": "Niciunul (folosește elementele de mai jos)",
+      "hint": "Un șablon salvat din Setări > Șabloane de e-mail înlocuiește elementele de mai jos.",
+      "noTemplates": "Încă nu există șabloane de e-mail.",
+      "clear": "Golește"
+    }
   }
 }
