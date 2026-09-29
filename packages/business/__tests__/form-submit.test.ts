@@ -11,6 +11,11 @@ const m = vi.hoisted(() => {
   const state = {
     selects: [] as unknown[][],
     inserted: [] as Record<string, unknown>[],
+    updated: [] as {
+      table: unknown
+      set: Record<string, unknown>
+      where: unknown
+    }[],
     calls: [] as string[],
     txFails: false,
     /** s201: rows the option-target lookup (`from(CustomField)`) returns. */
@@ -52,6 +57,16 @@ const m = vi.hoisted(() => {
           const row = { ...v, createdAt: new Date(), updatedAt: new Date() }
           state.inserted.push(row)
           return Promise.resolve([row])
+        },
+      }),
+    }),
+    // s224a: closeFormVisits is the only update the web submit issues.
+    update: (table: unknown) => ({
+      set: (v: Record<string, unknown>) => ({
+        where: (w: unknown) => {
+          state.calls.push("update")
+          state.updated.push({ table, set: v, where: w })
+          return Promise.resolve([])
         },
       }),
     }),
@@ -113,6 +128,7 @@ vi.mock("@chatbotx.io/database/client", () => ({
   desc: (f: unknown) => ({ desc: f }),
   eq: (f: unknown, v: unknown) => ({ f, v }),
   gte: (f: unknown, v: unknown) => ({ gte: [f, v] }),
+  isNull: (f: unknown) => ({ isNull: f }),
   inArray: (f: unknown, v: unknown) => ({ in: [f, v] }),
   isUniqueViolationError: (e: unknown) =>
     typeof e === "object" &&
@@ -134,6 +150,12 @@ vi.mock("@chatbotx.io/database/schema", () => ({
     dedupHash: "dedupHash",
     ipHash: "ipHash",
     createdAt: "createdAt",
+  },
+  formVisitModel: {
+    formId: "visit.formId",
+    contactId: "visit.contactId",
+    submittedAt: "visit.submittedAt",
+    abandonEmittedAt: "visit.abandonEmittedAt",
   },
 }))
 const link = vi.hoisted(() => ({ contactFromFormLink: vi.fn() }))
@@ -311,6 +333,7 @@ beforeEach(() => {
   vi.spyOn(formSubmitService, "admit").mockResolvedValue(null)
   m.state.selects.length = 0
   m.state.inserted.length = 0
+  m.state.updated.length = 0
   m.state.calls.length = 0
   m.state.txFails = false
   m.state.optionTargets = []
@@ -397,6 +420,9 @@ describe("formSubmitService.submit (s200)", () => {
     expect(m.state.inserted).toHaveLength(0)
     expect(m.emitFormSubmitted).not.toHaveBeenCalled()
     expect(FORM_DEDUP_WINDOW_SECONDS).toBe(300)
+    // s224a: the first copy answered the form, so a visit opened since closes.
+    expect(m.state.updated).toHaveLength(1)
+    expect(m.state.updated[0]?.set).toEqual({ submittedAt: expect.any(Date) })
   })
 
   test("budget: the per-form-per-ip hourly limit refuses with a Retry-After, nothing persisted", async () => {
@@ -415,6 +441,8 @@ describe("formSubmitService.submit (s200)", () => {
     expect(m.setValuesInTransaction).not.toHaveBeenCalled()
     expect(m.attachByNamesToContacts).not.toHaveBeenCalled()
     expect(m.emitFormSubmitted).not.toHaveBeenCalled()
+    // No contact, no visit to close (s224a).
+    expect(m.state.updated).toHaveLength(0)
   })
 
   test("a fullName answer names a new contact first + last and writes full_name (s219)", async () => {
@@ -514,6 +542,13 @@ describe("formSubmitService.submit (s200)", () => {
     // after commit, in order: custom-field events, tags, formSubmitted
     const commitAt = m.state.calls.indexOf("tx:commit")
     expect(commitAt).toBeGreaterThan(-1)
+    // s224a: the contact's open web visit closes INSIDE the submission tx.
+    const closeAt = m.state.calls.lastIndexOf("update")
+    expect(closeAt).toBeGreaterThan(m.state.calls.indexOf("insert"))
+    expect(closeAt).toBeLessThan(commitAt)
+    expect(m.state.updated.at(-1)?.set).toEqual({
+      submittedAt: expect.any(Date),
+    })
     expect(m.emitCustomFieldChanges).toHaveBeenCalledWith({
       workspaceId: WS,
       contactId: "c-new",

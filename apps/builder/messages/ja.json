@@ -2536,7 +2536,7 @@
       "eventTagApplied": "A tag is applied",
       "eventCustomFieldChanged": "A custom field changes",
       "eventFormSubmitted": "A form is submitted",
-      "eventFormAbandoned": "A chat form is abandoned",
+      "eventFormAbandoned": "A form is abandoned",
       "eventFormLabel": "Form",
       "eventTagLabel": "Tag",
       "eventCustomFieldLabel": "Custom field",
@@ -4454,7 +4454,7 @@
       "taskAssigned": "Task assigned",
       "dealMentioned": "Teammate mentioned on a deal",
       "formSubmitted": "Form submitted",
-      "formAbandoned": "Chat form abandoned",
+      "formAbandoned": "Form abandoned",
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
@@ -4931,7 +4931,9 @@
         "chat": "フォーム質問ステップで 1 問ずつ質問します。"
       },
       "profilingLimit": "チャットごとの質問数",
-      "profilingLimitHint": "段階的プロファイリング: 1 回の実行でこの数まで質問します。空欄 = すべて質問。"
+      "profilingLimitHint": "段階的プロファイリング: 1 回の実行でこの数まで質問します。空欄 = すべて質問。",
+      "abandonAfterMinutes": "放棄とみなすまで (分)",
+      "abandonAfterMinutesHint": "個人リンクの訪問者が入力を始めてこの時間内に送信しないと、フォーム放棄が発生します (5-1440)。"
     },
     "submitActions": {
       "title": "Actions after submit",

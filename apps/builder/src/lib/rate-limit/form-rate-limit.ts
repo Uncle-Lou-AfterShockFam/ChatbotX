@@ -46,5 +46,33 @@ export const checkFormRateLimit = ({
   })
 }
 
+/**
+ * The start beacon (s224a A2-4) has its OWN budget, so a page that beacons
+ * never eats its visitor's submit allowance: 30 / min per ip, 300 / min per
+ * form. A real page sends one per load.
+ */
+const START_IP_LIMIT = 30
+const START_FORM_LIMIT = 300
+const startKey = (...parts: string[]) => ["form-start", ...parts].join(":")
+
+export const checkFormStartRateLimit = ({
+  formId,
+  clientIp,
+  store,
+  now = Date.now(),
+}: FormRateLimitInput): Promise<FormRateLimitResult> => {
+  const suffix = windowSuffix(now, WINDOW_SECONDS)
+  return checkFixedWindow({
+    buckets: [
+      { key: startKey("ip", clientIp, suffix), limit: START_IP_LIMIT },
+      { key: startKey("form", formId, suffix), limit: START_FORM_LIMIT },
+    ],
+    windowSeconds: WINDOW_SECONDS,
+    store,
+    now,
+    scope: "form-start",
+  })
+}
+
 /** Test seam: forget every in-memory window. */
 export const resetFormRateLimitMemory = resetFixedWindowMemory

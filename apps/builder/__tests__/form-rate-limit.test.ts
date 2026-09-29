@@ -7,9 +7,11 @@ vi.mock("@/lib/log", () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }))
 
-const { checkFormRateLimit, resetFormRateLimitMemory } = await import(
-  "../src/lib/rate-limit/form-rate-limit"
-)
+const {
+  checkFormRateLimit,
+  checkFormStartRateLimit,
+  resetFormRateLimitMemory,
+} = await import("../src/lib/rate-limit/form-rate-limit")
 
 /** A store that counts in memory but through the real key contract. */
 const makeStore = () => {
@@ -118,5 +120,73 @@ describe("form submit rate limit (s200)", () => {
       ).limited
     }
     expect(limited).toBe(true)
+  })
+})
+
+describe("form start beacon rate limit (s224a A2-4)", () => {
+  beforeEach(() => resetFormRateLimitMemory())
+
+  test("30 per ip per minute on its OWN keys: beacons never spend the submit budget", async () => {
+    const store = makeStore()
+    const now = 1_758_800_000_000
+    for (let i = 0; i < 30; i++) {
+      expect(
+        (
+          await checkFormStartRateLimit({
+            formId: "f1",
+            clientIp: "203.0.113.1",
+            store,
+            now,
+          })
+        ).limited,
+      ).toBe(false)
+    }
+    expect(
+      (
+        await checkFormStartRateLimit({
+          formId: "f1",
+          clientIp: "203.0.113.1",
+          store,
+          now,
+        })
+      ).limited,
+    ).toBe(true)
+    expect(
+      [...store.counters.keys()].every((k) => k.startsWith("form-start:")),
+    ).toBe(true)
+    // The same visitor can still submit.
+    expect(
+      (
+        await checkFormRateLimit({
+          formId: "f1",
+          clientIp: "203.0.113.1",
+          store,
+          now,
+        })
+      ).limited,
+    ).toBe(false)
+  })
+
+  test("300 per form per minute across visitors", async () => {
+    const store = makeStore()
+    const now = 1_758_800_000_000
+    for (let i = 0; i < 300; i++) {
+      await checkFormStartRateLimit({
+        formId: "f2",
+        clientIp: `198.51.100.${i % 250}-${i}`,
+        store,
+        now,
+      })
+    }
+    expect(
+      (
+        await checkFormStartRateLimit({
+          formId: "f2",
+          clientIp: "192.0.2.77",
+          store,
+          now,
+        })
+      ).limited,
+    ).toBe(true)
   })
 })

@@ -1,8 +1,10 @@
 "use client"
 
 import {
+  FORM_MAX_ABANDON_MINUTES,
   FORM_MAX_PROFILING_LIMIT,
   FORM_MAX_SUBMISSION_LIMIT,
+  FORM_MIN_ABANDON_MINUTES,
   type FormSettings,
   formChannels,
 } from "@chatbotx.io/database/partials"
@@ -253,6 +255,40 @@ export function FormSettingsPanel(props: {
             />
             <span className="text-muted-foreground text-xs">
               {t("forms.settings.profilingLimitHint")}
+            </span>
+          </div>
+        ) : null}
+        {props.settings.channels.includes("web") ? (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="fs-abandon">
+              {t("forms.settings.abandonAfterMinutes")}
+            </Label>
+            <Input
+              id="fs-abandon"
+              max={FORM_MAX_ABANDON_MINUTES}
+              min={FORM_MIN_ABANDON_MINUTES}
+              // Clamp the floor on blur, not per keystroke: typing "30" passes "3".
+              onBlur={() =>
+                set({
+                  abandonAfterMinutes: Math.max(
+                    FORM_MIN_ABANDON_MINUTES,
+                    props.settings.abandonAfterMinutes,
+                  ),
+                })
+              }
+              onChange={(e) => {
+                const n = Number.parseInt(e.target.value, 10)
+                set({
+                  abandonAfterMinutes: Number.isNaN(n)
+                    ? FORM_MIN_ABANDON_MINUTES
+                    : Math.min(FORM_MAX_ABANDON_MINUTES, Math.max(1, n)),
+                })
+              }}
+              type="number"
+              value={props.settings.abandonAfterMinutes}
+            />
+            <span className="text-muted-foreground text-xs">
+              {t("forms.settings.abandonAfterMinutesHint")}
             </span>
           </div>
         ) : null}

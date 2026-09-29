@@ -273,3 +273,56 @@ export const formSessionModel = pgTable(
     ),
   ],
 )
+
+/**
+ * One web visit of a published form by a contact a PERSONAL form link names
+ * (s224a A2-4): the page's first interaction opens it, a submit closes it
+ * (`submittedAt`), and the sweep closes the rest at `abandonAt` with
+ * `formAbandoned` (channel web; the `abandonEmittedAt` compare-and-set is
+ * the claim). An anonymous visitor never has one. At most one OPEN visit per
+ * (form, contact): a later beacon refreshes it instead of adding a row.
+ */
+export const formVisitModel = pgTable(
+  "FormVisit",
+  {
+    ...sharedColumns,
+    workspaceId: bigintAsString()
+      .notNull()
+      .references(() => workspaceModel.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    formId: bigintAsString()
+      .notNull()
+      .references(() => formModel.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    contactId: bigintAsString()
+      .notNull()
+      .references(() => contactModel.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    startedAt: timestamp(timestampConfig).notNull(),
+    lastActivityAt: timestamp(timestampConfig).notNull(),
+    /** lastActivityAt + the form's abandonAfterMinutes at that beacon. */
+    abandonAt: timestamp(timestampConfig).notNull(),
+    submittedAt: timestamp(timestampConfig),
+    abandonEmittedAt: timestamp(timestampConfig),
+  },
+  (table) => [
+    uniqueIndex("FormVisit_formId_contactId_open_key")
+      .on(table.formId, table.contactId)
+      .where(
+        sql`${table.submittedAt} is null and ${table.abandonEmittedAt} is null`,
+      ),
+    index("FormVisit_abandonAt_open_idx")
+      .on(table.abandonAt)
+      .where(
+        sql`${table.submittedAt} is null and ${table.abandonEmittedAt} is null`,
+      ),
+    index("FormVisit_createdAt_idx").on(table.createdAt),
+    index("FormVisit_contactId_idx").on(table.contactId),
+  ],
+)

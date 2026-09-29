@@ -2678,7 +2678,7 @@
       "eventTagApplied": "A tag is applied",
       "eventCustomFieldChanged": "A custom field changes",
       "eventFormSubmitted": "A form is submitted",
-      "eventFormAbandoned": "A chat form is abandoned",
+      "eventFormAbandoned": "A form is abandoned",
       "eventFormLabel": "Form",
       "eventTagLabel": "Tag",
       "eventCustomFieldLabel": "Custom field",
@@ -4392,7 +4392,7 @@
       "taskAssigned": "Task assigned",
       "dealMentioned": "Teammate mentioned on a deal",
       "formSubmitted": "Form submitted",
-      "formAbandoned": "Chat form abandoned",
+      "formAbandoned": "Form abandoned",
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
@@ -4991,7 +4991,9 @@
         "chat": "Hỏi từng câu bằng bước Hỏi biểu mẫu."
       },
       "profilingLimit": "Số câu hỏi mỗi lượt chat",
-      "profilingLimitHint": "Hồ sơ lũy tiến: tối đa số câu hỏi này mỗi lượt. Trống = hỏi tất cả."
+      "profilingLimitHint": "Hồ sơ lũy tiến: tối đa số câu hỏi này mỗi lượt. Trống = hỏi tất cả.",
+      "abandonAfterMinutes": "Bỏ dở sau (phút)",
+      "abandonAfterMinutesHint": "Khách từ liên kết cá nhân bắt đầu nhưng không gửi trong thời gian này sẽ kích hoạt Biểu mẫu bị bỏ dở (5-1440)."
     },
     "submitActions": {
       "title": "Actions after submit",

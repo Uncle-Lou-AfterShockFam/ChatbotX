@@ -101,21 +101,27 @@ export type FormSubmittedMetadata = {
 }
 
 /**
- * A chat form run the contact left (s220 A2-3): it timed out, or every
- * attempt at one question failed. `sourceId` = the form id. Web forms keep
- * no server state until submit, so they never emit it.
+ * A form the contact left (s220 A2-3; web since s224a A2-4). `sourceId` =
+ * the form id. Chat: the run timed out, or every attempt at one question
+ * failed. Web: a visitor a PERSONAL form link named started the form and
+ * did not submit within its `abandonAfterMinutes` (reason always timeout);
+ * an anonymous web visitor never emits it.
  */
 export type FormAbandonedMetadata = {
   formId: string
-  formSessionId: string
-  channel: "chat"
+  channel: "chat" | "web"
   reason: "timeout" | "attempts"
-  /** The question the run was on; null when it ended between questions. */
+  /** The chat run; absent on the web. */
+  formSessionId?: string
+  /** The web visit; absent in chat. */
+  formVisitId?: string
+  /** The question the run was on; null when it ended between questions (always null on the web). */
   lastFieldKey: string | null
-  /** Questions sent before it ended (answered, skipped or display blocks). */
+  /** Questions sent before it ended (answered, skipped or display blocks); 0 on the web. */
   askedCount: number
-  conversationId: string
-  flowId: string
+  /** The chat run's conversation and flow; absent on the web. */
+  conversationId?: string
+  flowId?: string
   /** ISO instant the run ended (the catch-up may emit hours later). */
   occurredAt?: string
 }

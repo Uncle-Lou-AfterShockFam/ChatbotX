@@ -2678,7 +2678,7 @@
       "eventTagApplied": "A tag is applied",
       "eventCustomFieldChanged": "A custom field changes",
       "eventFormSubmitted": "A form is submitted",
-      "eventFormAbandoned": "A chat form is abandoned",
+      "eventFormAbandoned": "A form is abandoned",
       "eventFormLabel": "Form",
       "eventTagLabel": "Tag",
       "eventCustomFieldLabel": "Custom field",
@@ -4475,7 +4475,7 @@
       "taskAssigned": "Task assigned",
       "dealMentioned": "Teammate mentioned on a deal",
       "formSubmitted": "Form submitted",
-      "formAbandoned": "Chat form abandoned",
+      "formAbandoned": "Form abandoned",
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
@@ -4952,7 +4952,9 @@
         "chat": "يُطرح سؤالًا بسؤال عبر خطوة طرح النموذج."
       },
       "profilingLimit": "عدد الأسئلة في كل دردشة",
-      "profilingLimitHint": "التنميط التدريجي: بحد أقصى هذا العدد من الأسئلة في الجولة الواحدة. فارغ = اسأل كل شيء."
+      "profilingLimitHint": "التنميط التدريجي: بحد أقصى هذا العدد من الأسئلة في الجولة الواحدة. فارغ = اسأل كل شيء.",
+      "abandonAfterMinutes": "التخلي بعد (دقائق)",
+      "abandonAfterMinutesHint": "زوار الرابط الشخصي الذين يبدؤون ولا يرسلون خلال هذه المدة يطلقون حدث التخلي عن النموذج (5-1440)."
     },
     "submitActions": {
       "title": "Actions after submit",

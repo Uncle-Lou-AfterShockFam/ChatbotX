@@ -29,7 +29,7 @@ export const waitStepDelayTypes = z.enum([
 /**
  * `event`: park the run until this lands on the contact, or the timeout fires.
  * The form events (s220 A2-3) wait on ONE form: submitted on any channel, or
- * a chat run of it abandoned.
+ * abandoned (a chat run, or since s224a a personal-link web visit).
  */
 export const waitStepEventTypes = z.enum([
   "tagApplied",

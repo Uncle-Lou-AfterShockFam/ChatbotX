@@ -14,7 +14,8 @@ export const formSubmitted = z.object({
 
 /**
  * `formAbandoned` (s220 A2-3): a chat run of ONE form timed out or used up
- * its attempts; pinned by form id like `formSubmitted`.
+ * its attempts, or (s224a) a personal-link web visit of it went idle;
+ * pinned by form id like `formSubmitted`.
  */
 export const formAbandoned = z.object({
   id: zodBigintAsString().optional(),

@@ -346,17 +346,19 @@ const PAYLOAD_BUILDERS = {
       score: typeof data.score === "number" ? data.score : null,
     },
   }),
-  // Chat form runs (s220 A2-3): where the contact stopped, never the answers.
+  // Abandoned forms (s220 A2-3 chat, s224a web): where the contact stopped,
+  // never the answers. A web visit has no session / conversation.
   [triggerEventTypes.enum.formAbandoned]: (basePayload, data) => ({
     ...basePayload,
     form: {
       id: data.formId as string,
-      session_id: data.formSessionId as string,
-      channel: "chat",
+      channel: data.channel === "web" ? "web" : "chat",
+      session_id: (data.formSessionId as string | undefined) ?? null,
+      visit_id: (data.formVisitId as string | undefined) ?? null,
       reason: data.reason === "attempts" ? "attempts" : "timeout",
       last_field_key: (data.lastFieldKey as string | null) ?? null,
       asked_count: Number(data.askedCount ?? 0),
-      conversation_id: data.conversationId as string,
+      conversation_id: (data.conversationId as string | undefined) ?? null,
     },
   }),
   [triggerEventTypes.enum.invoiceCreated]: buildInvoicePayload,

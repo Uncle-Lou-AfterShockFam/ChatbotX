@@ -3451,7 +3451,7 @@
       "eventTagApplied": "A tag is applied",
       "eventCustomFieldChanged": "A custom field changes",
       "eventFormSubmitted": "A form is submitted",
-      "eventFormAbandoned": "A chat form is abandoned",
+      "eventFormAbandoned": "A form is abandoned",
       "eventFormLabel": "Form",
       "eventTagLabel": "Tag",
       "eventCustomFieldLabel": "Custom field",
@@ -5083,7 +5083,9 @@
         "chat": "Frågas en i taget av ett Fråga formulär-steg."
       },
       "profilingLimit": "Frågor per chatt",
-      "profilingLimitHint": "Progressiv profilering: högst så många frågor per körning. Tomt = fråga allt."
+      "profilingLimitHint": "Progressiv profilering: högst så många frågor per körning. Tomt = fråga allt.",
+      "abandonAfterMinutes": "Övergivet efter (minuter)",
+      "abandonAfterMinutesHint": "Besökare via personlig länk som börjar men inte skickar inom denna tid utlöser Formulär övergivet (5-1440)."
     },
     "submitActions": {
       "title": "Actions after submit",
@@ -5483,7 +5485,7 @@
       "taskAssigned": "Task assigned",
       "dealMentioned": "Teammate mentioned on a deal",
       "formSubmitted": "Form submitted",
-      "formAbandoned": "Chat form abandoned",
+      "formAbandoned": "Form abandoned",
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",

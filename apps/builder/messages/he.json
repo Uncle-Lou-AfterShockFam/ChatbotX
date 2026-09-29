@@ -546,7 +546,7 @@
       "eventTagApplied": "A tag is applied",
       "eventCustomFieldChanged": "A custom field changes",
       "eventFormSubmitted": "A form is submitted",
-      "eventFormAbandoned": "A chat form is abandoned",
+      "eventFormAbandoned": "A form is abandoned",
       "eventFormLabel": "Form",
       "eventTagLabel": "Tag",
       "eventCustomFieldLabel": "Custom field",
@@ -2485,7 +2485,7 @@
       "taskAssigned": "Task assigned",
       "dealMentioned": "Teammate mentioned on a deal",
       "formSubmitted": "Form submitted",
-      "formAbandoned": "Chat form abandoned",
+      "formAbandoned": "Form abandoned",
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
@@ -2962,7 +2962,9 @@
         "chat": "נשאל שאלה אחר שאלה בשלב שאל טופס."
       },
       "profilingLimit": "שאלות לכל צ'אט",
-      "profilingLimitHint": "פרופיילינג הדרגתי: לכל היותר מספר שאלות זה בריצה אחת. ריק = לשאול הכל."
+      "profilingLimitHint": "פרופיילינג הדרגתי: לכל היותר מספר שאלות זה בריצה אחת. ריק = לשאול הכל.",
+      "abandonAfterMinutes": "נטישה אחרי (דקות)",
+      "abandonAfterMinutesHint": "מבקרים מקישור אישי שמתחילים ולא שולחים בתוך הזמן הזה מפעילים את נטישת טופס (5-1440)."
     },
     "submitActions": {
       "title": "Actions after submit",

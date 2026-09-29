@@ -91,12 +91,42 @@ describe("form webhooks", () => {
     expect(payload.form).toEqual({
       id: "form-1",
       session_id: "fs-1",
+      visit_id: null,
       channel: "chat",
       reason: "attempts",
       last_field_key: "email",
       asked_count: 3,
       conversation_id: "conv-1",
     })
+  })
+
+  test("a web form_abandoned (s224a) names the visit; no session, no conversation", async () => {
+    const payload = await build(triggerEventTypes.enum.formAbandoned, {
+      formId: "form-1",
+      formVisitId: "fv-1",
+      channel: "web",
+      reason: "timeout",
+      lastFieldKey: null,
+      askedCount: 0,
+    })
+    expect(payload.form).toEqual({
+      id: "form-1",
+      session_id: null,
+      visit_id: "fv-1",
+      channel: "web",
+      reason: "timeout",
+      last_field_key: null,
+      asked_count: 0,
+      conversation_id: null,
+    })
+  })
+
+  test("an unknown channel on form_abandoned reads as chat, never echoed", async () => {
+    const payload = await build(triggerEventTypes.enum.formAbandoned, {
+      formId: "form-1",
+      channel: "<script>",
+    })
+    expect(payload.form).toMatchObject({ channel: "chat" })
   })
 
   test("form_abandoned with an unknown reason and no field reads as a timeout", async () => {

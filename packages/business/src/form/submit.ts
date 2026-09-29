@@ -7,6 +7,7 @@ import {
   eq,
   gte,
   inArray,
+  isNull,
   isUniqueViolationError,
   sql,
 } from "@chatbotx.io/database/client"
@@ -38,6 +39,7 @@ import {
   customFieldModel,
   formModel,
   formSubmissionModel,
+  formVisitModel,
 } from "@chatbotx.io/database/schema"
 import type { FormSubmissionModel } from "@chatbotx.io/database/types"
 import { contactFromFormLink } from "@chatbotx.io/encryption/form-link-token"
@@ -263,6 +265,29 @@ const closedResult = (
     reason === "pending" ? settings.pendingMessage : settings.closedMessage,
 })
 
+/**
+ * The contact answered the form (web or chat): its open web visit is done
+ * and must never read as abandoned (s224a A2-4). Conditional on the visit
+ * still being open, so it serialises with the sweep's claim on the row:
+ * exactly one of the two closes it.
+ */
+export async function closeFormVisits(
+  tx: DatabaseClient,
+  props: { formId: string; contactId: string; now: Date },
+): Promise<void> {
+  await tx
+    .update(formVisitModel)
+    .set({ submittedAt: props.now })
+    .where(
+      and(
+        eq(formVisitModel.formId, props.formId),
+        eq(formVisitModel.contactId, props.contactId),
+        isNull(formVisitModel.submittedAt),
+        isNull(formVisitModel.abandonEmittedAt),
+      ),
+    )
+}
+
 export class FormSubmitService {
   async submit(input: SubmitFormInput): Promise<SubmitFormResult> {
     const now = input.now ?? new Date()
@@ -336,6 +361,14 @@ export class FormSubmitService {
 
     const duplicate = await this.findRecentDuplicate({ form, dedupHash, now })
     if (duplicate) {
+      if (duplicate.contactId !== null) {
+        // A visit opened after the first copy went in is answered by it too.
+        await closeFormVisits(db, {
+          formId: form.id,
+          contactId: duplicate.contactId,
+          now,
+        })
+      }
       return {
         kind: "ok",
         duplicate: true,
@@ -424,6 +457,13 @@ export class FormSubmitService {
           tx,
         })
         if (duplicateOf) {
+          if (duplicateOf.contactId !== null) {
+            await closeFormVisits(tx, {
+              formId: form.id,
+              contactId: duplicateOf.contactId,
+              now,
+            })
+          }
           return { row: duplicateOf, pending: [], duplicateOf }
         }
         const pending =
@@ -469,6 +509,9 @@ export class FormSubmitService {
             dedupHash,
           })
           .returning()
+        if (contactId !== null) {
+          await closeFormVisits(tx, { formId: form.id, contactId, now })
+        }
         return { row, pending, duplicateOf: null }
       }, ADMISSION_ISOLATION)
     } catch (error) {
@@ -1026,7 +1069,7 @@ export class FormSubmitService {
    * The contact a signed form link names for THIS form, when it still
    * exists in the workspace; null otherwise (an anonymous submission).
    */
-  private async linkedContact(
+  async linkedContact(
     input: Pick<SubmitFormInput, "workspaceId" | "formLinkToken">,
     formId: string,
   ): Promise<string | null> {
