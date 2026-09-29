@@ -337,6 +337,13 @@ describe("s220b: broadcast attribution", () => {
     expect(prepareStepDocumentMock).toHaveBeenLastCalledWith(
       expect.objectContaining({ broadcastId: undefined }),
     )
+    await sendEmail({
+      ...makeProps({ templateId: "77", elements: [] }),
+      metadata: { type: "broadcast", contactInboxId: "ci-1" },
+    } as never)
+    expect(prepareStepDocumentMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ broadcastId: undefined }),
+    )
   })
 
   test("a send outside a broadcast has no broadcastId", async () => {

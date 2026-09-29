@@ -435,8 +435,12 @@ export async function sendEmail({
         step,
         workspaceId: conversation.workspaceId,
         variables,
+        // Job metadata is not runtime-validated: only a real id scopes the cache.
         broadcastId:
-          metadata?.type === BROADCAST_PAYLOAD_TYPE
+          metadata?.type === BROADCAST_PAYLOAD_TYPE &&
+          (typeof metadata.broadcastId === "string" ||
+            typeof metadata.broadcastId === "number") &&
+          String(metadata.broadcastId) !== ""
             ? String(metadata.broadcastId)
             : undefined,
       })

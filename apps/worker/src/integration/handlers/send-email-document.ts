@@ -48,6 +48,8 @@ export const ATTACHMENT_READ_TIMEOUT_MS = 60_000
  */
 export const ATTACHMENT_CACHE_BYTES = 2 * MAX_ATTACHMENT_BYTES_TOTAL
 export const ATTACHMENT_CACHE_TTL_MS = 10 * 60_000
+/** Entries are bounded by count too: an empty file costs 0 bytes (Codex probe). */
+export const ATTACHMENT_CACHE_MAX_ENTRIES = 200
 const attachmentCache = new Map<string, { content: Buffer; at: number }>()
 let attachmentCacheBytes = 0
 
@@ -79,8 +81,18 @@ function cacheSet(key: string, content: Buffer, now: number) {
     return
   }
   cacheDelete(key)
+  // Expired entries go first (a finished broadcast's are never read again),
+  // then the least recently used until both bounds hold.
+  for (const [oldKey, entry] of attachmentCache) {
+    if (now - entry.at > ATTACHMENT_CACHE_TTL_MS) {
+      cacheDelete(oldKey)
+    }
+  }
   for (const oldest of attachmentCache.keys()) {
-    if (attachmentCacheBytes + content.length <= ATTACHMENT_CACHE_BYTES) {
+    if (
+      attachmentCacheBytes + content.length <= ATTACHMENT_CACHE_BYTES &&
+      attachmentCache.size < ATTACHMENT_CACHE_MAX_ENTRIES
+    ) {
       break
     }
     cacheDelete(oldest)
