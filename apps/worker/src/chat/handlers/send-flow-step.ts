@@ -528,6 +528,8 @@ export async function sendFlowStep({
     {
       contactInbox: targetContactInbox,
       conversation,
+      // a message step goes to this contact's own conversation
+      personalLinks: true,
       ...(appointmentId ? { appointmentId } : {}),
     },
   )

@@ -10,6 +10,7 @@ import type {
 } from "@chatbotx.io/utils/form"
 import {
   evaluateForm,
+  formProfileContext,
   formProfiledOutKeys,
   validateFormSubmission,
 } from "@chatbotx.io/utils/form"
@@ -56,11 +57,11 @@ export function FormPreview(props: {
     if (profile === null) {
       return full
     }
-    const hidden = formProfiledOutKeys(definition, values, {
-      known: new Set(profile.known),
-      priorSubmissions: profile.priorSubmissions,
-      limit: profile.limit,
-    })
+    const hidden = formProfiledOutKeys(
+      definition,
+      values,
+      formProfileContext(profile),
+    )
     return {
       ...full,
       visibleFields: new Set(

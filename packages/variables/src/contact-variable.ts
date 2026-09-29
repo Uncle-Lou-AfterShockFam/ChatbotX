@@ -126,6 +126,8 @@ type GetAllProps = {
   conversation?: ConversationModel | null
   appointmentId?: string
   workspace?: WorkspaceModel
+  /** See ContactVariableContext.personalLinks: direct sends only. */
+  personalLinks?: boolean
 }
 
 const loadContact = async (contactId: string): Promise<ContactModel> => {
@@ -217,6 +219,7 @@ export const contactVariableService = {
       customFieldsMap,
       botFieldsMap,
       workspace,
+      personalLinks: input.personalLinks === true,
     }
   },
 

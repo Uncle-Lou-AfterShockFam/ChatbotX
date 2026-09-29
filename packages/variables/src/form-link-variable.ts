@@ -26,6 +26,11 @@ export const resolveFormLinkVariable = async (
   variables: ReplaceVariableProps,
   variable: string,
 ): Promise<string> => {
+  // Fail closed: only a direct send to this contact mints a live link
+  // (skeptic s220c: a public comment reply or a Sheets row would publish it).
+  if (variables.personalLinks !== true) {
+    return ""
+  }
   const formId = getFormLinkVariableFormId(variable)
   const workspaceId = variables.contact?.workspaceId
   const contactId = variables.contact?.id

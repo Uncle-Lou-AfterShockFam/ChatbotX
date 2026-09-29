@@ -357,6 +357,8 @@ export async function sendEmail({
     contactInbox,
     conversation,
     workspace,
+    // an email goes to this contact only
+    personalLinks: true,
   })
   const { appUrl } = await resolveTenantSettings({
     workspaceId: conversation.workspaceId,

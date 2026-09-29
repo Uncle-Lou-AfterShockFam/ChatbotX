@@ -35,6 +35,8 @@ export const FORM_MAX_BLOCKED_EMAIL_DOMAINS = 100
 const UNPARSEABLE_WINDOW_BOUND = "unparseable"
 /** Same key rule as a custom-field key / hub-connector field key. */
 const FORM_PREFILL_KEY_REGEX = /^[a-z][a-z0-9_]{0,39}$/
+/** The query key of a personal form link's token (never a prefill key). */
+export const FORM_LINK_QUERY_KEY = "k"
 /** `https://host[:port]` only: no path, no wildcard, no trailing slash. */
 export const FORM_EMBED_ORIGIN_REGEX =
   /^https:\/\/[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:\d{1,5})?$|^http:\/\/localhost(:\d{1,5})?$/
@@ -129,6 +131,12 @@ export const formSettingsSchema = z
     prefillKeys: z
       .array(z.string().regex(FORM_PREFILL_KEY_REGEX))
       .max(FORM_MAX_PREFILL_KEYS)
+      // s220c A2-4: `k` carries a personal link's token; prefilling it would
+      // store the bearer token as an answer (blind probe s220c)
+      .refine(
+        (keys) => !keys.includes(FORM_LINK_QUERY_KEY),
+        `"${FORM_LINK_QUERY_KEY}" is reserved for personal form links.`,
+      )
       .default([]),
     /**
      * Where the form runs (s219): `web` = the public page / embed, `chat` =

@@ -20,6 +20,7 @@ const CTX = {
   contactInbox: null,
   workspace: null,
   customFieldsMap: new Map(),
+  personalLinks: true,
 } as never
 
 beforeEach(() => {
@@ -59,6 +60,19 @@ describe("{{form_link:<formId>}} (s220c A2-4)", () => {
       contactId: "c-1",
       appUrl: "https://chat.example.org",
     })
+  })
+
+  test("FAIL CLOSED: without the direct-send opt-in (comment replies, Sheets, AI prompts, HTTP steps) no token is minted", async () => {
+    for (const ctx of [
+      { ...(CTX as object), personalLinks: false },
+      { ...(CTX as object), personalLinks: undefined },
+    ]) {
+      await expect(
+        resolveFormLinkVariable(ctx as never, "form_link:42"),
+      ).resolves.toBe("")
+    }
+    expect(m.personalLink).not.toHaveBeenCalled()
+    expect(m.resolveTenantSettings).not.toHaveBeenCalled()
   })
 
   test("a form the page would not serve, a bad id or no contact resolves to empty (never a dead link)", async () => {

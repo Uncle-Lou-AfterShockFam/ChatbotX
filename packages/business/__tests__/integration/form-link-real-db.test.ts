@@ -135,6 +135,57 @@ describe.skipIf(!databaseUrl)("signed form links (real Postgres)", () => {
     expect(r).toMatchObject({ kind: "ok", contactId: w.contactId })
   })
 
+  test("a linked submission never overwrites the contact, even on an overwriteExisting form (skeptic + blind probe s220c)", async () => {
+    const w = await seed()
+    const def = JSON.stringify({
+      steps: [
+        {
+          id: "s1",
+          fields: [
+            {
+              key: "email",
+              type: "email",
+              label: "Email",
+              required: true,
+              mapTo: { kind: "system", key: "email" },
+            },
+            {
+              key: "first",
+              type: "text",
+              label: "First",
+              mapTo: { kind: "system", key: "firstName" },
+            },
+          ],
+        },
+      ],
+      rules: [],
+    })
+    await asReplica(sql`
+      UPDATE "Form" SET definition = ${def}::jsonb, "publishedDefinition" = ${def}::jsonb,
+             settings = settings || '{"overwriteExisting": true}'::jsonb
+       WHERE id = ${w.formId}`)
+    await asReplica(sql`
+      UPDATE "Contact" SET email = 'owner@example.com', "firstName" = 'Owner' WHERE id = ${w.contactId}`)
+    const url = await formService.personalLink({ ...w, appUrl: APP })
+    const k = new URL(url as string).searchParams.get("k") as string
+    const r = await formSubmitService.submit({
+      workspaceId: w.workspaceId,
+      slug: w.slug,
+      values: { email: "attacker@example.com", first: "Mallory" },
+      honeypotFilled: false,
+      clientIp: "198.51.100.9",
+      userAgent: "vitest",
+      formLinkToken: k,
+    })
+    expect(r).toMatchObject({ kind: "ok", contactId: w.contactId })
+    const rows = await db.execute<{ email: string; firstName: string }>(sql`
+      SELECT email, "firstName" FROM "Contact" WHERE id = ${w.contactId}`)
+    expect(rows.rows[0]).toEqual({
+      email: "owner@example.com",
+      firstName: "Owner",
+    })
+  })
+
   test("the same token on ANOTHER form of the workspace is an anonymous submission", async () => {
     const a = await seed()
     const url = await formService.personalLink({ ...a, appUrl: APP })

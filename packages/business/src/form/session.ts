@@ -292,7 +292,8 @@ export class FormSessionService {
               challengeId: current.challengeId,
             }
           }
-          const profile = await this.profileFor(tx, {
+          const profile = await formSubmitService.contactProfile({
+            tx,
             workspaceId: input.workspaceId,
             contactId: input.contactId,
             form,
@@ -1201,12 +1202,6 @@ export class FormSessionService {
   }
 
   /** Progressive-profiling inputs, fixed for the whole run. */
-  private async profileFor(
-    tx: DatabaseClient,
-    props: { workspaceId: string; contactId: string; form: NormalizedForm },
-  ): Promise<FormSessionProfile> {
-    return await formSubmitService.contactProfile({ ...props, tx })
-  }
 }
 
 export const formSessionService = new FormSessionService()

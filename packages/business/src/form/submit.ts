@@ -15,7 +15,6 @@ import {
   EMPTY_FORM_DEFINITION,
   evaluateForm,
   FORM_OPTION_FIELD_TYPES,
-  type FormChatProfileContext,
   type FormDefinition,
   type FormSessionProfile,
   type FormSubmissionVisibility,
@@ -25,6 +24,7 @@ import {
   type FormValues,
   formInputFields,
   formMapsToContact,
+  formProfileContext,
   formProfiledOutKeys,
   formScore,
   formWindowState,
@@ -203,15 +203,6 @@ export type PendingChanges = Awaited<
   ReturnType<typeof contactCustomFieldService.setValuesInTransaction>
 >
 
-/** A stored profile as the chat planner reads it. */
-export const toProfileContext = (
-  profile: FormSessionProfile,
-): FormChatProfileContext => ({
-  known: new Set(profile.known),
-  priorSubmissions: profile.priorSubmissions,
-  limit: profile.limit,
-})
-
 /** Mautic caps the submission history profiling reads at 200 rows. */
 export const FORM_SESSION_HISTORY_CAP = 200
 
@@ -317,7 +308,7 @@ export class FormSubmitService {
         : formProfiledOutKeys(
             def,
             values,
-            toProfileContext(
+            formProfileContext(
               await this.contactProfile({
                 workspaceId: input.workspaceId,
                 contactId: linkedContactId,
@@ -447,7 +438,12 @@ export class FormSubmitService {
                 // A contact this submission created is ours to fill; an
                 // existing contact keeps every non-blank value unless the form
                 // owner opted into overwriting (skeptic, s200).
-                fillBlanksOnly: !(contactCreated || settings.overwriteExisting),
+                // A linked contact is written blanks-only WHATEVER the form's
+                // overwriteExisting: a forwarded link must not let its holder
+                // replace the contact's data (skeptic + blind probe s220c).
+                fillBlanksOnly:
+                  linkedContactId !== null ||
+                  !(contactCreated || settings.overwriteExisting),
                 tx,
               })
         // Last, so the per-form lock is held only for count + insert +
@@ -1026,14 +1022,6 @@ export class FormSubmitService {
     )
   }
 
-  /** What the contact already holds for the mapped fields (blank = absent). Shared with FormSessionService (s219 A2-2). */
-  /**
-   * What progressive profiling knows about a contact for one form (s219
-   * A2-2; the web uses it since s220c A2-4, for a contact a signed form link
-   * names): the field keys whose answer the contact already holds (a set
-   * mapped contact field, or an answer in an earlier submission of this
-   * form), how many earlier submissions, and the form's question budget.
-   */
   /**
    * The contact a signed form link names for THIS form, when it still
    * exists in the workspace; null otherwise (an anonymous submission).
@@ -1056,6 +1044,13 @@ export class FormSubmitService {
     return contact?.id ?? null
   }
 
+  /**
+   * What progressive profiling knows about a contact for one form (s219
+   * A2-2; the web uses it since s220c A2-4, for a contact a signed form link
+   * names): the field keys whose answer the contact already holds (a set
+   * mapped contact field, or an answer in an earlier submission of this
+   * form), how many earlier submissions, and the form's question budget.
+   */
   async contactProfile(props: {
     workspaceId: string
     contactId: string
@@ -1102,6 +1097,7 @@ export class FormSubmitService {
     }
   }
 
+  /** What the contact already holds for the mapped fields (blank = absent). Shared with FormSessionService (s219 A2-2). */
   async storedValues(props: {
     workspaceId: string
     contactId: string

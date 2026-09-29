@@ -46,6 +46,17 @@ export type FormChatProfileContext = {
   limit: number | null
 }
 
+/** A stored / serialized profile (keys as a list) as the planner reads it. */
+export const formProfileContext = (profile: {
+  known: readonly string[]
+  priorSubmissions: number
+  limit: number | null
+}): FormChatProfileContext => ({
+  known: new Set(profile.known),
+  priorSubmissions: profile.priorSubmissions,
+  limit: profile.limit,
+})
+
 export const NO_FORM_PROFILE: FormChatProfileContext = {
   known: new Set(),
   priorSubmissions: 0,

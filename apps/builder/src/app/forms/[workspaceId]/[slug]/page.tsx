@@ -1,6 +1,10 @@
 import { formService, formSubmitService } from "@chatbotx.io/business/form"
 import type { FormSessionProfile } from "@chatbotx.io/database/partials"
-import { FORM_SLUG_REGEX, MAX_FORM_TEXT } from "@chatbotx.io/database/partials"
+import {
+  FORM_LINK_QUERY_KEY,
+  FORM_SLUG_REGEX,
+  MAX_FORM_TEXT,
+} from "@chatbotx.io/database/partials"
 import { contactFromFormLink } from "@chatbotx.io/encryption/form-link-token"
 import { getIdFromParams } from "@chatbotx.io/utils"
 import type { FormValues } from "@chatbotx.io/utils/form"
@@ -53,19 +57,25 @@ export default async function PublicFormPage(props: {
   // s220c A2-4: a signed personal link names the contact. The page learns
   // only WHICH fields it already answered (keys, never values) so profiling
   // can hide them; the token rides back with the submit and is re-verified.
-  const linkToken = typeof search.k === "string" ? search.k : undefined
+  const rawToken = search[FORM_LINK_QUERY_KEY]
+  const linkToken = typeof rawToken === "string" ? rawToken : undefined
   const linkedContactId = await contactFromFormLink(linkToken, {
     workspaceId,
     formId: form.id,
   })
   let profile: FormSessionProfile | null = null
   if (linkedContactId !== null) {
+    // a failed read only costs the profiling (every field shown): the
+    // visitor stays linked, so the submission still lands on the contact
     profile = await formSubmitService
       .contactProfile({ workspaceId, contactId: linkedContactId, form })
-      .catch(() => null)
+      .catch(() => ({ known: [], priorSubmissions: 0, limit: null }))
   }
   const prefill: FormValues = {}
   for (const key of form.settings.prefillKeys) {
+    if (key === FORM_LINK_QUERY_KEY) {
+      continue // the token is never an answer (a legacy row may list it)
+    }
     const raw = search[key]
     const value = Array.isArray(raw) ? raw[0] : raw
     if (typeof value === "string" && value !== "") {
