@@ -9,6 +9,7 @@ import type {
 import {
   FORM_FIELD_KEY_REGEX,
   FORM_OPTION_FIELD_TYPES,
+  FORM_RATING_DEFAULT_STARS,
   isFormInputFieldType,
   MAX_FORM_FIELDS_PER_STEP,
   MAX_FORM_RULES,
@@ -89,6 +90,15 @@ export function newField(
       { value: "option_1", label: "Option 1" },
       { value: "option_2", label: "Option 2" },
     ]
+  }
+  // s220c A2-4: a slider needs both bounds to be valid; a rating is 1..5.
+  if (type === "slider") {
+    field.min = 0
+    field.max = 10
+    field.step = 1
+  }
+  if (type === "rating") {
+    field.max = FORM_RATING_DEFAULT_STARS
   }
   return field
 }

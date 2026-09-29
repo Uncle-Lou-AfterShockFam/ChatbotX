@@ -2802,7 +2802,7 @@
       "settings": "Settings",
       "preview": "Preview",
       "steps": "Steps",
-      "step": "Step",
+      "step": "צעד",
       "stepTitle": "Step title",
       "stepPosition": "Step {current} of {total}",
       "noStep": "Add a step to start placing fields.",
@@ -2843,7 +2843,18 @@
       "previewBack": "Back",
       "previewNext": "Next",
       "previewSubmit": "Submit (preview)",
-      "previewSubmitted": "Preview submitted. Nothing is stored from the preview."
+      "previewSubmitted": "Preview submitted. Nothing is stored from the preview.",
+      "stars": "מספר כוכבים",
+      "optionPoints": "נקודות",
+      "chatSection": "בצ'אט",
+      "chatPrompt": "נוסח השאלה בצ'אט (ריק = התווית)",
+      "chatRetry": "הודעה כשתשובה לא מתאימה",
+      "chatMediaUrl": "תמונה שנשלחת עם השאלה (קישור https)",
+      "askWhenKnown": "לשאול גם אם ידוע",
+      "askWhenKnownHint": "כבוי: הצ'אט מדלג על השאלה אם לאיש הקשר כבר יש תשובה.",
+      "alwaysAsk": "לעולם לא נחתך במגבלת השאלות",
+      "askAfterSubmissions": "לשאול החל מהגשה מספר",
+      "askAfterSubmissionsHint": "פרופיילינג הדרגתי: לשאול רק אחרי שאיש הקשר הגיש את הטופס מספר פעמים זה. ריק = תמיד."
     },
     "fieldTypes": {
       "text": "Short text",
@@ -2862,7 +2873,12 @@
       "time": "Time",
       "heading": "Heading",
       "paragraph": "Paragraph",
-      "divider": "Divider"
+      "divider": "Divider",
+      "slider": "מחוון",
+      "rating": "דירוג",
+      "image": "תמונה",
+      "file": "קובץ",
+      "location": "מיקום"
     },
     "ops": {
       "eq": "is",
@@ -2935,7 +2951,18 @@
       "submissionLimit": "מגבלת הגשות",
       "submissionLimitHint": "הפסקת קבלת תשובות אחרי מספר הגשות זה (אינטרנט וצ'אט). מחיקת הגשה משחררת מקום. ריק = ללא מגבלה.",
       "blockedEmailDomains": "דומיינים חסומים לאימייל",
-      "blockedEmailDomainsHint": "אחד בכל שורה, למשל example.com. גם תת-דומיינים נחסמים."
+      "blockedEmailDomainsHint": "אחד בכל שורה, למשל example.com. גם תת-דומיינים נחסמים.",
+      "channels": "איפה הוא פועל",
+      "channel": {
+        "web": "דף אינטרנט והטמעה",
+        "chat": "בצ'אט (שלב בזרימה)"
+      },
+      "channelHint": {
+        "web": "קישור ציבורי וקוד הטמעה.",
+        "chat": "נשאל שאלה אחר שאלה בשלב שאל טופס."
+      },
+      "profilingLimit": "שאלות לכל צ'אט",
+      "profilingLimitHint": "פרופיילינג הדרגתי: לכל היותר מספר שאלות זה בריצה אחת. ריק = לשאול הכל."
     },
     "submitActions": {
       "title": "Actions after submit",

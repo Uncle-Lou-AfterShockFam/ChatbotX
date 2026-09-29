@@ -36,6 +36,10 @@ export const MAX_FORM_DEFINITION_BYTES = 65_536
 export const MAX_FORM_LABEL = 120
 export const MAX_FORM_TEXT = 500
 export const MAX_FORM_VALUE = 2000
+/** s220c A2-4: a rating is 1..max stars, max between these (default 5). */
+export const FORM_RATING_MIN_STARS = 3
+export const FORM_RATING_MAX_STARS = 10
+export const FORM_RATING_DEFAULT_STARS = 5
 export const MAX_FORM_PATTERN = 200
 export const MAX_FORM_OPTION_POINTS = 1000
 
@@ -65,6 +69,8 @@ export const formInputFieldTypes = z.enum([
   "phone",
   "url",
   "number",
+  "slider",
+  "rating",
   "hidden",
   "select",
   "radio",
@@ -303,6 +309,8 @@ export const formField = z
     defaultValue: z.string().max(MAX_FORM_TEXT).optional(),
     min: z.number().optional(),
     max: z.number().optional(),
+    /** `slider` only: the knob's increment from `min` (default 1). */
+    step: z.number().positive().optional(),
     pattern: z.string().max(MAX_FORM_PATTERN).optional(),
     mapTo: formFieldMapTo.optional(),
     visibleWhen: formConditionGroup.optional(),
@@ -316,6 +324,72 @@ export const formField = z
         code: "custom",
         path: ["profile"],
         message: `A ${field.type} block asks nothing, so it has no profiling rule.`,
+      })
+    }
+    // s220c A2-4: a slider needs both bounds; a rating is 1..max stars.
+    if (field.step !== undefined && field.type !== "slider") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["step"],
+        message: "Only a slider has a step.",
+      })
+    }
+    if (field.type === "slider") {
+      if (field.min === undefined || field.max === undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: [field.min === undefined ? "min" : "max"],
+          message: "A slider needs a minimum and a maximum.",
+        })
+      } else if (
+        field.step !== undefined &&
+        field.step > field.max - field.min
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["step"],
+          message: "The step is larger than the slider's range.",
+        })
+      }
+    }
+    if (field.type === "rating") {
+      if (field.min !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["min"],
+          message: "A rating always starts at 1.",
+        })
+      }
+      if (
+        field.max !== undefined &&
+        !(
+          Number.isInteger(field.max) &&
+          field.max >= FORM_RATING_MIN_STARS &&
+          field.max <= FORM_RATING_MAX_STARS
+        )
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["max"],
+          message: `A rating has ${FORM_RATING_MIN_STARS} to ${FORM_RATING_MAX_STARS} stars.`,
+        })
+      }
+      if (field.defaultValue !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["defaultValue"],
+          message: "A rating starts empty (a default would be a vote).",
+        })
+      }
+    }
+    if (
+      (field.type === "slider" || field.type === "rating") &&
+      field.mapTo?.kind === "system"
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["mapTo"],
+        message: `A ${field.type} answer can only map to a custom field.`,
       })
     }
     if (FORM_CHAT_ONLY_FIELD_TYPES.has(field.type)) {

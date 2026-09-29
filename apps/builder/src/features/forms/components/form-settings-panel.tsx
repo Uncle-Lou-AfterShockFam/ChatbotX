@@ -1,8 +1,10 @@
 "use client"
 
 import {
+  FORM_MAX_PROFILING_LIMIT,
   FORM_MAX_SUBMISSION_LIMIT,
   type FormSettings,
+  formChannels,
 } from "@chatbotx.io/database/partials"
 import { Input } from "@chatbotx.io/ui/components/ui/input"
 import { Label } from "@chatbotx.io/ui/components/ui/label"
@@ -186,6 +188,75 @@ export function FormSettingsPanel(props: {
           {t("forms.settings.inboxHint")}
         </span>
       </div>
+      <fieldset
+        className="flex flex-col gap-3 rounded-md border px-3 py-3"
+        data-testid="fs-channels"
+      >
+        <legend className="px-1 font-medium text-sm">
+          {t("forms.settings.channels")}
+        </legend>
+        {formChannels.options.map((channel) => {
+          const on = props.settings.channels.includes(channel)
+          const last = on && props.settings.channels.length === 1
+          return (
+            <div
+              className="flex items-center justify-between gap-2"
+              key={channel}
+            >
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <Label htmlFor={`fs-channel-${channel}`}>
+                  {t(`forms.settings.channel.${channel}`)}
+                </Label>
+                <span className="text-muted-foreground text-xs">
+                  {t(`forms.settings.channelHint.${channel}`)}
+                </span>
+              </div>
+              <Switch
+                checked={on}
+                // a form runs somewhere: the last channel cannot be switched off
+                disabled={last}
+                id={`fs-channel-${channel}`}
+                onCheckedChange={(next) =>
+                  set({
+                    channels: next
+                      ? formChannels.options.filter(
+                          (c) =>
+                            c === channel ||
+                            props.settings.channels.includes(c),
+                        )
+                      : props.settings.channels.filter((c) => c !== channel),
+                  })
+                }
+              />
+            </div>
+          )
+        })}
+        {props.settings.channels.includes("chat") ? (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="fs-profiling">
+              {t("forms.settings.profilingLimit")}
+            </Label>
+            <Input
+              id="fs-profiling"
+              max={FORM_MAX_PROFILING_LIMIT}
+              min={1}
+              onChange={(e) => {
+                const n = Number.parseInt(e.target.value, 10)
+                set({
+                  profilingLimit: Number.isNaN(n)
+                    ? null
+                    : Math.max(1, Math.min(FORM_MAX_PROFILING_LIMIT, n)),
+                })
+              }}
+              type="number"
+              value={props.settings.profilingLimit ?? ""}
+            />
+            <span className="text-muted-foreground text-xs">
+              {t("forms.settings.profilingLimitHint")}
+            </span>
+          </div>
+        ) : null}
+      </fieldset>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="fs-success">{t("forms.settings.successMessage")}</Label>
         <Textarea

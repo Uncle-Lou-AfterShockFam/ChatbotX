@@ -4771,7 +4771,7 @@
       "settings": "Settings",
       "preview": "Preview",
       "steps": "Steps",
-      "step": "Step",
+      "step": "刻み",
       "stepTitle": "Step title",
       "stepPosition": "Step {current} of {total}",
       "noStep": "Add a step to start placing fields.",
@@ -4812,7 +4812,18 @@
       "previewBack": "Back",
       "previewNext": "Next",
       "previewSubmit": "Submit (preview)",
-      "previewSubmitted": "Preview submitted. Nothing is stored from the preview."
+      "previewSubmitted": "Preview submitted. Nothing is stored from the preview.",
+      "stars": "星の数",
+      "optionPoints": "ポイント",
+      "chatSection": "チャット",
+      "chatPrompt": "チャットでの質問文（空欄 = ラベル）",
+      "chatRetry": "回答が合わないときのメッセージ",
+      "chatMediaUrl": "質問と一緒に送る画像（https リンク）",
+      "askWhenKnown": "既知でも質問する",
+      "askWhenKnownHint": "オフ: 連絡先が既に回答を持っていればチャットはこの質問を飛ばします。",
+      "alwaysAsk": "質問数の上限で省略しない",
+      "askAfterSubmissions": "送信回数がこの数から質問",
+      "askAfterSubmissionsHint": "段階的プロファイリング: 連絡先がこのフォームをこの回数送信した後にのみ質問します。空欄 = 常に。"
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4831,7 +4842,12 @@
       "time": "Time",
       "heading": "Heading",
       "paragraph": "Paragraph",
-      "divider": "Divider"
+      "divider": "Divider",
+      "slider": "スライダー",
+      "rating": "評価",
+      "image": "写真",
+      "file": "ファイル",
+      "location": "位置情報"
     },
     "ops": {
       "eq": "is",
@@ -4904,7 +4920,18 @@
       "submissionLimit": "送信数の上限",
       "submissionLimitHint": "この件数の送信（Web とチャット）で回答の受付を停止します。送信を削除すると枠が空きます。空欄 = 上限なし。",
       "blockedEmailDomains": "ブロックするメールドメイン",
-      "blockedEmailDomainsHint": "1 行に 1 つ（例: example.com）。サブドメインもブロックされます。"
+      "blockedEmailDomainsHint": "1 行に 1 つ（例: example.com）。サブドメインもブロックされます。",
+      "channels": "利用先",
+      "channel": {
+        "web": "Web ページと埋め込み",
+        "chat": "チャット（フローのステップ）"
+      },
+      "channelHint": {
+        "web": "公開リンクと埋め込みコード。",
+        "chat": "フォーム質問ステップで 1 問ずつ質問します。"
+      },
+      "profilingLimit": "チャットごとの質問数",
+      "profilingLimitHint": "段階的プロファイリング: 1 回の実行でこの数まで質問します。空欄 = すべて質問。"
     },
     "submitActions": {
       "title": "Actions after submit",

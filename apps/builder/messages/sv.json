@@ -4923,7 +4923,7 @@
       "settings": "Settings",
       "preview": "Preview",
       "steps": "Steps",
-      "step": "Step",
+      "step": "Steg",
       "stepTitle": "Step title",
       "stepPosition": "Step {current} of {total}",
       "noStep": "Add a step to start placing fields.",
@@ -4964,7 +4964,18 @@
       "previewBack": "Back",
       "previewNext": "Next",
       "previewSubmit": "Submit (preview)",
-      "previewSubmitted": "Preview submitted. Nothing is stored from the preview."
+      "previewSubmitted": "Preview submitted. Nothing is stored from the preview.",
+      "stars": "Antal stjärnor",
+      "optionPoints": "Poäng",
+      "chatSection": "I chatten",
+      "chatPrompt": "Frågetext i chatten (tom = etiketten)",
+      "chatRetry": "Meddelande när ett svar inte passar",
+      "chatMediaUrl": "Bild som skickas med frågan (https-länk)",
+      "askWhenKnown": "Fråga även om det är känt",
+      "askWhenKnownHint": "Av: en chatt hoppar över frågan om kontakten redan har svaret.",
+      "alwaysAsk": "Kapas aldrig av frågegränsen",
+      "askAfterSubmissions": "Fråga från inskick nummer",
+      "askAfterSubmissionsHint": "Progressiv profilering: fråga först när kontakten skickat formuläret så många gånger. Tomt = alltid."
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4983,7 +4994,12 @@
       "time": "Time",
       "heading": "Heading",
       "paragraph": "Paragraph",
-      "divider": "Divider"
+      "divider": "Divider",
+      "slider": "Reglage",
+      "rating": "Betyg",
+      "image": "Foto",
+      "file": "Fil",
+      "location": "Plats"
     },
     "ops": {
       "eq": "is",
@@ -5056,7 +5072,18 @@
       "submissionLimit": "Gräns för inskick",
       "submissionLimitHint": "Sluta ta emot svar efter så här många inskick (webb och chatt). Att radera ett inskick frigör en plats. Tomt = ingen gräns.",
       "blockedEmailDomains": "Blockerade e-postdomäner",
-      "blockedEmailDomainsHint": "En per rad, t.ex. example.com. Underdomäner blockeras också."
+      "blockedEmailDomainsHint": "En per rad, t.ex. example.com. Underdomäner blockeras också.",
+      "channels": "Var det körs",
+      "channel": {
+        "web": "Webbsida och inbäddning",
+        "chat": "I en chatt (flödessteg)"
+      },
+      "channelHint": {
+        "web": "Offentlig länk och inbäddningskod.",
+        "chat": "Frågas en i taget av ett Fråga formulär-steg."
+      },
+      "profilingLimit": "Frågor per chatt",
+      "profilingLimitHint": "Progressiv profilering: högst så många frågor per körning. Tomt = fråga allt."
     },
     "submitActions": {
       "title": "Actions after submit",

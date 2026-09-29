@@ -4792,7 +4792,7 @@
       "settings": "Settings",
       "preview": "Preview",
       "steps": "Steps",
-      "step": "Step",
+      "step": "Adım",
       "stepTitle": "Step title",
       "stepPosition": "Step {current} of {total}",
       "noStep": "Add a step to start placing fields.",
@@ -4833,7 +4833,18 @@
       "previewBack": "Back",
       "previewNext": "Next",
       "previewSubmit": "Submit (preview)",
-      "previewSubmitted": "Preview submitted. Nothing is stored from the preview."
+      "previewSubmitted": "Preview submitted. Nothing is stored from the preview.",
+      "stars": "Yıldız sayısı",
+      "optionPoints": "Puan",
+      "chatSection": "Sohbette",
+      "chatPrompt": "Sohbetteki soru metni (boş = etiket)",
+      "chatRetry": "Yanıt uymadığında mesaj",
+      "chatMediaUrl": "Soruyla gönderilen görsel (https bağlantısı)",
+      "askWhenKnown": "Biliniyor olsa da sor",
+      "askWhenKnownHint": "Kapalı: kişi yanıta zaten sahipse sohbet bu soruyu atlar.",
+      "alwaysAsk": "Soru sınırıyla asla kesilmez",
+      "askAfterSubmissions": "Şu gönderimden itibaren sor",
+      "askAfterSubmissionsHint": "Aşamalı profil oluşturma: kişi bu formu bu kadar kez gönderdikten sonra sor. Boş = her zaman."
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4852,7 +4863,12 @@
       "time": "Time",
       "heading": "Heading",
       "paragraph": "Paragraph",
-      "divider": "Divider"
+      "divider": "Divider",
+      "slider": "Kaydırıcı",
+      "rating": "Puanlama",
+      "image": "Fotoğraf",
+      "file": "Dosya",
+      "location": "Konum"
     },
     "ops": {
       "eq": "is",
@@ -4925,7 +4941,18 @@
       "submissionLimit": "Gönderim sınırı",
       "submissionLimitHint": "Bu sayıda gönderimden sonra (web ve sohbet) yanıt kabul etmeyi durdur. Bir gönderimi silmek bir yer açar. Boş = sınır yok.",
       "blockedEmailDomains": "Engellenen e-posta alan adları",
-      "blockedEmailDomainsHint": "Satır başına bir tane, örn. example.com. Alt alan adları da engellenir."
+      "blockedEmailDomainsHint": "Satır başına bir tane, örn. example.com. Alt alan adları da engellenir.",
+      "channels": "Nerede çalışır",
+      "channel": {
+        "web": "Web sayfası ve yerleştirme",
+        "chat": "Sohbette (akış adımı)"
+      },
+      "channelHint": {
+        "web": "Herkese açık bağlantı ve yerleştirme kodu.",
+        "chat": "Form sor adımıyla soru soru sorulur."
+      },
+      "profilingLimit": "Sohbet başına soru",
+      "profilingLimitHint": "Aşamalı profil oluşturma: bir çalışmada en fazla bu kadar soru. Boş = hepsini sor."
     },
     "submitActions": {
       "title": "Actions after submit",

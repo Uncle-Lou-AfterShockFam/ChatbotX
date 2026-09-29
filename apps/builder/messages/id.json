@@ -4792,7 +4792,7 @@
       "settings": "Settings",
       "preview": "Preview",
       "steps": "Steps",
-      "step": "Step",
+      "step": "Langkah",
       "stepTitle": "Step title",
       "stepPosition": "Step {current} of {total}",
       "noStep": "Add a step to start placing fields.",
@@ -4833,7 +4833,18 @@
       "previewBack": "Back",
       "previewNext": "Next",
       "previewSubmit": "Submit (preview)",
-      "previewSubmitted": "Preview submitted. Nothing is stored from the preview."
+      "previewSubmitted": "Preview submitted. Nothing is stored from the preview.",
+      "stars": "Jumlah bintang",
+      "optionPoints": "Poin",
+      "chatSection": "Di chat",
+      "chatPrompt": "Teks pertanyaan di chat (kosong = label)",
+      "chatRetry": "Pesan saat jawaban tidak sesuai",
+      "chatMediaUrl": "Gambar yang dikirim dengan pertanyaan (tautan https)",
+      "askWhenKnown": "Tanyakan meski sudah diketahui",
+      "askWhenKnownHint": "Mati: chat melewati pertanyaan ini jika kontak sudah punya jawabannya.",
+      "alwaysAsk": "Tidak pernah dipotong batas pertanyaan",
+      "askAfterSubmissions": "Tanyakan mulai pengiriman ke",
+      "askAfterSubmissionsHint": "Profiling progresif: tanyakan hanya setelah kontak mengirim formulir ini sebanyak itu. Kosong = selalu."
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4852,7 +4863,12 @@
       "time": "Time",
       "heading": "Heading",
       "paragraph": "Paragraph",
-      "divider": "Divider"
+      "divider": "Divider",
+      "slider": "Penggeser",
+      "rating": "Penilaian",
+      "image": "Foto",
+      "file": "Berkas",
+      "location": "Lokasi"
     },
     "ops": {
       "eq": "is",
@@ -4925,7 +4941,18 @@
       "submissionLimit": "Batas pengiriman",
       "submissionLimitHint": "Berhenti menerima jawaban setelah sejumlah pengiriman ini (web dan chat). Menghapus pengiriman membebaskan satu tempat. Kosong = tanpa batas.",
       "blockedEmailDomains": "Domain email yang diblokir",
-      "blockedEmailDomainsHint": "Satu per baris, mis. example.com. Subdomain juga diblokir."
+      "blockedEmailDomainsHint": "Satu per baris, mis. example.com. Subdomain juga diblokir.",
+      "channels": "Tempat berjalan",
+      "channel": {
+        "web": "Halaman web dan sematan",
+        "chat": "Di chat (langkah alur)"
+      },
+      "channelHint": {
+        "web": "Tautan publik dan kode sematan.",
+        "chat": "Ditanyakan satu per satu oleh langkah Tanya formulir."
+      },
+      "profilingLimit": "Pertanyaan per chat",
+      "profilingLimitHint": "Profiling progresif: paling banyak sejumlah pertanyaan ini per sesi. Kosong = tanyakan semua."
     },
     "submitActions": {
       "title": "Actions after submit",

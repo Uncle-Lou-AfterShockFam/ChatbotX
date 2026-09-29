@@ -40,6 +40,7 @@ import {
   FORM_CHAT_SKIP_WORD,
   formChatPayload,
   formOptionsNumbered,
+  formScaleBounds,
   isFormChatSkip,
 } from "@chatbotx.io/utils/form"
 import { ChatJobAction, chatQueue } from "@chatbotx.io/worker-config"
@@ -320,8 +321,17 @@ function challengeNodeId(props: Props): string {
   return props.targetId ?? props.targetNodeId ?? ""
 }
 
+const scalePrompt = (prompt: string, b: { min: number; max: number }) =>
+  `${prompt} (${b.min}-${b.max})`
+
 function questionText(field: FormField): string {
-  const base = field.chat?.prompt ?? (field.label || field.key)
+  const prompt = field.chat?.prompt ?? (field.label || field.key)
+  // s220c A2-4: a slider / rating is answered with a number; the range is
+  // language-neutral ("(1-5)"), the reply is checked against it and its step.
+  const base =
+    field.type === "slider" || field.type === "rating"
+      ? scalePrompt(prompt, formScaleBounds(field))
+      : prompt
   return field.helpText ? `${base}\n${field.helpText}` : base
 }
 

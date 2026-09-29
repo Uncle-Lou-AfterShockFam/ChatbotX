@@ -6,9 +6,12 @@ import {
   type FormDefinition,
   type FormDefinitionInput,
   formDefinition,
+  formScaleBounds,
   formScore,
   isBlockedEmailDomain,
+  parseFormChatAnswer,
   pruneFormValues,
+  validateFormField,
   validateFormSubmission,
 } from "../src/form"
 
@@ -665,5 +668,150 @@ describe("blocked domains on an email-identity text field (skeptic s220c bypass)
         blockedEmailDomains: ["example.com"],
       }),
     ).toEqual([{ key: "addr", code: "emailDomainBlocked" }])
+  })
+})
+
+// s220c A2-4: slider + rating.
+describe("slider + rating", () => {
+  const one = (field: Record<string, unknown>) =>
+    formDefinition.safeParse({
+      steps: [{ id: "s1", fields: [field] }],
+      rules: [],
+    })
+
+  test("schema: a slider needs min AND max, a step within its range; step is slider-only", () => {
+    expect(one({ key: "s", type: "slider", label: "S" }).success).toBe(false)
+    expect(one({ key: "s", type: "slider", label: "S", min: 0 }).success).toBe(
+      false,
+    )
+    expect(
+      one({ key: "s", type: "slider", label: "S", min: 0, max: 10 }).success,
+    ).toBe(true)
+    expect(
+      one({ key: "s", type: "slider", label: "S", min: 0, max: 10, step: 20 })
+        .success,
+    ).toBe(false)
+    expect(
+      one({ key: "s", type: "slider", label: "S", min: 0, max: 10, step: 0 })
+        .success,
+    ).toBe(false)
+    expect(one({ key: "n", type: "number", label: "N", step: 2 }).success).toBe(
+      false,
+    )
+  })
+
+  test("schema: a rating starts at 1, has 3..10 stars, no default; neither maps to a system field", () => {
+    expect(one({ key: "r", type: "rating", label: "R" }).success).toBe(true)
+    expect(one({ key: "r", type: "rating", label: "R", max: 10 }).success).toBe(
+      true,
+    )
+    for (const bad of [
+      { max: 2 },
+      { max: 11 },
+      { max: 4.5 },
+      { min: 1 },
+      { defaultValue: "3" },
+    ]) {
+      expect(
+        one({ key: "r", type: "rating", label: "R", ...bad }).success,
+      ).toBe(false)
+    }
+    expect(
+      one({
+        key: "r",
+        type: "rating",
+        label: "R",
+        mapTo: { kind: "system", key: "email" },
+      }).success,
+    ).toBe(false)
+    expect(
+      one({
+        key: "r",
+        type: "rating",
+        label: "R",
+        mapTo: { kind: "custom", customFieldId: "7" },
+      }).success,
+    ).toBe(true)
+  })
+
+  test("validation: on the scale and on a step (float steps tolerated); rating is an integer 1..max", () => {
+    const slider = {
+      key: "s",
+      type: "slider",
+      label: "S",
+      required: false,
+      min: 0,
+      max: 1,
+      step: 0.1,
+    } as never
+    expect(validateFormField(slider, 0.3)).toBeNull() // 0.1 * 3 is 0.30000000000000004
+    expect(validateFormField(slider, "0.7")).toBeNull()
+    expect(validateFormField(slider, 0.35)).toBe("number")
+    expect(validateFormField(slider, -0.1)).toBe("min")
+    expect(validateFormField(slider, 1.1)).toBe("max")
+    expect(validateFormField(slider, "abc")).toBe("number")
+    const rating = {
+      key: "r",
+      type: "rating",
+      label: "R",
+      required: false,
+    } as never
+    expect(formScaleBounds(rating)).toEqual({ min: 1, max: 5, step: 1 })
+    expect(validateFormField(rating, 5)).toBeNull()
+    expect(validateFormField(rating, 0)).toBe("min")
+    expect(validateFormField(rating, 6)).toBe("max")
+    expect(validateFormField(rating, 2.5)).toBe("number")
+  })
+
+  test("hostile values never throw", () => {
+    const rating = {
+      key: "r",
+      type: "rating",
+      label: "R",
+      required: false,
+    } as never
+    for (const v of [
+      null,
+      true,
+      [],
+      ["3"],
+      { n: 3 },
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      "1e400",
+    ]) {
+      expect(() => validateFormField(rating, v as never)).not.toThrow()
+      expect(validateFormField(rating, v as never)).not.toBeNull()
+    }
+  })
+
+  test("chat: a reply is read as a number (a comma decimal too) and checked", () => {
+    const slider = {
+      key: "s",
+      type: "slider",
+      label: "S",
+      required: true,
+      min: 0,
+      max: 10,
+      step: 0.5,
+    } as never
+    expect(parseFormChatAnswer(slider, "7,5")).toEqual({ ok: true, value: 7.5 })
+    expect(parseFormChatAnswer(slider, "7.3")).toEqual({
+      ok: false,
+      code: "number",
+    })
+    const rating = {
+      key: "r",
+      type: "rating",
+      label: "R",
+      required: true,
+      max: 3,
+    } as never
+    expect(parseFormChatAnswer(rating, " 3 ")).toEqual({ ok: true, value: 3 })
+    expect(parseFormChatAnswer(rating, "4")).toEqual({ ok: false, code: "max" })
+    expect(parseFormChatAnswer(rating, "three")).toEqual({
+      ok: false,
+      code: "number",
+    })
   })
 })

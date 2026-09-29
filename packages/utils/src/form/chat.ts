@@ -310,7 +310,9 @@ export function parseFormChatAnswer(
       }
       break
     }
-    case "number": {
+    case "number":
+    case "slider":
+    case "rating": {
       const n = Number(trimmed.replace(",", "."))
       value = Number.isFinite(n) ? n : trimmed
       break

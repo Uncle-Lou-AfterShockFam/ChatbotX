@@ -25,7 +25,8 @@ import type {
   FormValue,
   FormValues,
 } from "@chatbotx.io/utils/form"
-import { isFormInputFieldType } from "@chatbotx.io/utils/form"
+import { formScaleBounds, isFormInputFieldType } from "@chatbotx.io/utils/form"
+import { StarIcon } from "lucide-react"
 
 /**
  * Renders the fields of ONE step against the current evaluation (s200).
@@ -258,6 +259,28 @@ function FieldInput(props: {
         </div>
       )
     }
+    case "slider":
+      return (
+        <SliderInput
+          disabled={disabled}
+          field={field}
+          id={id}
+          invalid={invalid}
+          onChange={onChange}
+          value={value}
+        />
+      )
+    case "rating":
+      return (
+        <RatingInput
+          disabled={disabled}
+          field={field}
+          id={id}
+          invalid={invalid}
+          onChange={onChange}
+          value={value}
+        />
+      )
     default:
       return (
         <Input
@@ -277,4 +300,104 @@ function FieldInput(props: {
         />
       )
   }
+}
+
+const numericValue = (value: FormValue): number | null => {
+  const n = typeof value === "string" ? Number(value) : value
+  return typeof n === "number" && Number.isFinite(n) ? n : null
+}
+
+/**
+ * s220c A2-4: a native range input (keyboard + screen readers for free). It
+ * has no "empty" position, so until the visitor moves it the value reads
+ * "-" and a required slider stays unanswered.
+ */
+function SliderInput(props: {
+  field: FormField
+  id: string
+  value: FormValue
+  onChange: (value: FormValue) => void
+  disabled: boolean
+  invalid: boolean
+}) {
+  const { field, id, value, onChange, disabled, invalid } = props
+  const { min, max, step } = formScaleBounds(field)
+  const current = numericValue(value)
+  return (
+    <div className="flex items-center gap-3">
+      <input
+        aria-invalid={invalid}
+        aria-valuetext={current === null ? "-" : String(current)}
+        className="h-2 min-w-0 flex-1 cursor-pointer accent-primary disabled:cursor-not-allowed"
+        disabled={disabled}
+        id={id}
+        max={max}
+        min={min}
+        onChange={(e) => onChange(Number(e.target.value))}
+        step={step}
+        type="range"
+        value={current ?? (min + max) / 2}
+      />
+      <output
+        className="w-12 shrink-0 text-right text-sm tabular-nums"
+        data-testid={`${id}-value`}
+        htmlFor={id}
+      >
+        {current === null ? "-" : current}
+      </output>
+    </div>
+  )
+}
+
+/**
+ * s220c A2-4: 1..max stars as NATIVE radios (arrow keys, form semantics and
+ * screen readers for free); each star is the radio's visible label.
+ */
+function RatingInput(props: {
+  field: FormField
+  id: string
+  value: FormValue
+  onChange: (value: FormValue) => void
+  disabled: boolean
+  invalid: boolean
+}) {
+  const { field, id, value, onChange, disabled, invalid } = props
+  const { max } = formScaleBounds(field)
+  const current = numericValue(value)
+  const stars = Array.from({ length: max }, (_, i) => i + 1)
+  return (
+    <fieldset
+      aria-invalid={invalid}
+      className="flex flex-wrap gap-1 border-0 p-0"
+      disabled={disabled}
+      id={id}
+    >
+      {stars.map((n) => (
+        <label
+          className="cursor-pointer rounded-md p-1 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
+          data-testid={`${id}-star-${n}`}
+          key={n}
+        >
+          <input
+            aria-label={`${n}/${max}`}
+            checked={current === n}
+            className="sr-only"
+            name={id}
+            onChange={() => onChange(n)}
+            type="radio"
+            value={n}
+          />
+          <StarIcon
+            aria-hidden="true"
+            className={cn(
+              "size-7",
+              current !== null && n <= current
+                ? "fill-amber-400 text-amber-400"
+                : "text-muted-foreground",
+            )}
+          />
+        </label>
+      ))}
+    </fieldset>
+  )
 }

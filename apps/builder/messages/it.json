@@ -4792,7 +4792,7 @@
       "settings": "Settings",
       "preview": "Preview",
       "steps": "Steps",
-      "step": "Step",
+      "step": "Passo",
       "stepTitle": "Step title",
       "stepPosition": "Step {current} of {total}",
       "noStep": "Add a step to start placing fields.",
@@ -4833,7 +4833,18 @@
       "previewBack": "Back",
       "previewNext": "Next",
       "previewSubmit": "Submit (preview)",
-      "previewSubmitted": "Preview submitted. Nothing is stored from the preview."
+      "previewSubmitted": "Preview submitted. Nothing is stored from the preview.",
+      "stars": "Numero di stelle",
+      "optionPoints": "Punti",
+      "chatSection": "In chat",
+      "chatPrompt": "Testo della domanda in chat (vuoto = l'etichetta)",
+      "chatRetry": "Messaggio quando una risposta non va bene",
+      "chatMediaUrl": "Immagine inviata con la domanda (link https)",
+      "askWhenKnown": "Chiedi anche se già noto",
+      "askWhenKnownHint": "Disattivato: la chat salta la domanda se il contatto ha già la risposta.",
+      "alwaysAsk": "Mai tagliato dal limite di domande",
+      "askAfterSubmissions": "Chiedi dall'invio numero",
+      "askAfterSubmissionsHint": "Profilazione progressiva: chiedi solo dopo che il contatto ha inviato il modulo questo numero di volte. Vuoto = sempre."
     },
     "fieldTypes": {
       "text": "Short text",
@@ -4852,7 +4863,12 @@
       "time": "Time",
       "heading": "Heading",
       "paragraph": "Paragraph",
-      "divider": "Divider"
+      "divider": "Divider",
+      "slider": "Cursore",
+      "rating": "Valutazione",
+      "image": "Foto",
+      "file": "File",
+      "location": "Posizione"
     },
     "ops": {
       "eq": "is",
@@ -4925,7 +4941,18 @@
       "submissionLimit": "Limite di invii",
       "submissionLimitHint": "Smetti di accettare risposte dopo questo numero di invii (web e chat). Eliminare un invio libera un posto. Vuoto = nessun limite.",
       "blockedEmailDomains": "Domini email bloccati",
-      "blockedEmailDomainsHint": "Uno per riga, es. example.com. Anche i sottodomini sono bloccati."
+      "blockedEmailDomainsHint": "Uno per riga, es. example.com. Anche i sottodomini sono bloccati.",
+      "channels": "Dove funziona",
+      "channel": {
+        "web": "Pagina web e incorporamento",
+        "chat": "In una chat (passaggio del flusso)"
+      },
+      "channelHint": {
+        "web": "Link pubblico e codice di incorporamento.",
+        "chat": "Chiesto domanda per domanda da un passaggio Chiedi modulo."
+      },
+      "profilingLimit": "Domande per chat",
+      "profilingLimitHint": "Profilazione progressiva: al massimo questo numero di domande per esecuzione. Vuoto = chiedi tutto."
     },
     "submitActions": {
       "title": "Actions after submit",
