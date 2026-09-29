@@ -39,6 +39,62 @@ export const MAX_ATTACHMENTS = 10
 export const MAX_ATTACHMENT_BYTES_TOTAL = 10 * 1024 * 1024
 /** One deadline for reading every attachment of an email (then: retry). */
 export const ATTACHMENT_READ_TIMEOUT_MS = 60_000
+/**
+ * s223b: one broadcast's recipients share their attachment bytes instead of
+ * each re-reading every file from storage. Per worker process, keyed by
+ * workspace + broadcast + storage key (a media key is one upload: new bytes
+ * are a new key), least recently used first out, bounded in bytes and age.
+ * A send outside a broadcast never uses it.
+ */
+export const ATTACHMENT_CACHE_BYTES = 2 * MAX_ATTACHMENT_BYTES_TOTAL
+export const ATTACHMENT_CACHE_TTL_MS = 10 * 60_000
+const attachmentCache = new Map<string, { content: Buffer; at: number }>()
+let attachmentCacheBytes = 0
+
+function cacheDelete(key: string) {
+  const entry = attachmentCache.get(key)
+  if (entry) {
+    attachmentCacheBytes -= entry.content.length
+    attachmentCache.delete(key)
+  }
+}
+
+function cacheGet(key: string, now: number): Buffer | undefined {
+  const entry = attachmentCache.get(key)
+  if (!entry) {
+    return
+  }
+  if (now - entry.at > ATTACHMENT_CACHE_TTL_MS) {
+    cacheDelete(key)
+    return
+  }
+  // Re-insert: Map order is the LRU order.
+  attachmentCache.delete(key)
+  attachmentCache.set(key, entry)
+  return entry.content
+}
+
+function cacheSet(key: string, content: Buffer, now: number) {
+  if (content.length > ATTACHMENT_CACHE_BYTES) {
+    return
+  }
+  cacheDelete(key)
+  for (const oldest of attachmentCache.keys()) {
+    if (attachmentCacheBytes + content.length <= ATTACHMENT_CACHE_BYTES) {
+      break
+    }
+    cacheDelete(oldest)
+  }
+  attachmentCache.set(key, { content, at: now })
+  attachmentCacheBytes += content.length
+}
+
+/** Test hook: empty the per-process attachment cache. */
+export function clearAttachmentCache() {
+  attachmentCache.clear()
+  attachmentCacheBytes = 0
+}
+
 /** Template links signed per send (a link-dense document stays bounded). */
 const MAX_LINKS = 100
 
@@ -114,6 +170,8 @@ function tooLarge(): EmailContentError {
 export async function loadAttachments(
   workspaceId: string,
   files: MediaFile[],
+  /** A broadcast id: its recipients share the bytes (s223b). */
+  cacheScope?: string,
 ): Promise<MailAttachment[]> {
   for (const file of files) {
     if (!isWorkspaceStorageKey(file.path, workspaceId)) {
@@ -125,7 +183,27 @@ export async function loadAttachments(
   const signal = AbortSignal.timeout(ATTACHMENT_READ_TIMEOUT_MS)
   let total = 0
   const out: MailAttachment[] = []
+  const toAttachment = (file: MediaFile, content: Buffer): MailAttachment => ({
+    filename: attachmentName(file.name, file.id),
+    content,
+    contentType: MIME_TYPE.test(file.mimeType ?? "")
+      ? file.mimeType
+      : "application/octet-stream",
+    key: file.path,
+  })
   for (const file of files) {
+    const cacheKey = cacheScope
+      ? `${workspaceId}\u0000${cacheScope}\u0000${file.path}`
+      : undefined
+    const cached = cacheKey ? cacheGet(cacheKey, Date.now()) : undefined
+    if (cached) {
+      total += cached.length
+      if (total > MAX_ATTACHMENT_BYTES_TOTAL) {
+        throw tooLarge()
+      }
+      out.push(toAttachment(file, cached))
+      continue
+    }
     let object: Awaited<ReturnType<typeof uploader.getObjectStream>>
     try {
       object = await uploader.getObjectStream(file.path, {
@@ -159,14 +237,11 @@ export async function loadAttachments(
         }
         chunks.push(buf)
       }
-      out.push({
-        filename: attachmentName(file.name, file.id),
-        content: Buffer.concat(chunks),
-        contentType: MIME_TYPE.test(file.mimeType ?? "")
-          ? file.mimeType
-          : "application/octet-stream",
-        key: file.path,
-      })
+      const content = Buffer.concat(chunks)
+      if (cacheKey) {
+        cacheSet(cacheKey, content, Date.now())
+      }
+      out.push(toAttachment(file, content))
     } finally {
       signal.removeEventListener("abort", abort)
       stream.destroy()
@@ -303,6 +378,8 @@ export async function prepareStepDocument(props: {
   step: EmailStepSchema
   workspaceId: string
   variables: Variables
+  /** The broadcast this send belongs to, if any (attachment cache scope). */
+  broadcastId?: string
 }): Promise<PreparedDocument> {
   const { step, workspaceId } = props
   const doc = await loadDocument(step, workspaceId)
@@ -372,6 +449,7 @@ export async function prepareStepDocument(props: {
   const attachments = await loadAttachments(
     workspaceId,
     attachmentIds.map((id) => files.get(id) as MediaFile),
+    props.broadcastId,
   )
   return { doc, inputs, vars, assets, attachments }
 }

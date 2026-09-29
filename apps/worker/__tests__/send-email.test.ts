@@ -318,6 +318,27 @@ describe("s220b: broadcast attribution", () => {
     expect(markFailed).not.toHaveBeenCalled()
   })
 
+  test("s223b: a broadcast's document send scopes the attachment cache to its broadcast; other sends do not", async () => {
+    await sendEmail({
+      ...makeProps({ templateId: "77", elements: [] }),
+      metadata: {
+        type: "broadcast",
+        broadcastId: "b-1",
+        contactInboxId: "ci-1",
+      },
+    } as never)
+    expect(prepareStepDocumentMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ broadcastId: "b-1" }),
+    )
+    await sendEmail({
+      ...makeProps({ templateId: "77", elements: [] }),
+      metadata: {},
+    } as never)
+    expect(prepareStepDocumentMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ broadcastId: undefined }),
+    )
+  })
+
   test("a send outside a broadcast has no broadcastId", async () => {
     await sendEmail({ ...makeProps(), metadata: {} } as never)
     expect(createRecipient).toHaveBeenLastCalledWith(

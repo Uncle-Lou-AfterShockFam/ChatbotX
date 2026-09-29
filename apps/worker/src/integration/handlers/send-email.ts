@@ -435,6 +435,10 @@ export async function sendEmail({
         step,
         workspaceId: conversation.workspaceId,
         variables,
+        broadcastId:
+          metadata?.type === BROADCAST_PAYLOAD_TYPE
+            ? String(metadata.broadcastId)
+            : undefined,
       })
     } catch (err) {
       if (!(err instanceof EmailContentError)) {
