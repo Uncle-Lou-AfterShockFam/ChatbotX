@@ -49,7 +49,12 @@ import {
 } from "./send-email-document"
 import { buildLineEmail, resolveEmailLine } from "./send-email-line"
 import { isSendSuppressed, SUPPRESSED_ERROR } from "./send-email-suppression"
-import { planThread, sequenceIdOf, type ThreadPlan } from "./send-email-thread"
+import {
+  planThread,
+  sequenceIdOf,
+  sequenceSendIdOf,
+  type ThreadPlan,
+} from "./send-email-thread"
 
 async function resolveElements({
   appUrl,
@@ -330,6 +335,20 @@ async function recordThreadSend(
   }
 }
 
+/** s225b: best effort; a leftover root only costs a phantom In-Reply-To. */
+async function releaseThreadRoot(
+  props: Parameters<typeof emailThreadService.releaseRoot>[0],
+) {
+  try {
+    await emailThreadService.releaseRoot(props)
+  } catch (err) {
+    logger.warn(
+      { err, workspaceId: props.workspaceId, sequenceId: props.sequenceId },
+      "handleSendEmail: releasing the unsent thread root failed",
+    )
+  }
+}
+
 const SINGLE_MAILBOX_RE = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+$/
 
 /**
@@ -485,6 +504,7 @@ export async function sendEmail({
         sequenceId,
         lineInboxId: lineContactInbox.inboxId,
         subject,
+        sendId: sequenceSendIdOf(metadata, step.id),
       })
     } catch (err) {
       if (!(err instanceof EmailContentError)) {
@@ -493,193 +513,210 @@ export async function sendEmail({
       contentError = err
     }
   }
-  if (isDocument && !contentError && !suppressed) {
-    try {
-      prepared = await prepareStepDocument({
-        step,
-        workspaceId: conversation.workspaceId,
-        variables,
-        // Job metadata is not runtime-validated: only a real id scopes the cache.
-        broadcastId:
-          metadata?.type === BROADCAST_PAYLOAD_TYPE &&
-          (typeof metadata.broadcastId === "string" ||
-            typeof metadata.broadcastId === "number") &&
-          String(metadata.broadcastId) !== ""
-            ? String(metadata.broadcastId)
-            : undefined,
-      })
-    } catch (err) {
-      if (!(err instanceof EmailContentError)) {
-        throw err
+  // s225b: a claimed thread root whose mail is never queued (content error,
+  // failed hand-off, a transient throw) is given back on every such path.
+  let queued = false
+  try {
+    if (isDocument && !contentError && !suppressed) {
+      try {
+        prepared = await prepareStepDocument({
+          step,
+          workspaceId: conversation.workspaceId,
+          variables,
+          // Job metadata is not runtime-validated: only a real id scopes the cache.
+          broadcastId:
+            metadata?.type === BROADCAST_PAYLOAD_TYPE &&
+            (typeof metadata.broadcastId === "string" ||
+              typeof metadata.broadcastId === "number") &&
+            String(metadata.broadcastId) !== ""
+              ? String(metadata.broadcastId)
+              : undefined,
+        })
+      } catch (err) {
+        if (!(err instanceof EmailContentError)) {
+          throw err
+        }
+        contentError = err
       }
-      contentError = err
     }
-  }
 
-  // Create per-recipient tracking row before building URLs so the token is available.
-  let token: string | undefined
-  if (step.topicId) {
-    // A broadcast's send (s220b): delivery, opens and clicks also stamp the
-    // recipient's ContactOnBroadcast row, keyed by the broadcast's OWN
-    // contactInboxId (the one its row was written with).
-    const broadcast =
-      metadata?.type === BROADCAST_PAYLOAD_TYPE ? metadata : undefined
-    const result = await emailTopicAnalyticsService.createRecipient({
-      topicId: step.topicId,
-      workspaceId: conversation.workspaceId,
-      contactId: conversation.contactId,
-      conversationId: conversation.id,
-      contactInboxId: broadcast?.contactInboxId ?? contactInbox.id,
-      email: recipient,
-      broadcastId: broadcast?.broadcastId ?? null,
-    })
-    token = result.token
-  }
-
-  if (suppressed) {
-    logger.warn(
-      {
+    // Create per-recipient tracking row before building URLs so the token is available.
+    let token: string | undefined
+    if (step.topicId) {
+      // A broadcast's send (s220b): delivery, opens and clicks also stamp the
+      // recipient's ContactOnBroadcast row, keyed by the broadcast's OWN
+      // contactInboxId (the one its row was written with).
+      const broadcast =
+        metadata?.type === BROADCAST_PAYLOAD_TYPE ? metadata : undefined
+      const result = await emailTopicAnalyticsService.createRecipient({
+        topicId: step.topicId,
         workspaceId: conversation.workspaceId,
         contactId: conversation.contactId,
-        lineInboxId,
-      },
-      "handleSendEmail: recipient is suppressed, not sent",
-    )
-    if (token) {
-      await emailTopicAnalyticsService.markFailed(token, SUPPRESSED_ERROR)
-    }
-    return
-  }
-
-  if (contentError) {
-    logger.error(
-      {
-        err: contentError,
-        workspaceId: conversation.workspaceId,
-        templateId: step.templateId,
-        lineInboxId,
-      },
-      "handleSendEmail: email content could not be prepared",
-    )
-    if (token) {
-      await emailTopicAnalyticsService.markFailed(token)
-    }
-    return
-  }
-
-  // Legacy `elements` keep the original path (no try: its errors propagate
-  // to the queue's retry, as they always did).
-  let body: { html: string; text: string; attachments?: MailAttachment[] }
-  if (isDocument) {
-    try {
-      body = await renderStepDocument({
-        prepared: prepared as PreparedDocument,
-        workspaceId: conversation.workspaceId,
-        appUrl,
-        inbox,
-        flowId: flowVersion.flowId,
-        unsubscribeUrl,
-        token: format === "text" ? undefined : token,
-        contact: {
-          id: conversation.contactId,
-          contactInboxId: lineContactInbox?.id ?? contactInbox.id,
-        },
+        conversationId: conversation.id,
+        contactInboxId: broadcast?.contactInboxId ?? contactInbox.id,
+        email: recipient,
+        broadcastId: broadcast?.broadcastId ?? null,
       })
-    } catch (err) {
-      // Only unusable CONTENT (template gone, invalid document, a bad
-      // attachment) fails the send closed; a transient error retries.
-      if (!(err instanceof EmailContentError)) {
-        throw err
+      token = result.token
+    }
+
+    if (suppressed) {
+      logger.warn(
+        {
+          workspaceId: conversation.workspaceId,
+          contactId: conversation.contactId,
+          lineInboxId,
+        },
+        "handleSendEmail: recipient is suppressed, not sent",
+      )
+      if (token) {
+        await emailTopicAnalyticsService.markFailed(token, SUPPRESSED_ERROR)
       }
+      return
+    }
+
+    if (contentError) {
       logger.error(
         {
-          err,
+          err: contentError,
           workspaceId: conversation.workspaceId,
           templateId: step.templateId,
+          lineInboxId,
         },
-        "handleSendEmail: email content could not be rendered",
+        "handleSendEmail: email content could not be prepared",
       )
       if (token) {
         await emailTopicAnalyticsService.markFailed(token)
       }
       return
     }
-  } else {
-    body = await renderLegacyElements({
-      appUrl,
-      step,
-      variables,
-      inbox,
-      flowId: flowVersion.flowId,
-      unsubscribeUrl,
-      token: format === "text" ? undefined : token,
-      workspaceId: conversation.workspaceId,
-      brandName: workspace.name ?? smtpIntegration?.name ?? "",
-      subject,
-      preheader,
-    })
-  }
 
-  // RFC 8058 one-click: the mail client POSTs to this URL; the /unsubscribe
-  // page itself only unsubscribes after a confirm (link scanners GET it).
-  const oneClickUrl = new URL(unsubscribeUrl)
-  oneClickUrl.pathname = "/unsubscribe/one-click"
-  const headers = {
-    "List-Unsubscribe": `<${oneClickUrl.toString()}>`,
-    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-  }
-
-  const sent = lineContactInbox
-    ? await sendViaLine({
-        workspaceId: conversation.workspaceId,
+    // Legacy `elements` keep the original path (no try: its errors propagate
+    // to the queue's retry, as they always did).
+    let body: { html: string; text: string; attachments?: MailAttachment[] }
+    if (isDocument) {
+      try {
+        body = await renderStepDocument({
+          prepared: prepared as PreparedDocument,
+          workspaceId: conversation.workspaceId,
+          appUrl,
+          inbox,
+          flowId: flowVersion.flowId,
+          unsubscribeUrl,
+          token: format === "text" ? undefined : token,
+          contact: {
+            id: conversation.contactId,
+            contactInboxId: lineContactInbox?.id ?? contactInbox.id,
+          },
+        })
+      } catch (err) {
+        // Only unusable CONTENT (template gone, invalid document, a bad
+        // attachment) fails the send closed; a transient error retries.
+        if (!(err instanceof EmailContentError)) {
+          throw err
+        }
+        logger.error(
+          {
+            err,
+            workspaceId: conversation.workspaceId,
+            templateId: step.templateId,
+          },
+          "handleSendEmail: email content could not be rendered",
+        )
+        if (token) {
+          await emailTopicAnalyticsService.markFailed(token)
+        }
+        return
+      }
+    } else {
+      body = await renderLegacyElements({
         appUrl,
-        lineContactInbox,
-        subject: thread?.subject ?? subject,
-        body,
-        headers,
-        ref: lineEmailRef(token, randomUUID()),
-        format,
-        thread,
-      })
-    : await sendViaSmtp({
-        workspaceId: workspace.id,
-        smtpIntegration: smtpIntegration as NonNullable<typeof smtpIntegration>,
-        auth: smtpAuth as NonNullable<typeof smtpAuth>,
-        from: step.from,
-        to,
+        step,
+        variables,
+        inbox,
+        flowId: flowVersion.flowId,
+        unsubscribeUrl,
+        token: format === "text" ? undefined : token,
+        workspaceId: conversation.workspaceId,
+        brandName: workspace.name ?? smtpIntegration?.name ?? "",
         subject,
-        body,
-        headers,
+        preheader,
       })
-  if (!sent) {
-    if (token) {
-      await emailTopicAnalyticsService.markFailed(token)
     }
-    return
-  }
-  // The line only QUEUED it: its own delivered / failed status settles the
-  // row (line-email-status.ts), since failed never overrides delivered.
-  if (lineContactInbox) {
-    if (thread && sequenceId) {
-      await recordThreadSend({
+
+    // RFC 8058 one-click: the mail client POSTs to this URL; the /unsubscribe
+    // page itself only unsubscribes after a confirm (link scanners GET it).
+    const oneClickUrl = new URL(unsubscribeUrl)
+    oneClickUrl.pathname = "/unsubscribe/one-click"
+    const headers = {
+      "List-Unsubscribe": `<${oneClickUrl.toString()}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    }
+
+    const sent = lineContactInbox
+      ? await sendViaLine({
+          workspaceId: conversation.workspaceId,
+          appUrl,
+          lineContactInbox,
+          subject: thread?.subject ?? subject,
+          body,
+          headers,
+          ref: lineEmailRef(token, randomUUID()),
+          format,
+          thread,
+        })
+      : await sendViaSmtp({
+          workspaceId: workspace.id,
+          smtpIntegration: smtpIntegration as NonNullable<
+            typeof smtpIntegration
+          >,
+          auth: smtpAuth as NonNullable<typeof smtpAuth>,
+          from: step.from,
+          to,
+          subject,
+          body,
+          headers,
+        })
+    if (!sent) {
+      if (token) {
+        await emailTopicAnalyticsService.markFailed(token)
+      }
+      return
+    }
+    queued = true
+    // The line only QUEUED it: its own delivered / failed status settles the
+    // row (line-email-status.ts), since failed never overrides delivered.
+    if (lineContactInbox) {
+      if (thread && !thread.root && sequenceId) {
+        await recordThreadSend({
+          workspaceId: conversation.workspaceId,
+          contactId: conversation.contactId,
+          sequenceId,
+          lineInboxId: lineContactInbox.inboxId,
+          subject,
+          key: thread.messageKey,
+        })
+      }
+      return
+    }
+
+    // Outside the send's try: a stats write failing after a sent mail must
+    // never mark that mail failed (it would count it twice in the broadcast).
+    if (token) {
+      try {
+        await emailTopicAnalyticsService.markDelivered(token)
+      } catch (err) {
+        logger.warn({ err, token }, "handleSendEmail: markDelivered failed")
+      }
+    }
+  } finally {
+    if (thread?.root && !queued && sequenceId) {
+      await releaseThreadRoot({
         workspaceId: conversation.workspaceId,
         contactId: conversation.contactId,
         sequenceId,
-        lineInboxId: lineContactInbox.inboxId,
-        subject,
         key: thread.messageKey,
       })
-    }
-    return
-  }
-
-  // Outside the send's try: a stats write failing after a sent mail must
-  // never mark that mail failed (it would count it twice in the broadcast).
-  if (token) {
-    try {
-      await emailTopicAnalyticsService.markDelivered(token)
-    } catch (err) {
-      logger.warn({ err, token }, "handleSendEmail: markDelivered failed")
     }
   }
 }

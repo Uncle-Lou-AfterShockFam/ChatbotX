@@ -10,9 +10,22 @@ const { ContentError } = vi.hoisted(() => ({
 vi.mock("../src/integration/handlers/send-email-document", () => ({
   EmailContentError: ContentError,
 }))
+vi.mock("../src/integration/handlers/send-email-line", () => ({
+  LINE_EMAIL_LIMITS: {
+    subject: 200,
+    htmlBytes: 1,
+    textBytes: 1,
+    threadKeys: 20,
+  },
+}))
 
-const { MESSAGE_KEY, mintMessageKey, replySubject, sequenceIdOf } =
-  await import("../src/integration/handlers/send-email-thread")
+const {
+  MESSAGE_KEY,
+  mintMessageKey,
+  replySubject,
+  sequenceIdOf,
+  sequenceSendIdOf,
+} = await import("../src/integration/handlers/send-email-thread")
 
 describe("send-email-thread (s225b)", () => {
   test("a minted key always passes the line's MESSAGE_KEY shape and never repeats", () => {
@@ -54,9 +67,36 @@ describe("send-email-thread (s225b)", () => {
     ).toBeUndefined()
   })
 
+  test("a derived key is stable per send id, distinct across ids, and still a valid key", () => {
+    expect(mintMessageKey("ws:c:1:d:s")).toBe(mintMessageKey("ws:c:1:d:s"))
+    expect(mintMessageKey("ws:c:1:d:s")).not.toBe(mintMessageKey("ws:c:1:d2:s"))
+    for (let i = 0; i < 500; i++) {
+      expect(mintMessageKey(`ws:c:1:${i}:s`)).toMatch(MESSAGE_KEY)
+    }
+  })
+
+  test("sequenceSendIdOf needs a sequence dispatch id", () => {
+    const meta = (dispatchId: unknown) =>
+      ({ type: "sequenceSchedule", dispatchId }) as never
+    expect(sequenceSendIdOf(meta("123"), "step-1")).toBe("123:step-1")
+    for (const junk of ["", "a b", 5, null, undefined, "x".repeat(65)]) {
+      expect(sequenceSendIdOf(meta(junk), "step-1")).toBeUndefined()
+    }
+    expect(sequenceSendIdOf(undefined, "step-1")).toBeUndefined()
+  })
+
   test("replySubject never doubles Re:", () => {
     expect(replySubject("Saturday")).toBe("Re: Saturday")
     expect(replySubject("  Re: Saturday ")).toBe("Re: Saturday")
     expect(replySubject("RE: x")).toBe("RE: x")
+  })
+
+  test("replySubject fits the line's 200-char cap even for a 197..200-char first subject", () => {
+    for (const n of [196, 197, 200]) {
+      const r = replySubject("a".repeat(n))
+      expect(r.startsWith("Re: ")).toBe(true)
+      expect(r.length).toBeLessThanOrEqual(200)
+    }
+    expect(replySubject("a".repeat(196))).toBe(`Re: ${"a".repeat(196)}`)
   })
 })
