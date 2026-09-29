@@ -162,4 +162,23 @@ describe("SmartDelayEventEmitter: form events (s220 A2-3)", () => {
     })
     expect(mocks.enqueueIntegrationJob).not.toHaveBeenCalled()
   })
+
+  test("a form event's occurredAt is the stale-guard instant, not the emit time", async () => {
+    await SmartDelayEventEmitter.formSubmitted("ws-1", "contact-1", {
+      ...submitted,
+      occurredAt: "2026-09-29T01:02:03.000Z",
+    })
+    await SmartDelayEventEmitter.formSubmitted("ws-1", "contact-1", {
+      ...submitted,
+      occurredAt: "not-a-date",
+    })
+    const stamps = mocks.enqueueIntegrationJob.mock.calls.map(
+      (call) => (call[0] as { data: { emittedAt: string } }).data.emittedAt,
+    )
+    expect(stamps[0]).toBe("2026-09-29T01:02:03.000Z")
+    // A malformed instant falls back to now (never undefined).
+    expect(Date.parse(stamps[1] ?? "")).toBeGreaterThan(
+      Date.parse("2026-09-29T01:02:03.000Z"),
+    )
+  })
 })

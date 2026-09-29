@@ -83,10 +83,19 @@ class SmartDelayEventEmitterImpl extends BaseEventEmitter {
       metadata?: Record<string, unknown>
     },
   ): Promise<void> {
-    const event = waitEventOf(eventType, data.metadata ?? {})
+    const metadata = data.metadata ?? {}
+    const event = waitEventOf(eventType, metadata)
     if (!event) {
       return
     }
+    // A form event carries WHEN it happened: a delayed emit (tags / field
+    // events awaited first, the abandon catch-up) must not resume a wait
+    // parked after the fact (Codex probe, s220 A2-3).
+    const occurredAt =
+      typeof metadata.occurredAt === "string" &&
+      Number.isFinite(Date.parse(metadata.occurredAt))
+        ? new Date(metadata.occurredAt).toISOString()
+        : null
     await enqueueIntegrationJob(
       {
         type: "resumeWaitForEvent",
@@ -94,7 +103,7 @@ class SmartDelayEventEmitterImpl extends BaseEventEmitter {
           reason: "event",
           workspaceId: data.workspaceId,
           contactId: data.contactId,
-          emittedAt: new Date().toISOString(),
+          emittedAt: occurredAt ?? new Date().toISOString(),
           ...event,
         },
       },

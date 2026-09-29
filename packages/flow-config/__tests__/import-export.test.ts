@@ -301,6 +301,23 @@ describe("collectFlowReferenceWarnings", () => {
     )
   })
 
+  test("a form id (askForm, a wait on a form event) is a reference (s220 A2-3)", () => {
+    const flow = buildFixtureFlow()
+    const node = flow.nodes[0] as unknown as {
+      data: { details: { steps: Record<string, unknown>[] } }
+    }
+    node.data.details.steps.push({
+      id: "30",
+      stepType: stepTypes.enum.wait,
+      delayType: "event",
+      eventType: "formSubmitted",
+      formId: "777",
+    })
+    expect(collectFlowReferenceWarnings(flow)).toContainEqual(
+      expect.objectContaining({ entityKind: "form", value: "777" }),
+    )
+  })
+
   test("does not flag addContactTag.tags as a reference", () => {
     const sendMessageNode = sendMessageNodeDefaultFn({
       labelVersion: 1,

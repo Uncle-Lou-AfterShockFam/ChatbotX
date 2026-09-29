@@ -93,6 +93,11 @@ export type FormSubmittedMetadata = {
   conversationId?: string | null
   /** Sum of the chosen options' points; null when the form is unscored. */
   score?: number | null
+  /**
+   * ISO instant the submission was written (s220 A2-3): a wait resumes only
+   * if it was parked before this, however late the emit ran.
+   */
+  occurredAt?: string
 }
 
 /**
@@ -111,6 +116,8 @@ export type FormAbandonedMetadata = {
   askedCount: number
   conversationId: string
   flowId: string
+  /** ISO instant the run ended (the catch-up may emit hours later). */
+  occurredAt?: string
 }
 
 /**

@@ -114,6 +114,7 @@ vi.mock("@chatbotx.io/database/client", () => ({
   isNotNull: mockIsNotNull,
   lt: mockLt,
   lte: mockLte,
+  or: vi.fn((...conditions: unknown[]) => ({ or: conditions })),
   sql: mockSql,
 }))
 

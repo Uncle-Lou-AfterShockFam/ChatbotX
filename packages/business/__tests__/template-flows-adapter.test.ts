@@ -71,6 +71,7 @@ describe("flowsAdapter", () => {
 
   test("declares botField as a consumed (non-deferred) kind", () => {
     expect(flowsAdapter.consumesKinds).toContain("botField")
+    expect(flowsAdapter.consumesKinds).toContain("form")
     expect(flowsAdapter.deferredKinds).not.toContain("botField")
   })
 
