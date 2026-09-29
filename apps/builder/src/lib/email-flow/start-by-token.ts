@@ -108,7 +108,8 @@ export async function checkEmailFlowToken(
           flowId: payload.fid,
           ...(payload.nid ? { nodeId: payload.nid } : {}),
           inboxId: contactInbox.inboxId,
-          jobId: `email-flow-start:${payload.lid}`,
+          // BullMQ refuses a custom job id containing ":" (its key separator).
+          jobId: `email-flow-start-${payload.lid}`,
         },
       })
     },

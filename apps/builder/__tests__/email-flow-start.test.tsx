@@ -99,7 +99,7 @@ describe("POST /email-topic/flow/start (s222b)", () => {
       input: {
         flowId: "700",
         inboxId: "55",
-        jobId: `email-flow-start:${LINK}`,
+        jobId: `email-flow-start-${LINK}`,
       },
     })
     expect(m.recordClick).toHaveBeenCalledWith("rec")
@@ -120,6 +120,14 @@ describe("POST /email-topic/flow/start (s222b)", () => {
     ])
   })
 
+  test("the queue job id is one BullMQ accepts: no ':' (live s222b: 'Custom Id cannot contain :')", async () => {
+    await route.POST(post({ source: "page" }))
+    const jobId = (
+      m.createOutgoing.mock.calls[0][0] as { input: { jobId: string } }
+    ).input.jobId
+    expect(jobId).not.toContain(":")
+  })
+
   test("a node-scoped token starts at that node", async () => {
     m.verify.mockResolvedValue({ ...PAYLOAD, nid: "703" })
     await route.POST(post({ source: "page" }))
@@ -129,7 +137,7 @@ describe("POST /email-topic/flow/start (s222b)", () => {
           flowId: "700",
           nodeId: "703",
           inboxId: "55",
-          jobId: `email-flow-start:${LINK}`,
+          jobId: `email-flow-start-${LINK}`,
         },
       }),
     )
