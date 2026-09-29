@@ -1090,6 +1090,27 @@ describe("sendFlowStep", () => {
     expect(mockCreateMessageRepository).not.toHaveBeenCalled()
   })
 
+  test("personal form links: minted for a DM / private reply, NEVER for a public comment reply (s220c)", async () => {
+    const optIn = () =>
+      (
+        mockResolveContactVariables.mock.calls.at(-1)?.[2] as {
+          personalLinks?: boolean
+        }
+      )?.personalLinks
+    await sendFlowStep({ ...baseParams })
+    expect(optIn()).toBe(true)
+    await sendFlowStep({
+      ...baseParams,
+      commentAnchor: { commentId: "comment-1", replyChannel: "private" },
+    })
+    expect(optIn()).toBe(true)
+    await sendFlowStep({
+      ...baseParams,
+      commentAnchor: { commentId: "comment-1", replyChannel: "public" },
+    })
+    expect(optIn()).toBe(false)
+  })
+
   test("forwards a private commentAnchor to sendFlowStepToChannel when the resolved contactInbox is messenger", async () => {
     await sendFlowStep({
       ...baseParams,

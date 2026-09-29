@@ -528,8 +528,10 @@ export async function sendFlowStep({
     {
       contactInbox: targetContactInbox,
       conversation,
-      // a message step goes to this contact's own conversation
-      personalLinks: true,
+      // Personal (bearer) links only when the message reaches this contact
+      // alone: never in a PUBLIC comment reply, which anyone can read (Codex
+      // review s220c). A private comment reply is a DM to the commenter.
+      personalLinks: commentAnchor?.replyChannel !== "public",
       ...(appointmentId ? { appointmentId } : {}),
     },
   )

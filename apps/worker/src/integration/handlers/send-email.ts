@@ -296,6 +296,18 @@ async function sendViaLine(props: {
   }
 }
 
+/**
+ * The resolved recipient is exactly the contact's stored email (one address,
+ * case-insensitive). A list, a different or an empty address is not.
+ */
+export const isContactsOwnAddress = (
+  to: string,
+  contactEmail: string | null | undefined,
+): boolean => {
+  const own = contactEmail?.trim().toLowerCase()
+  return Boolean(own) && to.trim().toLowerCase() === own
+}
+
 export async function sendEmail({
   conversation,
   flowVersion,
@@ -357,15 +369,20 @@ export async function sendEmail({
     contactInbox,
     conversation,
     workspace,
-    // an email goes to this contact only
-    personalLinks: true,
   })
   const { appUrl } = await resolveTenantSettings({
     workspaceId: conversation.workspaceId,
   })
 
-  const [to, subject, preheader] = await Promise.all([
-    contactVariableService.replaceAll({ text: step.to, variables }),
+  const to = await contactVariableService.replaceAll({
+    text: step.to,
+    variables,
+  })
+  // Personal (bearer) links only in mail to the contact's OWN address: an
+  // owner may address this step to someone else (a notification), and that
+  // reader must not get the contact's link (Codex review s220c).
+  variables.personalLinks = isContactsOwnAddress(to, variables.contact?.email)
+  const [subject, preheader] = await Promise.all([
     contactVariableService.replaceAll({ text: step.subject, variables }),
     contactVariableService.replaceAll({ text: step.preheader, variables }),
   ])

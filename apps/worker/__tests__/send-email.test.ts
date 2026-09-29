@@ -105,7 +105,9 @@ vi.mock("../src/services/integrations", () => ({
     resolveLineContext(...args),
 }))
 
-const { sendEmail } = await import("../../src/integration/handlers/send-email")
+const { sendEmail, isContactsOwnAddress } = await import(
+  "../../src/integration/handlers/send-email"
+)
 const { integrationSmtpService } = await import("@chatbotx.io/business")
 
 // ── shared fixture ──────────────────────────────────────────────────────────
@@ -555,4 +557,43 @@ test("s222b Codex probe: bad stored SMTP auth throws BEFORE the tracking row (no
     "host: required",
   )
   expect(createRecipient).not.toHaveBeenCalled()
+})
+
+describe("personal form links in email (s220c)", () => {
+  test("only mail to the contact's OWN address may carry them", () => {
+    expect(isContactsOwnAddress("Jane@Example.com ", "jane@example.com")).toBe(
+      true,
+    )
+    expect(isContactsOwnAddress("boss@example.com", "jane@example.com")).toBe(
+      false,
+    )
+    expect(
+      isContactsOwnAddress(
+        "jane@example.com, boss@example.com",
+        "jane@example.com",
+      ),
+    ).toBe(false)
+    expect(isContactsOwnAddress("", "")).toBe(false)
+    expect(isContactsOwnAddress("jane@example.com", null)).toBe(false)
+  })
+
+  test("the body is resolved with the opt-in only when the recipient is the contact", async () => {
+    const { contactVariableService } = await import("@chatbotx.io/variables")
+    const getAll = vi.mocked(contactVariableService.getAll)
+    const replaceAll = vi.mocked(contactVariableService.replaceAll)
+    for (const [to, expected] of [
+      ["jane@example.com", true],
+      ["boss@example.com", false],
+    ] as const) {
+      getAll.mockResolvedValueOnce({
+        contact: { email: "jane@example.com" },
+      } as never)
+      replaceAll.mockClear()
+      await sendEmail(makeProps({ to }) as never)
+      const subjectCall = replaceAll.mock.calls.find(
+        ([arg]) => (arg as { text: string }).text === "Hello",
+      )?.[0] as { variables: { personalLinks?: boolean } }
+      expect(subjectCall.variables.personalLinks).toBe(expected)
+    }
+  })
 })
