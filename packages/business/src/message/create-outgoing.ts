@@ -30,7 +30,16 @@ import { resolveTenantSettings } from "../platform/settings"
 import { getPublicFileUrl } from "../utils"
 
 type CreateOutgoingInput = (
-  | { flowId: string; nodeId?: string }
+  | {
+      flowId: string
+      nodeId?: string
+      /**
+       * s222b: the queue's dedupe key. A caller that must start the flow at
+       * most once (an email start-flow link) passes one, so a retried enqueue
+       * is a no-op while the job is retained.
+       */
+      jobId?: string
+    }
   | {
       text?: string
       files?: File[]
@@ -102,16 +111,20 @@ export const createOutgoing = async (props: {
   const { conversation, input: parsedInput, user, contactInbox } = props
 
   if ("flowId" in parsedInput) {
-    await integrationQueue.add(IntegrationJobAction.sendFlow, {
-      type: IntegrationJobAction.sendFlow,
-      data: {
-        conversationId: conversation,
-        contactInboxId: contactInbox,
-        flowId: parsedInput.flowId,
-        nodeId: parsedInput.nodeId,
-        sendFrom: "inbox",
+    await integrationQueue.add(
+      IntegrationJobAction.sendFlow,
+      {
+        type: IntegrationJobAction.sendFlow,
+        data: {
+          conversationId: conversation,
+          contactInboxId: contactInbox,
+          flowId: parsedInput.flowId,
+          nodeId: parsedInput.nodeId,
+          sendFrom: "inbox",
+        },
       },
-    })
+      parsedInput.jobId ? { jobId: parsedInput.jobId } : undefined,
+    )
     return null
   }
 

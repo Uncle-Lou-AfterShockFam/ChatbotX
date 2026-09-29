@@ -7664,5 +7664,16 @@
       "lineNone": "Ingen (skicka via SMTP)",
       "noLines": "Inga API-kanalinkorgar ännu."
     }
+  },
+  "emailFlowPage": {
+    "confirmTitle": "Fortsätt",
+    "confirmDescription": "Tryck på knappen för att fortsätta.",
+    "confirmButton": "Fortsätt",
+    "startedTitle": "Klart",
+    "startedDescription": "Allt är klart: vi tar det härifrån.",
+    "invalidTitle": "Ogiltig länk",
+    "invalidDescription": "Länken är ogiltig eller har gått ut.",
+    "unavailableTitle": "Inte tillgänglig",
+    "unavailableDescription": "Länken är inte längre tillgänglig."
   }
 }

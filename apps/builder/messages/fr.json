@@ -7664,5 +7664,16 @@
       "lineNone": "Aucune (envoi par SMTP)",
       "noLines": "Aucune boîte de réception de canal API."
     }
+  },
+  "emailFlowPage": {
+    "confirmTitle": "Continuer",
+    "confirmDescription": "Appuyez sur le bouton pour continuer.",
+    "confirmButton": "Continuer",
+    "startedTitle": "C'est fait",
+    "startedDescription": "Tout est prêt : nous nous occupons de la suite.",
+    "invalidTitle": "Lien non valide",
+    "invalidDescription": "Ce lien n'est pas valide ou a expiré.",
+    "unavailableTitle": "Indisponible",
+    "unavailableDescription": "Ce lien n'est plus disponible."
   }
 }

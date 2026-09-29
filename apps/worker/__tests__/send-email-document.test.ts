@@ -18,6 +18,10 @@ const { getDocument, findFile, resolveMapping, getObjectStream, NotFound } =
 vi.mock("@chatbotx.io/business", () => ({
   mediaLibraryService: { findFile },
   signEmailClickUrl: vi.fn(async (url: string) => `signed(${url})`),
+  signEmailFlowToken: vi.fn(
+    async (p: Record<string, string>) =>
+      `sealed.${p.workspaceId}.${p.flowId}.${p.nodeId ?? "-"}.${p.contactId}.${p.contactInboxId}`,
+  ),
 }))
 vi.mock("@chatbotx.io/filesystem", () => ({
   uploader: { getObjectStream },
@@ -88,6 +92,7 @@ const base = {
   inbox: undefined,
   flowId: "f-1",
   unsubscribeUrl: "https://hub.test/unsubscribe?token=u",
+  contact: { id: "c-9", contactInboxId: "ci-9" },
 }
 
 const render = async (step: object, token?: string) =>
@@ -510,5 +515,72 @@ describe("attachments (s221b)", () => {
         }
       }
     }
+  })
+})
+
+// ── s222b: a start-flow button on an email-only inbox ────────────────────────
+
+describe("start-flow buttons with no chat to open (s222b)", () => {
+  const flowButton = (id: string, beforeStep: object) => ({
+    id,
+    type: "button",
+    label: `Go${id}`,
+    action: { kind: "flow", beforeStep, steps: [] },
+  })
+
+  test("startExternalFlow / startExternalNode get the sealed /email-topic/flow link for this contact, carrying the recipient token; never click-wrapped", async () => {
+    getDocument.mockResolvedValueOnce({
+      version: 1,
+      settings: {},
+      blocks: [
+        flowButton("1", {
+          id: "11",
+          stepType: "startExternalFlow",
+          flowId: "700",
+        }),
+        flowButton("2", {
+          id: "12",
+          stepType: "startExternalNode",
+          flowId: "701",
+          nodeId: "703",
+        }),
+      ],
+    })
+    const out = await render({ templateId: "77" }, "tok-1")
+    const hrefs = [...out.html.matchAll(/href="([^"]+)"/g)].map((m) =>
+      m[1].replaceAll("&amp;", "&"),
+    )
+    expect(hrefs).toContain(
+      "https://hub.test/email-topic/flow?t=sealed.ws-1.700.-.c-9.ci-9&r=tok-1",
+    )
+    expect(hrefs).toContain(
+      "https://hub.test/email-topic/flow?t=sealed.ws-1.701.703.c-9.ci-9&r=tok-1",
+    )
+    expect(out.html).not.toContain("email-topic/click")
+  })
+
+  test("without a topic token the link has no r; a node-local button with no chat link is still dropped", async () => {
+    getDocument.mockResolvedValueOnce({
+      version: 1,
+      settings: {},
+      blocks: [
+        flowButton("1", {
+          id: "11",
+          stepType: "startExternalFlow",
+          flowId: "700",
+        }),
+        flowButton("2", {
+          id: "12",
+          stepType: "startAnotherNode",
+          nodeId: "n-1",
+        }),
+      ],
+    })
+    const out = await render({ templateId: "77" })
+    expect(out.html).toContain(
+      "https://hub.test/email-topic/flow?t=sealed.ws-1.700.-.c-9.ci-9",
+    )
+    expect(out.html).not.toContain("&amp;r=")
+    expect(out.html).not.toContain("Go2")
   })
 })

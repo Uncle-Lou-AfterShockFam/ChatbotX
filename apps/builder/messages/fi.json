@@ -7664,5 +7664,16 @@
       "lineNone": "Ei mitään (lähetä SMTP:llä)",
       "noLines": "Ei vielä API-kanavan saapuneita-kansioita."
     }
+  },
+  "emailFlowPage": {
+    "confirmTitle": "Jatka",
+    "confirmDescription": "Jatka napauttamalla painiketta.",
+    "confirmButton": "Jatka",
+    "startedTitle": "Valmis",
+    "startedDescription": "Kaikki valmista: hoidamme loput.",
+    "invalidTitle": "Linkki ei kelpaa",
+    "invalidDescription": "Linkki on virheellinen tai vanhentunut.",
+    "unavailableTitle": "Ei saatavilla",
+    "unavailableDescription": "Linkki ei ole enää käytettävissä."
   }
 }

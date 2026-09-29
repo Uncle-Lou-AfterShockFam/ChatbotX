@@ -7664,5 +7664,16 @@
       "lineNone": "Yok (SMTP ile gönder)",
       "noLines": "Henüz API kanalı gelen kutusu yok."
     }
+  },
+  "emailFlowPage": {
+    "confirmTitle": "Devam et",
+    "confirmDescription": "Devam etmek için düğmeye dokunun.",
+    "confirmButton": "Devam et",
+    "startedTitle": "Tamam",
+    "startedDescription": "Her şey hazır: gerisini biz hallederiz.",
+    "invalidTitle": "Bağlantı geçersiz",
+    "invalidDescription": "Bu bağlantı geçersiz veya süresi dolmuş.",
+    "unavailableTitle": "Kullanılamıyor",
+    "unavailableDescription": "Bu bağlantı artık kullanılamıyor."
   }
 }

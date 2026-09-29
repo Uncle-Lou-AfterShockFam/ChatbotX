@@ -7664,5 +7664,16 @@
       "lineNone": "Ninguna (enviar por SMTP)",
       "noLines": "Aún no hay bandejas de canal API."
     }
+  },
+  "emailFlowPage": {
+    "confirmTitle": "Continuar",
+    "confirmDescription": "Pulsa el botón para continuar.",
+    "confirmButton": "Continuar",
+    "startedTitle": "Listo",
+    "startedDescription": "Todo listo: nosotros nos encargamos del resto.",
+    "invalidTitle": "Enlace no válido",
+    "invalidDescription": "Este enlace no es válido o ha caducado.",
+    "unavailableTitle": "No disponible",
+    "unavailableDescription": "Este enlace ya no está disponible."
   }
 }

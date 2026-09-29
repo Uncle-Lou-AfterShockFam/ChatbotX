@@ -7664,5 +7664,16 @@
       "lineNone": "Nessuna (invia via SMTP)",
       "noLines": "Nessuna casella del canale API."
     }
+  },
+  "emailFlowPage": {
+    "confirmTitle": "Continua",
+    "confirmDescription": "Tocca il pulsante per continuare.",
+    "confirmButton": "Continua",
+    "startedTitle": "Fatto",
+    "startedDescription": "Tutto pronto: al resto pensiamo noi.",
+    "invalidTitle": "Link non valido",
+    "invalidDescription": "Questo link non è valido o è scaduto.",
+    "unavailableTitle": "Non disponibile",
+    "unavailableDescription": "Questo link non è più disponibile."
   }
 }

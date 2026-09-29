@@ -7664,5 +7664,16 @@
       "lineNone": "Tidak ada (kirim lewat SMTP)",
       "noLines": "Belum ada kotak masuk kanal API."
     }
+  },
+  "emailFlowPage": {
+    "confirmTitle": "Lanjutkan",
+    "confirmDescription": "Ketuk tombol untuk melanjutkan.",
+    "confirmButton": "Lanjutkan",
+    "startedTitle": "Selesai",
+    "startedDescription": "Semua sudah siap: kami lanjutkan dari sini.",
+    "invalidTitle": "Tautan tidak valid",
+    "invalidDescription": "Tautan ini tidak valid atau sudah kedaluwarsa.",
+    "unavailableTitle": "Tidak tersedia",
+    "unavailableDescription": "Tautan ini sudah tidak tersedia."
   }
 }

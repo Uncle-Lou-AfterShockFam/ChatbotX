@@ -7664,5 +7664,16 @@
       "lineNone": "ללא (שליחה ב-SMTP)",
       "noLines": "אין עדיין תיבות דואר של ערוץ API."
     }
+  },
+  "emailFlowPage": {
+    "confirmTitle": "המשך",
+    "confirmDescription": "הקישו על הכפתור כדי להמשיך.",
+    "confirmButton": "המשך",
+    "startedTitle": "בוצע",
+    "startedDescription": "הכול מוכן: מכאן אנחנו ממשיכים.",
+    "invalidTitle": "הקישור אינו תקין",
+    "invalidDescription": "הקישור אינו תקין או שפג תוקפו.",
+    "unavailableTitle": "לא זמין",
+    "unavailableDescription": "הקישור כבר אינו זמין."
   }
 }

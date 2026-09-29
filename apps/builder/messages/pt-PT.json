@@ -7664,5 +7664,16 @@
       "lineNone": "Nenhuma (enviar por SMTP)",
       "noLines": "Ainda não existem caixas de canal API."
     }
+  },
+  "emailFlowPage": {
+    "confirmTitle": "Continuar",
+    "confirmDescription": "Toque no botão para continuar.",
+    "confirmButton": "Continuar",
+    "startedTitle": "Concluído",
+    "startedDescription": "Está tudo pronto: a partir daqui tratamos nós.",
+    "invalidTitle": "Ligação inválida",
+    "invalidDescription": "Esta ligação é inválida ou expirou.",
+    "unavailableTitle": "Indisponível",
+    "unavailableDescription": "Esta ligação já não está disponível."
   }
 }
