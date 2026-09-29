@@ -123,13 +123,11 @@ vi.mock("@chatbotx.io/business/email-suppression", () => ({
 const threadFind = vi.fn()
 const threadRecord = vi.fn()
 const threadClaim = vi.fn()
-const threadRelease = vi.fn()
 vi.mock("@chatbotx.io/business/email-thread", () => ({
   emailThreadService: {
     find: (...args: unknown[]) => threadFind(...args),
     recordSent: (...args: unknown[]) => threadRecord(...args),
     claimRoot: (...args: unknown[]) => threadClaim(...args),
-    releaseRoot: (...args: unknown[]) => threadRelease(...args),
   },
 }))
 
@@ -834,13 +832,12 @@ describe("s225b outreach B-1: a text step on a line is text/plain, untracked, an
   const ref = { workspaceId: "ws-1", contactId: "contact-1", sequenceId: "555" }
 
   beforeEach(() => {
-    for (const m of [threadFind, threadRecord, threadClaim, threadRelease]) {
+    for (const m of [threadFind, threadRecord, threadClaim]) {
       m.mockReset()
     }
     threadFind.mockResolvedValue(null)
     threadRecord.mockResolvedValue({ id: "t-1" })
     threadClaim.mockResolvedValue({ id: "t-1" })
-    threadRelease.mockResolvedValue(undefined)
     buildLineEmailMock.mockClear()
     lineRunAction.mockClear()
     markFailed.mockClear()
@@ -881,7 +878,6 @@ describe("s225b outreach B-1: a text step on a line is text/plain, untracked, an
     )
     // The root is already stored: neither recorded again nor released.
     expect(threadRecord).not.toHaveBeenCalled()
-    expect(threadRelease).not.toHaveBeenCalled()
   })
 
   test("a follow-up replies under the thread (Re: <first subject>, References = stored keys) and is recorded after the queue", async () => {
@@ -959,26 +955,12 @@ describe("s225b outreach B-1: a text step on a line is text/plain, untracked, an
     expect(markFailed).toHaveBeenCalled()
   })
 
-  test("a claimed root whose mail is never queued is released: failed hand-off, content error, transient throw", async () => {
-    lineRunAction.mockRejectedValueOnce(new Error("outbox down"))
-    await sendEmail(props(textStep) as never)
-    expect(threadRelease).toHaveBeenCalledTimes(1)
-    buildLineEmailMock.mockRejectedValueOnce(new ContentError("too large"))
-    await sendEmail(props(textStep) as never)
-    expect(threadRelease).toHaveBeenCalledTimes(2)
-    renderStepDocumentMock.mockRejectedValueOnce(new Error("ECONNRESET"))
-    await expect(sendEmail(props(textStep) as never)).rejects.toThrow(
-      "ECONNRESET",
-    )
-    expect(threadRelease).toHaveBeenCalledTimes(3)
-    expect(threadRelease.mock.calls[0]?.[0]).toEqual({
-      ...ref,
-      key: expect.stringMatching(MINTED_KEY),
-    })
-    // A failed release never masks the send's outcome.
-    threadRelease.mockRejectedValueOnce(new Error("pg down"))
+  test("a claimed root whose mail never queues is KEPT (no release race); a failed send never throws past the tracking row", async () => {
     lineRunAction.mockRejectedValueOnce(new Error("outbox down"))
     await expect(sendEmail(props(textStep) as never)).resolves.toBeUndefined()
+    expect(threadClaim).toHaveBeenCalledOnce()
+    expect(markFailed).toHaveBeenCalledWith("test-token-xyz")
+    expect(threadRecord).not.toHaveBeenCalled()
   })
 
   test("a follow-up whose queue fails records nothing; a failed thread write never fails a queued send", async () => {
@@ -991,7 +973,6 @@ describe("s225b outreach B-1: a text step on a line is text/plain, untracked, an
     lineRunAction.mockRejectedValueOnce(new Error("outbox down"))
     await sendEmail(props(textStep) as never)
     expect(threadRecord).not.toHaveBeenCalled()
-    expect(threadRelease).not.toHaveBeenCalled()
     markFailed.mockClear()
     threadRecord.mockRejectedValueOnce(new Error("pg down"))
     await expect(sendEmail(props(textStep) as never)).resolves.toBeUndefined()
@@ -1016,7 +997,6 @@ describe("s225b outreach B-1: a text step on a line is text/plain, untracked, an
       threadKeys: [],
       subject: "Hello",
     })
-    expect(threadRelease).not.toHaveBeenCalled()
     // Another dispatch of the same step is a different mail.
     await sendEmail(
       props(

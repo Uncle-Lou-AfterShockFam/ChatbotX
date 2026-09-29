@@ -82,27 +82,6 @@ export class EmailThreadService extends BaseService {
   }
 
   /**
-   * Gives a claimed root back when its mail was never queued, so the next
-   * attempt starts the thread again. Only while the root is the thread's
-   * ONLY key: once a follow-up joined, the thread stays.
-   */
-  async releaseRoot(
-    props: ThreadRef & { key: string; tx?: DatabaseClient },
-  ): Promise<void> {
-    const { tx = db } = props
-    await tx
-      .delete(emailThreadModel)
-      .where(
-        and(
-          eq(emailThreadModel.workspaceId, props.workspaceId),
-          eq(emailThreadModel.contactId, props.contactId),
-          eq(emailThreadModel.sequenceId, props.sequenceId),
-          sql`${emailThreadModel.keys} = ARRAY[${props.key}::text]`,
-        ),
-      )
-  }
-
-  /**
    * Records a mail the line QUEUED under this thread, in ONE statement (no
    * read-then-write race): the first mail creates the thread with its
    * subject; a later one appends its key, keeping the root plus the newest

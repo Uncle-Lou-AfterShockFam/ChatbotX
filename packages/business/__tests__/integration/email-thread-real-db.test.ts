@@ -212,7 +212,7 @@ describe.skipIf(!databaseUrl)("emailThreadService.recordSent", () => {
     expect(keys.slice(1)).toEqual(all.slice(-(EMAIL_THREAD_MAX_KEYS - 1)))
   })
 
-  test("claimRoot: of N concurrent first sends (two lines) exactly ONE claims the root; releaseRoot gives back only a lone root", async () => {
+  test("claimRoot: of N concurrent first sends (two lines) exactly ONE claims the root", async () => {
     const s = await seed()
     const ref = {
       workspaceId: s.workspaceId,
@@ -233,45 +233,15 @@ describe.skipIf(!databaseUrl)("emailThreadService.recordSent", () => {
     expect(winners).toHaveLength(1)
     const row = await emailThreadService.find(ref)
     expect(row?.keys).toEqual(winners[0]?.keys)
-    await emailThreadService.releaseRoot({ ...ref, key: "bt.not-the-root" })
-    expect(await emailThreadService.find(ref)).not.toBeNull()
-    // Once a follow-up joined, the thread stays even for the root's own key.
-    const root = row?.keys[0] as string
-    await emailThreadService.recordSent({
-      ...ref,
-      lineInboxId: row?.lineInboxId as string,
-      subject: "x",
-      key: "bt.follow-00001",
-    })
-    await emailThreadService.releaseRoot({ ...ref, key: root })
-    expect((await emailThreadService.find(ref))?.keys).toEqual([
-      root,
-      "bt.follow-00001",
-    ])
-  })
-
-  test("releaseRoot drops a lone unsent root, so the next attempt can claim again", async () => {
-    const s = await seed()
-    const ref = {
-      workspaceId: s.workspaceId,
-      contactId: s.contactId,
-      sequenceId: s.sequenceId,
-    }
-    await emailThreadService.claimRoot({
-      ...ref,
-      lineInboxId: s.lineA,
-      subject: "s",
-      key: "bt.root-000001",
-    })
-    await emailThreadService.releaseRoot({ ...ref, key: "bt.root-000001" })
-    expect(await emailThreadService.find(ref)).toBeNull()
+    expect(row?.lineInboxId).toBe(winners[0]?.lineInboxId)
+    // A replayed root claim (a retried job) is refused, never a second row.
     expect(
       await emailThreadService.claimRoot({
         ...ref,
-        lineInboxId: s.lineB,
-        subject: "s",
-        key: "bt.root-000002",
+        lineInboxId: row?.lineInboxId as string,
+        subject: "x",
+        key: row?.keys[0] as string,
       }),
-    ).not.toBeNull()
+    ).toBeNull()
   })
 })

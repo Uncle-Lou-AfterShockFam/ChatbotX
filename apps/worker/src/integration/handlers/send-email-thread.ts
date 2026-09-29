@@ -87,7 +87,10 @@ export type ThreadPlan = {
   subject: string
   /**
    * True when this mail CLAIMED the thread's root (its key is already
-   * stored): release it if the mail is never queued; do not record it again.
+   * stored, so it is not recorded again). A root whose mail never queues is
+   * kept, never released (Codex s225b: a release races retries and
+   * follow-ups): its retry derives the same key and replays it, and a later
+   * step still threads, under a phantom In-Reply-To.
    */
   root: boolean
 }
@@ -127,7 +130,8 @@ export async function planThread(
     }
     thread = await emailThreadService.find(ref)
     if (!thread) {
-      // Claimed by a send whose mail then failed and released it: retry.
+      // Deleted between the claim and this read (its sequence or contact
+      // was removed): transient, the job's retry re-plans.
       throw new Error(
         `email thread for sequence ${ref.sequenceId} changed while planning`,
       )
@@ -148,7 +152,9 @@ export async function planThread(
   }
   // A retried job: this very mail is already in the thread. Re-send it with
   // the headers it had; the line refuses it if the first attempt went out.
-  // Never `root` here: a replay must not release a root that may be queued.
+  // Concurrent follow-ups may have recorded in another order, so a replay's
+  // ancestors can differ from the first attempt's: still one thread, and the
+  // line sends only one row per key.
   const at = thread.keys.indexOf(messageKey)
   if (at >= 0) {
     return {
