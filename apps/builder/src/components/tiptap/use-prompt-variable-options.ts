@@ -5,6 +5,8 @@ import { useEffect, useMemo } from "react"
 import { useCouponTopicOptions } from "@/features/coupons/provider/use-coupon-topic-options"
 import { useCustomFieldSelectOptions } from "@/features/custom-fields/provider/custom-field-hook"
 import { useCustomFieldStore } from "@/features/custom-fields/provider/custom-field-store-context"
+import { useForms } from "@/features/forms/provider/form-hooks"
+import { useWorkspaceId } from "@/hooks/routing"
 import type { PromptVariableOption } from "./extensions/variable-injection/definition"
 
 type UsePromptVariableOptionsProps = {
@@ -20,7 +22,26 @@ type UsePromptVariableOptionsProps = {
    * offer bot fields without also exposing the "raw" custom-field group.
    */
   includeBotFieldVariables?: boolean
+  /**
+   * s220c A2-4: `{{form_link:<formId>}}`, the contact's personal link to a
+   * published form, minted at send time. Defaults to on wherever coupon
+   * variables are (both are per-contact, send-time variables).
+   */
+  includeFormLinkVariables?: boolean
 }
+
+/** Pure: published forms as `{{form_link:<id>}}` options (s220c A2-4). */
+export const buildFormLinkPromptVariableOptions = (
+  forms: { id: string; title: string; status: string }[],
+  group: string,
+): PromptVariableOption[] =>
+  forms
+    .filter((form) => form.status === "published")
+    .map((form) => ({
+      group,
+      label: form.title,
+      value: `form_link:${form.id}`,
+    }))
 
 /**
  * Pure so it is unit-testable without mounting the hook / store. Bot fields
@@ -44,8 +65,23 @@ export function usePromptVariableOptions({
   includeCouponVariables = false,
   includeRawCustomFieldVariables = false,
   includeBotFieldVariables = false,
+  includeFormLinkVariables = includeCouponVariables,
 }: UsePromptVariableOptionsProps): PromptVariableOption[] {
   const t = useTranslations()
+  const workspaceId = useWorkspaceId()
+  const forms = useForms(workspaceId, false, {
+    enabled: includeFormLinkVariables && !botFieldsOnly && Boolean(workspaceId),
+  })
+  const formLinkOptions = useMemo(
+    () =>
+      includeFormLinkVariables && !botFieldsOnly
+        ? buildFormLinkPromptVariableOptions(
+            forms.data ?? [],
+            t("forms.variables.group"),
+          )
+        : [],
+    [botFieldsOnly, forms.data, includeFormLinkVariables, t],
+  )
   const customFieldSelectOptions = useCustomFieldSelectOptions({
     includeReserved: true,
     customFieldValueKey: "name",
@@ -111,6 +147,7 @@ export function usePromptVariableOptions({
             ...rawCustomFieldOptions,
             ...botFieldOptions,
             ...couponOptions,
+            ...formLinkOptions,
           ],
     [
       botFieldsOnly,
@@ -118,6 +155,7 @@ export function usePromptVariableOptions({
       customFieldSelectOptions,
       rawCustomFieldOptions,
       botFieldOptions,
+      formLinkOptions,
     ],
   )
 }

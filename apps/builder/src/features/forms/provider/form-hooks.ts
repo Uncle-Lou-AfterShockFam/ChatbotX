@@ -10,11 +10,16 @@ import { orpc } from "@/lib/orpc/query"
 
 /** Forms data (s200): list, one form, submissions, and the editor's mutations. */
 
-export const useForms = (workspaceId: string, includeArchived = false) =>
+export const useForms = (
+  workspaceId: string,
+  includeArchived = false,
+  options: { enabled?: boolean } = {},
+) =>
   useQuery(
     orpc.formsAPI.privateListFormsAPI.queryOptions({
       input: { workspaceId, includeArchived },
       select: (res) => res.data,
+      enabled: options.enabled ?? true,
     }),
   )
 

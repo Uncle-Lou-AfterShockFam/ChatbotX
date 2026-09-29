@@ -1,5 +1,6 @@
 "use client"
 
+import type { FormSessionProfile } from "@chatbotx.io/database/partials"
 import type { FormDefinition, FormValues } from "@chatbotx.io/utils/form"
 import { useTranslations } from "next-intl"
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -22,6 +23,10 @@ export function PublicForm(props: {
   embedOrigins: string[]
   /** s220c A2-4: set when the form is outside its window or full. */
   closedMessage?: string | null
+  /** s220c A2-4: a signed personal link's token (sent back with the submit). */
+  formLinkToken?: string
+  /** s220c A2-4: what profiling knows about the linked contact (keys only). */
+  profile?: FormSessionProfile | null
 }) {
   const { workspaceId, slug, title, definition, prefill, embed, embedOrigins } =
     props
@@ -96,6 +101,7 @@ export function PublicForm(props: {
         body: JSON.stringify({
           values,
           website: honeypot,
+          k: props.formLinkToken,
           // zone: viewer (the public submitter's own browser zone)
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
@@ -185,6 +191,7 @@ export function PublicForm(props: {
             idPrefix={`form-${slug}`}
             initialValues={prefill}
             onSubmit={submit}
+            profile={props.profile ?? null}
             submitLabel={t("forms.public.submit")}
             submitting={submitting}
           />

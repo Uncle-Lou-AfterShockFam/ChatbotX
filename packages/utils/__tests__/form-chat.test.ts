@@ -7,6 +7,7 @@ import {
   formDefinition,
   formInputFields,
   formOptionsNumbered,
+  formProfiledOutKeys,
   isFormChatSkip,
   matchFormOption,
   parseFormChatAnswer,
@@ -533,5 +534,60 @@ describe("parseFormChatAnswer", () => {
     expect(isFormChatSkip(" SKIP ")).toBe(true)
     expect(isFormChatSkip("askform:skip")).toBe(true)
     expect(isFormChatSkip("skip it")).toBe(false)
+  })
+})
+
+// s220c A2-4: the web page's progressive profiling for a linked contact.
+describe("formProfiledOutKeys", () => {
+  const def = formDefinition.parse({
+    steps: [
+      {
+        id: "s1",
+        fields: [
+          {
+            key: "email",
+            type: "email",
+            label: "Email",
+            required: true,
+            profile: { showWhenKnown: false },
+          },
+          {
+            key: "company",
+            type: "text",
+            label: "Company",
+            profile: { showAfterSubmissions: 2 },
+          },
+          { key: "role", type: "text", label: "Role" },
+          { key: "note", type: "text", label: "Note" },
+          { key: "source", type: "hidden", label: "", defaultValue: "web" },
+        ],
+      },
+    ],
+    rules: [],
+  })
+  const profile = (
+    known: string[],
+    priorSubmissions: number,
+    limit: number | null,
+  ) => ({
+    known: new Set(known),
+    priorSubmissions,
+    limit,
+  })
+
+  test("known answers and not-yet-due fields are hidden; hidden-type fields are not reported", () => {
+    expect(formProfiledOutKeys(def, {}, profile(["email"], 0, null))).toEqual(
+      new Set(["email", "company"]),
+    )
+    expect(formProfiledOutKeys(def, {}, profile([], 2, null))).toEqual(
+      new Set(),
+    )
+  })
+
+  test("the question budget hides the fields past it, in document order", () => {
+    // email + company spend the budget of 2; role and note are hidden
+    expect(formProfiledOutKeys(def, {}, profile([], 2, 2))).toEqual(
+      new Set(["role", "note"]),
+    )
   })
 })

@@ -1,5 +1,6 @@
 "use client"
 
+import type { FormSessionProfile } from "@chatbotx.io/database/partials"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
 import type {
   FormDefinition,
@@ -7,7 +8,11 @@ import type {
   FormValue,
   FormValues,
 } from "@chatbotx.io/utils/form"
-import { evaluateForm, validateFormSubmission } from "@chatbotx.io/utils/form"
+import {
+  evaluateForm,
+  formProfiledOutKeys,
+  validateFormSubmission,
+} from "@chatbotx.io/utils/form"
 import { useTranslations } from "next-intl"
 import { useMemo, useState } from "react"
 import { FormRenderer } from "./form-renderer"
@@ -24,6 +29,12 @@ export function FormPreview(props: {
   onSubmit: (values: FormValues) => Promise<void> | void
   submitting?: boolean
   idPrefix?: string
+  /**
+   * s220c A2-4: a contact a signed link names. Fields progressive profiling
+   * hides from them are not shown and not required (the server recomputes
+   * the same set; this only mirrors it).
+   */
+  profile?: FormSessionProfile | null
 }) {
   const {
     definition,
@@ -39,10 +50,24 @@ export function FormPreview(props: {
   }))
   const [stepIndex, setStepIndex] = useState(0)
   const [issues, setIssues] = useState<FormValidationIssue[]>([])
-  const evaluation = useMemo(
-    () => evaluateForm(definition, values),
-    [definition, values],
-  )
+  const profile = props.profile ?? null
+  const evaluation = useMemo(() => {
+    const full = evaluateForm(definition, values)
+    if (profile === null) {
+      return full
+    }
+    const hidden = formProfiledOutKeys(definition, values, {
+      known: new Set(profile.known),
+      priorSubmissions: profile.priorSubmissions,
+      limit: profile.limit,
+    })
+    return {
+      ...full,
+      visibleFields: new Set(
+        [...full.visibleFields].filter((key) => !hidden.has(key)),
+      ),
+    }
+  }, [definition, values, profile])
   const messages = useMemo(
     () =>
       Object.fromEntries(

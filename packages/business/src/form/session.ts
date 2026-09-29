@@ -2,7 +2,6 @@ import {
   and,
   type DatabaseClient,
   db,
-  desc,
   eq,
   gt,
   inArray,
@@ -26,7 +25,6 @@ import {
   formScore,
   isBlockedEmailDomain,
   isEmailAnswerField,
-  isEmptyFormValue,
   isFormChatSkip,
   normalizeFormDefinition,
   parseFormChatAnswer,
@@ -65,7 +63,7 @@ import {
  * retry `ask`, an exhausted question ends the run `skipped`.
  */
 
-export const FORM_SESSION_HISTORY_CAP = 200
+export { FORM_SESSION_HISTORY_CAP } from "./submit"
 export const DEFAULT_FORM_CHAT_TIMEOUT_MINUTES = 1440
 export const DEFAULT_FORM_CHAT_MAX_ATTEMPTS = 3
 export const MAX_FORM_CHAT_TIMEOUT_MINUTES = 30 * 24 * 60
@@ -1207,48 +1205,7 @@ export class FormSessionService {
     tx: DatabaseClient,
     props: { workspaceId: string; contactId: string; form: NormalizedForm },
   ): Promise<FormSessionProfile> {
-    const { workspaceId, contactId, form } = props
-    const def = form.publishedDefinition ?? normalizeFormDefinition(null)
-    const known = new Set<string>()
-    const stored = await formSubmitService.storedValues({
-      workspaceId,
-      contactId,
-      def,
-      tx,
-    })
-    for (const field of formInputFields(def)) {
-      const target = field.mapTo
-      if (
-        (target?.kind === "system" && stored.system[target.key]) ||
-        (target?.kind === "custom" && stored.custom.has(target.customFieldId))
-      ) {
-        known.add(field.key)
-      }
-    }
-    // Mautic caps the history it reads at 200 rows (FormModel.php:396).
-    const history = await tx
-      .select({ values: formSubmissionModel.values })
-      .from(formSubmissionModel)
-      .where(
-        and(
-          eq(formSubmissionModel.formId, form.id),
-          eq(formSubmissionModel.contactId, contactId),
-        ),
-      )
-      .orderBy(desc(formSubmissionModel.createdAt))
-      .limit(FORM_SESSION_HISTORY_CAP)
-    for (const row of history) {
-      for (const [key, value] of Object.entries(readValues(row.values))) {
-        if (!isEmptyFormValue(value)) {
-          known.add(key)
-        }
-      }
-    }
-    return {
-      known: [...known],
-      priorSubmissions: history.length,
-      limit: form.settings.profilingLimit,
-    }
+    return await formSubmitService.contactProfile({ ...props, tx })
   }
 }
 

@@ -76,6 +76,8 @@ export const submitFormRequest = z
       .refine((r) => Object.keys(r).length <= 100, "Too many fields"),
     /** The honeypot: a real browser leaves it empty. */
     website: z.string().max(200).optional(),
+    /** s220c A2-4: the signed form link's `k`, verified by the pipeline. */
+    k: z.string().max(4096).optional(),
     timezone: z.string().max(64).optional(),
   })
   .strict()
@@ -198,6 +200,7 @@ export async function POST(req: NextRequest, ctx: Params) {
       clientIp,
       userAgent: req.headers.get("user-agent"),
       sourceTimezone: parsed.data.timezone,
+      formLinkToken: parsed.data.k,
     })
     switch (result.kind) {
       case "notFound":

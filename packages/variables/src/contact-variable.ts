@@ -16,6 +16,10 @@ import {
 } from "@chatbotx.io/flow-config"
 import { loadBotFields } from "./bot-field-variable-resolver"
 import { isCouponVariable, resolveCouponVariable } from "./coupon-variable"
+import {
+  isFormLinkVariable,
+  resolveFormLinkVariable,
+} from "./form-link-variable"
 import { logger } from "./logger"
 import type { ContactCustomFieldValue, ReplaceVariableProps } from "./schema"
 import {
@@ -100,12 +104,19 @@ const couponResolver: VariableResolver = {
     await resolveCouponVariable(context, variable),
 }
 
+const formLinkResolver: VariableResolver = {
+  matches: (variable) => isFormLinkVariable(variable),
+  resolve: async (variable, context) =>
+    await resolveFormLinkVariable(context, variable),
+}
+
 const variableResolvers = [
   systemFieldResolver,
   rawCustomFieldResolver,
   botFieldResolver,
   customFieldResolver,
   couponResolver,
+  formLinkResolver,
 ] as const satisfies readonly VariableResolver[]
 
 type GetAllProps = {

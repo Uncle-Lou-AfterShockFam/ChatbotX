@@ -110,6 +110,7 @@ const m = vi.hoisted(() => {
 vi.mock("@chatbotx.io/database/client", () => ({
   db: m.tx,
   and: (...c: unknown[]) => ({ c }),
+  desc: (f: unknown) => ({ desc: f }),
   eq: (f: unknown, v: unknown) => ({ f, v }),
   gte: (f: unknown, v: unknown) => ({ gte: [f, v] }),
   inArray: (f: unknown, v: unknown) => ({ in: [f, v] }),
@@ -134,6 +135,10 @@ vi.mock("@chatbotx.io/database/schema", () => ({
     ipHash: "ipHash",
     createdAt: "createdAt",
   },
+}))
+const link = vi.hoisted(() => ({ contactFromFormLink: vi.fn() }))
+vi.mock("@chatbotx.io/encryption/form-link-token", () => ({
+  contactFromFormLink: link.contactFromFormLink,
 }))
 vi.mock("@chatbotx.io/events", () => ({
   emitFormSubmitted: m.emitFormSubmitted,
@@ -300,6 +305,7 @@ const submit = (values: unknown, over: Record<string, unknown> = {}) =>
 
 beforeEach(() => {
   vi.clearAllMocks()
+  link.contactFromFormLink.mockResolvedValue(null)
   // The admission (lock + fresh settings + count) is real-Postgres behaviour:
   // form-limit-real-db.test.ts. Here it admits unless a test says otherwise.
   vi.spyOn(formSubmitService, "admit").mockResolvedValue(null)
@@ -928,6 +934,90 @@ describe("formSubmitService.submit (s200)", () => {
       expect(r).toEqual({ kind: "closed", reason: "pending", message: "Soon." })
       expect(m.createContactWithInbox).not.toHaveBeenCalled()
       expect(m.state.inserted).toHaveLength(0)
+    })
+  })
+
+  describe("signed form links (s220c A2-4)", () => {
+    const LINKED = "c-linked"
+    const linkedProfile = (known: string[]) =>
+      vi
+        .spyOn(formSubmitService, "contactProfile")
+        .mockResolvedValue({ known, priorSubmissions: 1, limit: null })
+
+    test("a valid link lands the submission on ITS contact: no lookup, no create, no attach", async () => {
+      link.contactFromFormLink.mockResolvedValue(LINKED)
+      m.tx.query.contactModel.findFirst.mockResolvedValue({ id: LINKED })
+      linkedProfile([])
+      queueClean()
+      m.state.selects.push([]) // stored custom values of the linked contact: none
+      const r = await submit(
+        { phone: "(215) 555-0120", email: "someone-else@example.com" },
+        { formLinkToken: "k-token" },
+      )
+      expect(r).toMatchObject({ kind: "ok", contactId: LINKED })
+      // verified for THIS form, in THIS workspace
+      expect(link.contactFromFormLink).toHaveBeenCalledWith("k-token", {
+        workspaceId: WS,
+        formId: "form-1",
+      })
+      expect(m.findByPhone).not.toHaveBeenCalled()
+      expect(m.createContactWithInbox).not.toHaveBeenCalled()
+      expect(m.attachContactToInbox).not.toHaveBeenCalled()
+      expect(m.state.inserted[0]).toMatchObject({ contactId: LINKED })
+    })
+
+    test("a link naming a contact that no longer exists is an ordinary (looked-up) submission", async () => {
+      link.contactFromFormLink.mockResolvedValue(LINKED)
+      m.tx.query.contactModel.findFirst.mockResolvedValue(undefined)
+      queueClean()
+      const r = await submit(
+        { phone: "(215) 555-0121" },
+        { formLinkToken: "k-token" },
+      )
+      expect(r).toMatchObject({ kind: "ok", contactId: "c-new" })
+      expect(m.createContactWithInbox).toHaveBeenCalled()
+    })
+
+    test("a required field the linked contact already answered may be left out (profiling); without the link it is required", async () => {
+      const def = {
+        steps: [
+          {
+            id: "s1",
+            fields: [
+              ...DEF.steps[0].fields,
+              {
+                key: "company",
+                type: "text",
+                label: "",
+                required: true,
+                profile: { showWhenKnown: false },
+              },
+            ],
+          },
+        ],
+        rules: DEF.rules,
+      }
+      m.findPublishedBySlug.mockResolvedValue(
+        FORM({ publishedDefinition: def }),
+      )
+      link.contactFromFormLink.mockResolvedValue(LINKED)
+      m.tx.query.contactModel.findFirst.mockResolvedValue({ id: LINKED })
+      linkedProfile(["company"])
+      queueClean()
+      m.state.selects.push([]) // stored custom values of the linked contact: none
+      const linked = await submit(
+        { phone: "(215) 555-0122" },
+        { formLinkToken: "k" },
+      )
+      expect(linked).toMatchObject({ kind: "ok", contactId: LINKED })
+
+      link.contactFromFormLink.mockResolvedValue(null)
+      queueClean()
+      const anonymous = await submit({ phone: "(215) 555-0123" })
+      expect(anonymous).toEqual({
+        kind: "invalid",
+        issues: [{ key: "company", code: "required" }],
+      })
     })
   })
 

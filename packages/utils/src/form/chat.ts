@@ -1,6 +1,7 @@
 import {
   type FormDefinition,
   type FormField,
+  formInputFields,
   isFormInputFieldType,
   MAX_FORM_VALUE,
 } from "./definition"
@@ -73,6 +74,26 @@ const isProfiledOut = (
     return true
   }
   return rule.showWhenKnown === false && profile.known.has(field.key)
+}
+
+/**
+ * s220c A2-4: the visible input fields progressive profiling hides from a
+ * KNOWN contact on the web page (identified by a signed form link): the chat
+ * planner's own rules with nothing asked yet, minus `hidden` fields (never
+ * rendered anyway). The page hides them and validation does not require them.
+ */
+export function formProfiledOutKeys(
+  def: FormDefinition,
+  values: FormValues,
+  profile: FormChatProfileContext,
+): Set<string> {
+  const { suppressed } = planFormChat(def, values, new Set(), profile)
+  for (const field of formInputFields(def)) {
+    if (field.type === "hidden") {
+      suppressed.delete(field.key)
+    }
+  }
+  return suppressed
 }
 
 /**
