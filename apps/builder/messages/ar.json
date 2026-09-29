@@ -7579,7 +7579,9 @@
         "underline": "تسطير",
         "bulletList": "قائمة نقطية",
         "orderedList": "قائمة مرقمة",
-        "link": "رابط"
+        "link": "رابط",
+        "color": "لون النص",
+        "clearColor": "مسح اللون"
       },
       "linkInvalid": "يُسمح فقط بروابط https:// و http:// و mailto:.",
       "apply": "تطبيق",
@@ -7649,6 +7651,7 @@
       "settings": "إعدادات البريد الإلكتروني",
       "preview": "معاينة",
       "previewUnavailable": "المعاينة غير متاحة الآن.",
+      "previewSamples": "تعرض حقول الدمج قيمًا نموذجية: {list}",
       "previewMissing": "غير موجود في المعاينة: {list}",
       "previewPending": "جارٍ عرض المعاينة…",
       "empty": "أضف عنصرًا للبدء."

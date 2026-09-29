@@ -7579,7 +7579,9 @@
         "underline": "Alt çizili",
         "bulletList": "Madde işaretli liste",
         "orderedList": "Numaralı liste",
-        "link": "Bağlantı"
+        "link": "Bağlantı",
+        "color": "Metin rengi",
+        "clearColor": "Rengi temizle"
       },
       "linkInvalid": "Yalnızca https://, http:// ve mailto: bağlantılarına izin verilir.",
       "apply": "Uygula",
@@ -7649,6 +7651,7 @@
       "settings": "E-posta ayarları",
       "preview": "Önizleme",
       "previewUnavailable": "Önizleme şu anda kullanılamıyor.",
+      "previewSamples": "Birleştirme alanları örnek değerler gösterir: {list}",
       "previewMissing": "Önizlemede çözümlenmedi: {list}",
       "previewPending": "Önizleme oluşturuluyor…",
       "empty": "Başlamak için bir blok ekleyin."

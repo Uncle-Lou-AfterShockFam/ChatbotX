@@ -7579,7 +7579,9 @@
         "underline": "Garis bawah",
         "bulletList": "Daftar berpoin",
         "orderedList": "Daftar bernomor",
-        "link": "Tautan"
+        "link": "Tautan",
+        "color": "Warna teks",
+        "clearColor": "Hapus warna"
       },
       "linkInvalid": "Hanya tautan https://, http://, dan mailto: yang diperbolehkan.",
       "apply": "Terapkan",
@@ -7649,6 +7651,7 @@
       "settings": "Pengaturan email",
       "preview": "Pratinjau",
       "previewUnavailable": "Pratinjau tidak tersedia saat ini.",
+      "previewSamples": "Kolom gabungan menampilkan nilai contoh: {list}",
       "previewMissing": "Tidak teratasi dalam pratinjau: {list}",
       "previewPending": "Membuat pratinjau…",
       "empty": "Tambahkan blok untuk mulai."

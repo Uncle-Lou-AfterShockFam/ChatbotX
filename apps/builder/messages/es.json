@@ -7579,7 +7579,9 @@
         "underline": "Subrayado",
         "bulletList": "Lista con viñetas",
         "orderedList": "Lista numerada",
-        "link": "Enlace"
+        "link": "Enlace",
+        "color": "Color del texto",
+        "clearColor": "Quitar color"
       },
       "linkInvalid": "Solo se permiten enlaces https://, http:// y mailto:.",
       "apply": "Aplicar",
@@ -7649,6 +7651,7 @@
       "settings": "Ajustes de correo",
       "preview": "Vista previa",
       "previewUnavailable": "La vista previa no está disponible en este momento.",
+      "previewSamples": "Los campos combinados muestran valores de ejemplo: {list}",
       "previewMissing": "No resuelto en la vista previa: {list}",
       "previewPending": "Generando la vista previa…",
       "empty": "Añade un bloque para empezar."

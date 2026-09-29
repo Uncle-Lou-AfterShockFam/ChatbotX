@@ -7579,7 +7579,9 @@
         "underline": "Unterstrichen",
         "bulletList": "Aufzählung",
         "orderedList": "Nummerierte Liste",
-        "link": "Link"
+        "link": "Link",
+        "color": "Textfarbe",
+        "clearColor": "Farbe entfernen"
       },
       "linkInvalid": "Nur https://-, http://- und mailto:-Links sind erlaubt.",
       "apply": "Übernehmen",
@@ -7649,6 +7651,7 @@
       "settings": "E-Mail-Einstellungen",
       "preview": "Vorschau",
       "previewUnavailable": "Die Vorschau ist momentan nicht verfügbar.",
+      "previewSamples": "Platzhalter zeigen Beispielwerte: {list}",
       "previewMissing": "In der Vorschau nicht aufgelöst: {list}",
       "previewPending": "Vorschau wird erstellt…",
       "empty": "Füge einen Block hinzu, um zu beginnen."

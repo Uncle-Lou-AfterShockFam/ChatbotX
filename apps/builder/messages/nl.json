@@ -7579,7 +7579,9 @@
         "underline": "Onderstrepen",
         "bulletList": "Opsommingslijst",
         "orderedList": "Genummerde lijst",
-        "link": "Link"
+        "link": "Link",
+        "color": "Tekstkleur",
+        "clearColor": "Kleur wissen"
       },
       "linkInvalid": "Alleen https://, http:// en mailto:-links zijn toegestaan.",
       "apply": "Toepassen",
@@ -7649,6 +7651,7 @@
       "settings": "E-mailinstellingen",
       "preview": "Voorvertoning",
       "previewUnavailable": "De voorvertoning is momenteel niet beschikbaar.",
+      "previewSamples": "Samenvoegvelden tonen voorbeeldwaarden: {list}",
       "previewMissing": "Niet opgelost in de voorvertoning: {list}",
       "previewPending": "Voorvertoning wordt gemaakt…",
       "empty": "Voeg een blok toe om te beginnen."

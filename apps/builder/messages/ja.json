@@ -7579,7 +7579,9 @@
         "underline": "下線",
         "bulletList": "箇条書き",
         "orderedList": "番号付きリスト",
-        "link": "リンク"
+        "link": "リンク",
+        "color": "文字色",
+        "clearColor": "色をクリア"
       },
       "linkInvalid": "https://、http://、mailto: のリンクのみ許可されています。",
       "apply": "適用",
@@ -7649,6 +7651,7 @@
       "settings": "メール設定",
       "preview": "プレビュー",
       "previewUnavailable": "現在プレビューは利用できません。",
+      "previewSamples": "差し込みフィールドはサンプル値で表示されます: {list}",
       "previewMissing": "プレビューで解決されていません: {list}",
       "previewPending": "プレビューを生成中…",
       "empty": "ブロックを追加して開始してください。"

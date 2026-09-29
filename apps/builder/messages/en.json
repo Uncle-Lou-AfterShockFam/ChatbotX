@@ -7579,7 +7579,9 @@
         "underline": "Underline",
         "bulletList": "Bulleted list",
         "orderedList": "Numbered list",
-        "link": "Link"
+        "link": "Link",
+        "color": "Text color",
+        "clearColor": "Clear color"
       },
       "linkInvalid": "Only https://, http:// and mailto: links are allowed.",
       "apply": "Apply",
@@ -7649,6 +7651,7 @@
       "settings": "Email settings",
       "preview": "Preview",
       "previewUnavailable": "The preview is unavailable right now.",
+      "previewSamples": "Merge fields show sample values: {list}",
       "previewMissing": "Not resolved in the preview: {list}",
       "previewPending": "Rendering preview…",
       "empty": "Add a block to start."

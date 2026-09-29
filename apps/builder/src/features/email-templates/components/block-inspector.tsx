@@ -322,6 +322,7 @@ export function BlockInspector({
           />
           <Field label={t("color")}>
             <Input
+              className="h-9 w-14 cursor-pointer p-1"
               onChange={(e) =>
                 onPatch({
                   color: HEX.test(e.target.value) ? e.target.value : undefined,

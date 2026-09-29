@@ -7579,7 +7579,9 @@
         "underline": "Subliniat",
         "bulletList": "Listă cu marcatori",
         "orderedList": "Listă numerotată",
-        "link": "Link"
+        "link": "Link",
+        "color": "Culoarea textului",
+        "clearColor": "Șterge culoarea"
       },
       "linkInvalid": "Sunt permise doar linkuri https://, http:// și mailto:.",
       "apply": "Aplică",
@@ -7649,6 +7651,7 @@
       "settings": "Setări e-mail",
       "preview": "Previzualizare",
       "previewUnavailable": "Previzualizarea nu este disponibilă acum.",
+      "previewSamples": "Câmpurile de îmbinare afișează valori exemplu: {list}",
       "previewMissing": "Nerezolvat în previzualizare: {list}",
       "previewPending": "Se generează previzualizarea…",
       "empty": "Adaugă un bloc pentru a începe."
