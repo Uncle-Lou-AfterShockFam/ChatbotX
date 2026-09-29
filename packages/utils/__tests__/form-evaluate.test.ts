@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import {
+  applyHiddenDefaults,
   compareFormValue,
   evaluateForm,
   type FormDefinition,
@@ -359,6 +360,120 @@ describe("pruneFormValues", () => {
     }
     const pruned = pruneFormValues(d, values, evaluateForm(d, values))
     expect(pruned).toEqual({ interest: "none", done: "keep" })
+  })
+})
+
+// s220c A2-4: a hidden field's value is the form's, never the visitor's.
+describe("applyHiddenDefaults", () => {
+  const hd = formDefinition.parse({
+    steps: [
+      {
+        id: "s1",
+        fields: [
+          { key: "name", type: "text", label: "Name" },
+          {
+            key: "source",
+            type: "hidden",
+            label: "",
+            defaultValue: "landing-a",
+          },
+          { key: "ref", type: "hidden", label: "" },
+          { key: "campaign", type: "hidden", label: "", defaultValue: "none" },
+        ],
+      },
+    ],
+    rules: [
+      {
+        id: "r1",
+        when: {
+          logic: "AND",
+          rules: [{ fieldKey: "source", op: "eq", value: "landing-a" }],
+        },
+        action: { type: "require", fieldKey: "name" },
+      },
+    ],
+  })
+
+  test("sets every hidden default, overwrites a sent value, drops a hidden field with no default", () => {
+    expect(
+      applyHiddenDefaults(hd, { name: "Ada", source: "evil", ref: "x" }),
+    ).toEqual({
+      name: "Ada",
+      source: "landing-a",
+      campaign: "none",
+    })
+  })
+
+  test("a prefillable key keeps a sent value; empty / missing falls back to the default", () => {
+    const keep = new Set(["campaign", "ref"])
+    expect(
+      applyHiddenDefaults(hd, { campaign: "fall", ref: "r9" }, keep),
+    ).toMatchObject({ campaign: "fall", ref: "r9" })
+    expect(applyHiddenDefaults(hd, { campaign: "" }, keep)).toMatchObject({
+      campaign: "none",
+    })
+    expect(applyHiddenDefaults(hd, {}, keep)).not.toHaveProperty("ref")
+  })
+
+  test("never mutates the input; non-hidden fields and unknown keys pass through untouched", () => {
+    const input = { name: "Ada", source: "evil", extra: 1 }
+    const out = applyHiddenDefaults(hd, input)
+    expect(input).toEqual({ name: "Ada", source: "evil", extra: 1 })
+    expect(out).toMatchObject({ name: "Ada", extra: 1 })
+  })
+
+  test("rules read the default (a required-when-source rule fires with no source sent)", () => {
+    const values = applyHiddenDefaults(hd, {})
+    const issues = validateFormSubmission(hd, values, evaluateForm(hd, values))
+    expect(issues).toEqual([{ key: "name", code: "required" }])
+  })
+
+  test("a hidden field that identifies the contact cannot carry a default (every submitter would collapse onto one contact)", () => {
+    const hiddenIdentity = (
+      key: "email" | "phoneNumber",
+      defaultValue?: string,
+    ) =>
+      formDefinition.safeParse({
+        steps: [
+          {
+            id: "s1",
+            fields: [
+              {
+                key: "who",
+                type: "hidden",
+                label: "",
+                mapTo: { kind: "system", key },
+                defaultValue,
+              },
+            ],
+          },
+        ],
+        rules: [],
+      })
+    for (const key of ["email", "phoneNumber"] as const) {
+      const r = hiddenIdentity(key, "fixed@example.com")
+      expect(r.success).toBe(false)
+      expect(r.error?.issues.map((i) => i.path.at(-1))).toContain(
+        "defaultValue",
+      )
+      // without a default (a link fills it) it stays valid
+      expect(hiddenIdentity(key).success).toBe(true)
+      expect(hiddenIdentity(key, "").success).toBe(true)
+    }
+  })
+
+  test("hostile shapes: an array / object sent for a hidden key is replaced, never thrown on", () => {
+    const hostile = { source: ["a", "b"], campaign: { $ne: 1 } } as never
+    expect(applyHiddenDefaults(hd, hostile)).toEqual({
+      source: "landing-a",
+      campaign: "none",
+    })
+    expect(
+      applyHiddenDefaults(
+        formDefinition.parse({ steps: [{ id: "s", fields: [] }], rules: [] }),
+        hostile,
+      ),
+    ).toEqual(hostile)
   })
 })
 

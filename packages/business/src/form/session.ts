@@ -14,6 +14,7 @@ import {
   sql,
 } from "@chatbotx.io/database/client"
 import {
+  applyHiddenDefaults,
   evaluateForm,
   type FormChatPlan,
   type FormDefinition,
@@ -308,7 +309,15 @@ export class FormSessionService {
             expiresAt: addMinutes(now, timeoutMinutes),
           })
           .returning()
-        return await this.advance(tx, session, {}, [], now)
+        return await this.advance(
+          tx,
+          session,
+          // hidden fields are never asked: their defaults are the run's
+          // starting values (the answer path re-applies them per reply)
+          applyHiddenDefaults(this.definitionOf(session), {}),
+          [],
+          now,
+        )
       })
     } catch (error) {
       // Two starts racing for one contact: the partial unique index lets one
@@ -384,7 +393,11 @@ export class FormSessionService {
         await this.end(tx, session.id, "canceled", "fieldMissing", now)
         return { action: { kind: "ignored", reason: "noSession" } }
       }
-      const values = readValues(session.values)
+      // Hidden defaults before the required check too: a rule may read them.
+      const values = applyHiddenDefaults(
+        this.definitionOf(session),
+        readValues(session.values),
+      )
       const asked = readAsked(session.asked)
       const messageId =
         "messageId" in input.reply ? input.reply.messageId : null

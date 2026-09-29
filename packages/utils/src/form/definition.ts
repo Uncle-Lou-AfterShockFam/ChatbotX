@@ -336,6 +336,23 @@ export const formField = z
         })
       }
     }
+    // s220c A2-4: a hidden field's value is its default (applyHiddenDefaults),
+    // so a default on a hidden field that IDENTIFIES the contact would attach
+    // every submitter to the same contact. Such a field must come from a link.
+    if (
+      field.type === "hidden" &&
+      field.mapTo?.kind === "system" &&
+      (field.mapTo.key === "email" || field.mapTo.key === "phoneNumber") &&
+      field.defaultValue !== undefined &&
+      field.defaultValue !== ""
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["defaultValue"],
+        message:
+          "A hidden field that identifies the contact (email / phone) cannot have a default: every submission would land on the same contact. Fill it from a link (prefill key) instead.",
+      })
+    }
     if (!isFormInputFieldType(field.type) && field.chat?.retryMessage) {
       ctx.addIssue({
         code: "custom",

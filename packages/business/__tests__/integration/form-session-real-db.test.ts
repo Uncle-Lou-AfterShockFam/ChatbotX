@@ -339,6 +339,59 @@ describe.skipIf(!databaseUrl)("formSessionService (real Postgres)", () => {
     ])
   })
 
+  test("hidden fields are never asked, yet their defaults reach the rules and the ONE submission (s220c A2-4)", async () => {
+    const w = await seedWorld({
+      definition: {
+        steps: [
+          {
+            id: "s1",
+            title: "",
+            fields: [
+              {
+                key: "source",
+                type: "hidden",
+                label: "",
+                required: false,
+                defaultValue: "chat-bot",
+              },
+              { key: "ref", type: "hidden", label: "", required: false },
+              { key: "mail", type: "email", label: "Email?", required: false },
+            ],
+          },
+        ],
+        // mail is optional unless source = chat-bot: the default must be SEEN
+        rules: [
+          {
+            id: "r1",
+            when: {
+              logic: "AND",
+              rules: [{ fieldKey: "source", op: "eq", value: "chat-bot" }],
+            },
+            action: { type: "require", fieldKey: "mail" },
+          },
+        ],
+      },
+    })
+    const first = await start(w)
+    expect(first.kind === "ask" && first.field.key).toBe("mail")
+    // required ONLY through the rule reading the default: "skip" is not a
+    // skip (an optional field would advance) but a bad email, so a retry
+    const refused = await answer(w, "skip")
+    expect(refused.kind === "ask" && refused.retry).toBe(true)
+    const done = await answer(w, "ada@example.com")
+    expect(done.kind).toBe("completed")
+    await track(w)
+    const rows = await submissions(w)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.values).toEqual({
+      source: "chat-bot",
+      mail: "ada@example.com",
+    })
+    expect(emitted.formSubmitted[0]?.[2]).toMatchObject({
+      values: { source: "chat-bot", mail: "ada@example.com" },
+    })
+  })
+
   test("a redelivered message and a reply older than the question are ignored", async () => {
     const w = await seedWorld()
     const early = createId() // sent before the question existed

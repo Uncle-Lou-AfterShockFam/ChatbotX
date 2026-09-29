@@ -483,6 +483,40 @@ export function validateFormSubmission(
 }
 
 /**
+ * A `hidden` field's value is the FORM's, never the visitor's (s220c A2-4):
+ * every hidden field is set to its `defaultValue` (or dropped when it has
+ * none), whatever the caller sent. The one exception is a key the form lists
+ * in `prefillKeys`: a link may set it, and a sent value is kept (it is still
+ * validated like any answer). The web page seeded the default only in the
+ * browser, so a tampered POST could store any value; a chat run never asked
+ * hidden fields, so their default was never stored at all.
+ */
+export function applyHiddenDefaults(
+  def: FormDefinition,
+  values: FormValues,
+  prefillable: ReadonlySet<string> = new Set(),
+): FormValues {
+  const out: FormValues = { ...values }
+  for (const field of formInputFields(def)) {
+    if (field.type !== "hidden") {
+      continue
+    }
+    if (
+      prefillable.has(field.key) &&
+      !isEmptyFormValue(readFormValue(values, field.key))
+    ) {
+      continue
+    }
+    if (field.defaultValue === undefined || field.defaultValue === "") {
+      delete out[field.key]
+    } else {
+      out[field.key] = field.defaultValue
+    }
+  }
+  return out
+}
+
+/**
  * Keep only answers for visible input fields (unknown keys and hidden fields
  * are DROPPED, never errors), so what is persisted equals what was validated.
  */

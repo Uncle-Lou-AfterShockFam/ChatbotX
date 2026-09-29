@@ -182,6 +182,7 @@ vi.mock("@chatbotx.io/utils", async (importOriginal) => ({
   })(),
 }))
 
+import { isWebhookContext } from "@chatbotx.io/events/context"
 import { ChatbotXException } from "../src/errors"
 import {
   FORM_DEDUP_WINDOW_SECONDS,
@@ -805,6 +806,94 @@ describe("formSubmitService.submit (s200)", () => {
     expect(m.state.calls).toContain("execute")
     expect(m.state.inserted).toHaveLength(0)
     expect(m.emitFormSubmitted).not.toHaveBeenCalled()
+  })
+
+  describe("web webhook context + hidden defaults (s220c A2-4)", () => {
+    test("the web formSubmitted event is emitted INSIDE the webhook context (web form_submitted webhooks never fired)", async () => {
+      queueClean()
+      const seen: boolean[] = []
+      m.emitFormSubmitted.mockImplementation(() => {
+        seen.push(isWebhookContext())
+        return Promise.resolve()
+      })
+      const r = await submit({ phone: "(215) 555-0100" })
+      expect(r).toMatchObject({ kind: "ok", contactId: "c-new" })
+      expect(seen).toEqual([true])
+      // negative control: the submit path itself is NOT in the context, so
+      // only the emit is (tags / custom-field events keep their old behaviour)
+      expect(isWebhookContext()).toBe(false)
+      const tagged: boolean[] = []
+      m.attachByNamesToContacts.mockImplementation(() => {
+        tagged.push(isWebhookContext())
+        return Promise.resolve()
+      })
+      queueClean()
+      await submit({ phone: "(215) 555-0101" })
+      expect(tagged).toEqual([false])
+    })
+
+    const HIDDEN_DEF = {
+      steps: [
+        {
+          id: "s1",
+          fields: [
+            ...DEF.steps[0].fields,
+            {
+              key: "source",
+              type: "hidden",
+              required: false,
+              label: "",
+              defaultValue: "landing-a",
+            },
+            { key: "ref", type: "hidden", required: false, label: "" },
+            {
+              key: "campaign",
+              type: "hidden",
+              required: false,
+              label: "",
+              defaultValue: "none",
+            },
+          ],
+        },
+      ],
+      rules: DEF.rules,
+    }
+    const hiddenForm = () =>
+      FORM({
+        publishedDefinition: HIDDEN_DEF,
+        settings: { ...FORM().settings, prefillKeys: ["campaign"] },
+      })
+
+    test("a tampered hidden value is replaced by the form's default; a hidden field with no default is dropped", async () => {
+      m.findPublishedBySlug.mockResolvedValue(hiddenForm())
+      queueClean()
+      await submit({ phone: "(215) 555-0102", source: "evil", ref: "injected" })
+      expect(m.state.inserted[0].values).toMatchObject({ source: "landing-a" })
+      expect(m.state.inserted[0].values).not.toHaveProperty("ref")
+    })
+
+    test("an omitted hidden value still stores the default", async () => {
+      m.findPublishedBySlug.mockResolvedValue(hiddenForm())
+      queueClean()
+      await submit({ phone: "(215) 555-0103" })
+      expect(m.state.inserted[0].values).toMatchObject({
+        source: "landing-a",
+        campaign: "none",
+      })
+    })
+
+    test("a hidden key listed in prefillKeys keeps the sent value (a link may set it); empty falls back to the default", async () => {
+      m.findPublishedBySlug.mockResolvedValue(hiddenForm())
+      queueClean()
+      await submit({ phone: "(215) 555-0104", campaign: "fall-24" })
+      expect(m.state.inserted[0].values).toMatchObject({
+        campaign: "fall-24",
+        source: "landing-a",
+      })
+      queueClean()
+      await submit({ phone: "(215) 555-0105", campaign: "" })
+      expect(m.state.inserted[1].values).toMatchObject({ campaign: "none" })
+    })
   })
 
   describe("typed select targets (s201)", () => {
