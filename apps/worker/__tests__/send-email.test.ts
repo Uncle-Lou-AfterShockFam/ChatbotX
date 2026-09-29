@@ -741,6 +741,32 @@ describe("s224b outreach B-1: a suppressed recipient is never handed off", () =>
     expect(markFailed).toHaveBeenCalledWith("test-token-xyz", "suppressed")
   })
 
+  test("a quoted display name with a comma still sends (the regression the s224b probes found)", async () => {
+    await sendEmail(
+      makeProps({ to: '"Doe, Jane" <jane@example.com>' }) as never,
+    )
+    expect(isSuppressedMock).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      address: "jane@example.com",
+    })
+    expect(runAction).toHaveBeenCalledOnce()
+  })
+
+  test("a group or a second angle address cannot hide a listed recipient", async () => {
+    isSuppressedMock.mockImplementation(
+      async ({ address }: { address: string }) => address === "bob@blocked.com",
+    )
+    for (const to of [
+      "Team:bob@blocked.com;",
+      "<bob@blocked.com> <alice@allowed.com>",
+      '"bob"@blocked.com',
+    ]) {
+      runAction.mockClear()
+      await sendEmail(makeProps({ to }) as never)
+      expect(runAction, to).not.toHaveBeenCalled()
+    }
+  })
+
   test("an empty or unusable `to` fails closed (no lookup needed, nothing sent)", async () => {
     for (const to of ["", " , ; ", new Array(51).fill("a@b.com").join(",")]) {
       runAction.mockClear()

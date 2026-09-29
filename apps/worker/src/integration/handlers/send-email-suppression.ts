@@ -1,28 +1,27 @@
 import { emailSuppressionService } from "@chatbotx.io/business/email-suppression"
+import { parseRecipientAddresses } from "@chatbotx.io/mail/extras"
 
 /** The broadcast failure content a suppressed send is recorded with. */
 export const SUPPRESSED_ERROR = "suppressed"
 
 /** Upper bound on addresses in one step's `to`; more fails closed. */
 const MAX_RECIPIENTS = 50
-const ANGLE_ADDRESS = /<([^<>]*)>\s*$/
-const RECIPIENT_SEPARATOR = /[,;]/
 
 /**
- * The bare addresses of a resolved `to` (comma / semicolon separated, each
- * optionally `Name <addr>`). Null when there are none or too many: callers
- * treat that as suppressed.
+ * The bare addresses a resolved `to` is delivered to, parsed exactly as
+ * nodemailer parses it on send. Null when there are none, too many, or one
+ * entry has no address: callers treat that as suppressed.
  */
 export function recipientAddresses(to: unknown): string[] | null {
   if (typeof to !== "string") {
     return null
   }
-  const addresses = to
-    .split(RECIPIENT_SEPARATOR)
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0)
-    .map((part) => ANGLE_ADDRESS.exec(part)?.[1]?.trim() ?? part)
-  if (addresses.length === 0 || addresses.length > MAX_RECIPIENTS) {
+  const addresses = parseRecipientAddresses(to)
+  if (
+    addresses.length === 0 ||
+    addresses.length > MAX_RECIPIENTS ||
+    addresses.some((address) => address === "")
+  ) {
     return null
   }
   return addresses
