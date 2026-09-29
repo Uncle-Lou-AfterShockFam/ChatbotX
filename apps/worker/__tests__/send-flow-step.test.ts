@@ -1305,29 +1305,39 @@ describe("sendChatMessage", () => {
 })
 
 describe("isPrivateDestination (s220c personal form links)", () => {
-  test("person channels yes; Telegram only for a private chat; group-capable / public channels no", async () => {
+  test("person channels yes; Telegram private chats and one-person api identities only; the rest no", async () => {
     const { isPrivateDestination } = await import(
       "../src/chat/handlers/send-flow-step"
     )
+    const ok = (channel: string, sourceId: string | null) =>
+      isPrivateDestination({ channel, sourceId })
     for (const channel of [
       "messenger",
       "instagram",
       "whatsapp",
       "webchat",
-      "api",
       "smtp",
     ]) {
-      expect(isPrivateDestination({ channel, sourceId: "x" })).toBe(true)
+      expect(ok(channel, "x")).toBe(true)
     }
-    expect(
-      isPrivateDestination({ channel: "telegram", sourceId: "123456789" }),
-    ).toBe(true)
-    expect(
-      isPrivateDestination({ channel: "telegram", sourceId: "-1001234567890" }),
-    ).toBe(false)
-    expect(isPrivateDestination({ channel: "telegram", sourceId: null })).toBe(
-      false,
-    )
+    // Telegram: a positive id is a private chat; a group / channel is negative
+    expect(ok("telegram", "123456789")).toBe(true)
+    for (const id of ["-1001234567890", "0", "000", "", null]) {
+      expect(ok("telegram", id)).toBe(false)
+    }
+    // api lines: one E.164 number or one email address (the bulktext lines)
+    expect(ok("api", "+12154075123")).toBe(true)
+    expect(ok("api", "jane@example.com")).toBe(true)
+    for (const id of [
+      "group-42",
+      "chat:123",
+      "+1",
+      "a@b.com,c@d.com",
+      "12154075123",
+      null,
+    ]) {
+      expect(ok("api", id)).toBe(false)
+    }
     for (const channel of [
       "zalo",
       "threads",
@@ -1335,7 +1345,7 @@ describe("isPrivateDestination (s220c personal form links)", () => {
       "omnichannel",
       "something-new",
     ]) {
-      expect(isPrivateDestination({ channel, sourceId: "1" })).toBe(false)
+      expect(ok(channel, "1")).toBe(false)
     }
   })
 })
