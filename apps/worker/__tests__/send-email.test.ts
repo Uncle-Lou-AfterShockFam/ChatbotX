@@ -306,6 +306,26 @@ describe("s220b phase 2b: template / document steps", () => {
     expect(args.text).toBe("doc")
   })
 
+  test("s221b: the document's attachments reach sendMail as buffered parts", async () => {
+    const attachments = [
+      {
+        filename: "a.pdf",
+        content: Buffer.from("%PDF"),
+        contentType: "application/pdf",
+      },
+    ]
+    renderStepDocumentMock.mockResolvedValueOnce({
+      html: "<html>doc</html>",
+      text: "doc",
+      attachments,
+    })
+    await sendEmail(makeProps({ templateId: "77", elements: [] }) as never)
+    const args = runAction.mock.calls.at(-1)?.[1] as {
+      attachments: unknown
+    }
+    expect(args.attachments).toBe(attachments)
+  })
+
   test("an unrenderable template fails closed: nothing is sent, the topic row is marked failed", async () => {
     renderStepDocumentMock.mockRejectedValueOnce(
       new ContentError("Email template not found"),

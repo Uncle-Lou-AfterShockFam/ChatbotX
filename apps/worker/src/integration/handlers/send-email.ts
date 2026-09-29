@@ -36,7 +36,11 @@ import { contactVariableService } from "@chatbotx.io/variables"
 import { resolveButtonUrl } from "../../lib/convert-button"
 import { logger } from "../../lib/logger"
 import type { ExecuteStepProps } from "./flow"
-import { EmailContentError, renderStepDocument } from "./send-email-document"
+import {
+  EmailContentError,
+  type MailAttachment,
+  renderStepDocument,
+} from "./send-email-document"
 
 async function resolveElements({
   appUrl,
@@ -263,7 +267,7 @@ export async function sendEmail({
   // B2 (s220b): a template or inline document renders through
   // @chatbotx.io/email-document; legacy `elements` keep the original path
   // (no try: its errors propagate to the queue's retry, as they always did).
-  let body: { html: string; text: string }
+  let body: { html: string; text: string; attachments?: MailAttachment[] }
   if (step.templateId || step.document) {
     try {
       body = await renderStepDocument({
@@ -330,6 +334,7 @@ export async function sendEmail({
       subject,
       html: body.html,
       text: body.text,
+      attachments: body.attachments,
       headers: {
         "List-Unsubscribe": `<${oneClickUrl.toString()}>`,
         "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",

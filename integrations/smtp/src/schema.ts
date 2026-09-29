@@ -44,6 +44,12 @@ export const smtpAuthSchema = customAuthSchema.extend({
 })
 export type SmtpAuthValue = z.infer<typeof smtpAuthSchema>
 
+export type SmtpAttachment = {
+  filename: string
+  content: Buffer
+  contentType: string
+}
+
 export type SmtpActions<IAuth extends SmtpAuthValue = SmtpAuthValue> = {
   sendMail: (props: {
     ctx: Context<IAuth>
@@ -55,5 +61,7 @@ export type SmtpActions<IAuth extends SmtpAuthValue = SmtpAuthValue> = {
     text?: string
     /** Extra headers, e.g. List-Unsubscribe (RFC 2369 / 8058). */
     headers?: Record<string, string>
+    /** Buffered file parts (B2 attachment blocks); never a `path` URL. */
+    attachments?: SmtpAttachment[]
   }) => Promise<void>
 }

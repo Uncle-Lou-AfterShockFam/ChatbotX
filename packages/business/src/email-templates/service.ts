@@ -4,15 +4,20 @@ import {
   db,
   desc,
   eq,
+  inArray,
   isUniqueViolationError,
 } from "@chatbotx.io/database/client"
 import {
   EMAIL_TEMPLATE_MAX_NAME,
   type EmailTemplateStatus,
 } from "@chatbotx.io/database/partials"
-import { emailTemplateModel } from "@chatbotx.io/database/schema"
+import {
+  emailTemplateModel,
+  mediaLibraryFileModel,
+} from "@chatbotx.io/database/schema"
 import type { EmailTemplateModel } from "@chatbotx.io/database/types"
 import {
+  collectRenderInputs,
   DocumentTooLargeError,
   DocumentValidationError,
   type EmailDocument,
@@ -23,6 +28,7 @@ import { BaseService } from "../base.service"
 import { notFoundException, validationException } from "../errors"
 
 const TEMPLATE_NOT_FOUND = "Email template not found"
+const MAX_BIGINT = 9_223_372_036_854_775_807n
 
 export type EmailTemplateData = { name: unknown; document: unknown }
 
@@ -60,6 +66,45 @@ function parseTemplateData(data: EmailTemplateData): {
       )
     }
     throw error
+  }
+}
+
+/**
+ * Every media file a document references (images + attachments) must be a
+ * MediaLibraryFile of THIS workspace: a foreign or deleted id is a 422 at
+ * save, never a send that later attaches someone else's file or fails.
+ */
+async function assertAssetsOwned(
+  workspaceId: string,
+  document: EmailDocument,
+  tx: DatabaseClient,
+): Promise<void> {
+  const { assetIds } = collectRenderInputs(document)
+  if (assetIds.length === 0) {
+    return
+  }
+  // The schema allows 20 digits; a bigint column holds 19. An id past it
+  // matches no row, and must not reach Postgres as an out-of-range 500.
+  const queryable = assetIds.filter((id) => BigInt(id) <= MAX_BIGINT)
+  const owned =
+    queryable.length === 0
+      ? []
+      : await tx
+          .select({ id: mediaLibraryFileModel.id })
+          .from(mediaLibraryFileModel)
+          .where(
+            and(
+              eq(mediaLibraryFileModel.workspaceId, workspaceId),
+              inArray(mediaLibraryFileModel.id, queryable),
+            ),
+          )
+  const found = new Set(owned.map((row) => row.id))
+  const missing = assetIds.find((id) => !found.has(id))
+  if (missing !== undefined) {
+    throw validationException(
+      "document",
+      `Media file ${missing} is not in this workspace's media library`,
+    )
   }
 }
 
@@ -131,6 +176,7 @@ export class EmailTemplateService extends BaseService {
   }): Promise<EmailTemplateModel> {
     const { workspaceId, userId = null, tx = db } = props
     const data = parseTemplateData(props.data)
+    await assertAssetsOwned(workspaceId, data.document, tx)
     const [row] = await tx
       .insert(emailTemplateModel)
       .values({
@@ -154,6 +200,7 @@ export class EmailTemplateService extends BaseService {
   }): Promise<EmailTemplateModel> {
     const { workspaceId, id, tx = db } = props
     const data = parseTemplateData(props.data)
+    await assertAssetsOwned(workspaceId, data.document, tx)
     const [row] = await tx
       .update(emailTemplateModel)
       .set({ ...data, updatedAt: new Date() })
