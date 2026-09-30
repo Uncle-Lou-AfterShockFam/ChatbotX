@@ -7681,6 +7681,21 @@
       "onNoThreadStop": "Niet verzenden en de reeks voor dit contact beëindigen"
     }
   },
+  "pages": {
+    "title": "Pagina's",
+    "newPage": "Nieuwe pagina",
+    "showArchived": "Gearchiveerde tonen",
+    "noPages": "Nog geen pagina's.",
+    "archived": "Gearchiveerd",
+    "pickOrCreate": "Kies een pagina of maak een nieuwe.",
+    "saved": "Pagina opgeslagen",
+    "name": "Naam",
+    "namePlaceholder": "bijv. Voorjaarsaanbieding",
+    "linkTtlHours": "Geldigheid van de link (uren)",
+    "linkHint": "De flowstap Pagina versturen stuurt elk contact een persoonlijke link per sms of e-mail. Die toont de pagina met de gegevens van dat contact en werkt niet meer na de geldigheid. Archiveren van de pagina sluit alle links.",
+    "deleteTitle": "Deze pagina verwijderen?",
+    "deleteConfirm": "Alle al verstuurde links werken dan niet meer. Dit kan niet ongedaan worden gemaakt."
+  },
   "emailSuppression": {
     "title": "E-mailblokkering",
     "description": "De e-mailstap verstuurt nooit naar deze adressen of domeinen. Gebouncete verzendingen worden automatisch toegevoegd. Een domeinvermelding geldt alleen voor precies dat domein.",

@@ -7681,6 +7681,21 @@
       "onNoThreadStop": "不傳送,並為此聯絡人結束序列"
     }
   },
+  "pages": {
+    "title": "頁面",
+    "newPage": "新增頁面",
+    "showArchived": "顯示已封存",
+    "noPages": "還沒有頁面。",
+    "archived": "已封存",
+    "pickOrCreate": "選擇一個頁面或新增頁面。",
+    "saved": "頁面已儲存",
+    "name": "名稱",
+    "namePlaceholder": "例如：春季優惠",
+    "linkTtlHours": "連結有效期（小時）",
+    "linkHint": "流程中的「傳送頁面」步驟會透過簡訊或電子郵件傳送專屬連結給每位聯絡人。連結會以該聯絡人的資料顯示頁面，超過有效期後失效。封存頁面會關閉所有連結。",
+    "deleteTitle": "刪除此頁面？",
+    "deleteConfirm": "所有已傳送的連結都將失效。此操作無法復原。"
+  },
   "emailSuppression": {
     "title": "郵件封鎖",
     "description": "郵件步驟永遠不會寄送到這些地址或網域。退信的寄送會自動加入。網域項目只比對該確切網域。",

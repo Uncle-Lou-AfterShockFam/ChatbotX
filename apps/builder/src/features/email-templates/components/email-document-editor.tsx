@@ -51,6 +51,7 @@ import { useTranslations } from "next-intl"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { MediaLibraryTrigger } from "@/features/media-library/components/media-library-trigger"
+import { usePagePreview } from "@/features/pages/provider/page-hooks"
 import {
   BLOCK_TYPES,
   type BlockType,
@@ -538,12 +539,15 @@ export function EmailDocumentEditor({
   value,
   onChange,
   onValidChange,
+  previewAs = "email",
 }: {
   workspaceId: string
   value: EmailDocument
   onChange: (doc: EmailDocument) => void
   /** False while the current draft is unrendered or has schema issues. */
   onValidChange?: (valid: boolean) => void
+  /** "page": preview as a custom page (renderWeb) instead of an email (B4). */
+  previewAs?: "email" | "page"
 }) {
   const t = useTranslations("emailTemplates.editor")
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -562,12 +566,20 @@ export function EmailDocumentEditor({
   }, [value, schedulePreview])
 
   const sampleVars = useMemo(() => previewSampleVars(previewDoc), [previewDoc])
-  const preview = useEmailTemplatePreview(
+  const hasBlocks = previewDoc.blocks.length > 0
+  const emailPreview = useEmailTemplatePreview(
     workspaceId,
     previewDoc,
-    previewDoc.blocks.length > 0,
+    hasBlocks && previewAs === "email",
     sampleVars,
   )
+  const pagePreview = usePagePreview(
+    workspaceId,
+    previewDoc,
+    hasBlocks && previewAs === "page",
+    sampleVars,
+  )
+  const preview = previewAs === "page" ? pagePreview : emailPreview
   const result = preview.data
 
   // Names/urls of a saved document's media come back with its preview.

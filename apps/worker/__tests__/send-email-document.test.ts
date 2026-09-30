@@ -27,7 +27,13 @@ vi.mock("@chatbotx.io/filesystem", () => ({
   uploader: { getObjectStream },
 }))
 vi.mock("@chatbotx.io/business/errors", () => ({ ChatbotXException: NotFound }))
-vi.mock("@chatbotx.io/business/email-templates", () => ({
+vi.mock("@chatbotx.io/business/email-templates", async (importOriginal) => ({
+  // The real button validation (moved to business in s227a), a mocked store.
+  documentFlowButton: (
+    await importOriginal<
+      typeof import("@chatbotx.io/business/email-templates")
+    >()
+  ).documentFlowButton,
   emailTemplateService: { getDocument },
 }))
 vi.mock("@chatbotx.io/variables", () => ({

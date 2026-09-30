@@ -7681,6 +7681,21 @@
       "onNoThreadStop": "不发送,并为此联系人结束序列"
     }
   },
+  "pages": {
+    "title": "页面",
+    "newPage": "新建页面",
+    "showArchived": "显示已归档",
+    "noPages": "还没有页面。",
+    "archived": "已归档",
+    "pickOrCreate": "选择一个页面或新建页面。",
+    "saved": "页面已保存",
+    "name": "名称",
+    "namePlaceholder": "例如：春季优惠",
+    "linkTtlHours": "链接有效期（小时）",
+    "linkHint": "流程中的“发送页面”步骤会通过短信或邮件向每位联系人发送专属链接。链接以该联系人的信息显示页面，超过有效期后失效。归档页面会关闭所有链接。",
+    "deleteTitle": "删除此页面？",
+    "deleteConfirm": "所有已发送的链接都将失效。此操作无法撤销。"
+  },
   "emailSuppression": {
     "title": "邮件屏蔽",
     "description": "邮件步骤永远不会发送到这些地址或域名。退信的发送会自动加入。域名条目只匹配该确切域名。",

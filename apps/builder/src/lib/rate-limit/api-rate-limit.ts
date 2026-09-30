@@ -30,6 +30,7 @@ export type ApiRateLimitScope =
   | "quickbooks-webhook-rate-limit"
   | "invoice-pay-link-rate-limit"
   | "invoice-pdf-rate-limit"
+  | "page-link-rate-limit"
 
 type ApiRateLimitInput = {
   scope: ApiRateLimitScope

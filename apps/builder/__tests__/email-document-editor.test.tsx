@@ -8,9 +8,11 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true
 
-const { preview, previewVars } = vi.hoisted(() => ({
+const { preview, previewVars, enabledFor } = vi.hoisted(() => ({
   preview: { current: {} as object },
   previewVars: [] as unknown[],
+  /** Which preview hooks were asked to render ("email" / "page"). */
+  enabledFor: [] as string[],
 }))
 
 vi.mock("next-intl", () => ({
@@ -21,13 +23,28 @@ vi.mock("@/features/email-templates/provider/email-template-hooks", () => ({
   useEmailTemplatePreview: (
     _workspaceId: string,
     _document: unknown,
-    _enabled: boolean,
+    enabled: boolean,
     vars?: Record<string, string>,
   ) => {
+    if (enabled) {
+      enabledFor.push("email")
+    }
     previewVars.push(vars)
     return preview.current
   },
   useFlowOptions: () => ({ data: [] }),
+}))
+vi.mock("@/features/pages/provider/page-hooks", () => ({
+  usePagePreview: (
+    _workspaceId: string,
+    _document: unknown,
+    enabled: boolean,
+  ) => {
+    if (enabled) {
+      enabledFor.push("page")
+    }
+    return preview.current
+  },
 }))
 // The picker is a dialog over the media API: stand in with a button that
 // "picks" file 77 when clicked.
@@ -71,7 +88,13 @@ let root: Root | null = null
 let latest: EmailDocument = emptyDocument()
 let validity: boolean[] = []
 
-function Harness({ initial }: { initial: EmailDocument }) {
+function Harness({
+  initial,
+  previewAs,
+}: {
+  initial: EmailDocument
+  previewAs?: "email" | "page"
+}) {
   const [doc, setDoc] = useState(initial)
   latest = doc
   return (
@@ -81,18 +104,19 @@ function Harness({ initial }: { initial: EmailDocument }) {
         setDoc(next)
       }}
       onValidChange={(v) => validity.push(v)}
+      previewAs={previewAs}
       value={doc}
       workspaceId="1"
     />
   )
 }
 
-function mount(initial = emptyDocument()) {
+function mount(initial = emptyDocument(), previewAs?: "email" | "page") {
   container = document.createElement("div")
   document.body.appendChild(container)
   root = createRoot(container)
   act(() => {
-    root?.render(<Harness initial={initial} />)
+    root?.render(<Harness initial={initial} previewAs={previewAs} />)
   })
   return container
 }
@@ -107,6 +131,7 @@ const click = (el: Element | null | undefined) => {
 beforeEach(() => {
   preview.current = {}
   validity = []
+  enabledFor.length = 0
 })
 
 afterEach(() => {
@@ -193,6 +218,28 @@ describe("EmailDocumentEditor (B2 phase 3)", () => {
     })
     const frame = el.querySelector('[data-testid="email-preview-frame"]')
     expect(frame?.getAttribute("sandbox")).toBe("")
+  })
+
+  test("s227a: previewAs page renders through the page preview only (renderWeb), never the email one", () => {
+    preview.current = {
+      data: { ok: true, html: "<p>page</p>", missing: [], assets: {} },
+    }
+    const doc: EmailDocument = {
+      version: 1,
+      settings: {},
+      blocks: [{ id: "5", type: "divider" }],
+    }
+    const el = mount(doc, "page")
+    expect(new Set(enabledFor)).toEqual(new Set(["page"]))
+    expect(
+      el
+        .querySelector('[data-testid="email-preview-frame"]')
+        ?.getAttribute("srcdoc"),
+    ).toBe("<p>page</p>")
+    act(() => root?.unmount())
+    enabledFor.length = 0
+    mount(doc)
+    expect(new Set(enabledFor)).toEqual(new Set(["email"]))
   })
 
   test("s223b: the preview gets sample values for system-field tokens only, and says so", () => {

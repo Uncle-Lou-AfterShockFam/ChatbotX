@@ -7681,6 +7681,21 @@
       "onNoThreadStop": "Không gửi và kết thúc chuỗi cho liên hệ này"
     }
   },
+  "pages": {
+    "title": "Trang",
+    "newPage": "Trang mới",
+    "showArchived": "Hiện trang đã lưu trữ",
+    "noPages": "Chưa có trang nào.",
+    "archived": "Đã lưu trữ",
+    "pickOrCreate": "Chọn một trang hoặc tạo trang mới.",
+    "saved": "Đã lưu trang",
+    "name": "Tên",
+    "namePlaceholder": "vd: Ưu đãi mùa xuân",
+    "linkTtlHours": "Thời hạn liên kết (giờ)",
+    "linkHint": "Bước Gửi trang trong luồng gửi cho mỗi liên hệ một liên kết riêng qua SMS hoặc email. Liên kết hiển thị trang với thông tin của liên hệ đó và ngừng hoạt động khi hết thời hạn. Lưu trữ trang sẽ đóng mọi liên kết.",
+    "deleteTitle": "Xóa trang này?",
+    "deleteConfirm": "Mọi liên kết đã gửi sẽ ngừng hoạt động. Không thể hoàn tác."
+  },
   "emailSuppression": {
     "title": "Chặn email",
     "description": "Bước email không bao giờ gửi tới các địa chỉ hoặc tên miền này. Các lượt gửi bị trả lại được thêm tự động. Mục tên miền chỉ khớp đúng tên miền đó.",

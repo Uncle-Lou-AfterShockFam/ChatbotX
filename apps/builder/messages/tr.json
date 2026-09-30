@@ -7681,6 +7681,21 @@
       "onNoThreadStop": "Gönderme ve bu kişi için diziyi sonlandır"
     }
   },
+  "pages": {
+    "title": "Sayfalar",
+    "newPage": "Yeni sayfa",
+    "showArchived": "Arşivlenenleri göster",
+    "noPages": "Henüz sayfa yok.",
+    "archived": "Arşivlendi",
+    "pickOrCreate": "Bir sayfa seçin veya yeni bir sayfa oluşturun.",
+    "saved": "Sayfa kaydedildi",
+    "name": "Ad",
+    "namePlaceholder": "örn. Bahar kampanyası",
+    "linkTtlHours": "Bağlantı süresi (saat)",
+    "linkHint": "Akıştaki Sayfa gönder adımı her kişiye SMS veya e-postayla kişisel bir bağlantı gönderir. Bağlantı sayfayı o kişinin bilgileriyle gösterir ve süresi dolunca çalışmaz. Sayfayı arşivlemek tüm bağlantıları kapatır.",
+    "deleteTitle": "Bu sayfa silinsin mi?",
+    "deleteConfirm": "Gönderilmiş tüm bağlantılar çalışmayı durdurur. Bu işlem geri alınamaz."
+  },
   "emailSuppression": {
     "title": "E-posta engelleme",
     "description": "E-posta adımı bu adreslere veya alan adlarına asla gönderim yapmaz. Geri dönen gönderimler otomatik eklenir. Alan adı girişi yalnızca tam olarak o alan adıyla eşleşir.",

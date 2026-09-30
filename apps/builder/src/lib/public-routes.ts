@@ -14,6 +14,8 @@ export const PUBLIC_ROUTES = [
   "/f",
   // Hub invoice pay links (`/pay/[token]`, stripeCheckout s207b).
   "/pay",
+  // Custom expiring pages (`/p/[token]`, roadmap B4 s227a).
+  "/p",
   // Public web forms (`/forms/[workspaceId]/[slug]`, s200).
   "/forms",
   "/dynamic-images",

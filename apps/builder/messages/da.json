@@ -7681,6 +7681,21 @@
       "onNoThreadStop": "Send ikke, og afslut sekvensen for denne kontakt"
     }
   },
+  "pages": {
+    "title": "Sider",
+    "newPage": "Ny side",
+    "showArchived": "Vis arkiverede",
+    "noPages": "Ingen sider endnu.",
+    "archived": "Arkiveret",
+    "pickOrCreate": "Vælg en side, eller opret en ny.",
+    "saved": "Side gemt",
+    "name": "Navn",
+    "namePlaceholder": "f.eks. Forårstilbud",
+    "linkTtlHours": "Linkets levetid (timer)",
+    "linkHint": "Et flows trin Send side sender hver kontakt et personligt link via sms eller e-mail. Det viser siden med kontaktens oplysninger og holder op med at virke efter linkets levetid. Arkivering af siden lukker alle links.",
+    "deleteTitle": "Slet denne side?",
+    "deleteConfirm": "Alle links, der allerede er sendt, holder op med at virke. Det kan ikke fortrydes."
+  },
   "emailSuppression": {
     "title": "E-mailspærring",
     "description": "E-mailtrinnet sender aldrig til disse adresser eller domæner. Afviste afsendelser tilføjes automatisk. En domænepost matcher kun netop det domæne.",

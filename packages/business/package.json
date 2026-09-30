@@ -27,6 +27,7 @@
     "./email-suppression": "./src/email-suppression/index.ts",
     "./email-thread": "./src/email-thread/index.ts",
     "./email-templates": "./src/email-templates/index.ts",
+    "./page": "./src/page/index.ts",
     "./form": "./src/form/index.ts",
     "./coexist": "./src/coexist/index.ts",
     "./coexist/history": "./src/coexist/history-window.ts",

@@ -7681,6 +7681,21 @@
       "onNoThreadStop": "Nicht senden und die Sequenz für diesen Kontakt beenden"
     }
   },
+  "pages": {
+    "title": "Seiten",
+    "newPage": "Neue Seite",
+    "showArchived": "Archivierte anzeigen",
+    "noPages": "Noch keine Seiten.",
+    "archived": "Archiviert",
+    "pickOrCreate": "Wähle eine Seite oder erstelle eine neue.",
+    "saved": "Seite gespeichert",
+    "name": "Name",
+    "namePlaceholder": "z. B. Frühjahrsangebot",
+    "linkTtlHours": "Link-Gültigkeit (Stunden)",
+    "linkHint": "Der Flow-Schritt „Seite senden“ schickt jedem Kontakt per SMS oder E-Mail einen persönlichen Link. Er zeigt die Seite mit den Daten des Kontakts und funktioniert nach Ablauf der Gültigkeit nicht mehr. Das Archivieren der Seite schließt alle Links.",
+    "deleteTitle": "Diese Seite löschen?",
+    "deleteConfirm": "Alle bereits gesendeten Links funktionieren dann nicht mehr. Dies kann nicht rückgängig gemacht werden."
+  },
   "emailSuppression": {
     "title": "E-Mail-Sperrliste",
     "description": "Der E-Mail-Schritt sendet nie an diese Adressen oder Domains. Unzustellbare Sendungen werden automatisch hinzugefügt. Ein Domain-Eintrag gilt nur für genau diese Domain.",

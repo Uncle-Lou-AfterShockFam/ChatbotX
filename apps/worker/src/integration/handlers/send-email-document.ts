@@ -3,7 +3,10 @@ import {
   signEmailClickUrl,
   signEmailFlowToken,
 } from "@chatbotx.io/business"
-import { emailTemplateService } from "@chatbotx.io/business/email-templates"
+import {
+  documentFlowButton,
+  emailTemplateService,
+} from "@chatbotx.io/business/email-templates"
 import { ChatbotXException } from "@chatbotx.io/business/errors"
 import type { InboxWithIntegrations } from "@chatbotx.io/database/types"
 import {
@@ -11,21 +14,13 @@ import {
   DocumentTooLargeError,
   DocumentValidationError,
   type EmailDocument,
-  type LeafBlock,
   leafBlocks,
   parseDocument,
   type RenderAsset,
 } from "@chatbotx.io/email-document"
 import { renderEmail } from "@chatbotx.io/email-document/render-email"
 import { uploader } from "@chatbotx.io/filesystem"
-import {
-  type EmailStepSchema,
-  openWebsiteStepSchema,
-  type PageElementSchema,
-  startAnotherNodeStepSchema,
-  startExternalFlowStepSchema,
-  startExternalNodeStepSchema,
-} from "@chatbotx.io/flow-config"
+import type { EmailStepSchema } from "@chatbotx.io/flow-config"
 import { isWorkspaceStorageKey } from "@chatbotx.io/utils"
 import { contactVariableService } from "@chatbotx.io/variables"
 import { resolveButtonUrl } from "../../lib/convert-button"
@@ -121,17 +116,6 @@ export class EmailContentError extends Error {
     this.name = "EmailContentError"
   }
 }
-
-/**
- * A document flow button's beforeStep, validated by the SAME flow-config
- * schema a legacy button uses, per its stepType; anything else is dropped.
- */
-const BUTTON_STEPS = {
-  openWebsite: openWebsiteStepSchema,
-  startExternalFlow: startExternalFlowStepSchema,
-  startExternalNode: startExternalNodeStepSchema,
-  startAnotherNode: startAnotherNodeStepSchema,
-} as const
 
 type Variables = Awaited<ReturnType<typeof contactVariableService.getAll>>
 type MediaFile = Awaited<ReturnType<typeof mediaLibraryService.findFile>>
@@ -308,31 +292,6 @@ async function loadDocument(
   }
 }
 
-function legacyButton(
-  leaf: Extract<LeafBlock, { type: "button" }>,
-): Extract<PageElementSchema, { type: "button" }> | undefined {
-  if (leaf.action.kind !== "flow") {
-    return
-  }
-  const stepType = String(leaf.action.beforeStep.stepType ?? "")
-  if (!Object.hasOwn(BUTTON_STEPS, stepType)) {
-    return
-  }
-  const buttonType = stepType as keyof typeof BUTTON_STEPS
-  const parsed = BUTTON_STEPS[buttonType].safeParse(leaf.action.beforeStep)
-  if (!parsed.success) {
-    return
-  }
-  return {
-    id: leaf.id,
-    type: "button",
-    label: leaf.label,
-    buttonType,
-    beforeStep: parsed.data,
-    steps: [],
-  } as Extract<PageElementSchema, { type: "button" }>
-}
-
 /**
  * B2 phase 4 (s222b): a start-flow button whose inbox has no chat to open (an
  * SMTP or API-channel email line: `buildInboxLink` has no link for them).
@@ -342,7 +301,7 @@ function legacyButton(
  */
 async function startFlowUrl(props: {
   appUrl: string
-  button: NonNullable<ReturnType<typeof legacyButton>>
+  button: NonNullable<ReturnType<typeof documentFlowButton>>
   workspaceId: string
   contact: { id: string; contactInboxId: string }
   token: string | undefined
@@ -506,7 +465,7 @@ export async function renderStepDocument(props: {
     if (leaf.type !== "button") {
       continue
     }
-    const button = legacyButton(leaf)
+    const button = documentFlowButton(leaf)
     const url = button
       ? resolveButtonUrl({
           appUrl,
