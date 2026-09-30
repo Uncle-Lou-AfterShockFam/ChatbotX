@@ -136,6 +136,40 @@ describe("runChallenge", () => {
     ])
   })
 
+  test("a webchat reply (s230a) runs keyed and reports bot_received", async () => {
+    mocks.detectConversationAndContactInbox.mockResolvedValue({
+      conversation: {
+        id: "conversation-1",
+        workspaceId: "workspace-1",
+        contactId: "contact-1",
+      },
+      contactInbox: { id: "contact-inbox-1", channel: "webchat" },
+    })
+
+    await runChallenge(
+      makeChallenge({
+        messageId: "wm-1",
+        messageCreatedAt: new Date("2026-09-30T12:00:00Z"),
+      }),
+      { timestamp: 1 },
+    )
+
+    expect(mocks.runStepsAndQuickReplies).toHaveBeenCalledWith(
+      expect.objectContaining({
+        flowExecutionKey: "step-challenge-conversation-1-wm-1",
+        triggerMessageId: "wm-1",
+      }),
+    )
+    expect(mocks.emit).toHaveBeenCalledWith(
+      "analytics:dashboard",
+      expect.objectContaining({
+        eventType: "message:bot_received",
+        messageId: "wm-1",
+        hasResponse: true,
+      }),
+    )
+  })
+
   test("a challenge from before runStartedAt existed is judged by when it was asked", async () => {
     await runChallenge(makeChallenge(), { timestamp: 1_790_000_000_000 })
 
