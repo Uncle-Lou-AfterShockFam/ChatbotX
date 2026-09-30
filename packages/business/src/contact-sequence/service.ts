@@ -994,7 +994,9 @@ class ContactSequenceService extends BaseService {
 
   /**
    * s228b: a hard bounce or an email unsubscribe ENDS the contact's outreach
-   * enrolments (the stop-on-reply sequences) for good: `bounced` /
+   * enrolments (the stop-on-reply sequences; other sequences are not
+   * outreach - the email suppression / opt-out still stops their mail) for
+   * good. A completed enrolment is left as it is: `bounced` /
    * `unsubscribed` are terminal and overwrite an earlier non-terminal end
    * (the removal's rule). A bounce is also the reply state. Returns the
    * sequence ids it ended.
@@ -1032,6 +1034,10 @@ class ContactSequenceService extends BaseService {
           eq(contactsOnSequenceModel.workspaceId, workspaceId),
           eq(contactsOnSequenceModel.contactId, contactId),
           eq(sequenceModel.stopOnReply, true),
+          // Skeptic s228b: a finished enrolment's record is history, and an
+          // earlier end keeps its reply state (the removal's CASE below);
+          // only a live one, or a non-terminal end, is made final here.
+          sql`${contactsOnSequenceModel.status} IS DISTINCT FROM 'completed'`,
         ),
       )
     if (rows.length === 0) {
@@ -1323,7 +1329,14 @@ class ContactSequenceService extends BaseService {
         lockedAt: null,
         lockOwner: null,
         updatedAt: now,
-        ...(reply ? { replyState: reply.state, repliedAt: reply.at } : {}),
+        // An end being overwritten (a terminal reason after an earlier end)
+        // keeps the answer it recorded then (skeptic s228b).
+        ...(reply
+          ? {
+              replyState: sql`CASE WHEN ${contactsOnSequenceModel.status} = 'ended' THEN ${contactsOnSequenceModel.replyState} ELSE ${reply.state} END`,
+              repliedAt: sql`CASE WHEN ${contactsOnSequenceModel.status} = 'ended' THEN ${contactsOnSequenceModel.repliedAt} ELSE ${reply.at} END`,
+            }
+          : {}),
       })
       .where(
         and(

@@ -955,3 +955,52 @@ describe.skipIf(!databaseUrl)(
     })
   },
 )
+
+describe.skipIf(!databaseUrl)(
+  "endOutreach history (skeptic s228b PR 2)",
+  () => {
+    test("a bounce never rewrites a completed enrolment, and keeps an earlier end's reply state", async () => {
+      const live = await seed({ stopOnReply: true })
+      const done = await seed({ stopOnReply: true })
+      const replied = await seed({ stopOnReply: true })
+      // One contact across the three sequences.
+      for (const other of [done, replied]) {
+        await db.execute(
+          sql`UPDATE "ContactOnSequence" SET "contactId" = ${live.contactId}, "workspaceId" = ${live.workspaceId} WHERE id = ${other.enrollmentId}`,
+        )
+        await db.execute(
+          sql`UPDATE "Sequence" SET "workspaceId" = ${live.workspaceId} WHERE id = ${other.sequenceId}`,
+        )
+        await db.execute(
+          sql`UPDATE "SequenceDispatch" SET "workspaceId" = ${live.workspaceId}, "contactId" = ${live.contactId} WHERE id = ${other.dispatchId}`,
+        )
+      }
+      await db.execute(
+        sql`UPDATE "ContactOnSequence" SET status = 'completed', "completedAt" = now() WHERE id = ${done.enrollmentId}`,
+      )
+      await db.execute(
+        sql`UPDATE "ContactOnSequence" SET status = 'ended', "endReason" = 'contact_replied', "endedAt" = now(), "replyState" = 'replied', "repliedAt" = now() WHERE id = ${replied.enrollmentId}`,
+      )
+      await contactSequenceService.endOutreach({
+        workspaceId: live.workspaceId,
+        contactId: live.contactId,
+        reason: "bounced",
+      })
+      expect(await enrolment(live.enrollmentId)).toMatchObject({
+        status: "ended",
+        endReason: "bounced",
+        replyState: "bounced",
+      })
+      expect(await enrolment(done.enrollmentId)).toMatchObject({
+        status: "completed",
+        endReason: null,
+        replyState: "none",
+      })
+      expect(await enrolment(replied.enrollmentId)).toMatchObject({
+        status: "ended",
+        endReason: "bounced",
+        replyState: "replied",
+      })
+    })
+  },
+)
