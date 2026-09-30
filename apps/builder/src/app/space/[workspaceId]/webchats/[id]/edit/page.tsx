@@ -5,6 +5,7 @@ import { UpdateWebchatForm } from "@/features/integration-webchat/components/upd
 import { findIntegrationWebchat } from "@/features/integration-webchat/queries"
 import { withWorkspaceIdAndIdSchema } from "@/features/workspaces/schema/resource"
 import { requireWorkspacePermission } from "@/lib/auth/require-workspace-permission"
+import { withoutCredentials } from "@/lib/without-credentials"
 
 export default async function WebchatEditPage({
   params,
@@ -25,7 +26,11 @@ export default async function WebchatEditPage({
   return (
     <FlowStoreProvider workspaceId={data.workspaceId}>
       <Suspense fallback={<div>Loading...</div>}>
-        <UpdateWebchatForm integrationWebchat={integrationWebchat} />
+        <UpdateWebchatForm
+          integrationWebchat={
+            integrationWebchat && withoutCredentials(integrationWebchat)
+          }
+        />
       </Suspense>
     </FlowStoreProvider>
   )

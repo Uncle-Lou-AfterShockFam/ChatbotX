@@ -55,5 +55,14 @@ export default async function LandingPage({
     redirect(inboxLinks[0].url)
   }
 
-  return <InboxListLandingPage inboxLinks={inboxLinks} />
+  // A public page (no login): hand the client component only what it
+  // renders, never an inbox row with its integrations (s231a).
+  return (
+    <InboxListLandingPage
+      inboxLinks={inboxLinks.map(({ inbox, url }) => ({
+        inbox: { id: inbox.id, name: inbox.name, channel: inbox.channel },
+        url,
+      }))}
+    />
+  )
 }

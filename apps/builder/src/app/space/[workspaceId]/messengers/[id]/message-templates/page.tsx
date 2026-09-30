@@ -8,7 +8,9 @@ import { MessengerMessageTemplatesTable } from "@/features/integration-messenger
 import { listMessengerMessageTemplatesSearchParamsCache } from "@/features/integration-messenger/message-templates/schema/query"
 import { findIntegrationMessenger } from "@/features/integration-messenger/queries"
 import { withWorkspaceIdAndIdSchema } from "@/features/workspaces/schema/resource"
+import { requireWorkspacePermission } from "@/lib/auth/require-workspace-permission"
 import { getCurrentUserId } from "@/lib/auth/utils"
+import { withoutCredentials } from "@/lib/without-credentials"
 
 export default async function MessengerMessageTemplatesPage(props: {
   params: Promise<{ workspaceId: string; id: string }>
@@ -20,6 +22,7 @@ export default async function MessengerMessageTemplatesPage(props: {
   }
 
   const { workspaceId, id } = data
+  await requireWorkspacePermission(workspaceId, "superAdmin")
   const search = listMessengerMessageTemplatesSearchParamsCache.parse(
     await props.searchParams,
   )
@@ -60,7 +63,7 @@ export default async function MessengerMessageTemplatesPage(props: {
     <Suspense>
       <MessengerMessageTemplatesTable
         channels={channels}
-        integrationMessenger={integrationMessenger}
+        integrationMessenger={withoutCredentials(integrationMessenger)}
         promises={promises}
       />
     </Suspense>

@@ -7,12 +7,13 @@ import { useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { toast } from "sonner"
 import { useWorkspaceId } from "@/hooks/routing"
+import type { WithoutCredentials } from "@/lib/without-credentials"
 import { reconnectMessengerAction } from "../actions/reconnect.action"
 
 export function MessengerReconnect({
   integrationMessenger,
 }: {
-  integrationMessenger: IntegrationMessengerModel
+  integrationMessenger: WithoutCredentials<IntegrationMessengerModel>
 }) {
   const t = useTranslations()
   const workspaceId = useWorkspaceId()

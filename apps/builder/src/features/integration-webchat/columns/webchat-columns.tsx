@@ -20,11 +20,14 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { CodeIcon, ExternalLinkIcon, MoreHorizontalIcon } from "lucide-react"
 import Link from "next/link"
 import type { useTranslations } from "next-intl"
+import type { WithoutCredentials } from "@/lib/without-credentials"
 import { EmbedCodeDialog } from "../dialogs/embed-code-dialog"
 
 type WebchatColumnsProps = {
   setRowAction: (
-    action: DataTableRowAction<IntegrationWebchatModel> | null,
+    action: DataTableRowAction<
+      WithoutCredentials<IntegrationWebchatModel>
+    > | null,
   ) => void
   t: ReturnType<typeof useTranslations>
   timeZone: string | undefined
@@ -34,7 +37,9 @@ export function getWebchatColumns({
   setRowAction,
   t,
   timeZone,
-}: WebchatColumnsProps): ColumnDef<IntegrationWebchatModel>[] {
+}: WebchatColumnsProps): ColumnDef<
+  WithoutCredentials<IntegrationWebchatModel>
+>[] {
   return [
     {
       accessorKey: "name",

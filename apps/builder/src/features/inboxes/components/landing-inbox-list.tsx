@@ -7,8 +7,11 @@ import { Card } from "@chatbotx.io/ui/components/ui/card"
 import { useTranslations } from "next-intl"
 import { InboxIcon } from "@/features/inboxes/components/inbox-icon"
 
+/** Only what the page renders: the public QR page never gets a full row. */
+export type LandingInbox = Pick<InboxModel, "id" | "name" | "channel">
+
 type InboxLink = {
-  inbox: InboxModel
+  inbox: LandingInbox
   url: string
 }
 
@@ -34,7 +37,7 @@ function QrLandingInboxItem({
   inbox,
   url,
 }: {
-  inbox: InboxModel
+  inbox: LandingInbox
   url: string
 }) {
   const t = useTranslations()

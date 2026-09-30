@@ -4,11 +4,12 @@ import type { IntegrationWebchatModel } from "@chatbotx.io/database/types"
 import type { Table } from "@tanstack/react-table"
 import { useTranslations } from "next-intl"
 import { AddChannelButton } from "@/features/inboxes/components/add-channel-button"
+import type { WithoutCredentials } from "@/lib/without-credentials"
 
 type WebchatTableToolbarActionsProps = {
   canCreate?: boolean
   workspaceId: string
-  table: Table<IntegrationWebchatModel>
+  table: Table<WithoutCredentials<IntegrationWebchatModel>>
   onOpenChange: (open: boolean) => void
 }
 

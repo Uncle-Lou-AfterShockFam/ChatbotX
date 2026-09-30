@@ -7,12 +7,13 @@ import { useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { toast } from "sonner"
 import { useWorkspaceId } from "@/hooks/routing"
+import type { WithoutCredentials } from "@/lib/without-credentials"
 import { disconnectThreadsAction } from "../actions/disconnect.action"
 
 export function ThreadsDisconnect({
   integrationThreads,
 }: {
-  integrationThreads: IntegrationThreadsModel
+  integrationThreads: WithoutCredentials<IntegrationThreadsModel>
 }) {
   const t = useTranslations()
   const router = useRouter()

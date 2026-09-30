@@ -32,6 +32,7 @@ import { useFieldArray } from "react-hook-form"
 import { toast } from "sonner"
 import { useFlowSelectOptions } from "@/features/flows/provider/flow-hook"
 import PersistentMenuField from "@/features/integration-webchat/components/persistent-menu-field"
+import type { WithoutCredentials } from "@/lib/without-credentials"
 import { updateInstagramAction } from "../actions/update-instagram-action"
 import {
   type ConversationStarter,
@@ -40,7 +41,7 @@ import {
 } from "../schema/action"
 
 type UpdateInstagramFormProps = {
-  integrationInstagram: IntegrationInstagramModel
+  integrationInstagram: WithoutCredentials<IntegrationInstagramModel>
 }
 
 export function UpdateInstagramForm({

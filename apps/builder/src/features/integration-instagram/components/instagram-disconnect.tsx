@@ -7,12 +7,13 @@ import { useAction } from "next-safe-action/hooks"
 import { useState } from "react"
 import { toast } from "sonner"
 import { DisconnectIntegrationDialog } from "@/features/common/components/disconnect-integration-dialog"
+import type { WithoutCredentials } from "@/lib/without-credentials"
 import { disconnectInstagramAction } from "../actions/disconnect-instagram.action"
 
 export function InstagramDisconnect({
   integrationInstagram,
 }: {
-  integrationInstagram: IntegrationInstagramModel
+  integrationInstagram: WithoutCredentials<IntegrationInstagramModel>
 }) {
   const t = useTranslations()
   const router = useRouter()

@@ -34,13 +34,14 @@ import { useFieldArray } from "react-hook-form"
 import { toast } from "sonner"
 import { useFlowSelectOptions } from "@/features/flows/provider/flow-hook"
 import { useWorkspaceId } from "@/hooks/routing"
+import type { WithoutCredentials } from "@/lib/without-credentials"
 import { updateWebchatAction } from "../actions/update-webchat.action"
 import { updateWebchatRequest } from "../schema/mutation"
 import AuthorizedDomainField from "./authorized-domain-field"
 import PersistentMenuField from "./persistent-menu-field"
 
 type UpdateWebchatFormProps = {
-  integrationWebchat: IntegrationWebchatModel | null
+  integrationWebchat: WithoutCredentials<IntegrationWebchatModel> | null
 }
 
 export function UpdateWebchatForm({

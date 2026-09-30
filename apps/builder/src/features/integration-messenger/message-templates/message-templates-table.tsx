@@ -40,6 +40,7 @@ import { useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import React, { useMemo, useState } from "react"
 import { toast } from "sonner"
+import type { WithoutCredentials } from "@/lib/without-credentials"
 import { deleteMessengerMessageTemplateAction } from "./actions/delete-message-template"
 import { CloneMessageTemplateDialog } from "./clone-message-template-dialog"
 import { MessengerTemplatePreview } from "./components/template-preview"
@@ -52,7 +53,7 @@ type Channel = {
 }
 
 type MessengerMessageTemplatesTableProps = {
-  integrationMessenger: IntegrationMessengerModel
+  integrationMessenger: WithoutCredentials<IntegrationMessengerModel>
   promises: Promise<{
     data: MessengerMessageTemplateResource[]
     pageCount: number

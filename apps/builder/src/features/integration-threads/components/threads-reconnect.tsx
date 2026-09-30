@@ -7,12 +7,13 @@ import { useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { toast } from "sonner"
 import { useWorkspaceId } from "@/hooks/routing"
+import type { WithoutCredentials } from "@/lib/without-credentials"
 import { reconnectThreadsAction } from "../actions/reconnect.action"
 
 export function ThreadsReconnect({
   integrationThreads,
 }: {
-  integrationThreads: IntegrationThreadsModel
+  integrationThreads: WithoutCredentials<IntegrationThreadsModel>
 }) {
   const t = useTranslations()
   const workspaceId = useWorkspaceId()

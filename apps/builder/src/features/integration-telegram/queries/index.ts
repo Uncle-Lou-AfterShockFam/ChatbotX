@@ -1,14 +1,18 @@
 import { telegramIntegrationService } from "@chatbotx.io/business"
 import type { IntegrationTelegramModel } from "@chatbotx.io/database/types"
+import {
+  type WithoutCredentials,
+  withoutCredentials,
+} from "@/lib/without-credentials"
 
 export const listIntegrationTelegrams = async ({
   where,
 }: {
   where: Partial<Pick<IntegrationTelegramModel, "workspaceId">>
-}): Promise<{ data: IntegrationTelegramModel[] }> => {
+}): Promise<{ data: WithoutCredentials<IntegrationTelegramModel>[] }> => {
   const data = await telegramIntegrationService.listByWorkspace(where)
 
-  return { data }
+  return { data: data.map(withoutCredentials) }
 }
 
 /** Internal lookup by botId — no auth check, for use in webhook handler only */
