@@ -2429,6 +2429,7 @@
       "createTask": "Create task",
       "completeTask": "Complete task",
       "sendDocumentForSignature": "署名用に書類を送信",
+      "sendPage": "ページを送信",
       "createInvoice": "Create invoice",
       "askForm": "Ask a form"
     },
@@ -7694,7 +7695,15 @@
     "linkTtlHours": "リンクの有効期間（時間）",
     "linkHint": "フローの「ページを送信」ステップは、各連絡先に個別のリンクを SMS またはメールで送ります。リンクはその連絡先の情報でページを表示し、有効期間が過ぎると使えなくなります。ページをアーカイブするとすべてのリンクが閉じます。",
     "deleteTitle": "このページを削除しますか？",
-    "deleteConfirm": "送信済みのリンクはすべて使えなくなります。この操作は元に戻せません。"
+    "deleteConfirm": "送信済みのリンクはすべて使えなくなります。この操作は元に戻せません。",
+    "step": {
+      "page": "ページ",
+      "hint": "連絡先の個別リンクをフィールド page_link に書き込みます。次の SMS またはメールのステップで '{{page_link}}' を送信してください。",
+      "noPages": "ページはまだありません。設定 > ページ で作成してください。",
+      "noPagePicked": "ページが選択されていません",
+      "ttl": "リンクの有効期間（時間）",
+      "ttlHint": "空欄 = ページ自体のリンク有効期間。"
+    }
   },
   "emailSuppression": {
     "title": "メール配信停止リスト",

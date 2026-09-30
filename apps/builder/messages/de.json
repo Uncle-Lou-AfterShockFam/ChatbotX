@@ -2429,6 +2429,7 @@
       "createTask": "Create task",
       "completeTask": "Complete task",
       "sendDocumentForSignature": "Dokument zur Unterschrift senden",
+      "sendPage": "Seite senden",
       "createInvoice": "Create invoice",
       "askForm": "Ask a form"
     },
@@ -7694,7 +7695,15 @@
     "linkTtlHours": "Link-Gültigkeit (Stunden)",
     "linkHint": "Der Flow-Schritt „Seite senden“ schickt jedem Kontakt per SMS oder E-Mail einen persönlichen Link. Er zeigt die Seite mit den Daten des Kontakts und funktioniert nach Ablauf der Gültigkeit nicht mehr. Das Archivieren der Seite schließt alle Links.",
     "deleteTitle": "Diese Seite löschen?",
-    "deleteConfirm": "Alle bereits gesendeten Links funktionieren dann nicht mehr. Dies kann nicht rückgängig gemacht werden."
+    "deleteConfirm": "Alle bereits gesendeten Links funktionieren dann nicht mehr. Dies kann nicht rückgängig gemacht werden.",
+    "step": {
+      "page": "Seite",
+      "hint": "Schreibt den persönlichen Link des Kontakts in das Feld page_link. Sende '{{page_link}}' im nächsten SMS- oder E-Mail-Schritt.",
+      "noPages": "Noch keine Seiten. Lege eine unter Einstellungen > Seiten an.",
+      "noPagePicked": "Keine Seite gewählt",
+      "ttl": "Link-Gültigkeit (Stunden)",
+      "ttlHint": "Leer = die Link-Gültigkeit der Seite."
+    }
   },
   "emailSuppression": {
     "title": "E-Mail-Sperrliste",

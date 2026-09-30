@@ -2571,6 +2571,7 @@
       "createTask": "Create task",
       "completeTask": "Complete task",
       "sendDocumentForSignature": "Gửi tài liệu để ký",
+      "sendPage": "Gửi trang",
       "createInvoice": "Create invoice",
       "askForm": "Ask a form"
     },
@@ -7694,7 +7695,15 @@
     "linkTtlHours": "Thời hạn liên kết (giờ)",
     "linkHint": "Bước Gửi trang trong luồng gửi cho mỗi liên hệ một liên kết riêng qua SMS hoặc email. Liên kết hiển thị trang với thông tin của liên hệ đó và ngừng hoạt động khi hết thời hạn. Lưu trữ trang sẽ đóng mọi liên kết.",
     "deleteTitle": "Xóa trang này?",
-    "deleteConfirm": "Mọi liên kết đã gửi sẽ ngừng hoạt động. Không thể hoàn tác."
+    "deleteConfirm": "Mọi liên kết đã gửi sẽ ngừng hoạt động. Không thể hoàn tác.",
+    "step": {
+      "page": "Trang",
+      "hint": "Ghi liên kết riêng của liên hệ vào trường page_link. Gửi '{{page_link}}' trong bước SMS hoặc email tiếp theo.",
+      "noPages": "Chưa có trang nào. Tạo trang trong Cài đặt > Trang.",
+      "noPagePicked": "Chưa chọn trang",
+      "ttl": "Thời hạn liên kết (giờ)",
+      "ttlHint": "Để trống = thời hạn liên kết của chính trang đó."
+    }
   },
   "emailSuppression": {
     "title": "Chặn email",

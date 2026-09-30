@@ -2429,6 +2429,7 @@
       "createTask": "Create task",
       "completeTask": "Complete task",
       "sendDocumentForSignature": "Enviar documento para assinatura",
+      "sendPage": "Enviar página",
       "createInvoice": "Create invoice",
       "askForm": "Ask a form"
     },
@@ -7694,7 +7695,15 @@
     "linkTtlHours": "Validade do link (horas)",
     "linkHint": "A etapa Enviar página de um fluxo envia a cada contato um link pessoal por SMS ou e-mail. Ele mostra a página com os dados do contato e para de funcionar ao fim da validade. Arquivar a página fecha todos os links.",
     "deleteTitle": "Excluir esta página?",
-    "deleteConfirm": "Todos os links já enviados vão parar de funcionar. Esta ação não pode ser desfeita."
+    "deleteConfirm": "Todos os links já enviados vão parar de funcionar. Esta ação não pode ser desfeita.",
+    "step": {
+      "page": "Página",
+      "hint": "Grava o link pessoal do contato no campo page_link. Envie '{{page_link}}' na próxima etapa de SMS ou e-mail.",
+      "noPages": "Nenhuma página ainda. Crie uma em Configurações > Páginas.",
+      "noPagePicked": "Nenhuma página escolhida",
+      "ttl": "Validade do link (horas)",
+      "ttlHint": "Vazio = a validade de link da própria página."
+    }
   },
   "emailSuppression": {
     "title": "Supressão de e-mail",

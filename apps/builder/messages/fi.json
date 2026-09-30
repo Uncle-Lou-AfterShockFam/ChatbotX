@@ -2429,6 +2429,7 @@
       "createTask": "Create task",
       "completeTask": "Complete task",
       "sendDocumentForSignature": "Lähetä asiakirja allekirjoitettavaksi",
+      "sendPage": "Lähetä sivu",
       "createInvoice": "Create invoice",
       "askForm": "Ask a form"
     },
@@ -7694,7 +7695,15 @@
     "linkTtlHours": "Linkin voimassaolo (tuntia)",
     "linkHint": "Työnkulun Lähetä sivu -vaihe lähettää jokaiselle yhteystiedolle henkilökohtaisen linkin tekstiviestinä tai sähköpostina. Se näyttää sivun yhteystiedon tiedoilla ja lakkaa toimimasta voimassaolon päätyttyä. Sivun arkistointi sulkee kaikki linkit.",
     "deleteTitle": "Poistetaanko tämä sivu?",
-    "deleteConfirm": "Kaikki jo lähetetyt linkit lakkaavat toimimasta. Toimintoa ei voi kumota."
+    "deleteConfirm": "Kaikki jo lähetetyt linkit lakkaavat toimimasta. Toimintoa ei voi kumota.",
+    "step": {
+      "page": "Sivu",
+      "hint": "Kirjoittaa yhteystiedon henkilökohtaisen linkin kenttään page_link. Lähetä '{{page_link}}' seuraavassa tekstiviesti- tai sähköpostivaiheessa.",
+      "noPages": "Ei vielä sivuja. Luo sivu kohdassa Asetukset > Sivut.",
+      "noPagePicked": "Sivua ei ole valittu",
+      "ttl": "Linkin voimassaolo (tuntia)",
+      "ttlHint": "Tyhjä = sivun oma linkin voimassaolo."
+    }
   },
   "emailSuppression": {
     "title": "Sähköpostiesto",

@@ -2429,6 +2429,7 @@
       "createTask": "Create task",
       "completeTask": "Complete task",
       "sendDocumentForSignature": "Document ter ondertekening sturen",
+      "sendPage": "Pagina versturen",
       "createInvoice": "Create invoice",
       "askForm": "Ask a form"
     },
@@ -7694,7 +7695,15 @@
     "linkTtlHours": "Geldigheid van de link (uren)",
     "linkHint": "De flowstap Pagina versturen stuurt elk contact een persoonlijke link per sms of e-mail. Die toont de pagina met de gegevens van dat contact en werkt niet meer na de geldigheid. Archiveren van de pagina sluit alle links.",
     "deleteTitle": "Deze pagina verwijderen?",
-    "deleteConfirm": "Alle al verstuurde links werken dan niet meer. Dit kan niet ongedaan worden gemaakt."
+    "deleteConfirm": "Alle al verstuurde links werken dan niet meer. Dit kan niet ongedaan worden gemaakt.",
+    "step": {
+      "page": "Pagina",
+      "hint": "Schrijft de persoonlijke link van het contact naar het veld page_link. Stuur '{{page_link}}' in de volgende sms- of e-mailstap.",
+      "noPages": "Nog geen pagina's. Maak er een aan via Instellingen > Pagina's.",
+      "noPagePicked": "Geen pagina gekozen",
+      "ttl": "Geldigheid van de link (uren)",
+      "ttlHint": "Leeg = de linkgeldigheid van de pagina zelf."
+    }
   },
   "emailSuppression": {
     "title": "E-mailblokkering",
