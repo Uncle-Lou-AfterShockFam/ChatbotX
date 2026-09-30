@@ -7678,7 +7678,10 @@
       "threadCampaignBroadcast": "Diffusion : {name}",
       "onNoThread": "S'il n'y a pas d'e-mail précédent",
       "onNoThreadNew": "Démarrer un nouveau fil",
-      "onNoThreadStop": "Ne pas envoyer et terminer la séquence pour ce contact"
+      "onNoThreadStop": "Ne pas envoyer et terminer la séquence pour ce contact",
+      "subjectPreview": "Aperçu : {text}",
+      "subjectPreviewEmpty": "Sans champs du contact : {text}",
+      "subjectPreviewError": "Erreur dans le modèle de fusion : {error}"
     }
   },
   "emailSuppression": {

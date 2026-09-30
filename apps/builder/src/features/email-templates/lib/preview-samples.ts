@@ -1,6 +1,9 @@
 import {
   collectRenderInputs,
   type EmailDocument,
+  mergePlain,
+  TemplateError,
+  templateError,
 } from "@chatbotx.io/email-document"
 
 /**
@@ -39,4 +42,35 @@ export function previewSampleVars(doc: EmailDocument): Record<string, string> {
     }
   }
   return vars
+}
+
+export type HeaderPreview =
+  | { ok: true; sample: string; empty: string }
+  | { ok: false; error: string }
+
+/**
+ * A subject/preheader as a send renders it (s227b: the same Liquid
+ * evaluator, plain-text mode), twice: with the sample contact, and with no
+ * contact fields at all - the `{% else %}` / fallback a bare contact gets.
+ */
+export function headerPreview(text: string): HeaderPreview | undefined {
+  if (!(text.includes("{{") || text.includes("{%"))) {
+    return
+  }
+  const invalid = templateError(text, "text")
+  if (invalid) {
+    return { ok: false, error: invalid }
+  }
+  try {
+    return {
+      ok: true,
+      sample: mergePlain(text, PREVIEW_SAMPLE_VALUES, new Set()),
+      empty: mergePlain(text, {}, new Set()),
+    }
+  } catch (error) {
+    if (error instanceof TemplateError) {
+      return { ok: false, error: error.message }
+    }
+    throw error
+  }
 }

@@ -7678,7 +7678,10 @@
       "threadCampaignBroadcast": "שידור: {name}",
       "onNoThread": "אם אין דוא\"ל קודם",
       "onNoThreadNew": "התחלת שרשור חדש",
-      "onNoThreadStop": "לא לשלוח, ולסיים את הרצף עבור איש הקשר הזה"
+      "onNoThreadStop": "לא לשלוח, ולסיים את הרצף עבור איש הקשר הזה",
+      "subjectPreview": "תצוגה מקדימה: {text}",
+      "subjectPreviewEmpty": "ללא שדות איש קשר: {text}",
+      "subjectPreviewError": "שגיאה בתבנית המיזוג: {error}"
     }
   },
   "emailSuppression": {

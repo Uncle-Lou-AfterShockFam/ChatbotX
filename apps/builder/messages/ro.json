@@ -7678,7 +7678,10 @@
       "threadCampaignBroadcast": "Difuzare: {name}",
       "onNoThread": "Dacă nu există un e-mail anterior",
       "onNoThreadNew": "Începe o conversație nouă",
-      "onNoThreadStop": "Nu trimite și încheie secvența pentru acest contact"
+      "onNoThreadStop": "Nu trimite și încheie secvența pentru acest contact",
+      "subjectPreview": "Previzualizare: {text}",
+      "subjectPreviewEmpty": "Fără câmpurile contactului: {text}",
+      "subjectPreviewError": "Eroare în șablonul de îmbinare: {error}"
     }
   },
   "emailSuppression": {

@@ -32,7 +32,7 @@ export type RenderContext = {
 
 export const UNSUBSCRIBE_PLACEHOLDER = "<<unsubscribeUrl>>"
 const UNSUBSCRIBE_SENTINEL = "__UNSUBSCRIBE_URL__"
-const HAS_TOKEN = /\{\{/
+const HAS_TOKEN = /\{\{|\{%/
 const HTTP_URL = /^https?:\/\//i
 const AMP_ENTITY = /&amp;/g
 const HTTP_HREF = /(\shref=")(https?:\/\/[^"]*)(")/gi

@@ -15,6 +15,7 @@ import {
   leafBlocks,
   parseDocument,
   type RenderAsset,
+  TemplateError,
 } from "@chatbotx.io/email-document"
 import { renderEmail } from "@chatbotx.io/email-document/render-email"
 import { uploader } from "@chatbotx.io/filesystem"
@@ -396,6 +397,11 @@ export async function prepareStepDocument(props: {
   const { step, workspaceId } = props
   const doc = await loadDocument(step, workspaceId)
   const inputs = collectRenderInputs(doc)
+  if (inputs.invalid) {
+    throw new EmailContentError(
+      `the email has an invalid merge template: ${inputs.invalid}`,
+    )
+  }
 
   const vars =
     inputs.tokenNames.length > 0
@@ -533,14 +539,26 @@ export async function renderStepDocument(props: {
     }
   }
 
-  const rendered = await renderEmail(doc, {
-    vars: prepared.vars,
-    assets: prepared.assets,
-    link: (url, blockId) => links.get(`${blockId} ${url}`) ?? url,
-    button: (blockId) => buttons.get(blockId) ?? "",
-    unsubscribeUrl: props.unsubscribeUrl,
-    openPixelUrl: token ? `${appUrl}/email-topic/open?r=${token}` : undefined,
-  })
+  let rendered: Awaited<ReturnType<typeof renderEmail>>
+  try {
+    rendered = await renderEmail(doc, {
+      vars: prepared.vars,
+      assets: prepared.assets,
+      link: (url, blockId) => links.get(`${blockId} ${url}`) ?? url,
+      button: (blockId) => buttons.get(blockId) ?? "",
+      unsubscribeUrl: props.unsubscribeUrl,
+      openPixelUrl: token ? `${appUrl}/email-topic/open?r=${token}` : undefined,
+    })
+  } catch (error) {
+    // A render limit (time, memory) is content, never a retry.
+    if (error instanceof TemplateError) {
+      throw new EmailContentError(
+        `the email's merge template could not render: ${error.message}`,
+        { cause: error },
+      )
+    }
+    throw error
+  }
   if (rendered.missing.length > 0) {
     logger.info(
       { workspaceId, missing: rendered.missing.slice(0, 20) },

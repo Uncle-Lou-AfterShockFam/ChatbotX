@@ -7678,7 +7678,10 @@
       "threadCampaignBroadcast": "Utskick: {name}",
       "onNoThread": "Om det inte finns något tidigare e-postmeddelande",
       "onNoThreadNew": "Starta en ny tråd",
-      "onNoThreadStop": "Skicka inte, och avsluta sekvensen för den här kontakten"
+      "onNoThreadStop": "Skicka inte, och avsluta sekvensen för den här kontakten",
+      "subjectPreview": "Förhandsvisning: {text}",
+      "subjectPreviewEmpty": "Utan kontaktfält: {text}",
+      "subjectPreviewError": "Fel i kopplingsmallen: {error}"
     }
   },
   "emailSuppression": {

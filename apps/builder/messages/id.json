@@ -7678,7 +7678,10 @@
       "threadCampaignBroadcast": "Siaran: {name}",
       "onNoThread": "Jika tidak ada email sebelumnya",
       "onNoThreadNew": "Mulai utas baru",
-      "onNoThreadStop": "Jangan kirim, dan akhiri urutan untuk kontak ini"
+      "onNoThreadStop": "Jangan kirim, dan akhiri urutan untuk kontak ini",
+      "subjectPreview": "Pratinjau: {text}",
+      "subjectPreviewEmpty": "Tanpa kolom kontak: {text}",
+      "subjectPreviewError": "Kesalahan templat gabungan: {error}"
     }
   },
   "emailSuppression": {

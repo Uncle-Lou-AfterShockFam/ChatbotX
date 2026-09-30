@@ -50,6 +50,7 @@ import {
 } from "./send-email-document"
 import { buildLineEmail, resolveEmailLine } from "./send-email-line"
 import { isSendSuppressed, SUPPRESSED_ERROR } from "./send-email-suppression"
+import { legacyElementsError, mergeStepText } from "./send-email-text"
 import {
   broadcastIdOf,
   planThread,
@@ -91,10 +92,7 @@ async function resolveElements({
       case "heading":
       case "text":
       case "code": {
-        const resolvedText = await contactVariableService.replaceAll({
-          text: el.text,
-          variables,
-        })
+        const resolvedText = await mergeStepText({ text: el.text, variables })
         const text = resolvedText.replaceAll(
           UNSUBSCRIBE_PLACEHOLDER,
           unsubscribeUrl,
@@ -524,10 +522,30 @@ export async function sendEmail({
     recipient,
     variables.contact?.email,
   )
-  const [subject, preheader] = await Promise.all([
-    contactVariableService.replaceAll({ text: step.subject, variables }),
-    contactVariableService.replaceAll({ text: step.preheader, variables }),
-  ])
+  // s227b: subject + preheader are Liquid (the document evaluator, plain-text
+  // mode); a template that cannot render fails the send closed as content,
+  // before anything is recorded. Legacy element text is checked here too.
+  let subject = ""
+  let preheader = ""
+  if (!contentError) {
+    try {
+      ;[subject, preheader] = await Promise.all([
+        mergeStepText({ text: step.subject, variables }),
+        mergeStepText({ text: step.preheader, variables }),
+      ])
+      const legacyInvalid = isDocument
+        ? undefined
+        : legacyElementsError(step.elements)
+      if (legacyInvalid) {
+        throw new EmailContentError(`invalid merge template: ${legacyInvalid}`)
+      }
+    } catch (err) {
+      if (!(err instanceof EmailContentError)) {
+        throw err
+      }
+      contentError = err
+    }
+  }
   // Outreach B-1 (s225b): a `text` step on a line goes out text/plain only,
   // with no open pixel or signed links. SMTP sends stay html.
   const format = lineContactInbox && step.format === "text" ? "text" : "html"

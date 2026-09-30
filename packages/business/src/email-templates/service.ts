@@ -23,6 +23,7 @@ import {
   type EmailDocument,
   parseDocument,
   type RenderAsset,
+  TemplateError,
 } from "@chatbotx.io/email-document"
 import { renderEmail } from "@chatbotx.io/email-document/render-email"
 import { createId } from "@chatbotx.io/utils"
@@ -288,7 +289,15 @@ export class EmailTemplateService extends BaseService {
       }
       throw error
     }
-    const { assetIds } = collectRenderInputs(document)
+    const { assetIds, invalid } = collectRenderInputs(document)
+    // s227b: a Liquid template that cannot render is an editor issue, never
+    // a 500 - a send of the same document fails closed as content.
+    if (invalid) {
+      return {
+        ok: false,
+        issues: [{ path: "", message: `Merge template: ${invalid}` }],
+      }
+    }
     const rows = await ownedFiles(workspaceId, assetIds, tx)
     const assets: Record<string, RenderAsset> = {}
     if (rows.length > 0) {
@@ -302,10 +311,21 @@ export class EmailTemplateService extends BaseService {
         }
       }
     }
-    const rendered = await renderEmail(document, {
-      vars: props.vars ?? {},
-      assets,
-    })
+    let rendered: Awaited<ReturnType<typeof renderEmail>>
+    try {
+      rendered = await renderEmail(document, {
+        vars: props.vars ?? {},
+        assets,
+      })
+    } catch (error) {
+      if (error instanceof TemplateError) {
+        return {
+          ok: false,
+          issues: [{ path: "", message: `Merge template: ${error.message}` }],
+        }
+      }
+      throw error
+    }
     return {
       ok: true,
       html: rendered.html,

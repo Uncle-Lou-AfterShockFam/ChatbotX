@@ -7678,7 +7678,10 @@
       "threadCampaignBroadcast": "Toplu gönderim: {name}",
       "onNoThread": "Önceki e-posta yoksa",
       "onNoThreadNew": "Yeni konu dizisi başlat",
-      "onNoThreadStop": "Gönderme ve bu kişi için diziyi sonlandır"
+      "onNoThreadStop": "Gönderme ve bu kişi için diziyi sonlandır",
+      "subjectPreview": "Önizleme: {text}",
+      "subjectPreviewEmpty": "Kişi alanları olmadan: {text}",
+      "subjectPreviewError": "Birleştirme şablonu hatası: {error}"
     }
   },
   "emailSuppression": {

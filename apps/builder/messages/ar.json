@@ -7678,7 +7678,10 @@
       "threadCampaignBroadcast": "بث: {name}",
       "onNoThread": "إذا لم يوجد بريد سابق",
       "onNoThreadNew": "بدء سلسلة جديدة",
-      "onNoThreadStop": "عدم الإرسال وإنهاء التسلسل لجهة الاتصال هذه"
+      "onNoThreadStop": "عدم الإرسال وإنهاء التسلسل لجهة الاتصال هذه",
+      "subjectPreview": "معاينة: {text}",
+      "subjectPreviewEmpty": "بدون حقول جهة الاتصال: {text}",
+      "subjectPreviewError": "خطأ في قالب الدمج: {error}"
     }
   },
   "emailSuppression": {

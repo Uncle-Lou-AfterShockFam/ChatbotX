@@ -7678,7 +7678,10 @@
       "threadCampaignBroadcast": "Difusión: {name}",
       "onNoThread": "Si no hay un correo anterior",
       "onNoThreadNew": "Iniciar un hilo nuevo",
-      "onNoThreadStop": "No enviar y terminar la secuencia para este contacto"
+      "onNoThreadStop": "No enviar y terminar la secuencia para este contacto",
+      "subjectPreview": "Vista previa: {text}",
+      "subjectPreviewEmpty": "Sin campos del contacto: {text}",
+      "subjectPreviewError": "Error en la plantilla de combinación: {error}"
     }
   },
   "emailSuppression": {

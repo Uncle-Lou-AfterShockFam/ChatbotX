@@ -33,6 +33,7 @@ import { useCallback, useMemo, useRef } from "react"
 import { useFieldArray, useFormContext, useWatch } from "react-hook-form"
 import { TiptapEditorField } from "@/components/tiptap/tiptap-editor-field"
 import { useOmnichannelBroadcastSelectOptions } from "@/features/contact-filter/components/use-workspace-option-sources"
+import { headerPreview } from "@/features/email-templates/lib/preview-samples"
 import { useEmailTemplates } from "@/features/email-templates/provider/email-template-hooks"
 import { useEmailTopicSelectOptions } from "@/features/email-topics/provider/email-topic-hook"
 import {
@@ -311,6 +312,7 @@ export default function EmailStepEditor(props: EmailStepEditorProps) {
         name={`${parentName}.subject`}
         required
       />
+      <HeaderPreviewLine name={`${parentName}.subject`} />
       <TiptapEditorField
         includeBotFieldVariables
         label={t("fields.preheader.label")}
@@ -427,6 +429,41 @@ export default function EmailStepEditor(props: EmailStepEditorProps) {
           </DropdownMenu>
         </>
       )}
+    </div>
+  )
+}
+
+/** s227b: what a Liquid subject renders to, with and without contact fields. */
+function HeaderPreviewLine({ name }: { name: string }) {
+  const t = useTranslations()
+  const { control } = useFormContext()
+  const text = useWatch({ control, name }) as unknown
+  const preview = useMemo(
+    () => (typeof text === "string" ? headerPreview(text) : undefined),
+    [text],
+  )
+  if (!preview) {
+    return null
+  }
+  if (!preview.ok) {
+    return (
+      <p
+        className="-mt-2 text-destructive text-xs"
+        data-testid="subject-preview"
+      >
+        {t("emailTemplates.step.subjectPreviewError", { error: preview.error })}
+      </p>
+    )
+  }
+  return (
+    <div
+      className="-mt-2 text-muted-foreground text-xs"
+      data-testid="subject-preview"
+    >
+      <p>{t("emailTemplates.step.subjectPreview", { text: preview.sample })}</p>
+      <p>
+        {t("emailTemplates.step.subjectPreviewEmpty", { text: preview.empty })}
+      </p>
     </div>
   )
 }

@@ -7678,7 +7678,10 @@
       "threadCampaignBroadcast": "Transmissão: {name}",
       "onNoThread": "Se não houver e-mail anterior",
       "onNoThreadNew": "Iniciar uma nova conversa",
-      "onNoThreadStop": "Não enviar e encerrar a sequência para este contato"
+      "onNoThreadStop": "Não enviar e encerrar a sequência para este contato",
+      "subjectPreview": "Prévia: {text}",
+      "subjectPreviewEmpty": "Sem campos do contato: {text}",
+      "subjectPreviewError": "Erro no modelo de mesclagem: {error}"
     }
   },
   "emailSuppression": {

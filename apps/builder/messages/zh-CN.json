@@ -7678,7 +7678,10 @@
       "threadCampaignBroadcast": "群发:{name}",
       "onNoThread": "如果没有较早的邮件",
       "onNoThreadNew": "开始新会话",
-      "onNoThreadStop": "不发送,并为此联系人结束序列"
+      "onNoThreadStop": "不发送,并为此联系人结束序列",
+      "subjectPreview": "预览:{text}",
+      "subjectPreviewEmpty": "无联系人字段:{text}",
+      "subjectPreviewError": "合并模板错误:{error}"
     }
   },
   "emailSuppression": {

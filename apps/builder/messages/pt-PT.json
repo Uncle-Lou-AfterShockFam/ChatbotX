@@ -7678,7 +7678,10 @@
       "threadCampaignBroadcast": "Difusão: {name}",
       "onNoThread": "Se não houver e-mail anterior",
       "onNoThreadNew": "Iniciar uma nova conversa",
-      "onNoThreadStop": "Não enviar e terminar a sequência para este contacto"
+      "onNoThreadStop": "Não enviar e terminar a sequência para este contacto",
+      "subjectPreview": "Pré-visualização: {text}",
+      "subjectPreviewEmpty": "Sem campos do contacto: {text}",
+      "subjectPreviewError": "Erro no modelo de intercalação: {error}"
     }
   },
   "emailSuppression": {
