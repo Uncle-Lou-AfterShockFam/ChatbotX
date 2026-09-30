@@ -1,4 +1,4 @@
-"use server"
+import "server-only"
 
 import { aiAgentService } from "@chatbotx.io/business"
 import type { AIAgentModel } from "@chatbotx.io/database/types"

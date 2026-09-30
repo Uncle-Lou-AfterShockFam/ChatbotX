@@ -1,4 +1,4 @@
-"use server"
+import "server-only"
 
 import { integrationWebchatService } from "@chatbotx.io/business"
 import type { IntegrationWebchatModel } from "@chatbotx.io/database/types"

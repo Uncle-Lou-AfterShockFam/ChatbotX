@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
-import { dirname, join } from "node:path"
+import { dirname, join, sep } from "node:path"
 import ts from "typescript"
 import { describe, expect, test } from "vitest"
 
@@ -10,6 +10,8 @@ const SRC_ROOT = join(APP_ROOT, "src")
 const TS_LIKE_EXTENSION_PATTERN = /\.(ts|tsx)$/
 const USE_CLIENT_DIRECTIVE_PATTERN = /^["']use client["']\s*;?\s*$/
 const USE_SERVER_DIRECTIVE_PATTERN = /^["']use server["']\s*;?\s*$/
+const SERVER_ONLY_IMPORT_PATTERN = /^import ["']server-only["']/m
+const QUERIES_DIR_SEGMENT = `${sep}queries${sep}`
 // Matches a relative or `@/features/<feature>` specifier whose last path
 // segment is exactly `queries`, or a direct file inside such a directory
 // (e.g. `../queries`, `./queries/files`, `@/features/tags/queries`) — the
@@ -92,9 +94,8 @@ function resolveModuleSpecifier(importingFilePath: string, specifier: string) {
   return null
 }
 
-/** True if the resolved file's leading directive is "use server". */
-function isUseServerFile(resolvedPath: string) {
-  const source = readFileSync(resolvedPath, "utf8")
+/** True if the source's leading directive is "use server". */
+function hasUseServerDirective(source: string) {
   for (const line of source.split("\n")) {
     const trimmed = line.trim()
     if (trimmed === "" || trimmed.startsWith("//")) {
@@ -103,6 +104,14 @@ function isUseServerFile(resolvedPath: string) {
     return USE_SERVER_DIRECTIVE_PATTERN.test(trimmed)
   }
   return false
+}
+
+/** True if the resolved file is a server boundary: "use server" or `import "server-only"`. */
+function isServerBoundaryFile(resolvedPath: string) {
+  const source = readFileSync(resolvedPath, "utf8")
+  return (
+    hasUseServerDirective(source) || SERVER_ONLY_IMPORT_PATTERN.test(source)
+  )
 }
 
 /** True if this import/export clause pulls in at least one runtime value. */
@@ -162,7 +171,7 @@ function findQueriesValueImports(filePath: string, source: string) {
     // barrel, which is the adapter surface itself — flag it. An
     // unresolvable specifier is flagged conservatively rather than silently
     // skipped.
-    if (!resolved || isUseServerFile(resolved)) {
+    if (!resolved || isServerBoundaryFile(resolved)) {
       offenders.push(specifier)
     }
   }
@@ -182,6 +191,41 @@ describe("client components do not value-import features/*/queries modules", () 
         (specifier) => `${filePath} -> "${specifier}"`,
       )
     })
+
+    expect(offenders).toEqual([])
+  })
+})
+
+// s232a: a "use server" queries module turns every export into a network-
+// callable Server Action, and several of these take a caller-supplied
+// workspaceId/userId with no membership check (listWorkspaceMembers,
+// getAllWorkspaceMembers, findIntegrationWebchat returned the full row with
+// `auth`). Queries are server-only reads: `import "server-only"`, never
+// "use server". Mutations that must be callable from the browser belong in
+// `actions/` behind the safe-action clients (lib/safe-action.ts).
+describe('features/*/queries modules are never "use server"', () => {
+  test("the directive detector fires on a fixture", () => {
+    expect(
+      hasUseServerDirective('// note\n"use server"\n\nexport const x = 1'),
+    ).toBe(true)
+    expect(hasUseServerDirective("'use server';\n")).toBe(true)
+    expect(hasUseServerDirective('import "server-only"\n')).toBe(false)
+    expect(SERVER_ONLY_IMPORT_PATTERN.test('import "server-only"\n')).toBe(true)
+  })
+
+  test("the scan sees the queries modules", () => {
+    const queriesFiles = collectSourceFiles(SRC_ROOT).filter((filePath) =>
+      filePath.includes(QUERIES_DIR_SEGMENT),
+    )
+    expect(queriesFiles.length).toBeGreaterThan(10)
+  })
+
+  test('no file under a queries/ directory carries "use server"', () => {
+    const offenders = collectSourceFiles(SRC_ROOT).filter(
+      (filePath) =>
+        filePath.includes(QUERIES_DIR_SEGMENT) &&
+        hasUseServerDirective(readFileSync(filePath, "utf8")),
+    )
 
     expect(offenders).toEqual([])
   })

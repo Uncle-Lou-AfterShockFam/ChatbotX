@@ -1,4 +1,4 @@
-"use server"
+import "server-only"
 
 import { workspaceMemberService } from "@chatbotx.io/business"
 import type {

@@ -1,4 +1,4 @@
-"use server"
+import "server-only"
 
 import { aiFileService } from "@chatbotx.io/business"
 import { assertCurrentUserCanAccessChatbot } from "@/lib/auth/utils"
