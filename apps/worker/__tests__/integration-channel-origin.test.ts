@@ -21,7 +21,7 @@ describe("isChannelOriginatedJob", () => {
     expect(isChannelOriginatedJob(jobData)).toBe(true)
   })
 
-  test("keeps questionnaire challenge replies in webhook context", () => {
+  test("keeps step challenge replies in webhook context", () => {
     const jobData = {
       type: IntegrationJobAction.runChallenge,
       data: {

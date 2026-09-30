@@ -60,7 +60,6 @@ import { pipelinesPublicRouter } from "@/features/pipelines/api/public"
 import { productCategoriesPublicRouter } from "@/features/product-categories/api/public"
 import { productsPublicRouter } from "@/features/products/api/public"
 import { qrCodesPublicRouter } from "@/features/qr-codes/api/public"
-import { questionnairesPublicRouter } from "@/features/questionnaires/api/public"
 import { reflinksPublicRouter } from "@/features/reflinks/api/public"
 import { savedRepliesPublicRouter } from "@/features/saved-replies/api/public"
 import { sequencesPublicRouter } from "@/features/sequences/api/public"
@@ -124,7 +123,6 @@ export const publicRouter = {
   productCategories: productCategoriesPublicRouter,
   products: productsPublicRouter,
   qrCodes: qrCodesPublicRouter,
-  questionnaires: questionnairesPublicRouter,
   reflinks: reflinksPublicRouter,
   savedReplies: savedRepliesPublicRouter,
   schemas: schemasPublicRouter,

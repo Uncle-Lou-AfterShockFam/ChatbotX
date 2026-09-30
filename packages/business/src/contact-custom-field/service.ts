@@ -75,7 +75,7 @@ type SetValuesInput = {
    */
   contactInboxId?: string
   /**
-   * s201: an automated source (questionnaire, AI tool, spreadsheet, external
+   * s201: an automated source (form, AI tool, spreadsheet, external
    * request, WhatsApp flow) whose value is not one of a select / multiSelect
    * field's options SKIPS that field (logged) instead of failing the whole
    * batch. Direct user and API writes leave this off and get the typed 400.

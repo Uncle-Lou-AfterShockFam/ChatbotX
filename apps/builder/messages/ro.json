@@ -48,7 +48,6 @@
       "callApi": "Solicitare API externă",
       "make": "Make",
       "triggers": "Declanșatoare",
-      "questionnaires": "Chestionare",
       "setUpCoupon": "Configurează cuponul",
       "markCouponUsed": "Marchează cuponul ca utilizat",
       "executeJavascript": "Execută JavaScript",
@@ -5001,66 +5000,6 @@
       "wrongType": "Acest tip de fișier nu este acceptat.",
       "failed": "Fișierul nu a putut fi încărcat. Încearcă din nou.",
       "previewOnly": "Fișierele pot fi adăugate în formularul publicat."
-    }
-  },
-  "questionnaires": {
-    "title": "Chestionare",
-    "description": "Creează și gestionează chestionare pentru contactele tale.",
-    "singular": "Chestionar",
-    "submission": "Trimitere",
-    "addNew": "Adaugă nou",
-    "applicants": "Candidați",
-    "generalSettings": "Setări generale",
-    "triggerFlow": "Declanșează fluxul la finalizarea chestionarului",
-    "enableScore": "Acordă puncte pentru fiecare întrebare la care s-a răspuns.",
-    "enableRetryMessages": "Personalizează mesajele de reîncercare în caz de eșec al răspunsului.",
-    "enableCustomFieldMapping": "Salvează datele în câmpuri personalizate.",
-    "question": "Întrebare",
-    "activeQuestion": "Activ",
-    "questionImage": "Imagine întrebare",
-    "questionImageHint": "Imagine opțională trimisă cu această întrebare.",
-    "responseType": "Tip răspuns",
-    "points": "Puncte",
-    "retryMessage": "Mesaj de reîncercare dacă răspunsul este invalid",
-    "defaultRetryMessages": {
-      "text": "Ceea ce ai introdus nu este un text valid. Te rugăm să încerci din nou",
-      "number": "Ceea ce ai introdus nu este un număr valid. Te rugăm să încerci din nou",
-      "email": "Ceea ce ai introdus nu este un e-mail valid. Te rugăm să încerci din nou",
-      "phone": "Ceea ce ai introdus nu este un număr de telefon valid. Te rugăm să încerci din nou",
-      "multipleChoice": "Ceea ce ai introdus nu este o opțiune validă. Te rugăm să încerci din nou"
-    },
-    "customField": "Salvează răspunsul într-un câmp personalizat sau de sistem",
-    "options": "Opțiuni",
-    "mode": "Mod",
-    "completed": "Finalizat",
-    "completionRate": "Rata de finalizare",
-    "date": "Dată",
-    "inbox": "Mesaje primite",
-    "unknownContact": "Contact necunoscut",
-    "noAnswers": "Niciun răspuns",
-    "responseTypes": {
-      "text": "Text",
-      "number": "Număr",
-      "email": "E-mail",
-      "phone": "Telefon",
-      "multipleChoice": "Alegere multiplă"
-    },
-    "flowModes": {
-      "start": "Începe chestionarul",
-      "end": "Încheie chestionarul",
-      "deleteApplicant": "Șterge candidatul"
-    },
-    "dialogDescriptions": {
-      "create": "Denumește chestionarul înainte de a adăuga întrebări.",
-      "rename": "Actualizează numele chestionarului afișat în liste și fluxuri.",
-      "flowStep": "Alege cum interacționează acest pas de flux cu un chestionar."
-    },
-    "status": {
-      "inProgress": "În curs",
-      "completed": "Finalizat",
-      "cancelled": "Anulat",
-      "failed": "Eșuat",
-      "timeout": "Timp expirat"
     }
   },
   "appointmentScheduling": {

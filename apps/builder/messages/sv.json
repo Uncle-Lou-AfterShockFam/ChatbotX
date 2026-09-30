@@ -3269,7 +3269,6 @@
       "optInEmail": "Anmäl till e-post",
       "optOutEmail": "Avanmäl från e-post",
       "performAction": "Utför åtgärd",
-      "questionnaires": "Frågeformulär",
       "removeContactTag": "Ta bort kontakttagg",
       "sendAudio": "Skicka ljud",
       "sendCard": "Skicka kort",
@@ -5133,66 +5132,6 @@
       "failed": "Filen kunde inte laddas upp. Försök igen.",
       "previewOnly": "Filer kan läggas till i det publicerade formuläret."
     }
-  },
-  "questionnaires": {
-    "activeQuestion": "Aktiv",
-    "addNew": "Lägg till nytt",
-    "applicants": "Svarande",
-    "completed": "Slutfört",
-    "completionRate": "Slutförandegrad",
-    "customField": "Spara svaret i ett anpassat fält eller systemfält",
-    "date": "Datum",
-    "defaultRetryMessages": {
-      "email": "Det du har angett är inte en giltig e-postadress. Försök igen",
-      "multipleChoice": "Det du har angett är inte ett giltigt alternativ. Försök igen",
-      "number": "Det du har angett är inte ett giltigt tal. Försök igen",
-      "phone": "Det du har angett är inte ett giltigt telefonnummer. Försök igen",
-      "text": "Det du har angett är inte giltig text. Försök igen"
-    },
-    "description": "Skapa och hantera frågeformulär för dina kontakter.",
-    "dialogDescriptions": {
-      "create": "Namnge frågeformuläret innan du lägger till frågor.",
-      "flowStep": "Välj hur detta flödessteg samverkar med ett frågeformulär.",
-      "rename": "Uppdatera frågeformulärets namn som visas i listor och flöden."
-    },
-    "enableCustomFieldMapping": "Spara data i anpassade fält.",
-    "enableRetryMessages": "Anpassa meddelanden för nya försök när ett svar misslyckas.",
-    "enableScore": "Ge poäng för varje besvarad fråga.",
-    "flowModes": {
-      "deleteApplicant": "Ta bort svarande",
-      "end": "Avsluta frågeformulär",
-      "start": "Starta frågeformulär"
-    },
-    "generalSettings": "Allmänna inställningar",
-    "inbox": "Inkorg",
-    "mode": "Läge",
-    "noAnswers": "Inga svar",
-    "options": "Alternativ",
-    "points": "Poäng",
-    "question": "Fråga",
-    "questionImage": "Frågebild",
-    "questionImageHint": "Valfri bild som skickas med den här frågan.",
-    "responseType": "Svarstyp",
-    "responseTypes": {
-      "email": "E-post",
-      "multipleChoice": "Flervalsfråga",
-      "number": "Tal",
-      "phone": "Telefon",
-      "text": "Text"
-    },
-    "retryMessage": "Meddelande för nytt försök om svaret är ogiltigt",
-    "singular": "Frågeformulär",
-    "status": {
-      "cancelled": "Avbrutet",
-      "completed": "Slutfört",
-      "failed": "Misslyckat",
-      "inProgress": "Pågår",
-      "timeout": "Tidsgränsen har överskridits"
-    },
-    "submission": "Inlämning",
-    "title": "Frågeformulär",
-    "triggerFlow": "Utlös flödet genom att slutföra frågeformuläret",
-    "unknownContact": "Okänd kontakt"
   },
   "reflinks": {
     "description": "Nyckelordslänkar som startar flöden och samlar in referensnyttolaster från kanaler.",

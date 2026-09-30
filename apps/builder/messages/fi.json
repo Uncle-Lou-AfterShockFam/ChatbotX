@@ -2330,7 +2330,6 @@
       "callApi": "Ulkoinen API-pyyntö",
       "make": "Make",
       "triggers": "Käynnistimet",
-      "questionnaires": "Kyselyt",
       "setUpCoupon": "Määritä kuponki",
       "markCouponUsed": "Merkitse kuponki käytetyksi",
       "executeJavascript": "Suorita JavaScript",
@@ -5001,66 +5000,6 @@
       "wrongType": "Tätä tiedostotyyppiä ei hyväksytä.",
       "failed": "Tiedostoa ei voitu ladata. Yritä uudelleen.",
       "previewOnly": "Tiedostoja voi lisätä julkaistussa lomakkeessa."
-    }
-  },
-  "questionnaires": {
-    "title": "Kyselylomakkeet",
-    "description": "Luo ja hallitse kyselylomakkeita yhteystiedoillesi.",
-    "singular": "Kyselylomake",
-    "submission": "Vastaus",
-    "addNew": "Lisää uusi",
-    "applicants": "Vastaajat",
-    "generalSettings": "Yleiset asetukset",
-    "triggerFlow": "Käynnistä flow täyttämällä kyselylomake",
-    "enableScore": "Anna pisteitä jokaisesta vastatusta kysymyksestä.",
-    "enableRetryMessages": "Mukauta uudelleenyritysviestejä, jos vastaus epäonnistuu.",
-    "enableCustomFieldMapping": "Tallenna tiedot mukautettuihin kenttiin.",
-    "question": "Kysymys",
-    "activeQuestion": "Aktiivinen",
-    "questionImage": "Kysymyksen kuva",
-    "questionImageHint": "Tämän kysymyksen mukana lähetettävä valinnainen kuva.",
-    "responseType": "Vastaustyyppi",
-    "points": "Pisteet",
-    "retryMessage": "Uudelleenyritysviesti, jos vastaus on virheellinen",
-    "defaultRetryMessages": {
-      "text": "Kirjoittamasi arvo ei ole kelvollista tekstiä. Yritä uudelleen",
-      "number": "Kirjoittamasi arvo ei ole kelvollinen numero. Yritä uudelleen",
-      "email": "Kirjoittamasi arvo ei ole kelvollinen sähköpostiosoite. Yritä uudelleen",
-      "phone": "Kirjoittamasi arvo ei ole kelvollinen puhelinnumero. Yritä uudelleen",
-      "multipleChoice": "Kirjoittamasi arvo ei ole kelvollinen vaihtoehto. Yritä uudelleen"
-    },
-    "customField": "Tallenna vastaus mukautettuun tai järjestelmäkenttään",
-    "options": "Vaihtoehdot",
-    "mode": "Tila",
-    "completed": "Valmis",
-    "completionRate": "Valmistumisaste",
-    "date": "Päivämäärä",
-    "inbox": "Saapuneet",
-    "unknownContact": "Tuntematon yhteystieto",
-    "noAnswers": "Ei vastauksia",
-    "responseTypes": {
-      "text": "Teksti",
-      "number": "Numero",
-      "email": "Sähköposti",
-      "phone": "Puhelin",
-      "multipleChoice": "Monivalinta"
-    },
-    "flowModes": {
-      "start": "Aloita kyselylomake",
-      "end": "Päätä kyselylomake",
-      "deleteApplicant": "Poista vastaaja"
-    },
-    "dialogDescriptions": {
-      "create": "Nimeä kyselylomake ennen kysymysten lisäämistä.",
-      "rename": "Päivitä luetteloissa ja flow'issa näkyvä kyselylomakkeen nimi.",
-      "flowStep": "Valitse, miten tämä flow-vaihe toimii kyselylomakkeen kanssa."
-    },
-    "status": {
-      "inProgress": "Käynnissä",
-      "completed": "Valmis",
-      "cancelled": "Peruutettu",
-      "failed": "Epäonnistui",
-      "timeout": "Aikakatkaisu"
     }
   },
   "facebookCommentAutomation": {

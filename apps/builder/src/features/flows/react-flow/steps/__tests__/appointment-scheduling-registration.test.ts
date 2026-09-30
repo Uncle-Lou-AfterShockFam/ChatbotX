@@ -40,13 +40,13 @@ describe("appointmentScheduling step registration", () => {
     )
   })
 
-  test("appears above questionnaires in the action menu", () => {
+  test("appears above the tools group in the action menu", () => {
     const source = readFileSync(
       "src/features/flows/react-flow/nodes/perform-action/menu.tsx",
       "utf8",
     )
     expect(source.indexOf("stepTypes.enum.appointmentScheduling")).toBeLessThan(
-      source.indexOf("stepTypes.enum.questionnaires"),
+      source.indexOf('t("flows.actions.tools")'),
     )
   })
 })

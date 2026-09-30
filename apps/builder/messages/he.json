@@ -340,7 +340,6 @@
       "callApi": "בקשת API חיצונית",
       "make": "Make",
       "triggers": "גורמים מפעילים",
-      "questionnaires": "שאלונים",
       "setUpCoupon": "הגדרת קופון",
       "markCouponUsed": "סימון קופון כמשומש",
       "executeJavascript": "הפעלת JavaScript",
@@ -3011,66 +3010,6 @@
       "wrongType": "סוג קובץ זה אינו מתקבל.",
       "failed": "לא ניתן היה להעלות את הקובץ. נסו שוב.",
       "previewOnly": "ניתן להוסיף קבצים בטופס שפורסם."
-    }
-  },
-  "questionnaires": {
-    "title": "שאלונים",
-    "description": "יצירה וניהול של שאלונים עבור אנשי הקשר שלכם.",
-    "singular": "שאלון",
-    "submission": "הגשה",
-    "addNew": "הוספת חדש",
-    "applicants": "מועמדים",
-    "generalSettings": "הגדרות כלליות",
-    "triggerFlow": "הפעלת התהליך באמצעות השלמת השאלון",
-    "enableScore": "הענקת נקודות לכל שאלה שנענתה.",
-    "enableRetryMessages": "התאמת הודעות ניסיון חוזר במקרה של תשובה שנכשלה.",
-    "enableCustomFieldMapping": "שמירת נתונים בשדות מותאמים אישית.",
-    "question": "שאלה",
-    "activeQuestion": "פעילה",
-    "questionImage": "תמונת שאלה",
-    "questionImageHint": "תמונה אופציונלית הנשלחת עם שאלה זו.",
-    "responseType": "סוג תשובה",
-    "points": "נקודות",
-    "retryMessage": "הודעת ניסיון חוזר אם התשובה אינה תקינה",
-    "defaultRetryMessages": {
-      "text": "הערך שהזנתם אינו טקסט תקין. נסו שוב",
-      "number": "הערך שהזנתם אינו מספר תקין. נסו שוב",
-      "email": "הערך שהזנתם אינו דוא\"ל תקין. נסו שוב",
-      "phone": "הערך שהזנתם אינו מספר טלפון תקין. נסו שוב",
-      "multipleChoice": "הערך שהזנתם אינו אפשרות תקינה. נסו שוב"
-    },
-    "customField": "שמירת התשובה בשדה מותאם אישית או בשדה מערכת",
-    "options": "אפשרויות",
-    "mode": "מצב",
-    "completed": "הושלם",
-    "completionRate": "שיעור השלמה",
-    "date": "תאריך",
-    "inbox": "תיבת דואר נכנס",
-    "unknownContact": "איש קשר לא ידוע",
-    "noAnswers": "אין תשובות",
-    "responseTypes": {
-      "text": "טקסט",
-      "number": "מספר",
-      "email": "דוא\"ל",
-      "phone": "טלפון",
-      "multipleChoice": "בחירה מרובה"
-    },
-    "flowModes": {
-      "start": "התחלת שאלון",
-      "end": "סיום שאלון",
-      "deleteApplicant": "מחיקת מועמד"
-    },
-    "dialogDescriptions": {
-      "create": "תנו שם לשאלון לפני הוספת שאלות.",
-      "rename": "עדכנו את שם השאלון המוצג ברשימות ובתהליכים.",
-      "flowStep": "בחרו כיצד שלב תהליך זה מקיים אינטראקציה עם שאלון."
-    },
-    "status": {
-      "inProgress": "בתהליך",
-      "completed": "הושלם",
-      "cancelled": "בוטל",
-      "failed": "נכשל",
-      "timeout": "תם הזמן"
     }
   },
   "facebookCommentAutomation": {

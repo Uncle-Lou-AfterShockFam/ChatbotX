@@ -47,8 +47,8 @@ import {
 import { ChatJobAction, chatQueue } from "@chatbotx.io/worker-config"
 import { normalizeError } from "universal-error-normalizer"
 import { logger } from "../../lib/logger"
-import { QUICK_REPLY_CHANNELS } from "../../questionnaires/services/engine"
 import {
+  QUICK_REPLY_CHANNELS,
   waitForChatJobCompletion,
   waitForChatJobDelivered,
 } from "../utils/message"

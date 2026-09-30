@@ -2647,7 +2647,6 @@
       "callApi": "外部API 請求",
       "make": "Make.com",
       "triggers": "觸發器",
-      "questionnaires": "問卷",
       "setUpCoupon": "設定優惠券",
       "markCouponUsed": "標記優惠券",
       "executeJavascript": "執行 JavaScript",
@@ -5034,66 +5033,6 @@
       "wrongType": "不接受此類型的檔案。",
       "failed": "檔案無法上傳,請再試一次。",
       "previewOnly": "可在已發布的表單中新增檔案。"
-    }
-  },
-  "questionnaires": {
-    "title": "問卷",
-    "description": "建立並管理您的聯絡人的問卷。",
-    "singular": "問卷",
-    "submission": "提交",
-    "addNew": "新增新",
-    "applicants": "申請人",
-    "generalSettings": "常規設定",
-    "triggerFlow": "觸發器完成問卷的流程",
-    "enableScore": "為回答的每個問題評分。",
-    "enableRetryMessages": "自訂回覆失敗時的重試訊息。",
-    "enableCustomFieldMapping": "儲存資料到自訂欄位。",
-    "question": "問題",
-    "activeQuestion": "活動",
-    "questionImage": "問題圖片",
-    "questionImageHint": "與此問題一起傳送的選用影像。",
-    "responseType": "回應類型",
-    "points": "積分",
-    "retryMessage": "若回覆無效則重試訊息",
-    "defaultRetryMessages": {
-      "text": "您輸入的內容無效。請重試",
-      "number": "您輸入的數字無效。請重試",
-      "email": "您輸入的電子郵件地址無效。請重試",
-      "phone": "您輸入的電話號碼無效。請重試",
-      "multipleChoice": "您輸入的選項無效。請重試"
-    },
-    "customField": "儲存對自訂或系統欄位的回應",
-    "options": "選項",
-    "mode": "模式",
-    "completed": "已完成",
-    "completionRate": "完成率",
-    "date": "日期",
-    "inbox": "收件匣",
-    "unknownContact": "未知聯絡人",
-    "noAnswers": "無答案",
-    "responseTypes": {
-      "text": "文字",
-      "number": "號碼",
-      "email": "電子郵件",
-      "phone": "電話",
-      "multipleChoice": "多項選擇"
-    },
-    "flowModes": {
-      "start": "開始問卷",
-      "end": "結束問卷",
-      "deleteApplicant": "刪除申請人"
-    },
-    "dialogDescriptions": {
-      "create": "在新增問題之前為問卷命名。",
-      "rename": "更新清單和流程中顯示的問卷名稱。",
-      "flowStep": "選擇此流程步驟如何與問卷互動。"
-    },
-    "status": {
-      "inProgress": "進行中",
-      "completed": "已完成",
-      "cancelled": "已取消",
-      "failed": "失敗",
-      "timeout": "超時"
     }
   },
   "facebookCommentAutomation": {

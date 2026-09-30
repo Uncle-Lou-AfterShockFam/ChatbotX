@@ -321,11 +321,6 @@ export const router = {
       default: m.productCategoriesAPI,
     })),
   ),
-  questionnairesAPI: lazy(() =>
-    import("@/features/questionnaires/api").then((m) => ({
-      default: m.questionnairesAPI,
-    })),
-  ),
   refLinksAPI: lazy(() =>
     import("@/features/reflinks/api").then((m) => ({ default: m.refLinksAPI })),
   ),

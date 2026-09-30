@@ -19,6 +19,18 @@ import { logger } from "../../lib/logger"
 // worker lockDuration in env.ts.
 const CHAT_JOB_WAIT_TIMEOUT_MS = env.CHAT_JOB_WAIT_TIMEOUT_MS
 
+// Channels whose plain chat message pipeline can render native tappable
+// quick-reply buttons (see ChatJobSendChatMessage.quickReplies). Other
+// channels (WhatsApp, Zalo, TikTok, ...) keep the numbered-text fallback.
+// ContactInboxModel.channel is a plain text column (not the ChannelType
+// pgEnum), so this is checked against the raw string value.
+export const QUICK_REPLY_CHANNELS: ReadonlySet<string> = new Set([
+  "messenger",
+  "instagram",
+  "telegram",
+  "webchat",
+])
+
 let chatQueueEvents: QueueEvents | null = null
 
 function getChatQueueEvents(): QueueEvents {

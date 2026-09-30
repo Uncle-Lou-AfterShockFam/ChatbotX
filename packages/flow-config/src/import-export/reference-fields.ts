@@ -42,7 +42,6 @@ export const REFERENCE_FIELD_ENTITY_KIND: Record<string, string> = {
   integrationSmtpId: "integration",
   integrationMessengerId: "integration",
   calendarId: "calendar",
-  questionnaireId: "questionnaire",
   topicId: "couponTopic",
   inboxId: "inbox",
   // The email step's bulktext email line (s222b).

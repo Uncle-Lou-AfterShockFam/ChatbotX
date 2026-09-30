@@ -2330,7 +2330,6 @@
       "callApi": "External API Anmodning",
       "make": "Make",
       "triggers": "Triggers",
-      "questionnaires": "Questionnaires",
       "setUpCoupon": "Set up Kupon",
       "markCouponUsed": "Mark Kupon used",
       "executeJavascript": "Udfør JavaScript",
@@ -5001,66 +5000,6 @@
       "wrongType": "Denne filtype accepteres ikke.",
       "failed": "Filen kunne ikke uploades. Prøv igen.",
       "previewOnly": "Filer kan tilføjes i den publicerede formular."
-    }
-  },
-  "questionnaires": {
-    "title": "Spørgeskemaer",
-    "description": "Opret og administrer spørgeskemaer for din kontakter.",
-    "singular": "Spørgeskema",
-    "submission": "Submission",
-    "addNew": "Tilføj Ny",
-    "applicants": "Applicants",
-    "generalSettings": "Generelt indstillinger",
-    "triggerFlow": "Udløser den flow af completing den spørgeskema",
-    "enableScore": "Give points for each spørgsmål answered.",
-    "enableRetryMessages": "Customize retry beskeder i case af svar failure.",
-    "enableCustomFieldMapping": "Gem data til brugerdefineret felter.",
-    "question": "Spørgsmål",
-    "activeQuestion": "Aktiv",
-    "questionImage": "Spørgsmål billede",
-    "questionImageHint": "Valgfri billede sendt med denne spørgsmål.",
-    "responseType": "Svar Type",
-    "points": "Points",
-    "retryMessage": "Retry besked hvis den svar er ugyldig",
-    "defaultRetryMessages": {
-      "text": "What you've entered er ikke a valid tekst. Prøv igen",
-      "number": "What you've entered er ikke a valid nummer. Prøv igen",
-      "email": "What you've entered er ikke a valid e-mail. Prøv igen",
-      "phone": "What you've entered er ikke a valid telefon nummer. Prøv igen",
-      "multipleChoice": "What you've entered er ikke a valid option. Prøv igen"
-    },
-    "customField": "Gem svar til a brugerdefineret eller system felt",
-    "options": "Options",
-    "mode": "Mode",
-    "completed": "Fuldført",
-    "completionRate": "Completion rate",
-    "date": "Dato",
-    "inbox": "Indbakke",
-    "unknownContact": "Ukendt kontakt",
-    "noAnswers": "Ingen answers",
-    "responseTypes": {
-      "text": "Tekst",
-      "number": "Nummer",
-      "email": "E-mail",
-      "phone": "Telefon",
-      "multipleChoice": "Multiple choice"
-    },
-    "flowModes": {
-      "start": "Start spørgeskema",
-      "end": "Slut spørgeskema",
-      "deleteApplicant": "Slet applicant"
-    },
-    "dialogDescriptions": {
-      "create": "Navn den spørgeskema før adding spørgsmål.",
-      "rename": "Opdater den spørgeskema navn shown i lister og flows.",
-      "flowStep": "Choose how denne flow trin interacts med a spørgeskema."
-    },
-    "status": {
-      "inProgress": "I progress",
-      "completed": "Fuldført",
-      "cancelled": "Annulleret",
-      "failed": "Mislykkedes",
-      "timeout": "Timeout"
     }
   },
   "facebookCommentAutomation": {
