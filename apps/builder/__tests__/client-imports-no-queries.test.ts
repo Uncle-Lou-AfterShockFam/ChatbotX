@@ -10,7 +10,7 @@ const SRC_ROOT = join(APP_ROOT, "src")
 const TS_LIKE_EXTENSION_PATTERN = /\.(ts|tsx)$/
 const USE_CLIENT_DIRECTIVE_PATTERN = /^["']use client["']\s*;?\s*$/
 const USE_SERVER_DIRECTIVE_PATTERN = /^["']use server["']\s*;?\s*$/
-const SERVER_ONLY_IMPORT_PATTERN = /^import ["']server-only["']/m
+const SERVER_ONLY_IMPORT_PATTERN = /^import ["']server-only["']\s*;?\s*$/m
 const QUERIES_DIR_SEGMENT = `${sep}queries${sep}`
 // Matches a relative or `@/features/<feature>` specifier whose last path
 // segment is exactly `queries`, or a direct file inside such a directory
@@ -56,15 +56,17 @@ function collectSourceFiles(dir: string, results: string[] = []) {
   return results
 }
 
+// Blank lines, `//` lines and `/* ... */` blocks ahead of the first statement.
+const LEADING_COMMENTS_PATTERN = /^(?:\s+|\/\/[^\n]*|\/\*[\s\S]*?\*\/)*/
+
+/** The first statement's line, past any leading comments. */
+function firstStatementLine(source: string) {
+  const rest = source.replace(LEADING_COMMENTS_PATTERN, "")
+  return rest.split("\n", 1)[0].trim()
+}
+
 function isClientFile(source: string) {
-  for (const line of source.split("\n")) {
-    const trimmed = line.trim()
-    if (trimmed === "" || trimmed.startsWith("//")) {
-      continue
-    }
-    return USE_CLIENT_DIRECTIVE_PATTERN.test(trimmed)
-  }
-  return false
+  return USE_CLIENT_DIRECTIVE_PATTERN.test(firstStatementLine(source))
 }
 
 function isQueriesModuleSpecifier(specifier: string) {
@@ -96,14 +98,7 @@ function resolveModuleSpecifier(importingFilePath: string, specifier: string) {
 
 /** True if the source's leading directive is "use server". */
 function hasUseServerDirective(source: string) {
-  for (const line of source.split("\n")) {
-    const trimmed = line.trim()
-    if (trimmed === "" || trimmed.startsWith("//")) {
-      continue
-    }
-    return USE_SERVER_DIRECTIVE_PATTERN.test(trimmed)
-  }
-  return false
+  return USE_SERVER_DIRECTIVE_PATTERN.test(firstStatementLine(source))
 }
 
 /** True if the resolved file is a server boundary: "use server" or `import "server-only"`. */
@@ -209,6 +204,13 @@ describe('features/*/queries modules are never "use server"', () => {
       hasUseServerDirective('// note\n"use server"\n\nexport const x = 1'),
     ).toBe(true)
     expect(hasUseServerDirective("'use server';\n")).toBe(true)
+    expect(
+      hasUseServerDirective('/* license\n * header\n */\n"use server"\n'),
+    ).toBe(true)
+    expect(isClientFile('/* eslint-disable */\n"use client"\n')).toBe(true)
+    expect(SERVER_ONLY_IMPORT_PATTERN.test('import "server-only";\n')).toBe(
+      true,
+    )
     expect(hasUseServerDirective('import "server-only"\n')).toBe(false)
     expect(SERVER_ONLY_IMPORT_PATTERN.test('import "server-only"\n')).toBe(true)
   })
