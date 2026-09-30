@@ -2006,6 +2006,9 @@
     "webhookVerifyToken": {
       "label": "Webhook-vahvistustunnus"
     },
+    "oaSecretKey": {
+      "label": "OA Secret Key"
+    },
     "heading": {
       "label": "Otsikko",
       "placeholder": "Kirjoita otsikko"

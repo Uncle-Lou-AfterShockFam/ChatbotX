@@ -1,32 +1,46 @@
 import type { ContextQueue, HandleRequestProps } from "@chatbotx.io/sdk"
+import { sha256Hex } from "@chatbotx.io/utils/crypto"
 import { describe, expect, test, vi } from "vitest"
 import { webhookHandler } from "../src/handlers/webhook"
 import type { ZaloConfig } from "../src/schema/definition"
 
 const APP_ID = "app-1"
+const OA_SECRET_KEY = "oa-secret"
 
-const config = { clientId: APP_ID } as unknown as ZaloConfig
+const config = {
+  clientId: APP_ID,
+  oaSecretKey: OA_SECRET_KEY,
+} as unknown as ZaloConfig
 
-const buildProps = (
-  body: Record<string, unknown>,
+// Signed as Zalo signs it (s230a): sha256(app_id + body + timestamp + key).
+const buildProps = async (
+  fields: Record<string, unknown>,
   queueAdd: ContextQueue["add"],
-): HandleRequestProps<ZaloConfig> =>
-  ({
+): Promise<HandleRequestProps<ZaloConfig>> => {
+  const body = JSON.stringify({ timestamp: "1790000000000", ...fields })
+  const mac = await sha256Hex(
+    `${fields.app_id}${body}1790000000000${OA_SECRET_KEY}`,
+  )
+  return {
     config,
     req: new Request("https://example.com/webhook", {
       method: "POST",
-      body: JSON.stringify(body),
-      headers: { "Content-Type": "application/json" },
+      body,
+      headers: {
+        "Content-Type": "application/json",
+        "X-ZEvent-Signature": `mac=${mac}`,
+      },
     }),
     queue: { add: queueAdd },
-  }) as unknown as HandleRequestProps<ZaloConfig>
+  } as unknown as HandleRequestProps<ZaloConfig>
+}
 
 describe("zalo webhookHandler event routing", () => {
   test("acks user_received_message delivery receipts without enqueueing", async () => {
     const queueAdd = vi.fn()
 
     const result = await webhookHandler(
-      buildProps(
+      await buildProps(
         {
           app_id: APP_ID,
           event_name: "user_received_message",
@@ -46,7 +60,7 @@ describe("zalo webhookHandler event routing", () => {
     const queueAdd = vi.fn()
 
     await webhookHandler(
-      buildProps(
+      await buildProps(
         {
           app_id: APP_ID,
           event_name: "user_send_text",
@@ -74,7 +88,7 @@ describe("zalo webhookHandler event routing", () => {
     const queueAdd = vi.fn()
 
     await webhookHandler(
-      buildProps(
+      await buildProps(
         {
           app_id: APP_ID,
           event_name: "oa_send_text",
@@ -101,7 +115,7 @@ describe("zalo webhookHandler event routing", () => {
     const queueAdd = vi.fn()
 
     await webhookHandler(
-      buildProps(
+      await buildProps(
         {
           app_id: APP_ID,
           event_name: "user_seen_message",

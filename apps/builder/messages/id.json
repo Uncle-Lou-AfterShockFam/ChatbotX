@@ -2006,6 +2006,9 @@
     "webhookVerifyToken": {
       "label": "Token Verifikasi Webhook"
     },
+    "oaSecretKey": {
+      "label": "OA Secret Key"
+    },
     "heading": {
       "label": "Judul",
       "placeholder": "Masukkan judul"

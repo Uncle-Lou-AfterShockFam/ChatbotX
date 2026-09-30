@@ -2148,6 +2148,9 @@
     "webhookVerifyToken": {
       "label": "رمز التحقق من Webhook"
     },
+    "oaSecretKey": {
+      "label": "OA Secret Key"
+    },
     "heading": {
       "label": "العنوان",
       "placeholder": "أدخل العنوان"

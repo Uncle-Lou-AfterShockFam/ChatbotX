@@ -2148,6 +2148,9 @@
     "webhookVerifyToken": {
       "label": "Webhook Doğrulama Anahtarı"
     },
+    "oaSecretKey": {
+      "label": "OA Secret Key"
+    },
     "heading": {
       "label": "Başlık",
       "placeholder": "Başlık girin"

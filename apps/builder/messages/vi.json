@@ -2151,6 +2151,9 @@
     "webhookVerifyToken": {
       "label": "Webhook Verify Token"
     },
+    "oaSecretKey": {
+      "label": "OA Secret Key"
+    },
     "heading": {
       "label": "Tiêu đề",
       "placeholder": "Nhập tiêu đề"

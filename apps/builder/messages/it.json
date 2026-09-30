@@ -1277,6 +1277,9 @@
     "webhookVerifyToken": {
       "label": "Token di verifica del webhook"
     },
+    "oaSecretKey": {
+      "label": "OA Secret Key"
+    },
     "heading": {
       "label": "Intestazione",
       "placeholder": "Inserisci l'intestazione"

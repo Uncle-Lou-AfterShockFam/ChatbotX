@@ -1819,6 +1819,9 @@
     "webhookVerifyToken": {
       "label": "Verificatietoken voor webhook"
     },
+    "oaSecretKey": {
+      "label": "OA Secret Key"
+    },
     "heading": {
       "label": "Kop",
       "placeholder": "Voer een kop in"

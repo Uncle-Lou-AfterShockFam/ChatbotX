@@ -5448,6 +5448,9 @@
     "webhookVerifyToken": {
       "label": "אסימון אימות Webhook"
     },
+    "oaSecretKey": {
+      "label": "OA Secret Key"
+    },
     "heading": {
       "label": "כותרת",
       "placeholder": "הזנת כותרת"

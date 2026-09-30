@@ -2006,6 +2006,9 @@
     "webhookVerifyToken": {
       "label": "Webhook-Verifizierungstoken"
     },
+    "oaSecretKey": {
+      "label": "OA Secret Key"
+    },
     "heading": {
       "label": "Überschrift",
       "placeholder": "Überschrift eingeben"

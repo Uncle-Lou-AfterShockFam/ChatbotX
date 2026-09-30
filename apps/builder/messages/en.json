@@ -2157,6 +2157,9 @@
     "webhookVerifyToken": {
       "label": "Webhook Verify Token"
     },
+    "oaSecretKey": {
+      "label": "OA Secret Key"
+    },
     "heading": {
       "label": "Heading",
       "placeholder": "Enter heading"

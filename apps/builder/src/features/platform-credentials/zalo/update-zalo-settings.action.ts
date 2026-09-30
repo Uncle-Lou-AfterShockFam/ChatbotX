@@ -18,6 +18,7 @@ export const updateZaloSettingsAction = authActionClient
       version: parsedInput.version,
       verifyToken: parsedInput.verifyToken,
       clientSecret: parsedInput.clientSecret,
+      oaSecretKey: parsedInput.oaSecretKey,
     }
 
     await platformCredentialService.upsert({
