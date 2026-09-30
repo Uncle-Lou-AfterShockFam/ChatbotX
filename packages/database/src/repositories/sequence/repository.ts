@@ -1,4 +1,11 @@
-import { type DatabaseClient, db, eq, relationsFilterToSQL } from "../../client"
+import {
+  and,
+  type DatabaseClient,
+  db,
+  eq,
+  relationsFilterToSQL,
+  sql,
+} from "../../client"
 import { rootFolderId } from "../../partials"
 import {
   contactsOnSequenceModel,
@@ -66,7 +73,11 @@ export const sequenceRepository = {
         subscribersCount: (table) =>
           db.$count(
             contactsOnSequenceModel,
-            eq(contactsOnSequenceModel.sequenceId, table.id),
+            and(
+              eq(contactsOnSequenceModel.sequenceId, table.id),
+              // s228b: an ended subscription is kept as history, not counted.
+              sql`${contactsOnSequenceModel.status} IS DISTINCT FROM 'ended'`,
+            ),
           ),
       },
     })

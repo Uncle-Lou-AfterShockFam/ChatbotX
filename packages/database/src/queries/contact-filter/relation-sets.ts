@@ -114,6 +114,8 @@ const RELATION_SET_FILTERS: Record<string, RelationSetFilter> = {
   subscribedToDripCampaign: {
     exists: contactOnSequenceExists,
     column: contactsOnSequenceModel.sequenceId,
+    // s228b: an ended subscription is kept as history, not "subscribed".
+    extraPredicate: sql`${contactsOnSequenceModel.status} IS DISTINCT FROM 'ended'`,
   },
   entryPointsLinks: {
     exists: refLinkStatExists,

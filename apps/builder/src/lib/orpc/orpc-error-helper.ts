@@ -126,6 +126,28 @@ export const possibleErrorsOnResumingSequence = {
   notHeld,
 } satisfies ErrorMap
 
+/**
+ * s228b: reactivating an ended sequence subscription. `enrollmentChanged` =
+ * the optimistic check failed; `notReactivatable` = not ended, or ended for
+ * a terminal reason (bounced, unsubscribed).
+ */
+const enrollmentChanged = {
+  message:
+    "This subscription changed since it was read; reload it and try again",
+  status: 409,
+}
+const notReactivatable = {
+  message: "This subscription cannot be reactivated",
+  status: 409,
+}
+
+export const possibleErrorsOnReactivatingSequence = {
+  notFound,
+  businessError,
+  enrollmentChanged,
+  notReactivatable,
+} satisfies ErrorMap
+
 export const possibleErrorsOnListingResource = {
   businessError,
 } satisfies ErrorMap

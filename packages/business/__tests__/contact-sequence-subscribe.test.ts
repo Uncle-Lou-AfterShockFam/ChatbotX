@@ -56,7 +56,6 @@ vi.mock("@chatbotx.io/events", () => ({
 
 vi.mock("@chatbotx.io/sequence-scheduler", () => ({
   calculateNextRunAtFromStep: vi.fn(() => new Date("2026-01-01T00:00:00Z")),
-  cancelPendingDispatches: vi.fn(),
   enrollContactInSequence: (...args: unknown[]) =>
     mocks.enrollContactInSequence(...args),
   enrollContactsInSequenceBulk: (...args: unknown[]) =>

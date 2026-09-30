@@ -41,6 +41,15 @@ export const contactsOnSequenceModel = pgTable(
      * here; advanceEnrollment never schedules before it). Expires by time.
      */
     pausedUntil: timestamp(timestampConfig),
+    /**
+     * s228b (owner: the row is KEPT): a removal ends the enrolment
+     * (status 'ended') instead of deleting it; the reason and instant stay.
+     */
+    endedAt: timestamp(timestampConfig),
+    endReason: text(),
+    /** none | replied | ooo | bounced - never the pipeline stage. */
+    replyState: text().notNull().default("none"),
+    repliedAt: timestamp(timestampConfig),
     contactId: bigintAsString()
       .notNull()
       .references(() => contactModel.id, {

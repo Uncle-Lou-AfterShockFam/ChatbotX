@@ -51,6 +51,7 @@ const contactSequenceService = {
   removeContactSequencesForContacts: vi.fn(),
   updateContactSequences: vi.fn(),
   resumeHeldEnrollment: vi.fn(),
+  reactivateEnrollment: vi.fn(),
 }
 
 const resolveContactId = vi.fn()
@@ -87,9 +88,25 @@ beforeEach(() => {
 describe("GET /v1/contacts/{identifier}/sequences", () => {
   const procedure = findProcedure("GET", "/v1/contacts/{identifier}/sequences")
 
-  test("lists sequence subscriptions for the resolved contact", async () => {
+  test("lists every subscription, ENDED ones included (s228b), with ISO dates", async () => {
+    const enrolledAt = new Date("2026-09-30T08:00:00.000Z")
+    const endedAt = new Date("2026-09-30T09:00:00.000Z")
     contactSequenceService.listByContactId.mockResolvedValueOnce([
-      { sequenceId: "seq-1", sequenceName: "Welcome" },
+      {
+        sequenceId: "seq-1",
+        sequenceName: "Welcome",
+        status: "ended",
+        lastError: null,
+        enrolledAt,
+        completedAt: null,
+        endedAt,
+        endReason: "contact_replied",
+        replyState: "replied",
+        repliedAt: endedAt,
+        pausedUntil: null,
+        currentStep: 1,
+        updatedAt: endedAt,
+      },
     ])
 
     await expect(
@@ -98,12 +115,29 @@ describe("GET /v1/contacts/{identifier}/sequences", () => {
         input: { identifier: "id:123" },
       }),
     ).resolves.toEqual({
-      data: [{ sequenceId: "seq-1", sequenceName: "Welcome" }],
+      data: [
+        {
+          sequenceId: "seq-1",
+          sequenceName: "Welcome",
+          status: "ended",
+          lastError: null,
+          enrolledAt: "2026-09-30T08:00:00.000Z",
+          completedAt: null,
+          endedAt: "2026-09-30T09:00:00.000Z",
+          endReason: "contact_replied",
+          replyState: "replied",
+          repliedAt: "2026-09-30T09:00:00.000Z",
+          pausedUntil: null,
+          currentStep: 1,
+          updatedAt: "2026-09-30T09:00:00.000Z",
+        },
+      ],
     })
 
     expect(contactSequenceService.listByContactId).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       contactId: "contact-1",
+      includeEnded: true,
     })
   })
 })
@@ -208,6 +242,72 @@ describe("POST /v1/contacts/{identifier}/sequences/{sequenceId}/resume (s227b)",
       procedure.handler?.({
         context: { workspace: { id: "workspace-1" } },
         input: { identifier: "id:123", sequenceId: "seq-1" },
+      }),
+    ).rejects.toBe(conflict)
+  })
+})
+
+describe("POST /v1/contacts/{identifier}/sequences/{sequenceId}/reactivate (s228b)", () => {
+  const procedure = findProcedure(
+    "POST",
+    "/v1/contacts/{identifier}/sequences/{sequenceId}/reactivate",
+  )
+
+  test("reactivates the resolved contact's ended subscription with the optimistic check", async () => {
+    contactSequenceService.reactivateEnrollment.mockResolvedValueOnce({
+      runAt: new Date("2026-10-01T09:00:00.000Z"),
+    })
+
+    await expect(
+      procedure.handler?.({
+        context: { workspace: { id: "workspace-1" } },
+        input: {
+          identifier: "id:123",
+          sequenceId: "seq-1",
+          expectedUpdatedAt: "2026-09-30T09:00:00.000Z",
+        },
+      }),
+    ).resolves.toEqual({ runAt: "2026-10-01T09:00:00.000Z" })
+
+    expect(contactSequenceService.reactivateEnrollment).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      contactId: "contact-1",
+      sequenceId: "seq-1",
+      expectedUpdatedAt: new Date("2026-09-30T09:00:00.000Z"),
+    })
+  })
+
+  test("no active step left = runAt null", async () => {
+    contactSequenceService.reactivateEnrollment.mockResolvedValueOnce({
+      runAt: null,
+    })
+
+    await expect(
+      procedure.handler?.({
+        context: { workspace: { id: "workspace-1" } },
+        input: {
+          identifier: "id:123",
+          sequenceId: "seq-1",
+          expectedUpdatedAt: "2026-09-30T09:00:00.000Z",
+        },
+      }),
+    ).resolves.toEqual({ runAt: null })
+  })
+
+  test("a 409 (changed / not reactivatable) propagates", async () => {
+    const conflict = Object.assign(new Error("changed"), {
+      httpStatusCode: 409,
+    })
+    contactSequenceService.reactivateEnrollment.mockRejectedValueOnce(conflict)
+
+    await expect(
+      procedure.handler?.({
+        context: { workspace: { id: "workspace-1" } },
+        input: {
+          identifier: "id:123",
+          sequenceId: "seq-1",
+          expectedUpdatedAt: "2026-09-30T09:00:00.000Z",
+        },
       }),
     ).rejects.toBe(conflict)
   })

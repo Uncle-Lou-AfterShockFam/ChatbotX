@@ -21,16 +21,20 @@ import {
 import {
   calculateNextRunAtFromStep,
   calculateNextValidSendTime,
-  cancelPendingDispatches,
   enrollContactInSequence,
   enrollContactsInSequenceBulk,
+  reactivateEnrollment as reactivateEndedEnrollment,
   removeDispatchesFromSchedule,
   rescheduleDispatches,
+  scheduleDispatches,
   sequenceDispatchUtils,
+  TERMINAL_END_REASONS,
 } from "@chatbotx.io/sequence-scheduler"
 import { BaseService } from "../base.service"
 import { type ContactAccessScope, contactService } from "../contact/service"
 import {
+  enrollmentChangedException,
+  enrollmentNotReactivatableException,
   notFoundException,
   sequenceNotHeldException,
   validationException,
@@ -61,15 +65,31 @@ type RemoveEnrollmentsResult = {
   dispatchesToRemove: DispatchToRemove[]
   removedEnrollments: RemovedEnrollment[]
 }
+/**
+ * Why an enrolment ENDED (s228b: stored as `endReason`; the row is kept).
+ * `bounced` and `unsubscribed` are terminal (TERMINAL_END_REASONS).
+ */
 type RemoveReason =
   | "subscription_removed"
   | "unsubscribed_via_flow"
   | "company_stopped"
   | "contact_replied"
   | "no_email_thread"
+  | "bounced"
+  | "unsubscribed"
+
+/** An enrolment that is not ended (NULL status included). */
+const notEnded = () =>
+  sql`${contactsOnSequenceModel.status} IS DISTINCT FROM 'ended'`
+/** `notEnded` as a relational-query filter (keep the two in step). */
+const NOT_ENDED = {
+  OR: [{ status: { ne: "ended" } }, { status: { isNull: true as const } }],
+}
 
 type RemoveContactSequencesForContactsParams = {
   client?: DrizzleClient
+  /** A stop-on-reply end: the reply instant (replyState = replied). */
+  repliedAt?: Date
   contactIds: string[]
   removeFromSchedule?: boolean
   reason: RemoveReason
@@ -108,7 +128,7 @@ async function getExistingEnrollments(
   workspaceId: string,
   contactIds: string[],
   sequenceIds: string[],
-): Promise<Set<string>> {
+): Promise<Map<string, { id: string; status: string | null }>> {
   const enrollments = await db.query.contactsOnSequenceModel.findMany({
     where: {
       workspaceId,
@@ -116,20 +136,25 @@ async function getExistingEnrollments(
       sequenceId: { in: sequenceIds },
     },
     columns: {
+      id: true,
       contactId: true,
       sequenceId: true,
+      status: true,
     },
   })
 
-  return new Set<string>(
-    enrollments.map((e) => `${e.contactId}-${e.sequenceId}`),
+  return new Map(
+    enrollments.map((e) => [
+      `${e.contactId}-${e.sequenceId}`,
+      { id: e.id, status: e.status },
+    ]),
   )
 }
 
 function buildEnrollmentRecords(
   contacts: Array<{ id: string }>,
   sequenceIds: string[],
-  existingKeys: Set<string>,
+  existingKeys: ReadonlyMap<string, unknown>,
   nextRunAtMap: Map<string, { nextRunAt: Date; nextStepId: string | null }>,
   workspaceId: string,
   now: Date,
@@ -232,6 +257,20 @@ class ContactSequenceService extends BaseService {
         now,
       )
 
+      // s228b: an ENDED enrolment is resumed at its step (a terminal end is
+      // left as it is); every other existing one is left as-is.
+      for (const existing of existingKeys.values()) {
+        if (existing.status === "ended") {
+          const result = await reactivateEndedEnrollment({
+            workspaceId,
+            enrollmentId: existing.id,
+          })
+          if (result.kind === "reactivated") {
+            await scheduleDispatches(result.dispatches)
+          }
+        }
+      }
+
       if (records.length === 0) {
         continue
       }
@@ -271,12 +310,17 @@ class ContactSequenceService extends BaseService {
     contactInboxId: string
   }): Promise<void> {
     const { workspaceId, contactId, sequenceId, contactInboxId } = props
+    // A flow step's sequence must be this workspace's (probe s228b).
+    await this.assertSequencesInWorkspace({
+      workspaceId,
+      sequenceIds: [sequenceId],
+    })
 
     const existing = await db.query.contactsOnSequenceModel.findFirst({
       where: { contactId, sequenceId, workspaceId },
-      columns: { id: true },
+      columns: { status: true },
     })
-    if (existing) {
+    if (existing && existing.status !== "ended") {
       return
     }
 
@@ -295,7 +339,7 @@ class ContactSequenceService extends BaseService {
         )
       : now
 
-    await enrollContactInSequence({
+    const outcome = await enrollContactInSequence({
       workspaceId,
       contactId,
       sequenceId,
@@ -303,6 +347,9 @@ class ContactSequenceService extends BaseService {
       nextStepId: firstStep?.id ?? null,
       enrolledAt: now,
     })
+    if (outcome === "skipped") {
+      return
+    }
 
     const sequence = await db.query.sequenceModel.findFirst({
       where: { id: sequenceId },
@@ -318,9 +365,15 @@ class ContactSequenceService extends BaseService {
     )
   }
 
+  /**
+   * The contact's enrolments. ENDED ones (s228b: kept with their reason) are
+   * left out unless `includeEnded` - every internal caller means "the
+   * sequences the contact is in"; the public list shows the history too.
+   */
   async listByContactId(props: {
     workspaceId: string
     contactId: string
+    includeEnded?: boolean
     tx?: DrizzleClient
   }): Promise<
     {
@@ -328,21 +381,43 @@ class ContactSequenceService extends BaseService {
       sequenceName: string
       status: string | null
       lastError: string | null
+      enrolledAt: Date
+      completedAt: Date | null
+      endedAt: Date | null
+      endReason: string | null
+      replyState: string
+      repliedAt: Date | null
+      pausedUntil: Date | null
+      currentStep: number
+      updatedAt: Date
     }[]
   > {
     const { workspaceId, contactId, tx = db } = props
 
     const enrollments = await tx.query.contactsOnSequenceModel.findMany({
-      where: { workspaceId, contactId },
-      columns: { sequenceId: true, status: true, lastError: true },
+      where: props.includeEnded
+        ? { workspaceId, contactId }
+        : { workspaceId, contactId, ...NOT_ENDED },
+      columns: {
+        sequenceId: true,
+        status: true,
+        lastError: true,
+        enrolledAt: true,
+        completedAt: true,
+        endedAt: true,
+        endReason: true,
+        replyState: true,
+        repliedAt: true,
+        pausedUntil: true,
+        currentStep: true,
+        updatedAt: true,
+      },
       with: { sequence: { columns: { name: true } } },
     })
 
-    return enrollments.map((enrollment) => ({
-      sequenceId: enrollment.sequenceId,
-      sequenceName: enrollment.sequence.name,
-      status: enrollment.status,
-      lastError: enrollment.lastError,
+    return enrollments.map(({ sequence, ...enrollment }) => ({
+      ...enrollment,
+      sequenceName: sequence.name,
     }))
   }
 
@@ -406,12 +481,15 @@ class ContactSequenceService extends BaseService {
             lte(contactsOnSequenceModel.enrolledAt, occurredAt),
           ),
         )
+        .orderBy(contactsOnSequenceModel.id)
+        // s228b: the enrolment rows FIRST, then their dispatches - the order
+        // every enrolment writer takes (removal, hold, resume, advance).
+        .for("no key update", { of: contactsOnSequenceModel })
       if (rows.length === 0) {
         return { sequenceIds: [] as string[], moved: [] }
       }
       const ids = rows.map((row) => row.id)
-      // Lock order = removal's (dispatches, then the enrolment; Codex
-      // s226b): the pending dispatches FOR UPDATE first...
+      // ...then the pending dispatches.
       const pending = await tx
         .select({
           id: sequenceDispatchModel.id,
@@ -435,9 +513,8 @@ class ContactSequenceService extends BaseService {
           ),
         )
         .for("update", { of: sequenceDispatchModel })
-      // ...then the enrolment rows (the UPDATE locks them). A dispatch a
-      // concurrent advance creates meanwhile is held at send time
-      // (deferIfPaused), which reads the committed pause.
+      // A dispatch a concurrent advance created before the lock is held at
+      // send time (deferIfPaused), which reads the committed pause.
       await tx
         .update(contactsOnSequenceModel)
         .set({
@@ -489,23 +566,57 @@ class ContactSequenceService extends BaseService {
   }
 
   /**
-   * The send-time half of the out-of-office pause (Codex s226b): a claimed
-   * (running) dispatch whose enrolment is paused goes back to pending at the
-   * pause end, moved into the step's send window, instead of sending. This
-   * catches a dispatch claimed before the pause, or created by an advance
-   * racing it. Returns the new run time to schedule, or null to send now.
+   * The send-time gate of a claimed (running) dispatch.
+   * - It is no longer running (canceled meanwhile), or its row is gone:
+   *   "ended" - send nothing.
+   * - Its enrolment ENDED (s228b: a removal keeps the row, so the dispatch
+   *   no longer cascades away): the dispatch is canceled with the end
+   *   reason and "ended" is returned - send nothing.
+   * - Its enrolment is paused (the out-of-office half, Codex s226b): the
+   *   dispatch goes back to pending at the pause end, moved into the step's
+   *   send window; the new run time is returned to schedule. This catches a
+   *   dispatch claimed before the pause, or created by an advance racing it.
+   * Otherwise null: send now.
    */
   async deferIfPaused(props: {
     dispatchId: string
     workspaceId: string
     now?: Date
-  }): Promise<{ bucket: number; runAtMs: number } | null> {
+  }): Promise<{ bucket: number; runAtMs: number } | "ended" | null> {
     const now = props.now ?? new Date()
     return await db.transaction(async (tx) => {
+      // The enrolment FIRST (shared: gates of one enrolment never wait on
+      // each other), then the dispatch - every enrolment writer's order, so
+      // an end, pause or reactivate is either fully seen here or waits
+      // (probe s228b: an unlocked read let a pause-defer escape an end).
+      const [ref] = await tx
+        .select({ enrollmentId: sequenceDispatchModel.enrollmentId })
+        .from(sequenceDispatchModel)
+        .where(
+          and(
+            eq(sequenceDispatchModel.id, props.dispatchId),
+            eq(sequenceDispatchModel.workspaceId, props.workspaceId),
+          ),
+        )
+      if (!ref) {
+        return "ended"
+      }
+      await tx
+        .select({ id: contactsOnSequenceModel.id })
+        .from(contactsOnSequenceModel)
+        .where(
+          and(
+            eq(contactsOnSequenceModel.workspaceId, props.workspaceId),
+            eq(contactsOnSequenceModel.id, ref.enrollmentId),
+          ),
+        )
+        .for("share")
       const [dispatch] = await tx
         .select({
           bucket: sequenceDispatchModel.bucket,
           status: sequenceDispatchModel.status,
+          enrollmentStatus: contactsOnSequenceModel.status,
+          endReason: contactsOnSequenceModel.endReason,
           pausedUntil: contactsOnSequenceModel.pausedUntil,
           anytime: sequenceStepModel.anytime,
           sendTimeStart: sequenceStepModel.sendTimeStart,
@@ -523,7 +634,8 @@ class ContactSequenceService extends BaseService {
             ),
           ),
         )
-        .innerJoin(
+        // LEFT: the end check never depends on the step row still existing.
+        .leftJoin(
           sequenceStepModel,
           eq(sequenceStepModel.id, sequenceDispatchModel.stepId),
         )
@@ -534,17 +646,36 @@ class ContactSequenceService extends BaseService {
           ),
         )
         .for("update", { of: sequenceDispatchModel })
-      if (
-        !dispatch?.pausedUntil ||
-        dispatch.pausedUntil <= now ||
-        dispatch.status !== "running"
-      ) {
+      // No longer running (a concurrent end or reactivate canceled it):
+      // never send it.
+      if (dispatch?.status !== "running") {
+        return "ended"
+      }
+      if (dispatch.enrollmentStatus === "ended") {
+        await tx
+          .update(sequenceDispatchModel)
+          .set({
+            status: "canceled",
+            lastError: dispatch.endReason ?? "ended",
+            lockedAt: null,
+            lockOwner: null,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(sequenceDispatchModel.id, props.dispatchId),
+              eq(sequenceDispatchModel.workspaceId, props.workspaceId),
+            ),
+          )
+        return "ended"
+      }
+      if (!dispatch.pausedUntil || dispatch.pausedUntil <= now) {
         return null
       }
-      const runAtMs = calculateNextValidSendTime(
-        dispatch.pausedUntil,
-        dispatch,
-      ).getTime()
+      const runAtMs = calculateNextValidSendTime(dispatch.pausedUntil, {
+        ...dispatch,
+        anytime: dispatch.anytime ?? true,
+      }).getTime()
       await tx
         .update(sequenceDispatchModel)
         .set({
@@ -569,7 +700,7 @@ class ContactSequenceService extends BaseService {
    * all set HOLDS its enrolment instead of sending: enrolment status 'held'
    * with the reason in lastError, the dispatch 'held' (neither sent nor
    * failed). Lock order = the enrolment, then the dispatch: the order a
-   * removal takes (DELETE of the enrolment, then its cascade) - the other
+   * removal takes (s228b: it ends the enrolment, then cancels) - the other
    * order deadlocked against an unenrol (probe s227b). Only a RUNNING
    * dispatch of an ACTIVE enrolment is held; false = nothing to hold, the
    * caller then sends nothing.
@@ -589,9 +720,8 @@ class ContactSequenceService extends BaseService {
     }
     const reason = props.reason.slice(0, MAX_HOLD_REASON)
     return await db.transaction(async (tx) => {
-      // A plain read first: a dispatch that is not running is never locked
-      // (a removal locks PENDING dispatches before the enrolment, so taking
-      // the enrolment first and then a pending dispatch would deadlock).
+      // A plain read first: only a running dispatch is ever locked here,
+      // and always after its enrolment (every enrolment writer's order).
       const [ref] = await tx
         .select({
           enrollmentId: sequenceDispatchModel.enrollmentId,
@@ -789,6 +919,71 @@ class ContactSequenceService extends BaseService {
     return { runAt }
   }
 
+  /**
+   * An operator reactivates an ENDED enrolment (s228b, the ManyReach rule):
+   * it resumes at the step it stopped at (reactivateEnrollment has the
+   * rules). `expectedUpdatedAt` is the row's `updatedAt` as the caller read
+   * it (contacts.listSequences): a row changed since = 409 enrollmentChanged.
+   * Not enrolled = 404; not ended, or ended for a terminal reason (bounced,
+   * unsubscribed) = 409 notReactivatable.
+   */
+  async reactivateEnrollment(props: {
+    workspaceId: string
+    contactId: string
+    sequenceId: string
+    expectedUpdatedAt: Date
+  }): Promise<{ runAt: Date | null }> {
+    if (props === null || typeof props !== "object") {
+      throw new TypeError("reactivateEnrollment: props must be an object")
+    }
+    const { workspaceId, contactId, sequenceId, expectedUpdatedAt } = props
+    assertIds("reactivateEnrollment", { workspaceId, contactId, sequenceId })
+    if (
+      !(expectedUpdatedAt instanceof Date) ||
+      Number.isNaN(expectedUpdatedAt.getTime())
+    ) {
+      throw validationException(
+        "expectedUpdatedAt",
+        "reactivateEnrollment: expectedUpdatedAt must be a valid date",
+      )
+    }
+    const row = await db.query.contactsOnSequenceModel.findFirst({
+      where: { workspaceId, contactId, sequenceId },
+      columns: { id: true },
+    })
+    if (!row) {
+      throw notFoundException("The contact is not in this sequence")
+    }
+    const result = await reactivateEndedEnrollment({
+      workspaceId,
+      enrollmentId: row.id,
+      expectedUpdatedAt,
+    })
+    switch (result.kind) {
+      case "notFound":
+        throw notFoundException("The contact is not in this sequence")
+      case "changed":
+        throw enrollmentChangedException()
+      case "notEnded":
+        throw enrollmentNotReactivatableException(
+          "This subscription has not ended",
+        )
+      case "terminal":
+        throw enrollmentNotReactivatableException(
+          `This subscription ended for good (${result.endReason})`,
+        )
+      default:
+        break
+    }
+    try {
+      await scheduleDispatches(result.dispatches)
+    } catch (err) {
+      // The DB is authoritative: the row stays pending at its DB time.
+      logger.warn({ err, workspaceId }, "reactivateEnrollment: schedule failed")
+    }
+    return { runAt: result.runAt }
+  }
+
   async removeStopOnReplyEnrollments(props: {
     workspaceId: string
     contactId: string
@@ -815,6 +1010,7 @@ class ContactSequenceService extends BaseService {
           eq(contactsOnSequenceModel.contactId, contactId),
           eq(sequenceModel.stopOnReply, true),
           lte(contactsOnSequenceModel.enrolledAt, repliedAt),
+          notEnded(),
         ),
       )
     if (rows.length === 0) {
@@ -827,6 +1023,7 @@ class ContactSequenceService extends BaseService {
       sequenceIds,
       reason: "contact_replied",
       contactInboxId: props.contactInboxId,
+      repliedAt,
     })
     return sequenceIds
   }
@@ -862,25 +1059,38 @@ class ContactSequenceService extends BaseService {
     }
 
     const removeWithClient = async (tx: DrizzleClient) => {
-      const enrollments = await tx.query.contactsOnSequenceModel.findMany({
-        where: {
-          contactId: { in: contactIds },
-          sequenceId: { in: sequenceIds },
-          workspaceId,
-        },
-        columns: {
-          id: true,
-          contactId: true,
-          sequenceId: true,
-          workspaceId: true,
-        },
-      })
+      // The enrolment rows FIRST, in id order, then their dispatches (the
+      // order hold, resume, advance and the out-of-office pause take).
+      const enrollments = await tx
+        .select({
+          id: contactsOnSequenceModel.id,
+          contactId: contactsOnSequenceModel.contactId,
+          sequenceId: contactsOnSequenceModel.sequenceId,
+          workspaceId: contactsOnSequenceModel.workspaceId,
+          status: contactsOnSequenceModel.status,
+        })
+        .from(contactsOnSequenceModel)
+        .where(
+          and(
+            eq(contactsOnSequenceModel.workspaceId, workspaceId),
+            inArray(contactsOnSequenceModel.contactId, contactIds),
+            inArray(contactsOnSequenceModel.sequenceId, sequenceIds),
+            // A terminal reason (a bounce, an unsubscribe) also overwrites
+            // an earlier non-terminal end: it must never be reactivated.
+            TERMINAL_END_REASONS.has(reason)
+              ? sql`(${notEnded()} OR ${contactsOnSequenceModel.endReason} IS NULL OR ${contactsOnSequenceModel.endReason} NOT IN ('bounced', 'unsubscribed'))`
+              : notEnded(),
+          ),
+        )
+        .orderBy(contactsOnSequenceModel.id)
+        .for("no key update")
 
       return await this.removeEnrollmentsWithClient(
         tx,
         enrollments,
         reason,
         attributableContactInboxId,
+        params.repliedAt,
       )
     }
 
@@ -1008,49 +1218,68 @@ class ContactSequenceService extends BaseService {
       id: string
       sequenceId: string
       workspaceId: string
+      status: string | null
     }>,
     reason: RemoveReason,
     contactInboxId?: string,
+    repliedAt?: Date,
   ): Promise<RemoveEnrollmentsResult> {
     if (enrollments.length === 0) {
       return { dispatchesToRemove: [], removedEnrollments: [] }
     }
 
-    const canceledDispatches = (
-      await Promise.all(
-        enrollments.map((enrollment) =>
-          cancelPendingDispatches({
-            client,
-            enrollmentId: enrollment.id,
-            workspaceId: enrollment.workspaceId,
-            reason,
-            removeFromSchedule: false,
-          }),
+    // s228b: the enrolment ENDS (its row, step position and history stay);
+    // its pending and held dispatches are canceled with the reason. A
+    // running one is stopped at send time (deferIfPaused reads the end).
+    const workspaceId = enrollments[0]?.workspaceId ?? ""
+    const ids = enrollments.map((enrollment) => enrollment.id)
+    const now = new Date()
+    const canceledDispatches = await client
+      .update(sequenceDispatchModel)
+      .set({ status: "canceled", lastError: reason, updatedAt: now })
+      .where(
+        and(
+          eq(sequenceDispatchModel.workspaceId, workspaceId),
+          inArray(sequenceDispatchModel.enrollmentId, ids),
+          inArray(sequenceDispatchModel.status, ["pending", "held"]),
         ),
       )
-    ).flat()
+      .returning({
+        id: sequenceDispatchModel.id,
+        bucket: sequenceDispatchModel.bucket,
+      })
 
-    await Promise.all(
-      enrollments.map((enrollment) =>
-        client
-          .delete(contactsOnSequenceModel)
-          .where(
-            and(
-              eq(contactsOnSequenceModel.id, enrollment.id),
-              eq(contactsOnSequenceModel.workspaceId, enrollment.workspaceId),
-            ),
-          ),
-      ),
-    )
+    await client
+      .update(contactsOnSequenceModel)
+      .set({
+        status: "ended",
+        endReason: reason,
+        // An end overwritten by a terminal reason keeps its first instant.
+        endedAt: sql`COALESCE(${contactsOnSequenceModel.endedAt}, ${now})`,
+        lockedAt: null,
+        lockOwner: null,
+        updatedAt: now,
+        ...(repliedAt ? { replyState: "replied", repliedAt } : {}),
+      })
+      .where(
+        and(
+          eq(contactsOnSequenceModel.workspaceId, workspaceId),
+          inArray(contactsOnSequenceModel.id, ids),
+        ),
+      )
 
     return {
       dispatchesToRemove: canceledDispatches,
-      removedEnrollments: enrollments.map((enrollment) => ({
-        contactId: enrollment.contactId,
-        sequenceId: enrollment.sequenceId,
-        workspaceId: enrollment.workspaceId,
-        contactInboxId,
-      })),
+      // Only a row this removal ended is "unsubscribed" (an overwritten end
+      // was announced when it first ended).
+      removedEnrollments: enrollments
+        .filter((enrollment) => enrollment.status !== "ended")
+        .map((enrollment) => ({
+          contactId: enrollment.contactId,
+          sequenceId: enrollment.sequenceId,
+          workspaceId: enrollment.workspaceId,
+          contactInboxId,
+        })),
     }
   }
 
@@ -1094,6 +1323,7 @@ class ContactSequenceService extends BaseService {
       where: {
         contactId,
         workspaceId,
+        ...NOT_ENDED,
       },
       columns: {
         sequenceId: true,

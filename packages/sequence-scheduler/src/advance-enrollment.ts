@@ -4,16 +4,20 @@ import {
   db,
   eq,
   gt,
+  inArray,
   isForeignKeyViolationError,
+  sql,
 } from "@chatbotx.io/database/client"
 import {
   contactsOnSequenceModel,
+  sequenceDispatchModel,
   sequenceStepModel,
 } from "@chatbotx.io/database/schema"
 import type { SchedulerClient } from "@chatbotx.io/scheduler"
 import { calculateNextRunAtFromStep } from "./calculate-next-run-at"
 import { getDispatchContactInboxes } from "./contacts-on-sequences"
 import { createDispatch } from "./dispatch-manager"
+import { LIVE_DISPATCH_STATUSES } from "./enrollment-constants"
 import { calculateNextValidSendTime } from "./send-time-validator"
 
 type NextStepForSchedule = {
@@ -51,8 +55,8 @@ function calculateNextRunAt(step: NextStepForSchedule, baseTime: Date): Date {
 }
 
 /**
- * The enrolment row is gone: it was removed (unsubscribe, company stop,
- * sequence stop-on-reply) after the dispatch was claimed.
+ * The enrolment row is gone: its contact or workspace was deleted after the
+ * dispatch was claimed. (A removal ENDS the row since s228b; it is kept.)
  */
 export class EnrollmentNotFoundError extends Error {
   readonly enrollmentId: string
@@ -116,34 +120,16 @@ export async function advanceEnrollment(
     .orderBy(asc(sequenceStepModel.order))
     .limit(1)
 
-  if (!nextStep) {
-    await db
-      .update(contactsOnSequenceModel)
-      .set({
-        status: "completed",
-        completedAt: sentAt,
-        currentStep: currentStep.order + 1,
-        lastStepId: currentStep.id,
-        nextStepId: null,
-        nextRunAt: null,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(contactsOnSequenceModel.id, enrollmentId),
-          eq(contactsOnSequenceModel.workspaceId, workspaceId),
-        ),
-      )
-    return
-  }
-
   const dispatches = await db
     .transaction(async (tx) => {
       // s226b: an out-of-office pause holds the next step. Read under the
       // row lock the pause also takes, so a pause landing now either sees
       // this dispatch (and moves it) or is seen here.
       const [locked] = await tx
-        .select({ pausedUntil: contactsOnSequenceModel.pausedUntil })
+        .select({
+          status: contactsOnSequenceModel.status,
+          pausedUntil: contactsOnSequenceModel.pausedUntil,
+        })
         .from(contactsOnSequenceModel)
         .where(
           and(
@@ -152,6 +138,48 @@ export async function advanceEnrollment(
           ),
         )
         .for("update")
+      // s228b: the row is kept when a removal ends it; one that ended (or
+      // was held) after the unlocked read above is never advanced.
+      if (locked?.status !== "active") {
+        return []
+      }
+      // s228b (probe): a reactivation already moved it on (it resumed past
+      // this step and queued another): never a second live dispatch.
+      const [ahead] = await tx
+        .select({ id: sequenceDispatchModel.id })
+        .from(sequenceDispatchModel)
+        .where(
+          and(
+            eq(sequenceDispatchModel.workspaceId, workspaceId),
+            eq(sequenceDispatchModel.enrollmentId, enrollmentId),
+            inArray(sequenceDispatchModel.status, [...LIVE_DISPATCH_STATUSES]),
+            sql`${sequenceDispatchModel.stepId} IS DISTINCT FROM ${currentStep.id}`,
+          ),
+        )
+        .limit(1)
+      if (ahead) {
+        return []
+      }
+      if (!nextStep) {
+        await tx
+          .update(contactsOnSequenceModel)
+          .set({
+            status: "completed",
+            completedAt: sentAt,
+            currentStep: currentStep.order + 1,
+            lastStepId: currentStep.id,
+            nextStepId: null,
+            nextRunAt: null,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(contactsOnSequenceModel.id, enrollmentId),
+              eq(contactsOnSequenceModel.workspaceId, workspaceId),
+            ),
+          )
+        return []
+      }
       const scheduled = calculateNextRunAt(nextStep, sentAt)
       // The pause end, moved into the step's send window (Codex s226b).
       const nextRunAt =

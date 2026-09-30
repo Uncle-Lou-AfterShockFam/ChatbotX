@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, test, vi } from "vitest"
 
 const {
-  cancelPendingDispatchesSpy,
-  deleteWhereSpy,
+  lockSpy,
+  cancelReturningSpy,
+  endWhereSpy,
+  setSpy,
   enrollContactInSequenceSpy,
   emitSequenceUnsubscribedSpy,
   findManySpy,
@@ -17,15 +19,14 @@ const {
 } = vi.hoisted(() => {
   const order: string[] = []
   return {
-    cancelPendingDispatchesSpy: vi.fn().mockImplementation(() => {
-      order.push("cancel")
-      return Promise.resolve([{ id: "dispatch-1", bucket: 1 }])
-    }),
-    deleteWhereSpy: vi.fn().mockImplementation(() => {
-      order.push("delete")
-      return Promise.resolve(undefined)
-    }),
-    enrollContactInSequenceSpy: vi.fn().mockResolvedValue(undefined),
+    // s228b: the removal locks the enrolments first (FOR NO KEY UPDATE)...
+    lockSpy: vi.fn(),
+    // ...cancels their pending + held dispatches (UPDATE ... RETURNING)...
+    cancelReturningSpy: vi.fn(),
+    // ...then ENDS the enrolments (UPDATE, never DELETE).
+    endWhereSpy: vi.fn(),
+    setSpy: vi.fn(),
+    enrollContactInSequenceSpy: vi.fn().mockResolvedValue("enrolled"),
     emitSequenceUnsubscribedSpy: vi.fn().mockResolvedValue(undefined),
     findManySpy: vi.fn(),
     loggerWarnSpy: vi.fn(),
@@ -36,17 +37,41 @@ const {
     // mockResolvedValueOnce queue the other tests rely on.
     sequenceFindManySpy: vi.fn(),
     order,
-    removeDispatchesFromScheduleSpy: vi.fn().mockImplementation(() => {
-      order.push("remove")
-      return Promise.resolve(undefined)
-    }),
+    removeDispatchesFromScheduleSpy: vi.fn(),
     sequenceStepFindManySpy: vi.fn(),
     transactionSpy: vi.fn(),
   }
 })
 
+const dispatchTable = { __table: "SequenceDispatch" }
+const enrollmentTable = {
+  __table: "ContactOnSequence",
+  id: { __column: "id" },
+  workspaceId: { __column: "workspaceId" },
+  contactId: { __column: "contactId" },
+  sequenceId: { __column: "sequenceId" },
+  status: { __column: "status" },
+}
+
 const txClient = {
-  delete: vi.fn(() => ({ where: deleteWhereSpy })),
+  select: vi.fn(() => ({
+    from: () => ({
+      where: () => ({
+        orderBy: () => ({ for: lockSpy }),
+      }),
+    }),
+  })),
+  update: vi.fn((table: unknown) => ({
+    set: (values: unknown) => {
+      setSpy(table, values)
+      return {
+        where: () =>
+          (table as { __table?: string }).__table === "SequenceDispatch"
+            ? { returning: cancelReturningSpy }
+            : endWhereSpy(),
+      }
+    },
+  })),
   query: {
     contactsOnSequenceModel: {
       findMany: findManySpy,
@@ -81,6 +106,8 @@ vi.mock("@chatbotx.io/database/client", () => ({
   inArray: (column: unknown, value: unknown) => ({
     __inArray: [column, value],
   }),
+  lte: (column: unknown, value: unknown) => ({ __lte: [column, value] }),
+  sql: () => ({ __sql: true }),
 }))
 
 vi.mock("@chatbotx.io/database/schema", () => ({
@@ -92,14 +119,20 @@ vi.mock("@chatbotx.io/database/schema", () => ({
   contactsOnBroadcastsModel: {},
   contactsToTagsModel: {},
   contactInboxModel: {},
-  contactsOnSequenceModel: {
-    id: { __column: "id" },
-    workspaceId: { __column: "workspaceId" },
+  contactsOnSequenceModel: enrollmentTable,
+  sequenceDispatchModel: {
+    ...dispatchTable,
+    id: { __column: "dispatch.id" },
+    bucket: { __column: "dispatch.bucket" },
+    status: { __column: "dispatch.status" },
+    enrollmentId: { __column: "dispatch.enrollmentId" },
+    workspaceId: { __column: "dispatch.workspaceId" },
   },
   sequenceModel: {
     id: { __column: "sequence.id" },
     name: { __column: "sequence.name" },
   },
+  sequenceStepModel: {},
 }))
 
 vi.mock("@chatbotx.io/analytics", () => ({
@@ -117,7 +150,7 @@ vi.mock("../src/logger", () => ({
 }))
 
 vi.mock("@chatbotx.io/sequence-scheduler", () => ({
-  cancelPendingDispatches: cancelPendingDispatchesSpy,
+  TERMINAL_END_REASONS: new Set(["bounced", "unsubscribed"]),
   enrollContactInSequence: enrollContactInSequenceSpy,
   removeDispatchesFromSchedule: removeDispatchesFromScheduleSpy,
 }))
@@ -130,14 +163,26 @@ describe("contactSequenceService", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     order.length = 0
-    findManySpy.mockResolvedValue([
-      {
-        contactId: "contact-1",
-        id: "enrollment-1",
-        sequenceId: "sequence-1",
-        workspaceId: "ws-1",
-      },
-    ])
+    lockSpy.mockImplementation(() => {
+      order.push("lock")
+      return Promise.resolve([
+        {
+          contactId: "contact-1",
+          id: "enrollment-1",
+          sequenceId: "sequence-1",
+          workspaceId: "ws-1",
+        },
+      ])
+    })
+    cancelReturningSpy.mockImplementation(() => {
+      order.push("cancel")
+      return Promise.resolve([{ id: "dispatch-enrollment-1", bucket: 1 }])
+    })
+    endWhereSpy.mockImplementation(() => {
+      order.push("end")
+      return Promise.resolve(undefined)
+    })
+    findManySpy.mockResolvedValue([])
     selectFromSpy.mockReturnValue({ where: selectWhereSpy })
     selectWhereSpy.mockResolvedValue([{ id: "sequence-1", name: "Sequence 1" }])
     sequenceStepFindManySpy.mockResolvedValue([])
@@ -146,19 +191,11 @@ describe("contactSequenceService", () => {
     sequenceFindManySpy.mockImplementation(({ where }) =>
       Promise.resolve((where.id.in as string[]).map((id: string) => ({ id }))),
     )
-    deleteWhereSpy.mockImplementation(() => {
-      order.push("delete")
-      return Promise.resolve(undefined)
-    })
-    cancelPendingDispatchesSpy.mockImplementation(({ enrollmentId }) => {
-      order.push("cancel")
-      return Promise.resolve([{ id: `dispatch-${enrollmentId}`, bucket: 1 }])
-    })
     removeDispatchesFromScheduleSpy.mockImplementation(() => {
       order.push("remove")
       return Promise.resolve(undefined)
     })
-    enrollContactInSequenceSpy.mockResolvedValue(undefined)
+    enrollContactInSequenceSpy.mockResolvedValue("enrolled")
     transactionSpy.mockImplementation(async (cb) => {
       const result = await cb(txClient)
       order.push("tx-done")
@@ -166,7 +203,7 @@ describe("contactSequenceService", () => {
     })
   })
 
-  test("removes contact sequences in a transaction before removing scheduler entries", async () => {
+  test("s228b: ENDS the enrolment (never deletes it): lock, cancel pending + held dispatches, end, commit, then the schedule", async () => {
     await contactSequenceService.removeContactSequencesForContacts({
       workspaceId: "ws-1",
       contactIds: ["contact-1"],
@@ -174,19 +211,44 @@ describe("contactSequenceService", () => {
       reason: "subscription_removed",
     })
 
-    expect(findManySpy).toHaveBeenCalledOnce()
-    expect(cancelPendingDispatchesSpy).toHaveBeenCalledWith({
-      client: txClient,
-      enrollmentId: "enrollment-1",
-      workspaceId: "ws-1",
-      reason: "subscription_removed",
-      removeFromSchedule: false,
-    })
-    expect(deleteWhereSpy).toHaveBeenCalledOnce()
+    expect(lockSpy).toHaveBeenCalledWith("no key update")
+    expect(setSpy).toHaveBeenCalledWith(
+      expect.objectContaining(dispatchTable),
+      expect.objectContaining({
+        status: "canceled",
+        lastError: "subscription_removed",
+      }),
+    )
+    expect(setSpy).toHaveBeenCalledWith(
+      enrollmentTable,
+      expect.objectContaining({
+        status: "ended",
+        endReason: "subscription_removed",
+        // COALESCE(endedAt, now): a terminal overwrite keeps the first end.
+        endedAt: expect.anything(),
+      }),
+    )
+    expect(txClient).not.toHaveProperty("delete")
     expect(removeDispatchesFromScheduleSpy).toHaveBeenCalledWith([
       { id: "dispatch-enrollment-1", bucket: 1 },
     ])
-    expect(order).toEqual(["cancel", "delete", "tx-done", "remove"])
+    expect(order).toEqual(["lock", "cancel", "end", "tx-done", "remove"])
+  })
+
+  test("s228b: nothing left to end (already ended rows are filtered by the lock) touches no dispatch", async () => {
+    lockSpy.mockResolvedValueOnce([])
+
+    const result =
+      await contactSequenceService.removeContactSequencesForContacts({
+        workspaceId: "ws-1",
+        contactIds: ["contact-1"],
+        sequenceIds: ["sequence-1"],
+        reason: "contact_replied",
+      })
+
+    expect(result).toEqual([])
+    expect(setSpy).not.toHaveBeenCalled()
+    expect(emitSequenceUnsubscribedSpy).not.toHaveBeenCalled()
   })
 
   test("logs and resolves when scheduler removal fails after remove commit", async () => {
@@ -208,8 +270,8 @@ describe("contactSequenceService", () => {
     )
   })
 
-  test("does not remove scheduler entries when deleting enrollments fails", async () => {
-    deleteWhereSpy.mockRejectedValueOnce(new Error("delete failed"))
+  test("does not remove scheduler entries when ending enrollments fails", async () => {
+    endWhereSpy.mockRejectedValueOnce(new Error("end failed"))
 
     await expect(
       contactSequenceService.removeContactSequencesForContacts({
@@ -218,15 +280,13 @@ describe("contactSequenceService", () => {
         sequenceIds: ["sequence-1"],
         reason: "subscription_removed",
       }),
-    ).rejects.toThrow("delete failed")
+    ).rejects.toThrow("end failed")
 
     expect(removeDispatchesFromScheduleSpy).not.toHaveBeenCalled()
   })
 
   test("updates contact sequences in one transaction and defers scheduler removal until add succeeds", async () => {
-    findManySpy
-      .mockResolvedValueOnce([{ sequenceId: "sequence-old" }])
-      .mockResolvedValueOnce([{ id: "enrollment-old", workspaceId: "ws-1" }])
+    findManySpy.mockResolvedValueOnce([{ sequenceId: "sequence-old" }])
     sequenceStepFindManySpy.mockResolvedValueOnce([])
     enrollContactInSequenceSpy.mockRejectedValueOnce(new Error("add failed"))
     transactionSpy.mockImplementationOnce(async (cb) => {
@@ -243,15 +303,8 @@ describe("contactSequenceService", () => {
     ).rejects.toThrow("add failed")
 
     expect(transactionSpy).toHaveBeenCalledOnce()
-    expect(cancelPendingDispatchesSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        client: txClient,
-        enrollmentId: "enrollment-old",
-        removeFromSchedule: false,
-      }),
-    )
     expect(removeDispatchesFromScheduleSpy).not.toHaveBeenCalled()
-    expect(order).toEqual(["cancel", "delete"])
+    expect(order).toEqual(["lock", "cancel", "end"])
   })
 
   test("logs and returns updated sequences when scheduler removal fails after update commit", async () => {
@@ -261,7 +314,6 @@ describe("contactSequenceService", () => {
     const scheduleError = new Error("redis down")
     findManySpy
       .mockResolvedValueOnce([{ sequenceId: "sequence-old" }])
-      .mockResolvedValueOnce([{ id: "enrollment-old", workspaceId: "ws-1" }])
       .mockResolvedValueOnce(returnedSequences)
     sequenceStepFindManySpy.mockResolvedValueOnce([])
     removeDispatchesFromScheduleSpy.mockRejectedValueOnce(scheduleError)
@@ -285,15 +337,15 @@ describe("contactSequenceService", () => {
     ]
     findManySpy
       .mockResolvedValueOnce([{ sequenceId: "sequence-old" }])
-      .mockResolvedValueOnce([
-        {
-          contactId: "contact-1",
-          id: "enrollment-old",
-          sequenceId: "sequence-old",
-          workspaceId: "ws-1",
-        },
-      ])
       .mockResolvedValueOnce(returnedSequences)
+    lockSpy.mockResolvedValueOnce([
+      {
+        contactId: "contact-1",
+        id: "enrollment-old",
+        sequenceId: "sequence-old",
+        workspaceId: "ws-1",
+      },
+    ])
     sequenceStepFindManySpy.mockResolvedValueOnce([])
     selectWhereSpy.mockResolvedValueOnce([
       { id: "sequence-old", name: "Old sequence" },
@@ -349,8 +401,8 @@ describe("contactSequenceService", () => {
     ).rejects.toThrow("client and useTransaction are mutually exclusive")
 
     expect(transactionSpy).not.toHaveBeenCalled()
-    expect(cancelPendingDispatchesSpy).not.toHaveBeenCalled()
-    expect(deleteWhereSpy).not.toHaveBeenCalled()
+    expect(lockSpy).not.toHaveBeenCalled()
+    expect(setSpy).not.toHaveBeenCalled()
   })
 
   // ---------------------------------------------------------------------
@@ -380,7 +432,7 @@ describe("contactSequenceService", () => {
   })
 
   test("drops and warns on a contactInboxId supplied for a multi-contact removal instead of misattributing", async () => {
-    findManySpy.mockResolvedValue([
+    lockSpy.mockResolvedValueOnce([
       {
         contactId: "contact-1",
         id: "enrollment-1",
@@ -427,7 +479,7 @@ describe("contactSequenceService", () => {
   })
 
   test("bulk removal without a contactInboxId never warns and emits with no attribution (genuine fallback)", async () => {
-    findManySpy.mockResolvedValue([
+    lockSpy.mockResolvedValueOnce([
       {
         contactId: "contact-1",
         id: "enrollment-1",

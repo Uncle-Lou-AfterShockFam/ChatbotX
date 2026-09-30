@@ -9,6 +9,7 @@ import { SchedulerClient } from "@chatbotx.io/scheduler"
 import { createId } from "@chatbotx.io/utils"
 import { getDispatchContactInboxes } from "./contacts-on-sequences"
 import { createDispatch } from "./dispatch-manager"
+import { reactivateEnrollment } from "./reactivate-enrollment"
 
 type DrizzleClient = typeof db | Transaction
 type DispatchToSchedule = { id: string; bucket: number; runAtMs: string }
@@ -23,7 +24,16 @@ export type EnrollContactParams = {
   sequenceId: string
 }
 
-export async function enrollContactInSequence(params: EnrollContactParams) {
+/**
+ * enrolled = a new row; reactivated = an ENDED, non-terminal row resumed at
+ * its step (s228b); skipped = already enrolled (active, held, completed) or
+ * ended for a terminal reason.
+ */
+export type EnrollOutcome = "enrolled" | "reactivated" | "skipped"
+
+export async function enrollContactInSequence(
+  params: EnrollContactParams,
+): Promise<EnrollOutcome> {
   const {
     workspaceId,
     contactId,
@@ -34,6 +44,7 @@ export async function enrollContactInSequence(params: EnrollContactParams) {
     client,
   } = params
 
+  let outcome: EnrollOutcome = "enrolled"
   const enroll = async (
     dbClient: DrizzleClient,
   ): Promise<DispatchToSchedule[]> => {
@@ -43,11 +54,25 @@ export async function enrollContactInSequence(params: EnrollContactParams) {
         sequenceId,
         workspaceId,
       },
-      columns: { id: true },
+      columns: { id: true, status: true },
     })
 
     if (existing) {
-      return []
+      if (existing.status !== "ended") {
+        outcome = "skipped"
+        return []
+      }
+      const result = await reactivateEnrollment({
+        client: dbClient,
+        workspaceId,
+        enrollmentId: existing.id,
+      })
+      if (result.kind !== "reactivated") {
+        outcome = "skipped"
+        return []
+      }
+      outcome = "reactivated"
+      return result.dispatches
     }
 
     const enrollmentId = createId()
@@ -98,10 +123,17 @@ export async function enrollContactInSequence(params: EnrollContactParams) {
     ? await enroll(client)
     : await db.transaction(enroll)
 
+  await scheduleDispatches(dispatches)
+  return outcome
+}
+
+/** Adds committed dispatches to the Redis schedule. */
+export async function scheduleDispatches(
+  dispatches: DispatchToSchedule[],
+): Promise<void> {
   if (dispatches.length === 0) {
     return
   }
-
   const redisClient = await sequenceConnections.useExisting()
   const scheduler = new SchedulerClient(redisClient)
   for (const dispatch of dispatches) {

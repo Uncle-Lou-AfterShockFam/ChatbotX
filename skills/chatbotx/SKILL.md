@@ -244,7 +244,7 @@ Call `capabilities_get` and `token_get` first — both are always visible regard
 | AI Agents | `ai_agents_list`, `ai_agents_create`, `ai_agents_update`, `ai_files_list`, `ai_functions_list` |
 | Analytics | `analytics_new_contact_counts_per_day`, `analytics_blocked_contacts_per_day`, `analytics_flow_stats`, `analytics_broadcast_stats`, `analytics_sequence_step_stats` |
 | Broadcasts | `broadcasts_list`, `broadcasts_get`, `broadcasts_stop` |
-| Contacts | `contacts_create`, `contacts_get`, `contacts_list`, `contacts_list_tags`, `contacts_add_tags_by_name`, `contacts_list_custom_fields`, `contacts_set_custom_field`, `contacts_list_messages`, `contacts_send_message`, `contacts_send_flow`, `contacts_list_sequences`, `contacts_subscribe_sequences`, `contacts_resume_sequence` |
+| Contacts | `contacts_create`, `contacts_get`, `contacts_list`, `contacts_list_tags`, `contacts_add_tags_by_name`, `contacts_list_custom_fields`, `contacts_set_custom_field`, `contacts_list_messages`, `contacts_send_message`, `contacts_send_flow`, `contacts_list_sequences`, `contacts_subscribe_sequences`, `contacts_resume_sequence`, `contacts_reactivate_sequence` |
 | Conversations | `conversations_list`, `conversations_get`, `conversations_assign` |
 | Error Logs | `error_logs_list` |
 | Flows | `flows_list`, `flows_get`, `flows_create`, `flows_update_draft`, `flows_publish`, `flows_validate` |
