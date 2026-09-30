@@ -7779,6 +7779,8 @@
     "archiveConfirm": "Unterhaltungen mit diesem Postfach senden nicht mehr. Dies kann nicht rückgängig gemacht werden.",
     "statusLabel": "Status",
     "disconnected": "Getrennt",
+    "reconnect": "Passwort aktualisieren",
+    "reconnectHint": "Dieses Postfach kann sich nicht mehr anmelden ({reason}). Geben Sie ein neues Passwort ein, um es wieder zu verbinden.",
     "status": {
       "active": "Aktiv",
       "paused": "Pausiert",

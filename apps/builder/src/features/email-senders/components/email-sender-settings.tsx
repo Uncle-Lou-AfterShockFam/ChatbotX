@@ -211,6 +211,8 @@ function SenderDialog(props: {
   const set = (patch: Partial<FormState>) =>
     setForm((f) => ({ ...f, ...patch }))
   const pending = create.isPending || update.isPending
+  // s229b: a disconnected sender comes back only with a new password.
+  const disconnected = props.sender?.status === "disconnected"
 
   const applyGmailPreset = () => {
     const { smtp, imap } = GMAIL_APP_PASSWORD_PRESET
@@ -268,6 +270,16 @@ function SenderDialog(props: {
             {props.sender ? t("editTitle") : t("addTitle")}
           </DialogTitle>
           <DialogDescription>{t("formDescription")}</DialogDescription>
+          {disconnected ? (
+            <p
+              className="text-destructive text-sm"
+              data-testid="email-sender-reconnect-hint"
+            >
+              {t("reconnectHint", {
+                reason: props.sender?.disconnectionReason ?? "-",
+              })}
+            </p>
+          ) : null}
         </DialogHeader>
         <form className="space-y-4" id="email-sender-form" onSubmit={onSubmit}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -342,7 +354,9 @@ function SenderDialog(props: {
             id="email-sender-password"
             label={t("password")}
             onChange={(password) => set({ password })}
-            placeholder={props.sender ? t("passwordKeep") : undefined}
+            placeholder={
+              props.sender && !disconnected ? t("passwordKeep") : undefined
+            }
             type="password"
             value={form.password}
           />
@@ -392,7 +406,7 @@ function SenderDialog(props: {
           </Button>
           <Button
             data-testid="email-sender-save"
-            disabled={pending}
+            disabled={pending || (disconnected && form.password === "")}
             form="email-sender-form"
             type="submit"
           >
@@ -438,33 +452,44 @@ function SenderRow(props: {
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {sender.status === "disconnected" ? (
-          <Badge variant="destructive">{t("status.disconnected")}</Badge>
-        ) : null}
-        <Select
-          items={statusItems}
-          onValueChange={(value) =>
-            setStatus.mutate(
-              {
-                workspaceId: props.workspaceId,
-                id: sender.id,
-                status: value as EmailSenderUserStatus,
-              },
-              { onError: (err) => toast.error(errorMessage(err)) },
-            )
-          }
-          value={sender.status === "disconnected" ? null : sender.status}
-        >
-          <SelectTrigger aria-label={t("statusLabel")} className="w-32">
-            <SelectValue placeholder={t("status.disconnected")} />
-          </SelectTrigger>
-          <SelectContent>
-            {statusItems.map((item) => (
-              <SelectItem key={item.value} value={item.value}>
-                {item.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <>
+            <Badge variant="destructive">{t("status.disconnected")}</Badge>
+            {/* Only a new password reconnects it (the server 409s a status change). */}
+            <Button
+              data-testid="email-sender-reconnect"
+              onClick={props.onEdit}
+              size="sm"
+            >
+              {t("reconnect")}
+            </Button>
+          </>
+        ) : (
+          <Select
+            items={statusItems}
+            onValueChange={(value) =>
+              setStatus.mutate(
+                {
+                  workspaceId: props.workspaceId,
+                  id: sender.id,
+                  status: value as EmailSenderUserStatus,
+                },
+                { onError: (err) => toast.error(errorMessage(err)) },
+              )
+            }
+            value={sender.status}
+          >
+            <SelectTrigger aria-label={t("statusLabel")} className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {statusItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <Button onClick={props.onEdit} size="sm" variant="outline">
           {t("edit")}
         </Button>

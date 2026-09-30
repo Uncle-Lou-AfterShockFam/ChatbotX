@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 
 /**
  * s229b mailbox sender routes: every private route sits behind the
- * contacts-access workspace gate and passes the ROUTE's workspaceId to the
+ * workspace-admin gate (superAdmin) and passes the ROUTE's workspaceId to the
  * service; the line's credential feed is scoped to the TOKEN's inbox and
  * workspace, rate-limited, and never cached. No response carries a secret
  * the route did not mean to send.
@@ -47,9 +47,9 @@ vi.mock("@/orpc", () => {
     channelApiTokenAPI: api("channel"),
   }
 })
-const MW = Symbol("contactsAccessAuthorizedMiddleware")
+const MW = Symbol("superAdminAuthorizedMiddleware")
 vi.mock("@/middlewares/auth", () => ({
-  contactsAccessAuthorizedMiddleware: MW,
+  superAdminAuthorizedMiddleware: MW,
 }))
 const rateLimit = vi.fn(async (_args: unknown) => undefined)
 vi.mock("@/lib/rate-limit/api-rate-limit", () => ({
@@ -97,7 +97,7 @@ beforeEach(() => vi.clearAllMocks())
 const base = "/workspaces/{workspaceId}/email-senders"
 
 describe("email sender private routes (s229b)", () => {
-  test("all five routes exist and every one is gated by contacts access", () => {
+  test("all five routes exist and every one is gated to workspace admins", () => {
     const own = captured.filter((c) => c.route.path.startsWith(base))
     expect(own).toHaveLength(5)
     for (const entry of own) {

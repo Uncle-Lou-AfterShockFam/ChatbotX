@@ -7779,6 +7779,8 @@
     "archiveConfirm": "Samtaler, der bruger denne postkasse, holder op med at sende. Kan ikke fortrydes.",
     "statusLabel": "Status",
     "disconnected": "Afbrudt",
+    "reconnect": "Opdater adgangskode",
+    "reconnectHint": "Denne postkasse kan ikke længere logge ind ({reason}). Indtast en ny adgangskode for at forbinde den igen.",
     "status": {
       "active": "Aktiv",
       "paused": "Sat på pause",

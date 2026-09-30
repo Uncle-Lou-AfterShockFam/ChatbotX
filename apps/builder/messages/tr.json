@@ -7779,6 +7779,8 @@
     "archiveConfirm": "Bu posta kutusunu kullanan konuşmalar göndermeyi durdurur. Geri alınamaz.",
     "statusLabel": "Durum",
     "disconnected": "Bağlantı kesildi",
+    "reconnect": "Parolayı güncelle",
+    "reconnectHint": "Bu posta kutusu artık oturum açamıyor ({reason}). Yeniden bağlamak için yeni bir parola girin.",
     "status": {
       "active": "Etkin",
       "paused": "Duraklatıldı",

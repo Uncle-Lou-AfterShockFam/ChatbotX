@@ -7779,6 +7779,8 @@
     "archiveConfirm": "As conversas que usam esta caixa deixarão de enviar. Não é possível desfazer.",
     "statusLabel": "Status",
     "disconnected": "Desconectado",
+    "reconnect": "Atualizar senha",
+    "reconnectHint": "Esta caixa parou de fazer login ({reason}). Digite uma senha nova para reconectá-la.",
     "status": {
       "active": "Ativo",
       "paused": "Pausado",

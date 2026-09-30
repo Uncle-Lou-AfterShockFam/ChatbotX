@@ -7779,6 +7779,8 @@
     "archiveConfirm": "Các cuộc hội thoại dùng hộp thư này sẽ ngừng gửi. Không thể hoàn tác.",
     "statusLabel": "Trạng thái",
     "disconnected": "Mất kết nối",
+    "reconnect": "Cập nhật mật khẩu",
+    "reconnectHint": "Hộp thư này không đăng nhập được nữa ({reason}). Nhập mật khẩu mới để kết nối lại.",
     "status": {
       "active": "Hoạt động",
       "paused": "Tạm dừng",

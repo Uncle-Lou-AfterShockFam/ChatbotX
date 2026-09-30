@@ -7779,6 +7779,8 @@
     "archiveConfirm": "Conversations that use this mailbox stop sending. This cannot be undone.",
     "statusLabel": "Status",
     "disconnected": "Disconnected",
+    "reconnect": "Update password",
+    "reconnectHint": "This mailbox stopped signing in ({reason}). Enter a new password to reconnect it.",
     "status": {
       "active": "Active",
       "paused": "Paused",

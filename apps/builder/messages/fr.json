@@ -7779,6 +7779,8 @@
     "archiveConfirm": "Les conversations qui utilisent cette boîte n'enverront plus. Action irréversible.",
     "statusLabel": "Statut",
     "disconnected": "Déconnecté",
+    "reconnect": "Mettre à jour le mot de passe",
+    "reconnectHint": "Cette boîte ne parvient plus à se connecter ({reason}). Saisissez un nouveau mot de passe pour la reconnecter.",
     "status": {
       "active": "Actif",
       "paused": "En pause",

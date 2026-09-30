@@ -7779,6 +7779,8 @@
     "archiveConfirm": "Las conversaciones que usan este buzón dejarán de enviar. No se puede deshacer.",
     "statusLabel": "Estado",
     "disconnected": "Desconectado",
+    "reconnect": "Actualizar contraseña",
+    "reconnectHint": "Este buzón dejó de iniciar sesión ({reason}). Introduce una contraseña nueva para reconectarlo.",
     "status": {
       "active": "Activo",
       "paused": "En pausa",

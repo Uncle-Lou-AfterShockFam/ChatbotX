@@ -7779,6 +7779,8 @@
     "archiveConfirm": "Konversationer som använder brevlådan slutar skicka. Kan inte ångras.",
     "statusLabel": "Status",
     "disconnected": "Frånkopplad",
+    "reconnect": "Uppdatera lösenord",
+    "reconnectHint": "Brevlådan kan inte längre logga in ({reason}). Ange ett nytt lösenord för att ansluta den igen.",
     "status": {
       "active": "Aktiv",
       "paused": "Pausad",

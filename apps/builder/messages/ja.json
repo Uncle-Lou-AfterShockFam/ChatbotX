@@ -7779,6 +7779,8 @@
     "archiveConfirm": "このメールボックスを使う会話は送信を停止します。元に戻せません。",
     "statusLabel": "ステータス",
     "disconnected": "切断",
+    "reconnect": "パスワードを更新",
+    "reconnectHint": "このメールボックスはサインインできなくなりました（{reason}）。再接続するには新しいパスワードを入力してください。",
     "status": {
       "active": "有効",
       "paused": "一時停止",

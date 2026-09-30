@@ -24,7 +24,11 @@ import {
 import type { EmailSenderModel } from "@chatbotx.io/database/types"
 import { createId } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
-import { notFoundException, validationException } from "../errors"
+import {
+  emailSenderCredentialsRequiredException,
+  notFoundException,
+  validationException,
+} from "../errors"
 import { logger } from "../logger"
 import {
   createEmailSenderInput,
@@ -104,6 +108,17 @@ function assertOnePassword(secret: EmailSenderSmtpSecret) {
     )
   }
 }
+
+/** The feed's logins for a sender whose secret cannot be decrypted. */
+const UNREADABLE = {
+  smtp: { host: "smtp.unreadable.invalid", port: 465, secure: true },
+  imap: {
+    host: "imap.unreadable.invalid",
+    port: 993,
+    secure: true,
+    mailbox: "INBOX",
+  },
+} as const
 
 const utcMidnight = (now: Date) =>
   new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
@@ -199,7 +214,11 @@ export class EmailSenderService extends BaseService {
     return await this.toView(row)
   }
 
-  /** A blank (or absent) password keeps the stored one. */
+  /**
+   * A blank (or absent) password keeps the stored one. A NEW password
+   * reconnects a disconnected sender (status active, reason cleared); it
+   * leaves any other status as it is.
+   */
   async update(input: unknown): Promise<EmailSenderView> {
     const { workspaceId, id, connection, ...fields } = parseInput(
       updateEmailSenderInput,
@@ -246,9 +265,21 @@ export class EmailSenderService extends BaseService {
       assertOnePassword(next)
       secret = await encryptEmailSenderSecret(next, id)
     }
+    const reconnect = Boolean(
+      connection && (connection.smtp.password || connection.imap.password),
+    )
     const [row] = await db
       .update(emailSenderModel)
-      .set({ ...fields, ...(secret ? { secret } : {}) })
+      .set({
+        ...fields,
+        ...(secret ? { secret } : {}),
+        ...(reconnect
+          ? {
+              status: sql`CASE WHEN ${emailSenderModel.status} = 'disconnected' THEN 'active' ELSE ${emailSenderModel.status} END`,
+              disconnectionReason: null,
+            }
+          : {}),
+      })
       .where(
         and(
           eq(emailSenderModel.id, id),
@@ -265,8 +296,9 @@ export class EmailSenderService extends BaseService {
   }
 
   /**
-   * active | paused | draining. `disconnected` is the system's; setting a
-   * disconnected sender back clears its reason. An archived sender is final.
+   * active | paused | draining. `disconnected` is the system's and only an
+   * update with a new password leaves it (409 emailSenderCredentialsRequired
+   * here). An archived sender is final (404).
    */
   async setStatus(input: unknown): Promise<EmailSenderView> {
     const { workspaceId, id, status } = parseInput(
@@ -275,16 +307,22 @@ export class EmailSenderService extends BaseService {
     )
     const [row] = await db
       .update(emailSenderModel)
-      .set({ status, disconnectionReason: null })
+      .set({ status })
       .where(
         and(
           eq(emailSenderModel.id, id),
           eq(emailSenderModel.workspaceId, workspaceId),
           ne(emailSenderModel.status, "archived"),
+          ne(emailSenderModel.status, "disconnected"),
         ),
       )
       .returning()
     if (!row) {
+      const current = await this.findLive(workspaceId, id)
+      if (current.status === "disconnected") {
+        throw emailSenderCredentialsRequiredException()
+      }
+      // Changed between the update and this read: the caller retries.
       throw notFoundException(SENDER_NOT_FOUND)
     }
     await this.audit("update", `set email sender #${id} ${status}`)
@@ -318,8 +356,9 @@ export class EmailSenderService extends BaseService {
   /**
    * The line's credential feed (wire contract sec. 2): its non-archived
    * senders, at most 50, oldest first, WITH the password. Only the line's
-   * own token route may call this. A row whose secret cannot be decrypted is
-   * left out with an error log (never the secret, never the whole feed).
+   * own token route may call this. A row whose secret cannot be decrypted
+   * stays, with `auth: null` (the line holds its mail) and an error log
+   * naming the sender id only.
    */
   async listForLine(input: unknown): Promise<EmailSenderFeedRow[]> {
     const { workspaceId, lineInboxId } = parseInput(emailSenderLineInput, input)
@@ -366,10 +405,19 @@ export class EmailSenderService extends BaseService {
       try {
         secret = await decryptEmailSenderSecret(row)
       } catch {
+        // Kept with auth null so the line HOLDS this sender's sticky mail
+        // instead of failing it as an unknown sender. Its logins cannot be
+        // read either: `.invalid` hosts (RFC 2606) the line never dials.
         logger.error(
-          { senderId: row.id, lineInboxId },
-          "email sender secret cannot be decrypted; left out of the feed",
+          { senderId: row.id },
+          "email sender secret cannot be decrypted; fed with auth null",
         )
+        feed.push({
+          ...base,
+          smtp: { ...UNREADABLE.smtp, user: row.address },
+          imap: { ...UNREADABLE.imap, user: row.address },
+          auth: null,
+        })
         continue
       }
       const { smtp, imap } = connectionOf(secret)

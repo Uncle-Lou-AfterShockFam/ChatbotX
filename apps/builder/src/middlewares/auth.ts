@@ -4,7 +4,10 @@ import {
   workspaceMemberService,
 } from "@chatbotx.io/business"
 import { withAuditContext } from "@chatbotx.io/business/audit"
-import { hasContactsAccess } from "@chatbotx.io/business/workspace-member/permissions"
+import {
+  hasContactsAccess,
+  hasWorkspacePermission,
+} from "@chatbotx.io/business/workspace-member/permissions"
 import { ORPCError } from "@orpc/server"
 import { auth } from "@/lib/auth/auth"
 import { getGuestClientIp } from "@/lib/rate-limit/guest-rate-limit"
@@ -53,6 +56,7 @@ export const authMiddleware = base.middleware(async ({ context, next }) => {
  */
 const createWorkspaceAuthorizedMiddleware = (options: {
   requireContactsAccess: boolean
+  requireSuperAdmin?: boolean
 }) =>
   base.middleware(async ({ context, next, procedure }, workspaceId: string) => {
     if (!context.user) {
@@ -81,6 +85,15 @@ const createWorkspaceAuthorizedMiddleware = (options: {
       !hasContactsAccess(member.permissions)
     ) {
       throw new ORPCError("FORBIDDEN", { message: "Contacts access required" })
+    }
+
+    if (
+      options.requireSuperAdmin &&
+      !hasWorkspacePermission(member.permissions, "superAdmin")
+    ) {
+      throw new ORPCError("FORBIDDEN", {
+        message: "Workspace admin access required",
+      })
     }
 
     if (isWorkspaceScheduledForDeletion(workspace)) {
@@ -126,3 +139,13 @@ export const workspaceAuthorizedMidddleware =
 /** Deals, pipelines: the contacts-section permission gates the API as well as the nav. */
 export const contactsAccessAuthorizedMiddleware =
   createWorkspaceAuthorizedMiddleware({ requireContactsAccess: true })
+
+/**
+ * Workspace settings that hold credentials (s229b mailbox senders): admins
+ * and owners only, the same `superAdmin` rule the Settings layout applies.
+ */
+export const superAdminAuthorizedMiddleware =
+  createWorkspaceAuthorizedMiddleware({
+    requireContactsAccess: false,
+    requireSuperAdmin: true,
+  })

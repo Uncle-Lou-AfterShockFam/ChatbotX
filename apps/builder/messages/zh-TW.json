@@ -7779,6 +7779,8 @@
     "archiveConfirm": "使用此信箱的對話將停止寄送。此動作無法復原。",
     "statusLabel": "狀態",
     "disconnected": "已中斷",
+    "reconnect": "更新密碼",
+    "reconnectHint": "此信箱已無法登入（{reason}）。請輸入新密碼以重新連線。",
     "status": {
       "active": "啟用",
       "paused": "已暫停",

@@ -7779,6 +7779,8 @@
     "archiveConfirm": "As conversas que usam esta caixa deixarão de enviar. Não é possível anular.",
     "statusLabel": "Estado",
     "disconnected": "Desligado",
+    "reconnect": "Atualizar palavra-passe",
+    "reconnectHint": "Esta caixa deixou de iniciar sessão ({reason}). Introduza uma nova palavra-passe para a voltar a ligar.",
     "status": {
       "active": "Ativo",
       "paused": "Em pausa",

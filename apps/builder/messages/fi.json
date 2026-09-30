@@ -7779,6 +7779,8 @@
     "archiveConfirm": "Tätä postilaatikkoa käyttävät keskustelut lakkaavat lähettämästä. Tätä ei voi perua.",
     "statusLabel": "Tila",
     "disconnected": "Yhteys katkennut",
+    "reconnect": "Päivitä salasana",
+    "reconnectHint": "Tämä postilaatikko ei enää pysty kirjautumaan ({reason}). Anna uusi salasana yhdistääksesi sen uudelleen.",
     "status": {
       "active": "Aktiivinen",
       "paused": "Keskeytetty",

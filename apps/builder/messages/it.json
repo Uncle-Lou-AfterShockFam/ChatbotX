@@ -7779,6 +7779,8 @@
     "archiveConfirm": "Le conversazioni che usano questa casella smetteranno di inviare. Operazione irreversibile.",
     "statusLabel": "Stato",
     "disconnected": "Disconnesso",
+    "reconnect": "Aggiorna password",
+    "reconnectHint": "Questa casella non riesce più ad accedere ({reason}). Inserisci una nuova password per riconnetterla.",
     "status": {
       "active": "Attivo",
       "paused": "In pausa",

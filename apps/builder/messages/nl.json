@@ -7779,6 +7779,8 @@
     "archiveConfirm": "Gesprekken die deze mailbox gebruiken versturen niet meer. Dit kan niet ongedaan worden gemaakt.",
     "statusLabel": "Status",
     "disconnected": "Losgekoppeld",
+    "reconnect": "Wachtwoord bijwerken",
+    "reconnectHint": "Deze mailbox kan niet meer inloggen ({reason}). Voer een nieuw wachtwoord in om opnieuw te verbinden.",
     "status": {
       "active": "Actief",
       "paused": "Gepauzeerd",

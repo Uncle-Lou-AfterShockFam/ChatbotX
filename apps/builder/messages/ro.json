@@ -7779,6 +7779,8 @@
     "archiveConfirm": "Conversațiile care folosesc această căsuță nu vor mai trimite. Acțiune ireversibilă.",
     "statusLabel": "Stare",
     "disconnected": "Deconectat",
+    "reconnect": "Actualizează parola",
+    "reconnectHint": "Această căsuță nu se mai poate autentifica ({reason}). Introdu o parolă nouă pentru a o reconecta.",
     "status": {
       "active": "Activ",
       "paused": "În pauză",

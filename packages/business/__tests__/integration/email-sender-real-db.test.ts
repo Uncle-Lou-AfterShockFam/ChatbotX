@@ -17,6 +17,10 @@ import { afterAll, afterEach, describe, expect, test, vi } from "vitest"
 vi.mock("../../src/audit/dispatcher", () => ({
   dispatchAuditRecord: vi.fn(async () => undefined),
 }))
+const { errorLog } = vi.hoisted(() => ({ errorLog: vi.fn() }))
+vi.mock("../../src/logger", () => ({
+  logger: { error: errorLog, warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+}))
 
 const databaseUrl = requireRealDatabaseUrl()
 
@@ -509,5 +513,106 @@ describe.skipIf(!databaseUrl)("emailSenderService (s229b)", () => {
     await expect(
       db.execute(sql`DELETE FROM "EmailSender" WHERE id = ${a.id}`),
     ).rejects.toThrow()
+  })
+
+  test("disconnected: no status change brings it back (409); only an update with a NEW password reconnects it", async () => {
+    const s = await seed()
+    const a = await create(s, s.lineA, "a@example.com")
+    const b = await create(s, s.lineA, "b@example.com")
+    await db.execute(sql`
+      UPDATE "EmailSender" SET status = 'disconnected', "disconnectionReason" = 'AUTH failed'
+      WHERE id IN (${a.id}, ${b.id})`)
+    for (const status of ["active", "paused", "draining"] as const) {
+      await expect(
+        emailSenderService.setStatus({
+          workspaceId: s.workspaceId,
+          id: a.id,
+          status,
+        }),
+      ).rejects.toMatchObject({
+        httpStatusCode: 409,
+        code: "emailSenderCredentialsRequired",
+      })
+    }
+    const listed = await emailSenderService.list({ workspaceId: s.workspaceId })
+    expect(listed.find((v) => v.id === a.id)).toMatchObject({
+      status: "disconnected",
+      disconnectionReason: "AUTH failed",
+    })
+    // No password, or a blank one: still disconnected.
+    const blank = connection("a@example.com", "")
+    for (const patch of [{ fromName: "Renamed" }, { connection: blank }]) {
+      await expect(
+        emailSenderService.update({
+          workspaceId: s.workspaceId,
+          id: a.id,
+          ...patch,
+        }),
+      ).resolves.toMatchObject({
+        status: "disconnected",
+        disconnectionReason: "AUTH failed",
+      })
+    }
+    await expect(
+      emailSenderService.update({
+        workspaceId: s.workspaceId,
+        id: a.id,
+        connection: connection("a@example.com", "fresh-pass-1"),
+      }),
+    ).resolves.toMatchObject({ status: "active", disconnectionReason: null })
+    // A new password on a PAUSED sender does not activate it.
+    await emailSenderService.setStatus({
+      workspaceId: s.workspaceId,
+      id: a.id,
+      status: "paused",
+    })
+    await expect(
+      emailSenderService.update({
+        workspaceId: s.workspaceId,
+        id: a.id,
+        connection: connection("a@example.com", "fresh-pass-2"),
+      }),
+    ).resolves.toMatchObject({ status: "paused" })
+    // An archived sender is gone (404), not "update credentials".
+    await emailSenderService.archive({ workspaceId: s.workspaceId, id: b.id })
+    await expect(
+      emailSenderService.setStatus({
+        workspaceId: s.workspaceId,
+        id: b.id,
+        status: "active",
+      }),
+    ).rejects.toMatchObject({ httpStatusCode: 404 })
+  })
+
+  test("an undecryptable secret stays in the feed with auth null; the log names the sender id only", async () => {
+    const s = await seed()
+    const good = await create(s, s.lineA, "good@example.com")
+    const bad = await create(s, s.lineA, "bad@example.com")
+    // Another row's blob: valid shape, wrong AAD.
+    await db.execute(sql`
+      UPDATE "EmailSender" SET secret = (SELECT secret FROM "EmailSender" WHERE id = ${good.id})
+      WHERE id = ${bad.id}`)
+    errorLog.mockClear()
+    const feed = await emailSenderService.listForLine({
+      workspaceId: s.workspaceId,
+      lineInboxId: s.lineA,
+    })
+    expect(feed.map((r) => r.id)).toEqual([good.id, bad.id])
+    expect(feed[0]?.auth).toEqual({ type: "password", password: PASSWORD })
+    expect(feed[1]).toMatchObject({
+      address: "bad@example.com",
+      status: "active",
+      auth: null,
+      smtp: { host: "smtp.unreadable.invalid", user: "bad@example.com" },
+      imap: { host: "imap.unreadable.invalid", mailbox: "INBOX" },
+    })
+    expect(errorLog).toHaveBeenCalledTimes(1)
+    expect(errorLog.mock.calls[0]?.[0]).toEqual({ senderId: bad.id })
+    expect(JSON.stringify(errorLog.mock.calls)).not.toContain(PASSWORD)
+    // The UI view of it has no connection (and still no secret).
+    const view = (
+      await emailSenderService.list({ workspaceId: s.workspaceId })
+    ).find((v) => v.id === bad.id)
+    expect(view?.connection).toBeNull()
   })
 })

@@ -7779,6 +7779,8 @@
     "archiveConfirm": "Percakapan yang memakai kotak surat ini berhenti mengirim. Tidak dapat dibatalkan.",
     "statusLabel": "Status",
     "disconnected": "Terputus",
+    "reconnect": "Perbarui kata sandi",
+    "reconnectHint": "Kotak surat ini tidak bisa masuk lagi ({reason}). Masukkan kata sandi baru untuk menghubungkannya kembali.",
     "status": {
       "active": "Aktif",
       "paused": "Dijeda",
