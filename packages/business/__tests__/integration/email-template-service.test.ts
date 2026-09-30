@@ -403,4 +403,48 @@ describe.skipIf(!databaseUrl)("emailTemplateService", () => {
       }
     }
   })
+
+  test("s228a: a save refuses a Liquid template the preview reports (create + update)", async () => {
+    const workspaceId = await seedWorkspace()
+    const liquid = (text: string) => ({
+      ...DOCUMENT,
+      blocks: [{ id: "1", type: "text", text }],
+    })
+    const bad = [
+      "<p>{% if a %}</p>",
+      '<p>{% include "x" %}</p>',
+      "<p>Hi {{ first_name</p>",
+    ]
+    for (const text of bad) {
+      const error = await emailTemplateService
+        .create({ workspaceId, data: { name: "Bad", document: liquid(text) } })
+        .catch((e: unknown) => e)
+      expectValidation(error, "document")
+      expect((error as Error).message).toMatch(MERGE_TEMPLATE_ISSUE)
+    }
+    expect(
+      await emailTemplateService.list({ workspaceId, includeArchived: true }),
+    ).toEqual([])
+
+    // A valid Liquid template saves; an update that breaks it is refused and
+    // the stored document is unchanged.
+    const ok = liquid("<p>{% if first_name %}Hi {{first_name}}{% endif %}</p>")
+    const template = await emailTemplateService.create({
+      workspaceId,
+      data: { name: "Good", document: ok },
+    })
+    const error = await emailTemplateService
+      .update({
+        workspaceId,
+        id: template.id,
+        data: { name: "Good", document: liquid("<p>{% if a %}</p>") },
+      })
+      .catch((e: unknown) => e)
+    expectValidation(error, "document")
+    const stored = await emailTemplateService.get({
+      workspaceId,
+      id: template.id,
+    })
+    expect(stored.document).toEqual(ok)
+  })
 })

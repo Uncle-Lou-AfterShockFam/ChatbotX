@@ -106,6 +106,10 @@ test.each([
   )
   const body = await res.text()
   expect(body).not.toContain("Secret offer name")
+  // The hub favicon, so the refusal page makes no /favicon.ico 404 (s228a).
+  expect(body).toContain(
+    '<link rel="icon" type="image/svg+xml" href="/brand/favicon/favicon.svg">',
+  )
   expect(renderView).not.toHaveBeenCalled()
   expect(recordView).not.toHaveBeenCalled()
 })

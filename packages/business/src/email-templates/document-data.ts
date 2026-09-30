@@ -50,8 +50,9 @@ export function parseNamedDocument(
       `The name must be 1-${maxName} characters`,
     )
   }
+  let document: EmailDocument
   try {
-    return { name, document: parseDocument(data.document) }
+    document = parseDocument(data.document)
   } catch (error) {
     if (error instanceof DocumentTooLargeError) {
       throw validationException("document", `The ${noun} is too large`)
@@ -66,6 +67,19 @@ export function parseNamedDocument(
     }
     throw error
   }
+  // s228a: a save is refused on the same Liquid rule the preview reports, so
+  // a stored template or page can always render at send / view time.
+  const invalid = mergeTemplateIssue(document)
+  if (invalid) {
+    throw validationException("document", invalid)
+  }
+  return { name, document }
+}
+
+/** A Liquid template that cannot render (s227b), as the editor's message. */
+function mergeTemplateIssue(document: EmailDocument): string | null {
+  const { invalid } = collectRenderInputs(document)
+  return invalid ? `Merge template: ${invalid}` : null
 }
 
 /**
@@ -101,12 +115,9 @@ export function parsePreviewDocument(
   }
   // s227b: a Liquid template that cannot render is an editor issue (a send
   // of the same document fails closed as content).
-  const { invalid } = collectRenderInputs(document)
+  const invalid = mergeTemplateIssue(document)
   if (invalid) {
-    return {
-      ok: false,
-      issues: [{ path: "", message: `Merge template: ${invalid}` }],
-    }
+    return { ok: false, issues: [{ path: "", message: invalid }] }
   }
   return { ok: true, document }
 }
