@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto"
 import {
   contactCustomFieldService,
   customFieldService,
@@ -14,17 +13,14 @@ import { customFieldResolutionKey } from "@chatbotx.io/utils/custom-field"
 import { logger } from "../../lib/logger"
 import type { ExecuteStepProps } from "./flow-utils"
 import type { ExecuteStepResult } from "./step"
+import { stepRunRef } from "./step-run-ref"
 
 /**
  * One link per (flow run, step): a BullMQ retry of this step reuses the link
- * the first attempt minted instead of texting a second one. Hashed because a
- * run key is not ref-safe.
+ * the first attempt minted (see stepRunRef for when the run key is stable).
  */
 export const pageLinkRef = (flowExecutionKey: string, stepId: string) =>
-  `page:${createHash("sha256")
-    .update(JSON.stringify([flowExecutionKey, stepId]))
-    .digest("hex")
-    .slice(0, 40)}`
+  stepRunRef("page", flowExecutionKey, stepId)
 
 /**
  * Custom pages (roadmap B4, s227a): mints the contact's link to the step's
@@ -78,9 +74,9 @@ export async function handleSendPage({
       result: { pageLinkId: link.id, expiresAt: link.expiresAt.toISOString() },
     }
   } catch (error) {
-    logger.warn(
+    logger.error(
       { err: error, workspaceId, contactId, stepId: step.id },
-      "sendPage failed",
+      "sendPage threw",
     )
     return {
       status: "error",

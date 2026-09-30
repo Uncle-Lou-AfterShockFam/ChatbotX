@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto"
 import {
   contactCustomFieldService,
   contactService,
@@ -15,19 +14,16 @@ import { contactDocumentVariables } from "@chatbotx.io/variables"
 import { logger } from "../../lib/logger"
 import type { ExecuteStepProps } from "./flow-utils"
 import type { ExecuteStepResult } from "./step"
+import { stepRunRef } from "./step-run-ref"
 
-/**
- * One document per (flow run, step): the ref is derived from the run key, so
- * a BullMQ retry of this step reuses the same document and envelope instead
- * of sending a second one. Hashed because a run key is not ref-safe.
- */
 const MAX_SIGNER_NAME = 100
 
+/**
+ * One document per (flow run, step): a BullMQ retry of this step reuses the
+ * same document and envelope instead of sending a second one.
+ */
 export const signatureRef = (flowExecutionKey: string, stepId: string) =>
-  `sig:${createHash("sha256")
-    .update(JSON.stringify([flowExecutionKey, stepId]))
-    .digest("hex")
-    .slice(0, 40)}`
+  stepRunRef("sig", flowExecutionKey, stepId)
 
 export async function handleSendDocumentForSignature({
   conversation,
