@@ -86,10 +86,15 @@ const NOT_ENDED = {
   OR: [{ status: { ne: "ended" } }, { status: { isNull: true as const } }],
 }
 
+type EndReply = { state: "replied" | "bounced"; at: Date }
+
 type RemoveContactSequencesForContactsParams = {
   client?: DrizzleClient
-  /** A stop-on-reply end: the reply instant (replyState = replied). */
-  repliedAt?: Date
+  /**
+   * The contact's answer that ended it: a reply (stop-on-reply) or a bounce;
+   * written to replyState + repliedAt (s228b).
+   */
+  reply?: EndReply
   contactIds: string[]
   removeFromSchedule?: boolean
   reason: RemoveReason
@@ -520,6 +525,9 @@ class ContactSequenceService extends BaseService {
         .set({
           pausedUntil: until,
           nextRunAt: sql`GREATEST(${contactsOnSequenceModel.nextRunAt}, ${until})`,
+          // s228b: the out-of-office answer is the enrolment's reply state.
+          replyState: "ooo",
+          repliedAt: occurredAt,
           updatedAt: new Date(),
         })
         .where(
@@ -984,6 +992,68 @@ class ContactSequenceService extends BaseService {
     return { runAt: result.runAt }
   }
 
+  /**
+   * s228b: a hard bounce or an email unsubscribe ENDS the contact's outreach
+   * enrolments (the stop-on-reply sequences; other sequences are not
+   * outreach - the email suppression / opt-out still stops their mail) for
+   * good. A completed enrolment is left as it is: `bounced` /
+   * `unsubscribed` are terminal and overwrite an earlier non-terminal end
+   * (the removal's rule). A bounce is also the reply state. Returns the
+   * sequence ids it ended.
+   */
+  async endOutreach(props: {
+    workspaceId: string
+    contactId: string
+    reason: "bounced" | "unsubscribed"
+    at?: Date
+  }): Promise<string[]> {
+    if (props === null || typeof props !== "object") {
+      throw new TypeError("endOutreach: props must be an object")
+    }
+    const { workspaceId, contactId, reason } = props
+    assertIds("endOutreach", { workspaceId, contactId })
+    if (reason !== "bounced" && reason !== "unsubscribed") {
+      throw new TypeError("endOutreach: reason must be bounced or unsubscribed")
+    }
+    const at = props.at ?? new Date()
+    if (!(at instanceof Date) || Number.isNaN(at.getTime())) {
+      throw new TypeError("endOutreach: invalid at")
+    }
+    const rows = await db
+      .select({ sequenceId: contactsOnSequenceModel.sequenceId })
+      .from(contactsOnSequenceModel)
+      .innerJoin(
+        sequenceModel,
+        and(
+          eq(sequenceModel.id, contactsOnSequenceModel.sequenceId),
+          eq(sequenceModel.workspaceId, contactsOnSequenceModel.workspaceId),
+        ),
+      )
+      .where(
+        and(
+          eq(contactsOnSequenceModel.workspaceId, workspaceId),
+          eq(contactsOnSequenceModel.contactId, contactId),
+          eq(sequenceModel.stopOnReply, true),
+          // Skeptic s228b: a finished enrolment's record is history, and an
+          // earlier end keeps its reply state (the removal's CASE below);
+          // only a live one, or a non-terminal end, is made final here.
+          sql`${contactsOnSequenceModel.status} IS DISTINCT FROM 'completed'`,
+        ),
+      )
+    if (rows.length === 0) {
+      return []
+    }
+    const sequenceIds = [...new Set(rows.map((row) => row.sequenceId))]
+    await this.removeContactSequencesForContacts({
+      workspaceId,
+      contactIds: [contactId],
+      sequenceIds,
+      reason,
+      ...(reason === "bounced" ? { reply: { state: "bounced", at } } : {}),
+    })
+    return sequenceIds
+  }
+
   async removeStopOnReplyEnrollments(props: {
     workspaceId: string
     contactId: string
@@ -1023,7 +1093,7 @@ class ContactSequenceService extends BaseService {
       sequenceIds,
       reason: "contact_replied",
       contactInboxId: props.contactInboxId,
-      repliedAt,
+      reply: { state: "replied", at: repliedAt },
     })
     return sequenceIds
   }
@@ -1090,7 +1160,7 @@ class ContactSequenceService extends BaseService {
         enrollments,
         reason,
         attributableContactInboxId,
-        params.repliedAt,
+        params.reply,
       )
     }
 
@@ -1222,7 +1292,7 @@ class ContactSequenceService extends BaseService {
     }>,
     reason: RemoveReason,
     contactInboxId?: string,
-    repliedAt?: Date,
+    reply?: EndReply,
   ): Promise<RemoveEnrollmentsResult> {
     if (enrollments.length === 0) {
       return { dispatchesToRemove: [], removedEnrollments: [] }
@@ -1259,7 +1329,14 @@ class ContactSequenceService extends BaseService {
         lockedAt: null,
         lockOwner: null,
         updatedAt: now,
-        ...(repliedAt ? { replyState: "replied", repliedAt } : {}),
+        // An end being overwritten (a terminal reason after an earlier end)
+        // keeps the answer it recorded then (skeptic s228b).
+        ...(reply
+          ? {
+              replyState: sql`CASE WHEN ${contactsOnSequenceModel.status} = 'ended' THEN ${contactsOnSequenceModel.replyState} ELSE ${reply.state} END`,
+              repliedAt: sql`CASE WHEN ${contactsOnSequenceModel.status} = 'ended' THEN ${contactsOnSequenceModel.repliedAt} ELSE ${reply.at} END`,
+            }
+          : {}),
       })
       .where(
         and(

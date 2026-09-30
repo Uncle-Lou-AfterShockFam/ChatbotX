@@ -1,4 +1,6 @@
 import { contactService, verifyUnsubscribeToken } from "@chatbotx.io/business"
+import { contactSequenceService } from "@chatbotx.io/business/contact-sequence"
+import { logger } from "@/lib/log"
 import { loadServableWorkspace } from "@/lib/workspace/load-servable-workspace"
 
 export type UnsubscribeTokenStatus = "valid" | "invalid" | "unavailable"
@@ -56,5 +58,19 @@ export async function unsubscribeByToken(
     return checked.status
   }
   await contactService.unsubscribeEmail(checked.contactId, checked.workspaceId)
+  // s228b: an unsubscribe also ends the contact's outreach sequences for
+  // good. Best effort: the opt-out above already stops every email send.
+  await contactSequenceService
+    .endOutreach({
+      workspaceId: checked.workspaceId,
+      contactId: checked.contactId,
+      reason: "unsubscribed",
+    })
+    .catch((err: unknown) => {
+      logger.warn(
+        { err, workspaceId: checked.workspaceId },
+        "unsubscribe: ending the outreach enrolments failed",
+      )
+    })
   return "valid"
 }

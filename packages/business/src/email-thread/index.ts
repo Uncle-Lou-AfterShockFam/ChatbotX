@@ -1,4 +1,7 @@
 export {
+  AUTO_REPLY_CLASSES,
+  type AutoReplyClass,
+  autoReplyClass,
   EmailThreadMailService,
   emailThreadMailService,
   type InboundEmailAttributes,
