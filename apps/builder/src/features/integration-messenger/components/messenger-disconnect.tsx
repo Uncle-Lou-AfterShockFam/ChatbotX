@@ -8,12 +8,13 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { DisconnectIntegrationDialog } from "@/features/common/components/disconnect-integration-dialog"
 import { useWorkspaceId } from "@/hooks/routing"
+import type { WithoutCredentials } from "@/lib/without-credentials"
 import { disconnectMessengerAction } from "../actions/disconnect-messenger.action"
 
 export function MessengerDisconnect({
   integrationMessenger,
 }: {
-  integrationMessenger: IntegrationMessengerModel
+  integrationMessenger: WithoutCredentials<IntegrationMessengerModel>
 }) {
   const t = useTranslations()
   const router = useRouter()

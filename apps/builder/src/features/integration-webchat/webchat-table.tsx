@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation"
 import { useTimeZone, useTranslations } from "next-intl"
 import React, { useMemo, useState } from "react"
 import { useWorkspaceId } from "@/hooks/routing"
+import type { WithoutCredentials } from "@/lib/without-credentials"
 import { getWebchatColumns } from "./columns/webchat-columns"
 import { WebchatTableToolbarActions } from "./components/webchat-table-toolbar-actions"
 import { DeleteWebchatDialog } from "./dialogs/delete-webchat-dialog"
@@ -29,8 +30,9 @@ export function WebchatTable({
   const t = useTranslations()
   const timeZone = useTimeZone()
 
-  const [rowAction, setRowAction] =
-    useState<DataTableRowAction<IntegrationWebchatModel> | null>(null)
+  const [rowAction, setRowAction] = useState<DataTableRowAction<
+    WithoutCredentials<IntegrationWebchatModel>
+  > | null>(null)
   const columns = useMemo(
     () => getWebchatColumns({ t, setRowAction, timeZone }),
     [t, timeZone],

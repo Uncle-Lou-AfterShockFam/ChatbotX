@@ -16,9 +16,10 @@ import { CopyIcon } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useTenantSettings } from "@/features/tenant"
 import { useClipboard } from "@/hooks/use-clipboard"
+import type { WithoutCredentials } from "@/lib/without-credentials"
 
 type EmbedCodeDialogProps = {
-  webchat: IntegrationWebchatModel
+  webchat: WithoutCredentials<IntegrationWebchatModel>
   children: React.ReactElement
 }
 
