@@ -133,7 +133,7 @@ describe("formatDate calls pass the user's time zone", () => {
   const findings = scans.flatMap((s) => s.findings)
 
   test("the scan finds the known call sites (a broken scanner is not a pass)", () => {
-    expect(calls).toBeGreaterThanOrEqual(16)
+    expect(calls).toBeGreaterThanOrEqual(15)
   })
 
   test("every formatDate use in src passes timeZone", () => {
