@@ -171,3 +171,28 @@ export async function removeDispatchesFromSchedule(
     )
   }
 }
+
+/**
+ * Outreach B-1 (s226b): re-scores dispatches whose DB `runAtMs` moved LATER
+ * (an out-of-office pause). ZADD upserts, so the old entry moves. Best
+ * effort: the DB is authoritative, and the consumer re-queues a dispatch
+ * that fires early at its DB time.
+ */
+export async function rescheduleDispatches(
+  dispatches: (ScheduledDispatch & { runAtMs: string })[],
+): Promise<void> {
+  if (dispatches.length === 0) {
+    return
+  }
+  const redisClient = await sequenceConnections.useExisting()
+  const scheduler = new SchedulerClient(redisClient)
+  await Promise.allSettled(
+    dispatches.map((dispatch) =>
+      scheduler.addToSchedule(
+        dispatch.bucket,
+        dispatch.id,
+        Number(dispatch.runAtMs),
+      ),
+    ),
+  )
+}

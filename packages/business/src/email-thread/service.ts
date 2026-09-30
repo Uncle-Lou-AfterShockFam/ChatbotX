@@ -64,6 +64,23 @@ export function isCitableMsgId(id: unknown): id is string {
   )
 }
 
+/**
+ * True for an out-of-office answer the bulktext email line flagged
+ * (`contentAttributes.email.autoReply === "ooo"`, s226b): a sequence pauses
+ * on it instead of stopping.
+ */
+export function isOutOfOffice(contentAttributes: unknown): boolean {
+  const email =
+    typeof contentAttributes === "object" && contentAttributes !== null
+      ? (contentAttributes as { email?: unknown }).email
+      : undefined
+  return (
+    typeof email === "object" &&
+    email !== null &&
+    (email as { autoReply?: unknown }).autoReply === "ooo"
+  )
+}
+
 export type InboundEmailAttributes = {
   messageId: string
   subject: string
