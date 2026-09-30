@@ -2571,6 +2571,7 @@
       "createTask": "Create task",
       "completeTask": "Complete task",
       "sendDocumentForSignature": "Belgeyi imzaya gönder",
+      "sendPage": "Sayfa gönder",
       "createInvoice": "Create invoice",
       "askForm": "Ask a form"
     },
@@ -7682,6 +7683,29 @@
       "subjectPreview": "Önizleme: {text}",
       "subjectPreviewEmpty": "Kişi alanları olmadan: {text}",
       "subjectPreviewError": "Birleştirme şablonu hatası: {error}"
+    }
+  },
+  "pages": {
+    "title": "Sayfalar",
+    "newPage": "Yeni sayfa",
+    "showArchived": "Arşivlenenleri göster",
+    "noPages": "Henüz sayfa yok.",
+    "archived": "Arşivlendi",
+    "pickOrCreate": "Bir sayfa seçin veya yeni bir sayfa oluşturun.",
+    "saved": "Sayfa kaydedildi",
+    "name": "Ad",
+    "namePlaceholder": "örn. Bahar kampanyası",
+    "linkTtlHours": "Bağlantı süresi (saat)",
+    "linkHint": "Akıştaki Sayfa gönder adımı her kişiye SMS veya e-postayla kişisel bir bağlantı gönderir. Bağlantı sayfayı o kişinin bilgileriyle gösterir ve süresi dolunca çalışmaz. Sayfayı arşivlemek tüm bağlantıları kapatır.",
+    "deleteTitle": "Bu sayfa silinsin mi?",
+    "deleteConfirm": "Gönderilmiş tüm bağlantılar çalışmayı durdurur. Bu işlem geri alınamaz.",
+    "step": {
+      "page": "Sayfa",
+      "hint": "Kişinin kişisel bağlantısını page_link alanına yazar. Sonraki SMS veya e-posta adımında '{{page_link}}' gönderin.",
+      "noPages": "Henüz sayfa yok. Ayarlar > Sayfalar bölümünden oluşturun.",
+      "noPagePicked": "Sayfa seçilmedi",
+      "ttl": "Bağlantı süresi (saat)",
+      "ttlHint": "Boş = sayfanın kendi bağlantı süresi."
     }
   },
   "emailSuppression": {

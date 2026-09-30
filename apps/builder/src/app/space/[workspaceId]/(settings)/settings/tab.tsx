@@ -52,6 +52,10 @@ export function SettingsTab({
         value: "email-templates",
       },
       {
+        label: t("pages.title"),
+        value: "pages",
+      },
+      {
         label: t("emailSuppression.title"),
         value: "email-suppression",
       },

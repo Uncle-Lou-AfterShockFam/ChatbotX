@@ -8,6 +8,7 @@ import {
   messageService,
   verifyEmailFlowToken,
 } from "@chatbotx.io/business"
+import { pageService } from "@chatbotx.io/business/page"
 import { cacheConnections } from "@chatbotx.io/redis"
 import { logger } from "@/lib/log"
 import { loadServableWorkspace } from "@/lib/workspace/load-servable-workspace"
@@ -64,15 +65,23 @@ export async function checkEmailFlowToken(
   if (!servable) {
     return { status: "unavailable" }
   }
-  const [contactInbox, flow] = await Promise.all([
+  const [contactInbox, flow, pageLinkLive] = await Promise.all([
     contactInboxService.findInWorkspace({
       id: payload.ciid,
       contactId: payload.cid,
       workspaceId: payload.wid,
     }),
     flowService.findActiveById({ workspaceId: payload.wid, id: payload.fid }),
+    // s227a: a custom page's button lives only as long as its page link.
+    payload.plid === undefined
+      ? true
+      : pageService.isLinkLive({
+          id: payload.plid,
+          workspaceId: payload.wid,
+          contactId: payload.cid,
+        }),
   ])
-  if (!(contactInbox && flow?.currentVersionId)) {
+  if (!(contactInbox && flow?.currentVersionId && pageLinkLive)) {
     return { status: "invalid" }
   }
   let started: boolean

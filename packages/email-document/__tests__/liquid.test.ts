@@ -17,6 +17,7 @@ import { mergeHtml, mergeText, mergeUrl } from "../src/tokens"
 // s227b outreach B-1 H3: Liquid is the one email evaluator.
 const NOT_CLOSED = /not closed/
 const NESTS_TOO_DEEP = /nests more than/
+const NEVER_CLOSED = /never closed/
 const TOO_MANY = /more than \d+ merge fields/
 const OWNER =
   "Hi {% if first_name %}{{first_name}}{% else %}{{company}} Team{% endif %},"
@@ -133,6 +134,12 @@ describe("s227b review fixes", () => {
       "x".repeat(TEMPLATE_MAX_DELIMITERS),
     )
     expect(performance.now() - started).toBeLessThan(2000)
+  })
+
+  test("an unclosed opener fails closed before the delimiter count is skipped", () => {
+    const hidden = `{% x ${"{{a}}".repeat(15_000)}`
+    expect(templateError(hidden)).toMatch(NEVER_CLOSED)
+    expect(() => html("use {{ to open", {})).toThrow(TemplateError)
   })
 
   test("unclosed {% openers are scanned in linear time", () => {

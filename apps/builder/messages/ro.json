@@ -147,6 +147,7 @@
       "createTask": "Create task",
       "completeTask": "Complete task",
       "sendDocumentForSignature": "Trimite documentul spre semnare",
+      "sendPage": "Trimite pagina",
       "createInvoice": "Create invoice",
       "askForm": "Ask a form"
     },
@@ -7682,6 +7683,29 @@
       "subjectPreview": "Previzualizare: {text}",
       "subjectPreviewEmpty": "Fără câmpurile contactului: {text}",
       "subjectPreviewError": "Eroare în șablonul de îmbinare: {error}"
+    }
+  },
+  "pages": {
+    "title": "Pagini",
+    "newPage": "Pagină nouă",
+    "showArchived": "Afișează arhivate",
+    "noPages": "Încă nu există pagini.",
+    "archived": "Arhivată",
+    "pickOrCreate": "Alege o pagină sau creează una nouă.",
+    "saved": "Pagină salvată",
+    "name": "Nume",
+    "namePlaceholder": "de ex. Ofertă de primăvară",
+    "linkTtlHours": "Valabilitatea linkului (ore)",
+    "linkHint": "Pasul Trimite pagina dintr-un flux trimite fiecărui contact un link personal prin SMS sau e-mail. Linkul afișează pagina cu datele contactului și nu mai funcționează după expirare. Arhivarea paginii închide toate linkurile.",
+    "deleteTitle": "Ștergi această pagină?",
+    "deleteConfirm": "Toate linkurile deja trimise nu vor mai funcționa. Acțiunea nu poate fi anulată.",
+    "step": {
+      "page": "Pagină",
+      "hint": "Scrie linkul personal al contactului în câmpul page_link. Trimite '{{page_link}}' în următorul pas SMS sau e-mail.",
+      "noPages": "Încă nu există pagini. Creează una în Setări > Pagini.",
+      "noPagePicked": "Nicio pagină aleasă",
+      "ttl": "Valabilitatea linkului (ore)",
+      "ttlHint": "Gol = valabilitatea linkului paginii."
     }
   },
   "emailSuppression": {

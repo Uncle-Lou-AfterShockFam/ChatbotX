@@ -2759,6 +2759,7 @@
       "createTask": "Create task",
       "completeTask": "Complete task",
       "sendDocumentForSignature": "Send document for signature",
+      "sendPage": "Send page",
       "createInvoice": "Create invoice",
       "askForm": "Ask a form"
     },
@@ -7682,6 +7683,29 @@
       "subjectPreview": "Preview: {text}",
       "subjectPreviewEmpty": "Without contact fields: {text}",
       "subjectPreviewError": "Merge template error: {error}"
+    }
+  },
+  "pages": {
+    "title": "Pages",
+    "newPage": "New page",
+    "showArchived": "Show archived",
+    "noPages": "No pages yet.",
+    "archived": "Archived",
+    "pickOrCreate": "Pick a page or create a new one.",
+    "saved": "Page saved",
+    "name": "Name",
+    "namePlaceholder": "e.g. Spring offer",
+    "linkTtlHours": "Link lifetime (hours)",
+    "linkHint": "A flow's Send page step texts or emails each contact a personal link. It shows the page with that contact's details and stops working after the link lifetime. Archiving the page closes every link.",
+    "deleteTitle": "Delete this page?",
+    "deleteConfirm": "Every link already sent will stop working. This cannot be undone.",
+    "step": {
+      "page": "Page",
+      "hint": "Writes the contact's personal link to the field page_link. Send '{{page_link}}' in the next text or email step.",
+      "noPages": "No pages yet. Create one in Settings > Pages.",
+      "noPagePicked": "No page picked",
+      "ttl": "Link lifetime (hours)",
+      "ttlHint": "Empty = the page's own link lifetime."
     }
   },
   "emailSuppression": {

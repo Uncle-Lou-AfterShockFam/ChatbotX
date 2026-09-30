@@ -3332,6 +3332,7 @@
       "createTask": "Create task",
       "completeTask": "Complete task",
       "sendDocumentForSignature": "Skicka dokument för signering",
+      "sendPage": "Skicka sida",
       "createInvoice": "Create invoice",
       "askForm": "Ask a form"
     },
@@ -7682,6 +7683,29 @@
       "subjectPreview": "Förhandsvisning: {text}",
       "subjectPreviewEmpty": "Utan kontaktfält: {text}",
       "subjectPreviewError": "Fel i kopplingsmallen: {error}"
+    }
+  },
+  "pages": {
+    "title": "Sidor",
+    "newPage": "Ny sida",
+    "showArchived": "Visa arkiverade",
+    "noPages": "Inga sidor än.",
+    "archived": "Arkiverad",
+    "pickOrCreate": "Välj en sida eller skapa en ny.",
+    "saved": "Sidan sparades",
+    "name": "Namn",
+    "namePlaceholder": "t.ex. Vårerbjudande",
+    "linkTtlHours": "Länkens giltighetstid (timmar)",
+    "linkHint": "Flödessteget Skicka sida skickar en personlig länk till varje kontakt via sms eller e-post. Den visar sidan med kontaktens uppgifter och slutar fungera när giltighetstiden har gått ut. Att arkivera sidan stänger alla länkar.",
+    "deleteTitle": "Radera den här sidan?",
+    "deleteConfirm": "Alla länkar som redan skickats slutar fungera. Det går inte att ångra.",
+    "step": {
+      "page": "Sida",
+      "hint": "Skriver kontaktens personliga länk till fältet page_link. Skicka '{{page_link}}' i nästa sms- eller e-poststeg.",
+      "noPages": "Inga sidor än. Skapa en under Inställningar > Sidor.",
+      "noPagePicked": "Ingen sida vald",
+      "ttl": "Länkens giltighetstid (timmar)",
+      "ttlHint": "Tomt = sidans egen giltighetstid för länkar."
     }
   },
   "emailSuppression": {

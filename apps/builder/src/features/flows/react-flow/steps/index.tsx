@@ -67,6 +67,7 @@ import sendImageStep from "./send-image"
 import sendMessengerTemplateMessageStep from "./send-messenger-template-message"
 import { sendMetaCapiEventStep } from "./send-meta-capi-event"
 import sendMultipleImagesStep from "./send-multiple-images"
+import { sendPageStep } from "./send-page"
 import sendTextStep from "./send-text"
 import { sendVideoStep } from "./send-video"
 import sendWaTemplateMessageStep from "./send-wa-template-message"
@@ -126,6 +127,7 @@ export const allSteps: Record<StepType, StepDefinition<any> | undefined> = {
   [stepTypes.enum.make]: makeStep,
   [stepTypes.enum.triggerN8n]: triggerN8nStep,
   [stepTypes.enum.sendDocumentForSignature]: sendDocumentForSignatureStep,
+  [stepTypes.enum.sendPage]: sendPageStep,
   [stepTypes.enum.executeJavascript]: executeJavascriptStep,
   [stepTypes.enum.disableBot]: disableBotStep,
   [stepTypes.enum.enableBot]: enableBotStep,

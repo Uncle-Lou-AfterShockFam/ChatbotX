@@ -217,8 +217,8 @@ function prepare(template: string, mode: TemplateMode): Prepared {
 
 /**
  * One linear pass over the delimiters: counts them against the cap and, in
- * html mode, unescapes entities inside each. An unclosed opener ends the
- * scan (no later opener can close either; the parser reports it).
+ * html mode, unescapes entities inside each. An unclosed opener is a parse
+ * error.
  */
 function scanDelimited(template: string, unescapeInside: boolean): string {
   let out = ""
@@ -237,7 +237,12 @@ function scanDelimited(template: string, unescapeInside: boolean): string {
     }
     const close = template.indexOf(kind === "{" ? "}}" : "%}", open + 2)
     if (close < 0) {
-      break
+      // Fail closed here: the cap must not depend on the parser also
+      // rejecting what follows (skeptic s227b).
+      throw new TemplateError(
+        "parse",
+        `"{${kind}" at character ${open} is never closed`,
+      )
     }
     count += 1
     if (count > TEMPLATE_MAX_DELIMITERS) {

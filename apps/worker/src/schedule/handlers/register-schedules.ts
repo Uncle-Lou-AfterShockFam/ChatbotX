@@ -233,6 +233,21 @@ export const registerSchedules = async () => {
     },
   )
 
+  // s227a: page links expired past their retention window (B4).
+  await scheduleQueue.upsertJobScheduler(
+    ScheduleJobData.sweepPageLinks,
+    {
+      pattern: "41 3 * * *",
+    },
+    {
+      name: ScheduleJobData.sweepPageLinks,
+      data: {
+        type: ScheduleJobData.sweepPageLinks,
+        data: {},
+      },
+    },
+  )
+
   await scheduleQueue.upsertJobScheduler(
     ScheduleJobData.scanAppointmentReminders,
     {

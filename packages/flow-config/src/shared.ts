@@ -48,6 +48,7 @@ import { optOutEmailStepSchema } from "./steps/opt-out-email"
 import { removeContactTagStepSchema } from "./steps/remove-contact-tag"
 import { sendDocumentForSignatureStepSchema } from "./steps/send-document-for-signature"
 import { sendMetaCapiEventSchema } from "./steps/send-meta-capi-event"
+import { sendPageStepSchema } from "./steps/send-page"
 import { sendGridAddContactSchema } from "./steps/sendgrid-add-contact"
 import { setCustomFieldStepSchema } from "./steps/set-custom-field"
 import { setDealStatusStepSchema } from "./steps/set-deal-status"
@@ -95,6 +96,7 @@ const contactSteps = [
   setUpCouponStepSchema,
   markCouponUsedStepSchema,
   sendDocumentForSignatureStepSchema,
+  sendPageStepSchema,
 ]
 
 const broadcastSteps = [

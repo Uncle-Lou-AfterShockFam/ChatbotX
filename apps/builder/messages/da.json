@@ -2429,6 +2429,7 @@
       "createTask": "Create task",
       "completeTask": "Complete task",
       "sendDocumentForSignature": "Send dokument til underskrift",
+      "sendPage": "Send side",
       "createInvoice": "Create invoice",
       "askForm": "Ask a form"
     },
@@ -7682,6 +7683,29 @@
       "subjectPreview": "Forhåndsvisning: {text}",
       "subjectPreviewEmpty": "Uden kontaktfelter: {text}",
       "subjectPreviewError": "Fejl i fletteskabelon: {error}"
+    }
+  },
+  "pages": {
+    "title": "Sider",
+    "newPage": "Ny side",
+    "showArchived": "Vis arkiverede",
+    "noPages": "Ingen sider endnu.",
+    "archived": "Arkiveret",
+    "pickOrCreate": "Vælg en side, eller opret en ny.",
+    "saved": "Side gemt",
+    "name": "Navn",
+    "namePlaceholder": "f.eks. Forårstilbud",
+    "linkTtlHours": "Linkets levetid (timer)",
+    "linkHint": "Et flows trin Send side sender hver kontakt et personligt link via sms eller e-mail. Det viser siden med kontaktens oplysninger og holder op med at virke efter linkets levetid. Arkivering af siden lukker alle links.",
+    "deleteTitle": "Slet denne side?",
+    "deleteConfirm": "Alle links, der allerede er sendt, holder op med at virke. Det kan ikke fortrydes.",
+    "step": {
+      "page": "Side",
+      "hint": "Skriver kontaktens personlige link i feltet page_link. Send '{{page_link}}' i det næste sms- eller e-mail-trin.",
+      "noPages": "Ingen sider endnu. Opret en under Indstillinger > Sider.",
+      "noPagePicked": "Ingen side valgt",
+      "ttl": "Linkets levetid (timer)",
+      "ttlHint": "Tom = sidens egen levetid for links."
     }
   },
   "emailSuppression": {

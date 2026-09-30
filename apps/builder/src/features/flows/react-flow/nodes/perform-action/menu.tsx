@@ -20,6 +20,7 @@ import {
   CodeIcon,
   CogIcon,
   FileSignatureIcon,
+  FileTextIcon,
   GlobeIcon,
   HandshakeIcon,
   KanbanIcon,
@@ -481,6 +482,11 @@ export const performActionMenus = (t: TranslationFn): MenuItem[] => [
     label: t("flows.actions.sendDocumentForSignature"),
     icon: FileSignatureIcon,
     stepType: stepTypes.enum.sendDocumentForSignature,
+  },
+  {
+    label: t("flows.actions.sendPage"),
+    icon: FileTextIcon,
+    stepType: stepTypes.enum.sendPage,
   },
   {
     label: t("flows.actions.createInvoice"),

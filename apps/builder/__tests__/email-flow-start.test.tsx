@@ -13,6 +13,7 @@ const m = vi.hoisted(() => ({
   set: vi.fn(),
   evalScript: vi.fn(),
   findConversation: vi.fn(),
+  isLinkLive: vi.fn(),
   warn: vi.fn(),
 }))
 
@@ -25,6 +26,9 @@ vi.mock("@chatbotx.io/business", () => ({
   emailTopicService: {
     findAnalyticsWorkspaceIdByToken: m.findAnalyticsWorkspace,
   },
+}))
+vi.mock("@chatbotx.io/business/page", () => ({
+  pageService: { isLinkLive: m.isLinkLive },
 }))
 vi.mock("@chatbotx.io/analytics", () => ({
   emailTopicAnalyticsService: { recordClick: m.recordClick },
@@ -209,6 +213,33 @@ describe("POST /email-topic/flow/start (s222b)", () => {
     }
     expect(m.set).not.toHaveBeenCalled()
     expect(m.createOutgoing).not.toHaveBeenCalled()
+  })
+
+  test("s227a: a custom page's button starts only while its page link is live", async () => {
+    m.verify.mockResolvedValue({ ...PAYLOAD, plid: "4242" })
+    m.isLinkLive.mockResolvedValueOnce(false)
+    const dead = await route.POST(post({ source: "page" }))
+    expect(
+      new URL(dead.headers.get("location") ?? "", ORIGIN).searchParams.get(
+        "result",
+      ),
+    ).toBe("invalid")
+    expect(m.isLinkLive).toHaveBeenCalledWith({
+      id: "4242",
+      workspaceId: "1",
+      contactId: "9",
+    })
+    expect(m.createOutgoing).not.toHaveBeenCalled()
+
+    m.isLinkLive.mockResolvedValueOnce(true)
+    await route.POST(post({ source: "page" }))
+    expect(m.createOutgoing).toHaveBeenCalledOnce()
+  })
+
+  test("a newsletter token (no page link) never consults page links", async () => {
+    await route.POST(post({ source: "page" }))
+    expect(m.isLinkLive).not.toHaveBeenCalled()
+    expect(m.createOutgoing).toHaveBeenCalledOnce()
   })
 
   test("no form, a wrong form, or an oversized body is refused before any token work", async () => {

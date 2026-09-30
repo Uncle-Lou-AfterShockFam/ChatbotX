@@ -2429,6 +2429,7 @@
       "createTask": "Create task",
       "completeTask": "Complete task",
       "sendDocumentForSignature": "Enviar documento para assinatura",
+      "sendPage": "Enviar página",
       "createInvoice": "Create invoice",
       "askForm": "Ask a form"
     },
@@ -7682,6 +7683,29 @@
       "subjectPreview": "Pré-visualização: {text}",
       "subjectPreviewEmpty": "Sem campos do contacto: {text}",
       "subjectPreviewError": "Erro no modelo de intercalação: {error}"
+    }
+  },
+  "pages": {
+    "title": "Páginas",
+    "newPage": "Nova página",
+    "showArchived": "Mostrar arquivadas",
+    "noPages": "Ainda não há páginas.",
+    "archived": "Arquivada",
+    "pickOrCreate": "Escolha uma página ou crie uma nova.",
+    "saved": "Página guardada",
+    "name": "Nome",
+    "namePlaceholder": "ex.: Oferta de primavera",
+    "linkTtlHours": "Validade da ligação (horas)",
+    "linkHint": "O passo Enviar página de um fluxo envia a cada contacto uma ligação pessoal por SMS ou e-mail. Mostra a página com os dados do contacto e deixa de funcionar no fim da validade. Arquivar a página fecha todas as ligações.",
+    "deleteTitle": "Eliminar esta página?",
+    "deleteConfirm": "Todas as ligações já enviadas deixarão de funcionar. Esta ação não pode ser anulada.",
+    "step": {
+      "page": "Página",
+      "hint": "Escreve a ligação pessoal do contacto no campo page_link. Envie '{{page_link}}' no passo seguinte de SMS ou e-mail.",
+      "noPages": "Ainda não há páginas. Crie uma em Definições > Páginas.",
+      "noPagePicked": "Nenhuma página escolhida",
+      "ttl": "Validade da ligação (horas)",
+      "ttlHint": "Vazio = a validade de ligação da própria página."
     }
   },
   "emailSuppression": {

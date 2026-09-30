@@ -2429,6 +2429,7 @@
       "createTask": "Create task",
       "completeTask": "Complete task",
       "sendDocumentForSignature": "Kirim dokumen untuk ditandatangani",
+      "sendPage": "Kirim halaman",
       "createInvoice": "Create invoice",
       "askForm": "Ask a form"
     },
@@ -7682,6 +7683,29 @@
       "subjectPreview": "Pratinjau: {text}",
       "subjectPreviewEmpty": "Tanpa kolom kontak: {text}",
       "subjectPreviewError": "Kesalahan templat gabungan: {error}"
+    }
+  },
+  "pages": {
+    "title": "Halaman",
+    "newPage": "Halaman baru",
+    "showArchived": "Tampilkan yang diarsipkan",
+    "noPages": "Belum ada halaman.",
+    "archived": "Diarsipkan",
+    "pickOrCreate": "Pilih halaman atau buat yang baru.",
+    "saved": "Halaman disimpan",
+    "name": "Nama",
+    "namePlaceholder": "mis. Penawaran musim semi",
+    "linkTtlHours": "Masa berlaku tautan (jam)",
+    "linkHint": "Langkah Kirim halaman pada alur mengirim tautan pribadi ke setiap kontak lewat SMS atau email. Tautan menampilkan halaman dengan data kontak tersebut dan berhenti berfungsi setelah masa berlakunya habis. Mengarsipkan halaman menutup semua tautan.",
+    "deleteTitle": "Hapus halaman ini?",
+    "deleteConfirm": "Semua tautan yang sudah terkirim akan berhenti berfungsi. Tindakan ini tidak dapat dibatalkan.",
+    "step": {
+      "page": "Halaman",
+      "hint": "Menulis tautan pribadi kontak ke kolom page_link. Kirim '{{page_link}}' pada langkah SMS atau email berikutnya.",
+      "noPages": "Belum ada halaman. Buat di Pengaturan > Halaman.",
+      "noPagePicked": "Belum ada halaman dipilih",
+      "ttl": "Masa berlaku tautan (jam)",
+      "ttlHint": "Kosong = masa berlaku tautan halaman itu sendiri."
     }
   },
   "emailSuppression": {

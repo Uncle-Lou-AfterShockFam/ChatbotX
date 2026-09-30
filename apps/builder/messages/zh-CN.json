@@ -3335,6 +3335,7 @@
       "createTask": "Create task",
       "completeTask": "Complete task",
       "sendDocumentForSignature": "发送文档以签名",
+      "sendPage": "发送页面",
       "createInvoice": "Create invoice",
       "askForm": "Ask a form"
     },
@@ -7682,6 +7683,29 @@
       "subjectPreview": "预览:{text}",
       "subjectPreviewEmpty": "无联系人字段:{text}",
       "subjectPreviewError": "合并模板错误:{error}"
+    }
+  },
+  "pages": {
+    "title": "页面",
+    "newPage": "新建页面",
+    "showArchived": "显示已归档",
+    "noPages": "还没有页面。",
+    "archived": "已归档",
+    "pickOrCreate": "选择一个页面或新建页面。",
+    "saved": "页面已保存",
+    "name": "名称",
+    "namePlaceholder": "例如：春季优惠",
+    "linkTtlHours": "链接有效期（小时）",
+    "linkHint": "流程中的“发送页面”步骤会通过短信或邮件向每位联系人发送专属链接。链接以该联系人的信息显示页面，超过有效期后失效。归档页面会关闭所有链接。",
+    "deleteTitle": "删除此页面？",
+    "deleteConfirm": "所有已发送的链接都将失效。此操作无法撤销。",
+    "step": {
+      "page": "页面",
+      "hint": "将联系人的专属链接写入字段 page_link。在下一个短信或邮件步骤中发送 '{{page_link}}'。",
+      "noPages": "还没有页面。请在 设置 > 页面 中创建。",
+      "noPagePicked": "未选择页面",
+      "ttl": "链接有效期（小时）",
+      "ttlHint": "留空 = 使用页面自身的链接有效期。"
     }
   },
   "emailSuppression": {

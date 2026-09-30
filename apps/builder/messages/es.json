@@ -2571,6 +2571,7 @@
       "createTask": "Create task",
       "completeTask": "Complete task",
       "sendDocumentForSignature": "Enviar documento para firmar",
+      "sendPage": "Enviar página",
       "createInvoice": "Create invoice",
       "askForm": "Ask a form"
     },
@@ -7682,6 +7683,29 @@
       "subjectPreview": "Vista previa: {text}",
       "subjectPreviewEmpty": "Sin campos del contacto: {text}",
       "subjectPreviewError": "Error en la plantilla de combinación: {error}"
+    }
+  },
+  "pages": {
+    "title": "Páginas",
+    "newPage": "Nueva página",
+    "showArchived": "Mostrar archivadas",
+    "noPages": "Aún no hay páginas.",
+    "archived": "Archivada",
+    "pickOrCreate": "Elige una página o crea una nueva.",
+    "saved": "Página guardada",
+    "name": "Nombre",
+    "namePlaceholder": "p. ej. Oferta de primavera",
+    "linkTtlHours": "Duración del enlace (horas)",
+    "linkHint": "El paso Enviar página de un flujo envía a cada contacto un enlace personal por SMS o correo. Muestra la página con los datos de ese contacto y deja de funcionar al terminar su duración. Archivar la página cierra todos los enlaces.",
+    "deleteTitle": "¿Eliminar esta página?",
+    "deleteConfirm": "Todos los enlaces ya enviados dejarán de funcionar. Esta acción no se puede deshacer.",
+    "step": {
+      "page": "Página",
+      "hint": "Escribe el enlace personal del contacto en el campo page_link. Envía '{{page_link}}' en el siguiente paso de SMS o correo.",
+      "noPages": "Aún no hay páginas. Crea una en Configuración > Páginas.",
+      "noPagePicked": "Ninguna página elegida",
+      "ttl": "Duración del enlace (horas)",
+      "ttlHint": "Vacío = la duración de enlace de la página."
     }
   },
   "emailSuppression": {
