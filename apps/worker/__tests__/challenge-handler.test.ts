@@ -119,6 +119,23 @@ describe("runChallenge", () => {
     )
   })
 
+  test("runs under a key of the reply, so a retry of it reuses what it made", async () => {
+    await runChallenge(makeChallenge({ messageId: "m-1" }), { timestamp: 1 })
+    await runChallenge(makeChallenge({ messageId: "m-1" }), { timestamp: 2 })
+    await runChallenge(makeChallenge({ messageId: "m-2" }), { timestamp: 3 })
+    await runChallenge(makeChallenge(), { timestamp: 4 })
+
+    const keys = mocks.runStepsAndQuickReplies.mock.calls.map(
+      ([props]) => (props as { flowExecutionKey?: string }).flowExecutionKey,
+    )
+    expect(keys).toEqual([
+      "step-challenge-conversation-1-m-1",
+      "step-challenge-conversation-1-m-1",
+      "step-challenge-conversation-1-m-2",
+      undefined,
+    ])
+  })
+
   test("a challenge from before runStartedAt existed is judged by when it was asked", async () => {
     await runChallenge(makeChallenge(), { timestamp: 1_790_000_000_000 })
 
