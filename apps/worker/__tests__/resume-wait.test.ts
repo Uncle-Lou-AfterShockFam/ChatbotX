@@ -31,7 +31,7 @@ vi.mock("../src/integration/handlers/flow", () => ({ runFlowNode }))
 const { runWaitResume } = await import(
   "../src/integration/handlers/wait-resume"
 )
-const { CLAIM_WRITE_ATTEMPTS } = await import(
+const { CLAIM_WRITE_ATTEMPTS, smartDelayRunKey } = await import(
   "../src/integration/handlers/smart-delay-run"
 )
 
@@ -136,7 +136,10 @@ describe("runWaitResume", () => {
         nodeId: "next-node",
         runStartedAt: "2026-07-16T00:00:00.000Z",
       },
-      { flowExecutionKey: undefined, claimCheck: expect.any(Function) },
+      {
+        flowExecutionKey: smartDelayRunKey("smart-delay-1"),
+        claimCheck: expect.any(Function),
+      },
     )
   })
 
@@ -162,7 +165,10 @@ describe("runWaitResume", () => {
           contactInboxId: "contact-inbox-1",
         },
       }),
-      { flowExecutionKey: undefined, claimCheck: expect.any(Function) },
+      {
+        flowExecutionKey: smartDelayRunKey("smart-delay-1"),
+        claimCheck: expect.any(Function),
+      },
     )
   })
 
@@ -181,7 +187,10 @@ describe("runWaitResume", () => {
       expect.objectContaining({
         appointmentId: "appointment-1",
       }),
-      { flowExecutionKey: undefined, claimCheck: expect.any(Function) },
+      {
+        flowExecutionKey: smartDelayRunKey("smart-delay-1"),
+        claimCheck: expect.any(Function),
+      },
     )
   })
 
@@ -208,6 +217,33 @@ describe("runWaitResume", () => {
     expect(smartDelayService.finishClaimedRun).not.toHaveBeenCalled()
   })
 
+  test("a requeued run re-claimed by ANOTHER job runs under the same key (the row's)", async () => {
+    runFlowNode.mockRejectedValueOnce(new Error("provider down"))
+    await expect(
+      runWaitResume({ smartDelayId: "smart-delay-1" }, {
+        id: "job-a",
+        timestamp: 1,
+      } as never),
+    ).rejects.toThrow("provider down")
+    smartDelayService.claimRunning.mockResolvedValueOnce({
+      ...claimed(waitRow),
+      claimGeneration: 8,
+    })
+    await runWaitResume({ smartDelayId: "smart-delay-1" }, {
+      id: "job-b",
+      timestamp: 2,
+    } as never)
+
+    const keys = runFlowNode.mock.calls.map(
+      ([, options]) =>
+        (options as { flowExecutionKey: string }).flowExecutionKey,
+    )
+    expect(keys).toEqual([
+      smartDelayRunKey("smart-delay-1"),
+      smartDelayRunKey("smart-delay-1"),
+    ])
+  })
+
   test("finishes the claimed row with ITS generation after the flow ran", async () => {
     await runWaitResume({ smartDelayId: "smart-delay-1" })
 
@@ -230,7 +266,10 @@ describe("runWaitResume", () => {
 
     expect(runFlowNode).toHaveBeenCalledWith(
       expect.objectContaining({ nodeId: "re-pointed-node" }),
-      { flowExecutionKey: undefined, claimCheck: expect.any(Function) },
+      {
+        flowExecutionKey: smartDelayRunKey("smart-delay-1"),
+        claimCheck: expect.any(Function),
+      },
     )
   })
 

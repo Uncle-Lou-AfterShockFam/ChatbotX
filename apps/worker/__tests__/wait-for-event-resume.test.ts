@@ -39,6 +39,9 @@ const {
   eventPrecedesRow,
   runWaitForEventResume,
 } = await import("../src/integration/handlers/wait-for-event-resume")
+const { smartDelayRunKey } = await import(
+  "../src/integration/handlers/smart-delay-run"
+)
 
 const NOW = new Date("2026-09-23T18:02:00.000Z")
 
@@ -171,7 +174,10 @@ describe("runWaitForEventResume", () => {
         nodeId: "timeout-node",
         contactInboxId: "ci-1",
       }),
-      { flowExecutionKey: undefined, claimCheck: expect.any(Function) },
+      {
+        flowExecutionKey: smartDelayRunKey("sd-1"),
+        claimCheck: expect.any(Function),
+      },
     )
   })
 
@@ -219,7 +225,10 @@ describe("runWaitForEventResume", () => {
     )
     expect(runFlowNode).toHaveBeenCalledWith(
       expect.objectContaining({ nodeId: "event-node" }),
-      { flowExecutionKey: undefined, claimCheck: expect.any(Function) },
+      {
+        flowExecutionKey: smartDelayRunKey("sd-1"),
+        claimCheck: expect.any(Function),
+      },
     )
     expect(smartDelayService.finishClaimedRun).toHaveBeenCalledWith({
       id: "sd-1",

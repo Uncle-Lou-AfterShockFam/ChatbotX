@@ -46,6 +46,15 @@ async function withClaimWriteRetry<T>(write: () => Promise<T>): Promise<T> {
 }
 
 /**
+ * The flow execution key of a claimed smart delay's resumed run. Only wait /
+ * waitForEvent rows resume through here, and those are never re-armed in
+ * place (upsertFollowUp is the follow-up type's, resumed in follow-up.ts),
+ * so one row = one continuation.
+ */
+export const smartDelayRunKey = (smartDelayId: string) =>
+  `smart-delay-run-${smartDelayId}`
+
+/**
  * Run a claimed (`running`) smart delay's resume job. The claim (claimRunning
  * / claimForEvent) is the concurrency guard and its generation is the token:
  * the flow ends with finishClaimedRun(generation) -> completed; on a flow
@@ -122,8 +131,12 @@ export async function runClaimedSmartDelay(
       )
       return
     }
+    // The run key is the ROW, not the job: a failed run is requeued and
+    // re-claimed by whichever job comes next (a BullMQ retry, the next event,
+    // a sweep's timeout job), and that re-run must reuse what the first one
+    // made (stepRunRef: page links, signature documents; heavy-step ids).
     await runFlowNode(resumeJob.data.data, {
-      flowExecutionKey: parentJob?.id,
+      flowExecutionKey: smartDelayRunKey(smartDelayId),
       claimCheck,
       startedAt: parentJob ? new Date(parentJob.timestamp) : undefined,
     })
