@@ -96,7 +96,7 @@ export const contactsSequencesPublicRouter = {
     .route({
       method: "POST",
       path: "/v1/contacts/{identifier}/sequences/{sequenceId}/resume",
-      summary: "Resume a held sequence subscription",
+      summary: "Resume held sequence subscription",
       description:
         "A sequence step can require contact fields (`holdOnMissing`); a contact missing one is HELD at that step, with the reason in `contacts.listSequences` (`status` held, `lastError`). Fill the fields, then call this to put the step back on schedule. The step re-checks the fields when it runs. 409 when the subscription is not held.",
       tags: ["Contacts"],

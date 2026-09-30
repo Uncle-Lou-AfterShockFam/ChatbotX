@@ -92,6 +92,7 @@ Tool names are derived from the OpenAPI `operationId` converted to `snake_case` 
 | `contacts_send_flow` | Send flow to contact |
 | `contacts_list_sequences` | List contact sequence subscriptions |
 | `contacts_subscribe_sequences` | Subscribe contact to sequences |
+| `contacts_resume_sequence` | Resume held sequence subscription |
 
 ### Conversations
 

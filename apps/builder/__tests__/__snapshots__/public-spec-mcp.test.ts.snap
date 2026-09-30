@@ -24,6 +24,7 @@ exports[`default tool set > operation ids match the curated snapshot 1`] = `
   "contacts.listMessages",
   "contacts.listSequences",
   "contacts.listTags",
+  "contacts.resumeSequence",
   "contacts.sendFlow",
   "contacts.sendMessage",
   "contacts.setCustomField",
