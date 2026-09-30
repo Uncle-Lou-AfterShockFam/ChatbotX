@@ -12,6 +12,7 @@ import {
   contactsOnSequenceModel,
   sequenceDispatchModel,
   sequenceModel,
+  sequenceStepModel,
 } from "@chatbotx.io/database/schema"
 import {
   emitSequenceSubscribed,
@@ -19,6 +20,7 @@ import {
 } from "@chatbotx.io/events"
 import {
   calculateNextRunAtFromStep,
+  calculateNextValidSendTime,
   cancelPendingDispatches,
   enrollContactInSequence,
   enrollContactsInSequenceBulk,
@@ -379,11 +381,38 @@ class ContactSequenceService extends BaseService {
             lte(contactsOnSequenceModel.enrolledAt, occurredAt),
           ),
         )
-        .for("update", { of: contactsOnSequenceModel })
       if (rows.length === 0) {
         return { sequenceIds: [] as string[], moved: [] }
       }
       const ids = rows.map((row) => row.id)
+      // Lock order = removal's (dispatches, then the enrolment; Codex
+      // s226b): the pending dispatches FOR UPDATE first...
+      const pending = await tx
+        .select({
+          id: sequenceDispatchModel.id,
+          bucket: sequenceDispatchModel.bucket,
+          runAtMs: sequenceDispatchModel.runAtMs,
+          anytime: sequenceStepModel.anytime,
+          sendTimeStart: sequenceStepModel.sendTimeStart,
+          sendTimeEnd: sequenceStepModel.sendTimeEnd,
+          sendDays: sequenceStepModel.sendDays,
+        })
+        .from(sequenceDispatchModel)
+        .innerJoin(
+          sequenceStepModel,
+          eq(sequenceStepModel.id, sequenceDispatchModel.stepId),
+        )
+        .where(
+          and(
+            eq(sequenceDispatchModel.workspaceId, workspaceId),
+            inArray(sequenceDispatchModel.enrollmentId, ids),
+            eq(sequenceDispatchModel.status, "pending"),
+          ),
+        )
+        .for("update", { of: sequenceDispatchModel })
+      // ...then the enrolment rows (the UPDATE locks them). A dispatch a
+      // concurrent advance creates meanwhile is held at send time
+      // (deferIfPaused), which reads the committed pause.
       await tx
         .update(contactsOnSequenceModel)
         .set({
@@ -395,24 +424,31 @@ class ContactSequenceService extends BaseService {
           and(
             eq(contactsOnSequenceModel.workspaceId, workspaceId),
             inArray(contactsOnSequenceModel.id, ids),
+            eq(contactsOnSequenceModel.status, "active"),
           ),
         )
-      const movedRows = await tx
-        .update(sequenceDispatchModel)
-        .set({ runAtMs: String(until.getTime()) })
-        .where(
-          and(
-            eq(sequenceDispatchModel.workspaceId, workspaceId),
-            inArray(sequenceDispatchModel.enrollmentId, ids),
-            eq(sequenceDispatchModel.status, "pending"),
-            sql`${sequenceDispatchModel.runAtMs} < ${until.getTime()}`,
-          ),
-        )
-        .returning({
-          id: sequenceDispatchModel.id,
-          bucket: sequenceDispatchModel.bucket,
-          runAtMs: sequenceDispatchModel.runAtMs,
+      const movedRows: { id: string; bucket: number; runAtMs: string }[] = []
+      for (const dispatch of pending) {
+        // The pause end, moved into the step's send window; never earlier.
+        const runAt = calculateNextValidSendTime(until, dispatch).getTime()
+        if (Number(dispatch.runAtMs) >= runAt) {
+          continue
+        }
+        await tx
+          .update(sequenceDispatchModel)
+          .set({ runAtMs: String(runAt) })
+          .where(
+            and(
+              eq(sequenceDispatchModel.workspaceId, workspaceId),
+              eq(sequenceDispatchModel.id, dispatch.id),
+            ),
+          )
+        movedRows.push({
+          id: dispatch.id,
+          bucket: dispatch.bucket,
+          runAtMs: String(runAt),
         })
+      }
       return {
         sequenceIds: [...new Set(rows.map((row) => row.sequenceId))],
         moved: movedRows,
@@ -425,6 +461,81 @@ class ContactSequenceService extends BaseService {
       logger.warn({ err, workspaceId }, "pauseForAutoReply: reschedule failed")
     }
     return sequenceIds
+  }
+
+  /**
+   * The send-time half of the out-of-office pause (Codex s226b): a claimed
+   * (running) dispatch whose enrolment is paused goes back to pending at the
+   * pause end, moved into the step's send window, instead of sending. This
+   * catches a dispatch claimed before the pause, or created by an advance
+   * racing it. Returns the new run time to schedule, or null to send now.
+   */
+  async deferIfPaused(props: {
+    dispatchId: string
+    workspaceId: string
+    now?: Date
+  }): Promise<{ bucket: number; runAtMs: number } | null> {
+    const now = props.now ?? new Date()
+    return await db.transaction(async (tx) => {
+      const [dispatch] = await tx
+        .select({
+          bucket: sequenceDispatchModel.bucket,
+          status: sequenceDispatchModel.status,
+          pausedUntil: contactsOnSequenceModel.pausedUntil,
+          anytime: sequenceStepModel.anytime,
+          sendTimeStart: sequenceStepModel.sendTimeStart,
+          sendTimeEnd: sequenceStepModel.sendTimeEnd,
+          sendDays: sequenceStepModel.sendDays,
+        })
+        .from(sequenceDispatchModel)
+        .innerJoin(
+          contactsOnSequenceModel,
+          and(
+            eq(contactsOnSequenceModel.id, sequenceDispatchModel.enrollmentId),
+            eq(
+              contactsOnSequenceModel.workspaceId,
+              sequenceDispatchModel.workspaceId,
+            ),
+          ),
+        )
+        .innerJoin(
+          sequenceStepModel,
+          eq(sequenceStepModel.id, sequenceDispatchModel.stepId),
+        )
+        .where(
+          and(
+            eq(sequenceDispatchModel.id, props.dispatchId),
+            eq(sequenceDispatchModel.workspaceId, props.workspaceId),
+          ),
+        )
+        .for("update", { of: sequenceDispatchModel })
+      if (
+        !dispatch?.pausedUntil ||
+        dispatch.pausedUntil <= now ||
+        dispatch.status !== "running"
+      ) {
+        return null
+      }
+      const runAtMs = calculateNextValidSendTime(
+        dispatch.pausedUntil,
+        dispatch,
+      ).getTime()
+      await tx
+        .update(sequenceDispatchModel)
+        .set({
+          status: "pending",
+          runAtMs: String(runAtMs),
+          lockedAt: null,
+          lockOwner: null,
+        })
+        .where(
+          and(
+            eq(sequenceDispatchModel.id, props.dispatchId),
+            eq(sequenceDispatchModel.workspaceId, props.workspaceId),
+          ),
+        )
+      return { bucket: dispatch.bucket, runAtMs }
+    })
   }
 
   async removeStopOnReplyEnrollments(props: {

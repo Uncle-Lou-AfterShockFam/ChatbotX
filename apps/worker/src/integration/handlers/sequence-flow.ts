@@ -118,6 +118,24 @@ async function runSendSequenceFlow(
       await scheduler.removeFromSchedule(bucket, dispatchId)
       return
     }
+    // s226b: an out-of-office paused the enrolment after this step was
+    // claimed (or an advance raced the pause): hold it, never send it now.
+    const deferred = await contactSequenceService.deferIfPaused({
+      dispatchId,
+      workspaceId,
+    })
+    if (deferred) {
+      await scheduler.addToSchedule(
+        deferred.bucket,
+        dispatchId,
+        deferred.runAtMs,
+      )
+      logger.info(
+        { dispatchId, workspaceId, runAtMs: deferred.runAtMs },
+        "sendSequenceFlow: enrolment paused (out-of-office), step held",
+      )
+      return
+    }
     const { companyStopped } = await sendFlowDirect({
       flowId: validStep.flow.id,
       workspaceId,

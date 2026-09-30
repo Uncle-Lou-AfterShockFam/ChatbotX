@@ -79,9 +79,19 @@ async function seedEnrollment(props: {
   contactId: string
   dispatchStatus?: "pending" | "running"
   enrolledAt?: Date
+  window?: { start: string; end: string; days: string | null }
 }): Promise<{ enrollmentId: string; dispatchId: string }> {
   const enrollmentId = mintId()
   const dispatchId = mintId()
+  const stepId = mintId()
+  await asReplica(sql`
+    INSERT INTO "SequenceStep"
+      (id, "sequenceId", "order", "delayDays", anytime, "sendTimeStart",
+       "sendTimeEnd", "sendDays")
+    VALUES (${stepId}, ${props.sequenceId}, 1, 0, ${props.window === undefined},
+            ${props.window?.start ?? null}, ${props.window?.end ?? null},
+            ${props.window?.days ?? null})`)
+  seeded.SequenceStep?.push(stepId)
   await asReplica(sql`
     INSERT INTO "ContactOnSequence"
       (id, "contactId", "sequenceId", "workspaceId", status, "nextRunAt",
@@ -95,7 +105,7 @@ async function seedEnrollment(props: {
       (id, "runAtMs", "idempotencyKey", "workspaceId", "sequenceId",
        "contactId", "contactInboxId", "stepId", "enrollmentId", status)
     VALUES (${dispatchId}, ${Date.now() + 86_400_000}, ${`s226b-${dispatchId}`},
-            ${props.workspaceId}, ${props.sequenceId}, ${props.contactId}, 1, 1,
+            ${props.workspaceId}, ${props.sequenceId}, ${props.contactId}, 1, ${stepId},
             ${enrollmentId}, ${props.dispatchStatus ?? "pending"})`)
   seeded.SequenceDispatch?.push(dispatchId)
   return { enrollmentId, dispatchId }
@@ -269,5 +279,76 @@ describe.skipIf(!databaseUrl)("pauseForAutoReply", () => {
         pauseMs: 15 * DAY,
       }),
     ).rejects.toThrow(RangeError)
+  })
+
+  test("the moved dispatch lands inside the step's send window, not at the raw pause end", async () => {
+    rescheduled.mockReset()
+    const workspaceId = mintId()
+    const seq = await seedSequence({ workspaceId, stopOnReply: true })
+    const contact = mintId()
+    const e = await seedEnrollment({
+      workspaceId,
+      sequenceId: seq,
+      contactId: contact,
+      window: { start: "09:00", end: "10:00", days: null },
+    })
+    // Pause ends 23:30 server time -> the next 09:00 window.
+    const now = new Date(2026, 9, 1, 23, 30)
+    await contactSequenceService.pauseForAutoReply({
+      workspaceId,
+      contactId: contact,
+      occurredAt: new Date(),
+      now,
+    })
+    const runAt = new Date(
+      Number((await row("SequenceDispatch", e.dispatchId))?.runAtMs),
+    )
+    expect(runAt.getTime()).toBeGreaterThan(now.getTime() + 14 * DAY)
+    // The validator reads SERVER-local hours (netcup runs UTC).
+    expect(runAt.getHours()).toBe(9)
+  })
+
+  test("deferIfPaused: a CLAIMED step of a paused enrolment goes back to pending at the pause end; unpaused or expired sends now", async () => {
+    const workspaceId = mintId()
+    const seq = await seedSequence({ workspaceId, stopOnReply: true })
+    const contact = mintId()
+    const e = await seedEnrollment({
+      workspaceId,
+      sequenceId: seq,
+      contactId: contact,
+      dispatchStatus: "running",
+    })
+    expect(
+      await contactSequenceService.deferIfPaused({
+        dispatchId: e.dispatchId,
+        workspaceId,
+      }),
+    ).toBeNull()
+    const now = new Date()
+    await contactSequenceService.pauseForAutoReply({
+      workspaceId,
+      contactId: contact,
+      occurredAt: now,
+      now,
+    })
+    const deferred = await contactSequenceService.deferIfPaused({
+      dispatchId: e.dispatchId,
+      workspaceId,
+    })
+    expect(deferred?.runAtMs).toBe(now.getTime() + 14 * DAY)
+    const d = await row("SequenceDispatch", e.dispatchId)
+    expect(d?.status).toBe("pending")
+    expect(Number(d?.runAtMs)).toBe(now.getTime() + 14 * DAY)
+    // Past the pause end: the step sends.
+    await asReplica(
+      sql`UPDATE "SequenceDispatch" SET status = 'running' WHERE id = ${e.dispatchId}`,
+    )
+    expect(
+      await contactSequenceService.deferIfPaused({
+        dispatchId: e.dispatchId,
+        workspaceId,
+        now: new Date(now.getTime() + 15 * DAY),
+      }),
+    ).toBeNull()
   })
 })

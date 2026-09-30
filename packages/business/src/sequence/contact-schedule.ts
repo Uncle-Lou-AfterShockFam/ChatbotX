@@ -161,6 +161,13 @@ type UpdateContactsNextRunAtParams = {
   client: DatabaseClient
 }
 
+/**
+ * s226b (skeptic): a step edit never shows an out-of-office-paused enrolment
+ * as due before its pause ends (GREATEST ignores a NULL pausedUntil).
+ */
+const notBeforePause = (value: ReturnType<typeof sql>) =>
+  sql`GREATEST(${value}, ${contactsOnSequenceModel.pausedUntil})`
+
 async function updateContactsNextRunAt(params: UpdateContactsNextRunAtParams) {
   const {
     sequenceId,
@@ -192,7 +199,7 @@ async function updateContactsNextRunAt(params: UpdateContactsNextRunAtParams) {
     await client
       .update(contactsOnSequenceModel)
       .set({
-        nextRunAt: delayMsOrDate,
+        nextRunAt: notBeforePause(sql`${delayMsOrDate}`),
         nextStepId,
         updatedAt: new Date(),
       })
@@ -201,7 +208,9 @@ async function updateContactsNextRunAt(params: UpdateContactsNextRunAtParams) {
     await client
       .update(contactsOnSequenceModel)
       .set({
-        nextRunAt: sql`NOW() + INTERVAL '${sql.raw(String(delayMsOrDate))} milliseconds'`,
+        nextRunAt: notBeforePause(
+          sql`NOW() + INTERVAL '${sql.raw(String(delayMsOrDate))} milliseconds'`,
+        ),
         nextStepId,
         updatedAt: new Date(),
       })
