@@ -2472,7 +2472,6 @@
       "callApi": "طلب API خارجي",
       "make": "Make",
       "triggers": "المحفزات",
-      "questionnaires": "الاستبيانات",
       "setUpCoupon": "إعداد كوبون",
       "markCouponUsed": "تحديد الكوبون كمستخدم",
       "executeJavascript": "تنفيذ JavaScript",
@@ -5001,66 +5000,6 @@
       "wrongType": "هذا النوع من الملفات غير مقبول.",
       "failed": "تعذّر رفع الملف. يُرجى المحاولة مرة أخرى.",
       "previewOnly": "يمكن إضافة الملفات في النموذج المنشور."
-    }
-  },
-  "questionnaires": {
-    "title": "الاستبيانات",
-    "description": "إنشاء الاستبيانات وإدارتها لجهات اتصالك.",
-    "singular": "استبيان",
-    "submission": "إجابة",
-    "addNew": "إضافة جديد",
-    "applicants": "المشاركون",
-    "generalSettings": "الإعدادات العامة",
-    "triggerFlow": "تشغيل المسار عند إكمال الاستبيان",
-    "enableScore": "منح نقاط لكل سؤال تتم الإجابة عنه.",
-    "enableRetryMessages": "تخصيص رسائل إعادة المحاولة عند فشل الرد.",
-    "enableCustomFieldMapping": "حفظ البيانات في الحقول المخصصة.",
-    "question": "السؤال",
-    "activeQuestion": "نشط",
-    "questionImage": "صورة السؤال",
-    "questionImageHint": "صورة اختيارية تُرسل مع هذا السؤال.",
-    "responseType": "نوع الإجابة",
-    "points": "النقاط",
-    "retryMessage": "رسالة إعادة المحاولة إذا كانت الإجابة غير صالحة",
-    "defaultRetryMessages": {
-      "text": "النص الذي أدخلته غير صالح. يُرجى المحاولة مرة أخرى",
-      "number": "الرقم الذي أدخلته غير صالح. يُرجى المحاولة مرة أخرى",
-      "email": "البريد الإلكتروني الذي أدخلته غير صالح. يُرجى المحاولة مرة أخرى",
-      "phone": "رقم الهاتف الذي أدخلته غير صالح. يُرجى المحاولة مرة أخرى",
-      "multipleChoice": "الخيار الذي أدخلته غير صالح. يُرجى المحاولة مرة أخرى"
-    },
-    "customField": "حفظ الإجابة في حقل مخصص أو حقل نظام",
-    "options": "الخيارات",
-    "mode": "الوضع",
-    "completed": "مكتمل",
-    "completionRate": "معدل الإكمال",
-    "date": "التاريخ",
-    "inbox": "صندوق الوارد",
-    "unknownContact": "جهة اتصال غير معروفة",
-    "noAnswers": "لا توجد إجابات",
-    "responseTypes": {
-      "text": "نص",
-      "number": "رقم",
-      "email": "البريد الإلكتروني",
-      "phone": "هاتف",
-      "multipleChoice": "اختيار متعدد"
-    },
-    "flowModes": {
-      "start": "بدء الاستبيان",
-      "end": "إنهاء الاستبيان",
-      "deleteApplicant": "حذف المشارك"
-    },
-    "dialogDescriptions": {
-      "create": "سمِّ الاستبيان قبل إضافة الأسئلة.",
-      "rename": "حدّث اسم الاستبيان الظاهر في القوائم والمسارات.",
-      "flowStep": "اختر كيفية تفاعل خطوة المسار هذه مع الاستبيان."
-    },
-    "status": {
-      "inProgress": "قيد التقدم",
-      "completed": "مكتمل",
-      "cancelled": "ملغى",
-      "failed": "فشل",
-      "timeout": "انتهت المهلة"
     }
   },
   "facebookCommentAutomation": {

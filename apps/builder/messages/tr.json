@@ -2472,7 +2472,6 @@
       "callApi": "Harici API İsteği",
       "make": "Make",
       "triggers": "Tetikleyiciler",
-      "questionnaires": "Anketler",
       "setUpCoupon": "Kupon Ayarla",
       "markCouponUsed": "Kuponu Kullanıldı Olarak İşaretle",
       "executeJavascript": "JavaScript Çalıştır",
@@ -5001,66 +5000,6 @@
       "wrongType": "Bu dosya türü kabul edilmiyor.",
       "failed": "Dosya yüklenemedi. Lütfen tekrar deneyin.",
       "previewOnly": "Dosyalar yayınlanan formda eklenebilir."
-    }
-  },
-  "questionnaires": {
-    "title": "Anketler",
-    "description": "Kişileriniz için anketler oluşturun ve yönetin.",
-    "singular": "Anket",
-    "submission": "Gönderim",
-    "addNew": "Yeni Ekle",
-    "applicants": "Başvuranlar",
-    "generalSettings": "Genel ayarlar",
-    "triggerFlow": "Anketi tamamlayarak akışı tetikle",
-    "enableScore": "Yanıtlanan her soru için puan ver.",
-    "enableRetryMessages": "Yanıt başarısız olduğunda gösterilecek yeniden deneme mesajlarını özelleştirin.",
-    "enableCustomFieldMapping": "Verileri özel alanlara kaydet.",
-    "question": "Soru",
-    "activeQuestion": "Aktif",
-    "questionImage": "Soru görseli",
-    "questionImageHint": "Bu soruyla birlikte gönderilen isteğe bağlı görsel.",
-    "responseType": "Yanıt Türü",
-    "points": "Puanlar",
-    "retryMessage": "Yanıt geçersizse gösterilecek yeniden deneme mesajı",
-    "defaultRetryMessages": {
-      "text": "Girdiğiniz değer geçerli bir metin değil. Lütfen tekrar deneyin",
-      "number": "Girdiğiniz değer geçerli bir sayı değil. Lütfen tekrar deneyin",
-      "email": "Girdiğiniz değer geçerli bir e-posta adresi değil. Lütfen tekrar deneyin",
-      "phone": "Girdiğiniz değer geçerli bir telefon numarası değil. Lütfen tekrar deneyin",
-      "multipleChoice": "Girdiğiniz değer geçerli bir seçenek değil. Lütfen tekrar deneyin"
-    },
-    "customField": "Yanıtı özel veya sistem alanına kaydet",
-    "options": "Seçenekler",
-    "mode": "Mod",
-    "completed": "Tamamlandı",
-    "completionRate": "Tamamlanma oranı",
-    "date": "Tarih",
-    "inbox": "Gelen Kutusu",
-    "unknownContact": "Bilinmeyen kişi",
-    "noAnswers": "Yanıt yok",
-    "responseTypes": {
-      "text": "Metin",
-      "number": "Sayı",
-      "email": "E-posta",
-      "phone": "Telefon",
-      "multipleChoice": "Çoktan seçmeli"
-    },
-    "flowModes": {
-      "start": "Anketi başlat",
-      "end": "Anketi bitir",
-      "deleteApplicant": "Başvuranı sil"
-    },
-    "dialogDescriptions": {
-      "create": "Soru eklemeden önce ankete bir isim verin.",
-      "rename": "Listelerde ve akışlarda gösterilen anket adını güncelleyin.",
-      "flowStep": "Bu akış adımının bir anketle nasıl etkileşime gireceğini seçin."
-    },
-    "status": {
-      "inProgress": "Devam ediyor",
-      "completed": "Tamamlandı",
-      "cancelled": "İptal edildi",
-      "failed": "Başarısız",
-      "timeout": "Zaman aşımı"
     }
   },
   "facebookCommentAutomation": {

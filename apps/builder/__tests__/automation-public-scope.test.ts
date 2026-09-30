@@ -51,21 +51,6 @@ vi.mock("@chatbotx.io/business", () => ({
     update: vi.fn(),
     delete: vi.fn(),
   },
-  questionnaireService: {
-    list: vi.fn(),
-    getForEdit: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-    rename: vi.fn(),
-    duplicate: vi.fn(),
-    deleteMany: vi.fn(),
-  },
-  questionnaireSubmissionService: {
-    list: vi.fn(),
-    detail: vi.fn(),
-    dashboard: vi.fn(),
-    deleteSubmission: vi.fn(),
-  },
   spreadsheetService: {
     list: vi.fn(),
     findByWorkspaceIdOrFail: vi.fn(),
@@ -143,9 +128,6 @@ const { igStoriesPublicRouter } = await import(
 const { qrCodesPublicRouter } = await import(
   "../src/features/qr-codes/api/public"
 )
-const { questionnairesPublicRouter } = await import(
-  "../src/features/questionnaires/api/public"
-)
 const { spreadsheetsPublicRouter } = await import(
   "../src/features/spreadsheets/api/public"
 )
@@ -174,8 +156,6 @@ const SUPERSET_INPUT = {
   name: "x",
   spreadsheetId: "1",
   worksheetName: "Sheet1",
-  questionnaireId: "1",
-  submissionId: "1",
   variant: "instagram",
   pageId: "1",
   formId: "1",
@@ -200,7 +180,6 @@ const routers = {
   "ig-comments": igCommentsPublicRouter,
   "ig-stories": igStoriesPublicRouter,
   "qr-codes": qrCodesPublicRouter,
-  questionnaires: questionnairesPublicRouter,
   spreadsheets: spreadsheetsPublicRouter,
   "facebook-lead-ads": facebookLeadAdsPublicRouter,
 } as const

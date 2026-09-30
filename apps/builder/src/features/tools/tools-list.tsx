@@ -14,7 +14,6 @@ import {
   BotIcon,
   CalendarIcon,
   CardSimIcon,
-  CircleQuestionMarkIcon,
   CopyIcon,
   Gamepad2Icon,
   ImagesIcon,
@@ -144,13 +143,6 @@ export const TOOLS_CONFIG = [
     descriptionKey: "appointmentScheduling.description",
     icon: CalendarIcon,
     getLink: (id: string) => `/space/${id}/appointment-calendars`,
-  },
-  {
-    id: "questionnaires",
-    labelKey: "questionnaires.title",
-    descriptionKey: "questionnaires.description",
-    icon: CircleQuestionMarkIcon,
-    getLink: (id: string) => `/space/${id}/questionnaires`,
   },
   {
     id: "ecommerce",

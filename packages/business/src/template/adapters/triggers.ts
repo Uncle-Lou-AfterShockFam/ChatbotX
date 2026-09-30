@@ -28,7 +28,6 @@ const TRIGGER_REMAP_KINDS = [
   "aiAgent",
   "integration",
   "calendar",
-  "questionnaire",
   "couponTopic",
   "inbox",
   "messengerPersona",

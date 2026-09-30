@@ -251,15 +251,11 @@ an endpoint's scope.
 - **Automation** — covers flows, triggers, keywords (automated responses),
   AI agents, AI MCP servers, AI functions, AI files, ref links, Facebook Lead
   Ads automations, FB/IG comment automations, IG story automations, QR
-  codes, questionnaires (+ submissions), and spreadsheets — a full CRUD
+  codes, and spreadsheets — a full CRUD
   surface so an agent can build, publish, and inspect automations without
   human help via the builder UI. AI triggers were retired (dropped from the
   schema and this scope) in favor of the AI
-  files/functions/MCP servers surface. Note this scope **is a contact-PII
-  export path**: `GET /v1/questionnaires/{id}/submissions` returns the
-  submitting contact's email and phone, matching the broadcasts-audience and
-  minigames-players precedent (minting a token already requires workspace
-  superAdmin). Six invariants:
+  files/functions/MCP servers surface. Six invariants:
   - *Keywords `type` filter* — `AutomatedResponse` serves two `FolderType`s
     off one table (`automatedResponse` for inbound/Contact,
     `outboundAutomatedResponse` for outbound/Page), disambiguated by the

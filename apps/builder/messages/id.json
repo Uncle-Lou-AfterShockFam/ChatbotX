@@ -2330,7 +2330,6 @@
       "callApi": "Permintaan API Eksternal",
       "make": "Make",
       "triggers": "Pemicu",
-      "questionnaires": "Kuesioner",
       "setUpCoupon": "Siapkan Kupon",
       "markCouponUsed": "Tandai Kupon Telah Digunakan",
       "executeJavascript": "Jalankan JavaScript",
@@ -5001,66 +5000,6 @@
       "wrongType": "Jenis file ini tidak diterima.",
       "failed": "File tidak dapat diunggah. Silakan coba lagi.",
       "previewOnly": "File dapat ditambahkan pada formulir yang diterbitkan."
-    }
-  },
-  "questionnaires": {
-    "title": "Kuesioner",
-    "description": "Buat dan kelola kuesioner untuk kontak Anda.",
-    "singular": "Kuesioner",
-    "submission": "Pengajuan",
-    "addNew": "Tambahkan Baru",
-    "applicants": "Peserta",
-    "generalSettings": "Pengaturan umum",
-    "triggerFlow": "Picu alur dengan menyelesaikan kuesioner",
-    "enableScore": "Berikan poin untuk setiap pertanyaan yang dijawab.",
-    "enableRetryMessages": "Sesuaikan pesan percobaan ulang jika balasan gagal.",
-    "enableCustomFieldMapping": "Simpan data ke kolom kustom.",
-    "question": "Pertanyaan",
-    "activeQuestion": "Aktif",
-    "questionImage": "Gambar pertanyaan",
-    "questionImageHint": "Gambar opsional yang dikirim bersama pertanyaan ini.",
-    "responseType": "Jenis Respons",
-    "points": "Poin",
-    "retryMessage": "Pesan percobaan ulang jika balasan tidak valid",
-    "defaultRetryMessages": {
-      "text": "Yang Anda masukkan bukan teks yang valid. Silakan coba lagi",
-      "number": "Yang Anda masukkan bukan angka yang valid. Silakan coba lagi",
-      "email": "Yang Anda masukkan bukan email yang valid. Silakan coba lagi",
-      "phone": "Yang Anda masukkan bukan nomor telepon yang valid. Silakan coba lagi",
-      "multipleChoice": "Yang Anda masukkan bukan pilihan yang valid. Silakan coba lagi"
-    },
-    "customField": "Simpan respons ke kolom kustom atau sistem",
-    "options": "Pilihan",
-    "mode": "Mode",
-    "completed": "Selesai",
-    "completionRate": "Tingkat penyelesaian",
-    "date": "Tanggal",
-    "inbox": "Kotak Masuk",
-    "unknownContact": "Kontak tidak dikenal",
-    "noAnswers": "Tidak ada jawaban",
-    "responseTypes": {
-      "text": "Teks",
-      "number": "Angka",
-      "email": "Email",
-      "phone": "Telepon",
-      "multipleChoice": "Pilihan ganda"
-    },
-    "flowModes": {
-      "start": "Mulai kuesioner",
-      "end": "Akhiri kuesioner",
-      "deleteApplicant": "Hapus peserta"
-    },
-    "dialogDescriptions": {
-      "create": "Beri nama kuesioner sebelum menambahkan pertanyaan.",
-      "rename": "Perbarui nama kuesioner yang ditampilkan dalam daftar dan alur.",
-      "flowStep": "Pilih cara langkah alur ini berinteraksi dengan kuesioner."
-    },
-    "status": {
-      "inProgress": "Sedang berlangsung",
-      "completed": "Selesai",
-      "cancelled": "Dibatalkan",
-      "failed": "Gagal",
-      "timeout": "Waktu habis"
     }
   },
   "facebookCommentAutomation": {

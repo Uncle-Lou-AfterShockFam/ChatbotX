@@ -1939,61 +1939,6 @@ exports[`public API spec — operation naming guard > operation list (operationI
   },
   {
     "method": "POST",
-    "operationId": "questionnaires.create",
-    "path": "/v1/questionnaires",
-  },
-  {
-    "method": "DELETE",
-    "operationId": "questionnaires.delete",
-    "path": "/v1/questionnaires/{id}",
-  },
-  {
-    "method": "DELETE",
-    "operationId": "questionnaires.deleteSubmission",
-    "path": "/v1/questionnaires/{id}/submissions/{submissionId}",
-  },
-  {
-    "method": "POST",
-    "operationId": "questionnaires.duplicate",
-    "path": "/v1/questionnaires/{id}/duplicate",
-  },
-  {
-    "method": "GET",
-    "operationId": "questionnaires.get",
-    "path": "/v1/questionnaires/{id}",
-  },
-  {
-    "method": "GET",
-    "operationId": "questionnaires.getSubmission",
-    "path": "/v1/questionnaires/{id}/submissions/{submissionId}",
-  },
-  {
-    "method": "GET",
-    "operationId": "questionnaires.getSubmissionStats",
-    "path": "/v1/questionnaires/{id}/submissions/stats",
-  },
-  {
-    "method": "GET",
-    "operationId": "questionnaires.list",
-    "path": "/v1/questionnaires",
-  },
-  {
-    "method": "GET",
-    "operationId": "questionnaires.listSubmissions",
-    "path": "/v1/questionnaires/{id}/submissions",
-  },
-  {
-    "method": "PATCH",
-    "operationId": "questionnaires.rename",
-    "path": "/v1/questionnaires/{id}/rename",
-  },
-  {
-    "method": "PUT",
-    "operationId": "questionnaires.update",
-    "path": "/v1/questionnaires/{id}",
-  },
-  {
-    "method": "POST",
     "operationId": "reflinks.create",
     "path": "/v1/ref-links",
   },

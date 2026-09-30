@@ -8,8 +8,7 @@ import {
 import { workspaceActionClientAllowExpired } from "@/lib/safe-action"
 
 // AllowExpired (not strict): invariant 14 — delete stays available after
-// trial expiry, a deliberate divergence from the questionnaires bulk-delete
-// precedent, matching the single deleteBroadcastAction below.
+// trial expiry, matching the single deleteBroadcastAction below.
 export const deleteBroadcastsAction = workspaceActionClientAllowExpired
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(bulkUpdateIdsRequest)

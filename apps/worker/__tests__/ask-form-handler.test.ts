@@ -29,7 +29,6 @@ vi.mock("@chatbotx.io/business", () => ({
     storageUrl: "https://files.example.org",
   })),
   workspaceService: { findById: vi.fn(async () => ({ language: "en" })) },
-  questionnaireSubmissionService: {},
 }))
 vi.mock("@chatbotx.io/business/form", () => ({
   formSessionService: {
@@ -64,6 +63,12 @@ vi.mock("@chatbotx.io/worker-config", () => ({
   integrationQueue: { add: vi.fn() },
 }))
 vi.mock("../src/integration/utils/message", () => ({
+  QUICK_REPLY_CHANNELS: new Set([
+    "messenger",
+    "instagram",
+    "telegram",
+    "webchat",
+  ]),
   waitForChatJobCompletion: mocks.waitForChatJobCompletion,
   waitForChatJobDelivered: mocks.delivered,
 }))

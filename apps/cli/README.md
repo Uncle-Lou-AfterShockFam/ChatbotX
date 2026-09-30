@@ -821,24 +821,6 @@ chatbotx qr-codes delete <id>
 
 ---
 
-### `questionnaires`
-
-```bash
-chatbotx questionnaires list
-chatbotx questionnaires get <id>
-chatbotx questionnaires create --name <name>
-chatbotx questionnaires update <id>                     # Full replace
-chatbotx questionnaires delete <id>
-chatbotx questionnaires rename update <id> --name <name>
-chatbotx questionnaires duplicate add <id>
-chatbotx questionnaires submissions list <id>           # [--page --perPage]
-chatbotx questionnaires submission get <id> <submissionId>
-chatbotx questionnaires submission delete <id> <submissionId>
-chatbotx questionnaires stats list <id>                 # Submission/completion stats
-```
-
----
-
 ### `ref-links`
 
 ```bash

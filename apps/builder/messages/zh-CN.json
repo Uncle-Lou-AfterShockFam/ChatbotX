@@ -3272,7 +3272,6 @@
       "optInEmail": "选择接收电子邮件",
       "optOutEmail": "选择退出电子邮件",
       "performAction": "运行操作",
-      "questionnaires": "问卷",
       "removeContactTag": "移除联系人标签",
       "sendAudio": "发送音频",
       "sendCard": "发送卡片",
@@ -5133,66 +5132,6 @@
       "failed": "文件无法上传,请重试。",
       "previewOnly": "可在已发布的表单中添加文件。"
     }
-  },
-  "questionnaires": {
-    "activeQuestion": "活动",
-    "addNew": "添加新",
-    "applicants": "申请人",
-    "completed": "已完成",
-    "completionRate": "完成率",
-    "customField": "保存对自订或系统字段的回应",
-    "date": "日期",
-    "defaultRetryMessages": {
-      "email": "您输入的电子邮件地址无效。请重试",
-      "multipleChoice": "您输入的选项无效。请重试",
-      "number": "您输入的数字无效。请重试",
-      "phone": "您输入的电话号码无效。请重试",
-      "text": "您输入的内容无效。请重试"
-    },
-    "description": "创建并管理您的联系人的问卷。",
-    "dialogDescriptions": {
-      "create": "在添加问题之前为问卷命名。",
-      "flowStep": "选择此流程步骤如何与问卷交互。",
-      "rename": "更新清单和流程中显示的问卷名称。"
-    },
-    "enableCustomFieldMapping": "保存数据到自订字段。",
-    "enableRetryMessages": "自订回复失败时的重试消息。",
-    "enableScore": "为回答的每个问题评分。",
-    "flowModes": {
-      "deleteApplicant": "删除申请人",
-      "end": "结束问卷",
-      "start": "开始问卷"
-    },
-    "generalSettings": "常规设置",
-    "inbox": "收件匣",
-    "mode": "模式",
-    "noAnswers": "无答案",
-    "options": "选项",
-    "points": "积分",
-    "question": "问题",
-    "questionImage": "问题图片",
-    "questionImageHint": "与此问题一起发送的选用影像。",
-    "responseType": "回应类型",
-    "responseTypes": {
-      "email": "电子邮件",
-      "multipleChoice": "多项选择",
-      "number": "号码",
-      "phone": "电话",
-      "text": "文本"
-    },
-    "retryMessage": "若回复无效则重试消息",
-    "singular": "问卷",
-    "status": {
-      "cancelled": "已取消",
-      "completed": "已完成",
-      "failed": "失败",
-      "inProgress": "进行中",
-      "timeout": "超时"
-    },
-    "submission": "提交",
-    "title": "问卷",
-    "triggerFlow": "触发器完成问卷的流程",
-    "unknownContact": "未知联系人"
   },
   "reflinks": {
     "description": "启动流程并从频道截取引用 payload 的关键字链接。",

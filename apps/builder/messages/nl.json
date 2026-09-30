@@ -2330,7 +2330,6 @@
       "callApi": "Externe API-aanvraag",
       "make": "Make",
       "triggers": "Triggers",
-      "questionnaires": "Vragenlijsten",
       "setUpCoupon": "Kortingsbon instellen",
       "markCouponUsed": "Kortingsbon als gebruikt markeren",
       "executeJavascript": "JavaScript uitvoeren",
@@ -5001,66 +5000,6 @@
       "wrongType": "Dit bestandstype wordt niet geaccepteerd.",
       "failed": "Het bestand kon niet worden geüpload. Probeer het opnieuw.",
       "previewOnly": "Bestanden kunnen worden toegevoegd op het gepubliceerde formulier."
-    }
-  },
-  "questionnaires": {
-    "title": "Vragenlijsten",
-    "description": "Maak en beheer vragenlijsten voor je contacten.",
-    "singular": "Vragenlijst",
-    "submission": "Inzending",
-    "addNew": "Nieuwe toevoegen",
-    "applicants": "Deelnemers",
-    "generalSettings": "Algemene instellingen",
-    "triggerFlow": "Activeer de flow door de vragenlijst te voltooien",
-    "enableScore": "Ken punten toe voor elke beantwoorde vraag.",
-    "enableRetryMessages": "Pas berichten voor een nieuwe poging aan wanneer een antwoord ongeldig is.",
-    "enableCustomFieldMapping": "Sla gegevens op in aangepaste velden.",
-    "question": "Vraag",
-    "activeQuestion": "Actief",
-    "questionImage": "Afbeelding bij vraag",
-    "questionImageHint": "Optionele afbeelding die met deze vraag wordt verzonden.",
-    "responseType": "Antwoordtype",
-    "points": "Punten",
-    "retryMessage": "Bericht voor nieuwe poging bij een ongeldig antwoord",
-    "defaultRetryMessages": {
-      "text": "De ingevoerde waarde is geen geldige tekst. Probeer het opnieuw",
-      "number": "De ingevoerde waarde is geen geldig getal. Probeer het opnieuw",
-      "email": "De ingevoerde waarde is geen geldig e-mailadres. Probeer het opnieuw",
-      "phone": "De ingevoerde waarde is geen geldig telefoonnummer. Probeer het opnieuw",
-      "multipleChoice": "De ingevoerde waarde is geen geldige optie. Probeer het opnieuw"
-    },
-    "customField": "Antwoord opslaan in een aangepast veld of systeemveld",
-    "options": "Opties",
-    "mode": "Modus",
-    "completed": "Voltooid",
-    "completionRate": "Voltooiingspercentage",
-    "date": "Datum",
-    "inbox": "Inbox",
-    "unknownContact": "Onbekend contact",
-    "noAnswers": "Geen antwoorden",
-    "responseTypes": {
-      "text": "Tekst",
-      "number": "Getal",
-      "email": "E-mail",
-      "phone": "Telefoonnummer",
-      "multipleChoice": "Meerkeuze"
-    },
-    "flowModes": {
-      "start": "Vragenlijst starten",
-      "end": "Vragenlijst beëindigen",
-      "deleteApplicant": "Deelnemer verwijderen"
-    },
-    "dialogDescriptions": {
-      "create": "Geef de vragenlijst een naam voordat je vragen toevoegt.",
-      "rename": "Wijzig de naam van de vragenlijst die in lijsten en flows wordt weergegeven.",
-      "flowStep": "Kies hoe deze flowstap met een vragenlijst omgaat."
-    },
-    "status": {
-      "inProgress": "Bezig",
-      "completed": "Voltooid",
-      "cancelled": "Geannuleerd",
-      "failed": "Mislukt",
-      "timeout": "Time-out"
     }
   },
   "facebookCommentAutomation": {

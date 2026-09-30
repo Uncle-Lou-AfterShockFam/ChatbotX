@@ -16,7 +16,6 @@ import {
   CheckCheckIcon,
   CircleCheckIcon,
   CircleEllipsisIcon,
-  ClipboardListIcon,
   CloudDownloadIcon,
   CodeIcon,
   CogIcon,
@@ -582,11 +581,6 @@ export const performActionMenus = (t: TranslationFn): MenuItem[] => [
     label: t("flows.actions.appointmentScheduling"),
     icon: CalendarClockIcon,
     stepType: stepTypes.enum.appointmentScheduling,
-  },
-  {
-    label: t("flows.actions.questionnaires"),
-    icon: ClipboardListIcon,
-    stepType: stepTypes.enum.questionnaires,
   },
   {
     label: t("flows.actions.tools"),

@@ -81,7 +81,6 @@ import {
 } from "./messenger-user-menu"
 import { handleSendMetaCapiEventStep } from "./meta-conversions/send-meta-capi-event-step-handler"
 import { addOrUpdateMoosendContact } from "./moosend-handler"
-import { questionnaires } from "./questionnaires"
 import { handleSendDocumentForSignature } from "./send-document-for-signature"
 import { sendEmail } from "./send-email"
 import { addSendGridContact } from "./sendgrid-handler"
@@ -547,7 +546,6 @@ export const flowStepHandlers: Record<
   [stepTypes.enum.startExternalFlow]: startExternalFlow,
   [stepTypes.enum.chooseChannel]: undefined,
   [stepTypes.enum.appointmentScheduling]: appointmentScheduling,
-  [stepTypes.enum.questionnaires]: questionnaires,
   [stepTypes.enum.setUpCoupon]: setUpCoupon,
   [stepTypes.enum.markCouponUsed]: markCouponUsed,
   [stepTypes.enum.condition]: handleCondition,

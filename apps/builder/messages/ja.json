@@ -2330,7 +2330,6 @@
       "callApi": "外部APIリクエスト",
       "make": "Make",
       "triggers": "トリガー",
-      "questionnaires": "アンケート",
       "setUpCoupon": "クーポンを設定",
       "markCouponUsed": "クーポンを使用済みにする",
       "executeJavascript": "JavaScriptを実行",
@@ -4980,66 +4979,6 @@
       "wrongType": "この種類のファイルは受け付けていません。",
       "failed": "ファイルをアップロードできませんでした。もう一度お試しください。",
       "previewOnly": "ファイルは公開中のフォームで追加できます。"
-    }
-  },
-  "questionnaires": {
-    "title": "アンケート",
-    "description": "連絡先向けのアンケートを作成・管理します。",
-    "singular": "アンケート",
-    "submission": "回答",
-    "addNew": "新規追加",
-    "applicants": "回答者",
-    "generalSettings": "一般設定",
-    "triggerFlow": "アンケートの完了時にフローを開始",
-    "enableScore": "回答した各質問にポイントを付与します。",
-    "enableRetryMessages": "回答が無効な場合の再試行メッセージをカスタマイズします。",
-    "enableCustomFieldMapping": "データをカスタムフィールドに保存します。",
-    "question": "質問",
-    "activeQuestion": "有効",
-    "questionImage": "質問画像",
-    "questionImageHint": "この質問と一緒に送信する任意の画像です。",
-    "responseType": "回答形式",
-    "points": "ポイント",
-    "retryMessage": "回答が無効な場合の再試行メッセージ",
-    "defaultRetryMessages": {
-      "text": "入力内容は有効なテキストではありません。もう一度お試しください",
-      "number": "入力内容は有効な数値ではありません。もう一度お試しください",
-      "email": "入力内容は有効なメールアドレスではありません。もう一度お試しください",
-      "phone": "入力内容は有効な電話番号ではありません。もう一度お試しください",
-      "multipleChoice": "入力内容は有効な選択肢ではありません。もう一度お試しください"
-    },
-    "customField": "回答をカスタムフィールドまたはシステムフィールドに保存",
-    "options": "選択肢",
-    "mode": "モード",
-    "completed": "完了",
-    "completionRate": "完了率",
-    "date": "日付",
-    "inbox": "受信トレイ",
-    "unknownContact": "不明な連絡先",
-    "noAnswers": "回答なし",
-    "responseTypes": {
-      "text": "テキスト",
-      "number": "数値",
-      "email": "メール",
-      "phone": "電話番号",
-      "multipleChoice": "複数選択"
-    },
-    "flowModes": {
-      "start": "アンケートを開始",
-      "end": "アンケートを終了",
-      "deleteApplicant": "回答者を削除"
-    },
-    "dialogDescriptions": {
-      "create": "質問を追加する前にアンケート名を入力してください。",
-      "rename": "一覧とフローに表示されるアンケート名を更新します。",
-      "flowStep": "このフローステップとアンケートの連携方法を選択します。"
-    },
-    "status": {
-      "inProgress": "進行中",
-      "completed": "完了",
-      "cancelled": "キャンセル済み",
-      "failed": "失敗",
-      "timeout": "タイムアウト"
     }
   },
   "facebookCommentAutomation": {

@@ -2330,7 +2330,6 @@
       "callApi": "Externe API-Anfrage",
       "make": "Make",
       "triggers": "Trigger",
-      "questionnaires": "Fragebögen",
       "setUpCoupon": "Gutschein einrichten",
       "markCouponUsed": "Gutschein als verwendet markieren",
       "executeJavascript": "JavaScript ausführen",
@@ -5001,66 +5000,6 @@
       "wrongType": "Dieser Dateityp wird nicht akzeptiert.",
       "failed": "Die Datei konnte nicht hochgeladen werden. Bitte versuche es erneut.",
       "previewOnly": "Dateien können im veröffentlichten Formular hinzugefügt werden."
-    }
-  },
-  "questionnaires": {
-    "title": "Fragebögen",
-    "description": "Erstellen und verwalten Sie Fragebögen für Ihre Kontakte.",
-    "singular": "Fragebogen",
-    "submission": "Einreichung",
-    "addNew": "Neu hinzufügen",
-    "applicants": "Teilnehmer",
-    "generalSettings": "Allgemeine Einstellungen",
-    "triggerFlow": "Flow durch Abschluss des Fragebogens auslösen",
-    "enableScore": "Für jede beantwortete Frage Punkte vergeben.",
-    "enableRetryMessages": "Wiederholungsnachrichten bei ungültiger Antwort anpassen.",
-    "enableCustomFieldMapping": "Daten in benutzerdefinierten Feldern speichern.",
-    "question": "Frage",
-    "activeQuestion": "Aktiv",
-    "questionImage": "Fragebild",
-    "questionImageHint": "Optionales Bild, das mit dieser Frage gesendet wird.",
-    "responseType": "Antworttyp",
-    "points": "Punkte",
-    "retryMessage": "Wiederholungsnachricht bei ungültiger Antwort",
-    "defaultRetryMessages": {
-      "text": "Ihre Eingabe ist kein gültiger Text. Versuchen Sie es erneut",
-      "number": "Ihre Eingabe ist keine gültige Zahl. Versuchen Sie es erneut",
-      "email": "Ihre Eingabe ist keine gültige E-Mail-Adresse. Versuchen Sie es erneut",
-      "phone": "Ihre Eingabe ist keine gültige Telefonnummer. Versuchen Sie es erneut",
-      "multipleChoice": "Ihre Eingabe ist keine gültige Option. Versuchen Sie es erneut"
-    },
-    "customField": "Antwort in einem benutzerdefinierten oder Systemfeld speichern",
-    "options": "Optionen",
-    "mode": "Modus",
-    "completed": "Abgeschlossen",
-    "completionRate": "Abschlussrate",
-    "date": "Datum",
-    "inbox": "Posteingang",
-    "unknownContact": "Unbekannter Kontakt",
-    "noAnswers": "Keine Antworten",
-    "responseTypes": {
-      "text": "Text",
-      "number": "Zahl",
-      "email": "E-Mail",
-      "phone": "Telefon",
-      "multipleChoice": "Mehrfachauswahl"
-    },
-    "flowModes": {
-      "start": "Fragebogen starten",
-      "end": "Fragebogen beenden",
-      "deleteApplicant": "Teilnehmer löschen"
-    },
-    "dialogDescriptions": {
-      "create": "Benennen Sie den Fragebogen, bevor Sie Fragen hinzufügen.",
-      "rename": "Aktualisieren Sie den Namen des Fragebogens, der in Listen und Flows angezeigt wird.",
-      "flowStep": "Wählen Sie, wie dieser Flow-Schritt mit einem Fragebogen interagiert."
-    },
-    "status": {
-      "inProgress": "In Bearbeitung",
-      "completed": "Abgeschlossen",
-      "cancelled": "Abgebrochen",
-      "failed": "Fehlgeschlagen",
-      "timeout": "Zeitüberschreitung"
     }
   },
   "facebookCommentAutomation": {

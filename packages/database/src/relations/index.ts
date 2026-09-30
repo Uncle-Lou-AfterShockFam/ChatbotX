@@ -128,7 +128,6 @@ import { pipelineRelations } from "./pipeline"
 import { pipelineMemberRelations } from "./pipeline-member"
 import { productRelations } from "./product"
 import { productCategoryRelations } from "./product-category"
-import { questionnaireRelations } from "./questionnaire"
 import { reflinkRelations } from "./reflink"
 import { savedReplyRelations } from "./save-reply"
 import { sequenceRelations } from "./sequence"
@@ -313,7 +312,6 @@ export const relations = {
   ...productRelations,
   ...productCategoryRelations,
   ...metaCatalogRelations,
-  ...questionnaireRelations,
   ...coexistSyncRunRelations,
   ...userPersistentMenuRelations,
   ...userDeviceTokenRelations,

@@ -2330,7 +2330,6 @@
       "callApi": "Solicitação de API externa",
       "make": "Make",
       "triggers": "Gatilhos",
-      "questionnaires": "Questionários",
       "setUpCoupon": "Configurar cupom",
       "markCouponUsed": "Marcar cupom como usado",
       "executeJavascript": "Executar JavaScript",
@@ -4894,66 +4893,6 @@
       "wrongType": "Este tipo de arquivo não é aceito.",
       "failed": "Não foi possível enviar o arquivo. Tente novamente.",
       "previewOnly": "Os arquivos podem ser adicionados no formulário publicado."
-    }
-  },
-  "questionnaires": {
-    "title": "Questionários",
-    "description": "Crie e gerencie questionários para seus contatos.",
-    "singular": "Questionário",
-    "submission": "Envio",
-    "addNew": "Adicionar novo",
-    "applicants": "Participantes",
-    "generalSettings": "Configurações gerais",
-    "triggerFlow": "Acionar o fluxo ao concluir o questionário",
-    "enableScore": "Atribuir pontos a cada pergunta respondida.",
-    "enableRetryMessages": "Personalizar mensagens de nova tentativa em caso de falha na resposta.",
-    "enableCustomFieldMapping": "Salvar dados em campos personalizados.",
-    "question": "Pergunta",
-    "activeQuestion": "Ativa",
-    "questionImage": "Imagem da pergunta",
-    "questionImageHint": "Imagem opcional enviada com esta pergunta.",
-    "responseType": "Tipo de resposta",
-    "points": "Pontos",
-    "retryMessage": "Mensagem de nova tentativa se a resposta for inválida",
-    "defaultRetryMessages": {
-      "text": "O que você digitou não é um texto válido. Tente novamente",
-      "number": "O que você digitou não é um número válido. Tente novamente",
-      "email": "O que você digitou não é um e-mail válido. Tente novamente",
-      "phone": "O que você digitou não é um número de telefone válido. Tente novamente",
-      "multipleChoice": "O que você digitou não é uma opção válida. Tente novamente"
-    },
-    "customField": "Salvar resposta em um campo personalizado ou do sistema",
-    "options": "Opções",
-    "mode": "Modo",
-    "completed": "Concluído",
-    "completionRate": "Taxa de conclusão",
-    "date": "Data",
-    "inbox": "Caixa de entrada",
-    "unknownContact": "Contato desconhecido",
-    "noAnswers": "Sem respostas",
-    "responseTypes": {
-      "text": "Texto",
-      "number": "Número",
-      "email": "E-mail",
-      "phone": "Telefone",
-      "multipleChoice": "Múltipla escolha"
-    },
-    "flowModes": {
-      "start": "Iniciar questionário",
-      "end": "Encerrar questionário",
-      "deleteApplicant": "Excluir participante"
-    },
-    "dialogDescriptions": {
-      "create": "Dê um nome ao questionário antes de adicionar perguntas.",
-      "rename": "Atualize o nome do questionário exibido nas listas e nos fluxos.",
-      "flowStep": "Escolha como esta etapa do fluxo interage com um questionário."
-    },
-    "status": {
-      "inProgress": "Em andamento",
-      "completed": "Concluído",
-      "cancelled": "Cancelado",
-      "failed": "Falhou",
-      "timeout": "Tempo esgotado"
     }
   },
   "facebookCommentAutomation": {

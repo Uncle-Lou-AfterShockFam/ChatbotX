@@ -2662,7 +2662,6 @@
       "make": "Make",
       "triggerN8n": "Trigger n8n",
       "triggers": "Triggers",
-      "questionnaires": "Questionnaires",
       "setUpCoupon": "Set up Coupon",
       "markCouponUsed": "Mark Coupon used",
       "executeJavascript": "Execute JavaScript Code",
@@ -5232,66 +5231,6 @@
       "wrongType": "This type of file is not accepted.",
       "failed": "The file could not be uploaded. Please try again.",
       "previewOnly": "Files can be added on the published form."
-    }
-  },
-  "questionnaires": {
-    "title": "Questionnaires",
-    "description": "Create and manage questionnaires for your contacts.",
-    "singular": "Questionnaire",
-    "submission": "Submission",
-    "addNew": "Add New",
-    "applicants": "Applicants",
-    "generalSettings": "General settings",
-    "triggerFlow": "Trigger the flow by completing the questionnaire",
-    "enableScore": "Give points for each question answered.",
-    "enableRetryMessages": "Customize retry messages in case of reply failure.",
-    "enableCustomFieldMapping": "Save data to custom fields.",
-    "question": "Question",
-    "activeQuestion": "Active",
-    "questionImage": "Question image",
-    "questionImageHint": "Optional image sent with this question.",
-    "responseType": "Response Type",
-    "points": "Points",
-    "retryMessage": "Retry message if the reply is invalid",
-    "defaultRetryMessages": {
-      "text": "What you've entered is not a valid text. Please try again",
-      "number": "What you've entered is not a valid number. Please try again",
-      "email": "What you've entered is not a valid email. Please try again",
-      "phone": "What you've entered is not a valid phone number. Please try again",
-      "multipleChoice": "What you've entered is not a valid option. Please try again"
-    },
-    "customField": "Save response to a custom or system field",
-    "options": "Options",
-    "mode": "Mode",
-    "completed": "Completed",
-    "completionRate": "Completion rate",
-    "date": "Date",
-    "inbox": "Inbox",
-    "unknownContact": "Unknown contact",
-    "noAnswers": "No answers",
-    "responseTypes": {
-      "text": "Text",
-      "number": "Number",
-      "email": "Email",
-      "phone": "Phone",
-      "multipleChoice": "Multiple choice"
-    },
-    "flowModes": {
-      "start": "Start questionnaire",
-      "end": "End questionnaire",
-      "deleteApplicant": "Delete applicant"
-    },
-    "dialogDescriptions": {
-      "create": "Name the questionnaire before adding questions.",
-      "rename": "Update the questionnaire name shown in lists and flows.",
-      "flowStep": "Choose how this flow step interacts with a questionnaire."
-    },
-    "status": {
-      "inProgress": "In progress",
-      "completed": "Completed",
-      "cancelled": "Cancelled",
-      "failed": "Failed",
-      "timeout": "Timeout"
     }
   },
   "facebookCommentAutomation": {

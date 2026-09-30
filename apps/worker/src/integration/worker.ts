@@ -257,7 +257,7 @@ async function startIntegrationWorker() {
                       },
                     },
                     {
-                      jobId: `questionnaire-challenge-${routing.conversation.id}-${message.id}`,
+                      jobId: `step-challenge-${routing.conversation.id}-${message.id}`,
                     },
                   )
                 } else if (routing.type === "automatedResponse") {

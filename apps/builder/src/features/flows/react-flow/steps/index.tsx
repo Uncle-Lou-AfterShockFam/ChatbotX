@@ -57,7 +57,6 @@ import { moveDealStageStep } from "./move-deal-stage"
 import { openWebsiteStep } from "./open-website"
 import { optInEmailStep } from "./opt-in-email"
 import { optOutEmailStep } from "./opt-out-email"
-import { questionnairesStep } from "./questionnaires"
 import { removeContactTagStep } from "./remove-contact-tag"
 import sendAudioStep from "./send-audio"
 import { sendCarouselStep } from "./send-carousel"
@@ -180,7 +179,6 @@ export const allSteps: Record<StepType, StepDefinition<any> | undefined> = {
   [stepTypes.enum.completeTask]: completeTaskStep,
   [stepTypes.enum.chooseChannel]: chooseChannelStep,
   [stepTypes.enum.appointmentScheduling]: appointmentSchedulingStep,
-  [stepTypes.enum.questionnaires]: questionnairesStep,
   [stepTypes.enum.setUpCoupon]: setUpCouponStep,
   [stepTypes.enum.markCouponUsed]: markCouponUsedStep,
   [stepTypes.enum.condition]: conditionStep,

@@ -100,7 +100,6 @@ export * from "./platform-credential"
 export * from "./product"
 export * from "./product-category"
 export * from "./qr-code"
-export * from "./questionnaire"
 export * from "./quota-enforcement"
 // The fail-closed live-counter parser, so the reconcile workers read the same
 // way the services do. The key builders themselves live in `@chatbotx.io/utils`

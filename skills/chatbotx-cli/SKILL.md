@@ -250,8 +250,6 @@ chatbotx coupons list
 chatbotx minigames list / get / create / update / delete / bulk-delete
 chatbotx minigames plays list <id> --contactId <contactId>
 chatbotx minigames players list <id>
-chatbotx questionnaires list / get / create / update / delete / duplicate
-chatbotx questionnaires submissions list <id>
 chatbotx appointment-calendars list / get / create / update / delete
 chatbotx appointments list / get / create / cancel / delete
 chatbotx ref-links list / get / create / update / delete
