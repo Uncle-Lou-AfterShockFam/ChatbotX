@@ -23,14 +23,17 @@ const unauthorized = (reason: string) =>
  * the concatenation (not an HMAC), over the body bytes as sent. app_id and
  * timestamp come from the body itself. Fails closed: no OA Secret Key
  * configured refuses every event, tag events included. Returns the parsed
- * JSON only once the signature holds.
+ * JSON only once the signature holds. No freshness window: a replayed
+ * message is deduplicated on its msg_id (received-message), and seen / tag
+ * events are idempotent.
  */
 export async function verifyZaloWebhook(
   rawBody: string,
   signatureHeader: string | null,
   oaSecretKey: string | undefined,
 ): Promise<unknown> {
-  if (!oaSecretKey) {
+  // A blank or whitespace key is no secret: refused like a missing one.
+  if (!oaSecretKey?.trim()) {
     logger.error(
       "zalo webhook refused: no OA Secret Key in the Zalo platform credential",
     )
@@ -47,10 +50,8 @@ export async function verifyZaloWebhook(
     throw unauthorized("body is not JSON")
   }
   const { app_id: appId, timestamp } = (body ?? {}) as Record<string, unknown>
-  if (
-    typeof appId !== "string" ||
-    !(typeof timestamp === "string" || typeof timestamp === "number")
-  ) {
+  // Strings, as the event schema reads them (Zalo sends both as strings).
+  if (typeof appId !== "string" || typeof timestamp !== "string") {
     throw unauthorized("app_id or timestamp missing")
   }
   const expected = await sha256Hex(
@@ -76,6 +77,10 @@ const handleWebhookEvent = async (
   try {
     const webhookData = zaloWebhookEventSchema.parse(body)
 
+    if (webhookData.app_id !== config.clientId) {
+      throw new SdkException("Invalid app_id in webhook payload")
+    }
+
     // Tag events carry oa_id + tag (no sender/recipient). Route them before
     // the message-event handling below.
     if (TAG_EVENT_NAME_SET.has(webhookData.event_name) && webhookData.oa_id) {
@@ -88,10 +93,6 @@ const handleWebhookEvent = async (
         },
       })
       return
-    }
-
-    if (webhookData.app_id !== config.clientId) {
-      throw new SdkException("Invalid app_id in webhook payload")
     }
 
     // Message events always carry sender/recipient.

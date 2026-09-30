@@ -91,10 +91,10 @@ describe("zalo webhook signature (s230a)", () => {
 
   test("no OA Secret Key configured refuses even a validly signed event (fail closed)", async () => {
     const body = JSON.stringify(message)
-    for (const key of [undefined, ""]) {
+    for (const key of [undefined, "", " ", "\t\n"]) {
       const { queueAdd, result } = call(
         body,
-        `mac=${await macFor(body, APP_ID, TS, "")}`,
+        `mac=${await macFor(body, APP_ID, TS, key ?? "")}`,
         key,
       )
       await expect401(result)
@@ -145,18 +145,26 @@ describe("zalo webhook signature (s230a)", () => {
     )
   })
 
-  test("a signed event for another app is still refused by the app_id gate", async () => {
-    const body = JSON.stringify({ ...message, app_id: "app-2" })
-    const { queueAdd, result } = call(
-      body,
-      `mac=${await macFor(body, "app-2")}`,
-    )
-    await expect(result).rejects.toThrow("Invalid app_id")
-    expect(queueAdd).not.toHaveBeenCalled()
+  test("a signed event for another app is still refused by the app_id gate, tag events included", async () => {
+    for (const event of [message, tagEvent]) {
+      const body = JSON.stringify({ ...event, app_id: "app-2" })
+      const { queueAdd, result } = call(
+        body,
+        `mac=${await macFor(body, "app-2")}`,
+      )
+      await expect(result).rejects.toThrow("Invalid app_id")
+      expect(queueAdd).not.toHaveBeenCalled()
+    }
   })
 
   test("non-JSON, null and field-less bodies are refused before routing", async () => {
-    for (const body of ["not json", "null", "{}", '{"app_id":1}']) {
+    for (const body of [
+      "not json",
+      "null",
+      "{}",
+      '{"app_id":1}',
+      `{"app_id":"${APP_ID}","timestamp":${TS}}`,
+    ]) {
       await expect401(call(body, `mac=${await macFor(body)}`).result)
     }
   })

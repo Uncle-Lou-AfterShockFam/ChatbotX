@@ -16,7 +16,14 @@ const handleRequest = async (
   ) as IntegrationType
   const integrationAction = allParams.integration[1]
 
-  if (!(integrationType && integrationAction)) {
+  // Exactly /integrations/<type>/<action>: integrations dispatch on the LAST
+  // path segment, so /<type>/webhook/callback would reach the callback
+  // handler past the webhook route (s230a). Longer paths have their own
+  // routes (whatsapp / stripe / woocommerce webhook/[integrationId]).
+  if (
+    allParams.integration.length !== 2 ||
+    !(integrationType && integrationAction)
+  ) {
     return notFound()
   }
 
