@@ -34,6 +34,15 @@ export type MetaMessengerTemplate = {
   components: unknown
 }
 
+/**
+ * The integration fields a template list carries: every caller hands the rows
+ * to the browser (the templates table, conversion events, the templates API),
+ * so never the row's `auth` / `userInfo` / `capiAccessToken` (s231a).
+ */
+const TEMPLATE_INTEGRATION = {
+  integrationMessenger: { columns: { id: true, name: true, inboxId: true } },
+} as const
+
 class MessengerMessageTemplateService extends BaseService {
   private async resolveIntegrationMessengerId({
     tx,
@@ -79,9 +88,7 @@ class MessengerMessageTemplateService extends BaseService {
           workspaceId: where.workspaceId,
         },
       },
-      with: {
-        integrationMessenger: true,
-      },
+      with: TEMPLATE_INTEGRATION,
       orderBy: { id: "desc" },
     })
   }
@@ -111,9 +118,7 @@ class MessengerMessageTemplateService extends BaseService {
     const [data, total] = await Promise.all([
       tx.query.messengerMessageTemplateModel.findMany({
         where: queryWhere,
-        with: {
-          integrationMessenger: true,
-        },
+        with: TEMPLATE_INTEGRATION,
         orderBy: { id: "desc" },
         limit: pagination.limit,
         offset: pagination.offset,
