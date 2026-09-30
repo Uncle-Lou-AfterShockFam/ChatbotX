@@ -38,6 +38,38 @@ const THREADS_BAD_REQUEST_MESSAGES = new Set([
   "Webhook app_id does not match configured clientId",
 ])
 
+/**
+ * Webhook callers are unauthenticated, so an exception's text (config state
+ * such as "OA Secret Key not configured", zod issues) never reaches them
+ * (s231a): the status survives, the body is a fixed message per status, and
+ * the detail goes to the log only.
+ */
+const publicWebhookMessage = (status: number) => {
+  if (status === 401 || status === 403) {
+    return "Unauthorized"
+  }
+  if (status === 404) {
+    return "Not found"
+  }
+  return status < 500 ? "Invalid webhook request" : "Failed to process webhook"
+}
+
+const webhookErrorResponse = (
+  error: unknown,
+  integrationType: string,
+  logMessage: string,
+) => {
+  let status = error instanceof SdkException ? error.httpStatusCode : 400
+  if (!Number.isInteger(status) || status < 400 || status > 599) {
+    status = 500
+  }
+  logger.error({ err: error, integrationType, status }, logMessage)
+  return new Response(
+    JSON.stringify({ message: publicWebhookMessage(status) }),
+    { status, headers: WEBHOOK_PUBLIC_ERROR_HEADERS },
+  )
+}
+
 const createThreadsErrorResponse = (error: unknown) => {
   const safeError = getSafeErrorDetails(error)
 
@@ -189,20 +221,13 @@ export const handleWebhook = async (
 
     return new Response(result as BodyInit)
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    logger.error(
-      { err: e, integrationType },
+    // Respect the exception's own status (e.g. 401 from a failed inbound
+    // webhook signature check); every SdkException defaults it to 400.
+    return webhookErrorResponse(
+      e,
+      integrationType,
       "Integration handleRequest failed",
     )
-    // Respect the exception's own status (e.g. 401 from a failed inbound
-    // webhook signature check) instead of always answering 400 — every
-    // SdkException still defaults its httpStatusCode to 400, so this is a
-    // no-op for exceptions that never set one.
-    const status = e instanceof SdkException ? e.httpStatusCode : 400
-    return new Response(JSON.stringify({ message }), {
-      status,
-      headers: { "Content-Type": "application/json" },
-    })
   }
 }
 
@@ -321,15 +346,7 @@ const handleTelegramWebhook = async (req: NextRequest) => {
 
     return new Response(result as BodyInit)
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    logger.error(
-      { err: e, integrationType: "telegram" },
-      "Telegram handleRequest failed",
-    )
-    return new Response(JSON.stringify({ message }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    })
+    return webhookErrorResponse(e, "telegram", "Telegram handleRequest failed")
   }
 }
 
@@ -415,14 +432,6 @@ const handleTiktokWebhook = async (req: NextRequest) => {
 
     return new Response(result as BodyInit)
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    logger.error(
-      { err: e, integrationType: "tiktok" },
-      "TikTok handleRequest failed",
-    )
-    return new Response(JSON.stringify({ message }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    })
+    return webhookErrorResponse(e, "tiktok", "TikTok handleRequest failed")
   }
 }

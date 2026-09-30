@@ -6,6 +6,9 @@ const findIntegrationTelegramByBotId = vi.fn()
 const findIntegrationTiktokByOpenId = vi.fn()
 const telegramHandleRequest = vi.fn()
 const tiktokHandleRequest = vi.fn()
+const zaloHandleRequest = vi.fn()
+const findDecryptedPlatform = vi.fn()
+const logError = vi.fn()
 const dbUpdateSet = vi.fn()
 const dbUpdateWhere = vi.fn()
 const dbUpdate = vi.fn(() => ({ set: dbUpdateSet }))
@@ -14,7 +17,7 @@ vi.mock("@chatbotx.io/business", () => ({
   customDomainService: { findActiveByDomain: vi.fn() },
   platformCredentialService: {
     findDecryptedForUser: vi.fn(),
-    findDecryptedPlatform: vi.fn(),
+    findDecryptedPlatform,
   },
   tenantService: { findById: vi.fn() },
 }))
@@ -52,11 +55,12 @@ vi.mock("@/integration", () => ({
   integrations: {
     telegram: { name: "telegram", handleRequest: telegramHandleRequest },
     tiktok: { name: "tiktok", handleRequest: tiktokHandleRequest },
+    zalo: { name: "zalo", handleRequest: zaloHandleRequest },
   },
 }))
 
 vi.mock("@/lib/log", () => ({
-  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn() },
+  logger: { debug: vi.fn(), error: logError, info: vi.fn() },
 }))
 
 vi.mock("@/lib/oauth-broker", () => ({
@@ -66,6 +70,7 @@ vi.mock("@/lib/oauth-broker", () => ({
 // Dynamic import: loads the module under test only after every `vi.mock`
 // above has registered, matching the convention used by the sibling
 // freeze/webhook-log tests in this directory.
+const { SdkException } = await import("@chatbotx.io/sdk")
 const { handleWebhook } = await import(
   "../src/app/integrations/[...integration]/webhook"
 )
@@ -209,5 +214,120 @@ describe("tiktok webhook routing", () => {
     expect(tiktokHandleRequest).not.toHaveBeenCalled()
     expect(dbUpdate).toHaveBeenCalledTimes(1)
     expect(dbUpdateSet).toHaveBeenCalledWith({ status: "disconnected" })
+  })
+})
+
+// s231a: webhook callers are unauthenticated, so a thrown exception's text
+// (config state, zod issues) must never reach the response body.
+describe("webhook error responses carry no exception text", () => {
+  const SECRET_DETAIL = "OA Secret Key not configured for oa 42"
+
+  const expectGeneric = async (
+    response: Response,
+    status: number,
+    message: string,
+  ) => {
+    expect(response.status).toBe(status)
+    const text = await response.text()
+    expect(JSON.parse(text)).toEqual({ message })
+    expect(text).not.toContain("OA Secret")
+    expect(text).not.toContain("oa 42")
+  }
+
+  const callZalo = () =>
+    handleWebhook(
+      "zalo",
+      asNextRequest("http://localhost/integrations/zalo/webhook", "{}"),
+    )
+
+  beforeEach(() => {
+    findDecryptedPlatform.mockResolvedValue({ config: { appId: "app" } })
+  })
+
+  test.each([
+    [401, "Unauthorized"],
+    [403, "Unauthorized"],
+    [404, "Not found"],
+    [400, "Invalid webhook request"],
+    [422, "Invalid webhook request"],
+    [500, "Failed to process webhook"],
+    [503, "Failed to process webhook"],
+  ])("an SdkException with status %i answers %j", async (status, message) => {
+    zaloHandleRequest.mockRejectedValue(
+      new SdkException(SECRET_DETAIL, -1, status),
+    )
+
+    await expectGeneric(await callZalo(), status, message)
+    expect(logError).toHaveBeenCalledWith(
+      expect.objectContaining({ integrationType: "zalo", status }),
+      "Integration handleRequest failed",
+    )
+  })
+
+  test.each([
+    [302],
+    [200],
+    [700],
+    [Number.NaN],
+  ])("an out-of-range status %s is clamped to 500", async (status) => {
+    zaloHandleRequest.mockRejectedValue(
+      new SdkException(SECRET_DETAIL, -1, status),
+    )
+
+    await expectGeneric(await callZalo(), 500, "Failed to process webhook")
+  })
+
+  test.each([
+    [new Error(`[{"code":"invalid_type","message":"${SECRET_DETAIL}"}]`)],
+    [SECRET_DETAIL],
+    [undefined],
+  ])("a non-SdkException throw %# answers a generic 400", async (thrown) => {
+    zaloHandleRequest.mockRejectedValue(thrown)
+
+    await expectGeneric(await callZalo(), 400, "Invalid webhook request")
+  })
+
+  test("telegram keeps the status and hides the text", async () => {
+    findIntegrationTelegramByBotId.mockResolvedValue({
+      auth: { metadata: {}, secretText: "secret" },
+      botId: "bot-1",
+    })
+    telegramHandleRequest.mockRejectedValue(
+      new SdkException(SECRET_DETAIL, -1, 401),
+    )
+
+    await expectGeneric(
+      await handleWebhook(
+        "telegram",
+        asNextRequest("http://localhost/integrations/telegram?botId=bot-1"),
+      ),
+      401,
+      "Unauthorized",
+    )
+  })
+
+  test("tiktok answers a generic 400 for a plain error", async () => {
+    findIntegrationTiktokByOpenId.mockResolvedValue({
+      auth: {
+        clientId: "id",
+        clientSecret: "secret",
+        redirectUrl: "https://x",
+      },
+      inboxId: "inbox-1",
+      openId: "open-1",
+    })
+    tiktokHandleRequest.mockRejectedValue(new Error(SECRET_DETAIL))
+
+    await expectGeneric(
+      await handleWebhook(
+        "tiktok",
+        asNextRequest(
+          "http://localhost/integrations/tiktok",
+          JSON.stringify({ event: "im_receive_msg", user_openid: "open-1" }),
+        ),
+      ),
+      400,
+      "Invalid webhook request",
+    )
   })
 })
