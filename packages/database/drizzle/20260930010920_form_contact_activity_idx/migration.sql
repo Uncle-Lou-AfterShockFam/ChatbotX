@@ -1,1 +1,1 @@
-CREATE INDEX "FormSession_workspaceId_contactId_idx" ON "FormSession" ("workspaceId","contactId");
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "FormSession_workspaceId_contactId_idx" ON "FormSession" ("workspaceId","contactId");
