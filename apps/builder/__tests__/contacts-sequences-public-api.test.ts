@@ -50,6 +50,7 @@ const contactSequenceService = {
   listByContactId: vi.fn(),
   removeContactSequencesForContacts: vi.fn(),
   updateContactSequences: vi.fn(),
+  resumeHeldEnrollment: vi.fn(),
 }
 
 const resolveContactId = vi.fn()
@@ -169,5 +170,45 @@ describe("PUT /v1/contacts/{identifier}/sequences", () => {
       contactId: "contact-1",
       sequenceIds: ["seq-3"],
     })
+  })
+})
+
+describe("POST /v1/contacts/{identifier}/sequences/{sequenceId}/resume (s227b)", () => {
+  const procedure = findProcedure(
+    "POST",
+    "/v1/contacts/{identifier}/sequences/{sequenceId}/resume",
+  )
+
+  test("resumes the resolved contact's held subscription in this workspace", async () => {
+    contactSequenceService.resumeHeldEnrollment.mockResolvedValueOnce({
+      runAt: new Date("2026-10-01T09:00:00.000Z"),
+    })
+
+    await expect(
+      procedure.handler?.({
+        context: { workspace: { id: "workspace-1" } },
+        input: { identifier: "id:123", sequenceId: "seq-1" },
+      }),
+    ).resolves.toEqual({ runAt: "2026-10-01T09:00:00.000Z" })
+
+    expect(contactSequenceService.resumeHeldEnrollment).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      contactId: "contact-1",
+      sequenceId: "seq-1",
+    })
+  })
+
+  test("a not-held subscription's 409 propagates", async () => {
+    const conflict = Object.assign(new Error("not held"), {
+      httpStatusCode: 409,
+    })
+    contactSequenceService.resumeHeldEnrollment.mockRejectedValueOnce(conflict)
+
+    await expect(
+      procedure.handler?.({
+        context: { workspace: { id: "workspace-1" } },
+        input: { identifier: "id:123", sequenceId: "seq-1" },
+      }),
+    ).rejects.toBe(conflict)
   })
 })

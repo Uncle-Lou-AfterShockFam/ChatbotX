@@ -30,10 +30,26 @@ import {
 } from "@chatbotx.io/sequence-scheduler"
 import { BaseService } from "../base.service"
 import { type ContactAccessScope, contactService } from "../contact/service"
-import { notFoundException } from "../errors"
+import {
+  notFoundException,
+  sequenceNotHeldException,
+  validationException,
+} from "../errors"
 import { logger } from "../logger"
 
 type DrizzleClient = DatabaseClient | Transaction
+/** lastError is operator-facing: the missing names, capped. */
+const MAX_HOLD_REASON = 500
+/** A bigint id as the API carries it; anything else never reaches SQL. */
+const BIGINT_ID = /^\d{1,19}$/
+
+function assertIds(fn: string, ids: Record<string, unknown>): void {
+  for (const [field, value] of Object.entries(ids)) {
+    if (typeof value !== "string" || !BIGINT_ID.test(value)) {
+      throw validationException(field, `${fn}: ${field} must be a numeric id`)
+    }
+  }
+}
 type DispatchToRemove = { id: string; bucket: number }
 type RemovedEnrollment = {
   contactId: string
@@ -306,18 +322,27 @@ class ContactSequenceService extends BaseService {
     workspaceId: string
     contactId: string
     tx?: DrizzleClient
-  }): Promise<{ sequenceId: string; sequenceName: string }[]> {
+  }): Promise<
+    {
+      sequenceId: string
+      sequenceName: string
+      status: string | null
+      lastError: string | null
+    }[]
+  > {
     const { workspaceId, contactId, tx = db } = props
 
     const enrollments = await tx.query.contactsOnSequenceModel.findMany({
       where: { workspaceId, contactId },
-      columns: { sequenceId: true },
+      columns: { sequenceId: true, status: true, lastError: true },
       with: { sequence: { columns: { name: true } } },
     })
 
     return enrollments.map((enrollment) => ({
       sequenceId: enrollment.sequenceId,
       sequenceName: enrollment.sequence.name,
+      status: enrollment.status,
+      lastError: enrollment.lastError,
     }))
   }
 
@@ -536,6 +561,232 @@ class ContactSequenceService extends BaseService {
         )
       return { bucket: dispatch.bucket, runAtMs }
     })
+  }
+
+  /**
+   * Outreach B-1 H3 (s227b, owner: the hold lives on the SEQUENCE STEP): a
+   * claimed (running) dispatch whose step's `holdOnMissing` fields are not
+   * all set HOLDS its enrolment instead of sending: enrolment status 'held'
+   * with the reason in lastError, the dispatch 'held' (neither sent nor
+   * failed). Lock order = the enrolment, then the dispatch: the order a
+   * removal takes (DELETE of the enrolment, then its cascade) - the other
+   * order deadlocked against an unenrol (probe s227b). Only a RUNNING
+   * dispatch of an ACTIVE enrolment is held; false = nothing to hold, the
+   * caller then sends nothing.
+   */
+  async holdEnrollment(props: {
+    dispatchId: string
+    workspaceId: string
+    reason: string
+  }): Promise<boolean> {
+    if (props === null || typeof props !== "object") {
+      throw new TypeError("holdEnrollment: props must be an object")
+    }
+    const { dispatchId, workspaceId } = props
+    assertIds("holdEnrollment", { dispatchId, workspaceId })
+    if (typeof props.reason !== "string" || props.reason.trim() === "") {
+      throw new TypeError("holdEnrollment: a reason is required")
+    }
+    const reason = props.reason.slice(0, MAX_HOLD_REASON)
+    return await db.transaction(async (tx) => {
+      // A plain read first: a dispatch that is not running is never locked
+      // (a removal locks PENDING dispatches before the enrolment, so taking
+      // the enrolment first and then a pending dispatch would deadlock).
+      const [ref] = await tx
+        .select({
+          enrollmentId: sequenceDispatchModel.enrollmentId,
+          status: sequenceDispatchModel.status,
+        })
+        .from(sequenceDispatchModel)
+        .where(
+          and(
+            eq(sequenceDispatchModel.id, dispatchId),
+            eq(sequenceDispatchModel.workspaceId, workspaceId),
+          ),
+        )
+      if (ref?.status !== "running") {
+        return false
+      }
+      const [enrollment] = await tx
+        .select({ status: contactsOnSequenceModel.status })
+        .from(contactsOnSequenceModel)
+        .where(
+          and(
+            eq(contactsOnSequenceModel.workspaceId, workspaceId),
+            eq(contactsOnSequenceModel.id, ref.enrollmentId),
+          ),
+        )
+        .for("update")
+      if (enrollment?.status !== "active") {
+        return false
+      }
+      const [dispatch] = await tx
+        .select({ status: sequenceDispatchModel.status })
+        .from(sequenceDispatchModel)
+        .where(
+          and(
+            eq(sequenceDispatchModel.id, dispatchId),
+            eq(sequenceDispatchModel.workspaceId, workspaceId),
+          ),
+        )
+        .for("update")
+      if (dispatch?.status !== "running") {
+        return false
+      }
+      await tx
+        .update(contactsOnSequenceModel)
+        .set({
+          status: "held",
+          lastError: reason,
+          nextRunAt: null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(contactsOnSequenceModel.workspaceId, workspaceId),
+            eq(contactsOnSequenceModel.id, ref.enrollmentId),
+          ),
+        )
+      await tx
+        .update(sequenceDispatchModel)
+        .set({
+          status: "held",
+          lastError: reason,
+          lockedAt: null,
+          lockOwner: null,
+        })
+        .where(
+          and(
+            eq(sequenceDispatchModel.id, dispatchId),
+            eq(sequenceDispatchModel.workspaceId, workspaceId),
+          ),
+        )
+      return true
+    })
+  }
+
+  /**
+   * An operator resumes a HELD enrolment (owner s227b: manual only): status
+   * back to 'active', lastError cleared, the held dispatch back to pending
+   * at max(now, pausedUntil) moved into its step's send window (DB first,
+   * the schedule after commit). The step re-checks its fields when it runs,
+   * so a field still missing holds it again. Locks the enrolment first, then
+   * its held dispatches (holdEnrollment's and a removal's order). Not
+   * enrolled = 404; not held = 409 (a concurrent second resume waits on the
+   * enrolment lock, then gets it); held but its step was deleted (the
+   * dispatch cascaded away) = 409 saying so - unsubscribe clears it.
+   */
+  async resumeHeldEnrollment(props: {
+    workspaceId: string
+    contactId: string
+    sequenceId: string
+    now?: Date
+  }): Promise<{ runAt: Date }> {
+    if (props === null || typeof props !== "object") {
+      throw new TypeError("resumeHeldEnrollment: props must be an object")
+    }
+    const { workspaceId, contactId, sequenceId } = props
+    assertIds("resumeHeldEnrollment", { workspaceId, contactId, sequenceId })
+    const now = props.now ?? new Date()
+    if (!(now instanceof Date) || Number.isNaN(now.getTime())) {
+      throw new TypeError("resumeHeldEnrollment: invalid now")
+    }
+    const { moved, runAt } = await db.transaction(async (tx) => {
+      const [enrollment] = await tx
+        .select({
+          id: contactsOnSequenceModel.id,
+          status: contactsOnSequenceModel.status,
+          pausedUntil: contactsOnSequenceModel.pausedUntil,
+        })
+        .from(contactsOnSequenceModel)
+        .where(
+          and(
+            eq(contactsOnSequenceModel.workspaceId, workspaceId),
+            eq(contactsOnSequenceModel.contactId, contactId),
+            eq(contactsOnSequenceModel.sequenceId, sequenceId),
+          ),
+        )
+        .for("update")
+      if (!enrollment) {
+        throw notFoundException("The contact is not in this sequence")
+      }
+      if (enrollment.status !== "held") {
+        throw sequenceNotHeldException()
+      }
+      const dispatches = await tx
+        .select({
+          id: sequenceDispatchModel.id,
+          bucket: sequenceDispatchModel.bucket,
+          anytime: sequenceStepModel.anytime,
+          sendTimeStart: sequenceStepModel.sendTimeStart,
+          sendTimeEnd: sequenceStepModel.sendTimeEnd,
+          sendDays: sequenceStepModel.sendDays,
+        })
+        .from(sequenceDispatchModel)
+        .innerJoin(
+          sequenceStepModel,
+          eq(sequenceStepModel.id, sequenceDispatchModel.stepId),
+        )
+        .where(
+          and(
+            eq(sequenceDispatchModel.workspaceId, workspaceId),
+            eq(sequenceDispatchModel.enrollmentId, enrollment.id),
+            eq(sequenceDispatchModel.status, "held"),
+          ),
+        )
+        .for("update", { of: sequenceDispatchModel })
+      if (dispatches.length === 0) {
+        throw sequenceNotHeldException(
+          "The step this contact was held at no longer exists; unsubscribe the contact to clear it",
+        )
+      }
+      const floor =
+        enrollment.pausedUntil && enrollment.pausedUntil > now
+          ? enrollment.pausedUntil
+          : now
+      const planned = dispatches.map((dispatch) => ({
+        id: dispatch.id,
+        bucket: dispatch.bucket,
+        runAtMs: String(calculateNextValidSendTime(floor, dispatch).getTime()),
+      }))
+      const first = Math.min(...planned.map((row) => Number(row.runAtMs)))
+      await tx
+        .update(contactsOnSequenceModel)
+        .set({
+          status: "active",
+          lastError: null,
+          nextRunAt: new Date(first),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(contactsOnSequenceModel.workspaceId, workspaceId),
+            eq(contactsOnSequenceModel.id, enrollment.id),
+          ),
+        )
+      for (const row of planned) {
+        await tx
+          .update(sequenceDispatchModel)
+          .set({ status: "pending", runAtMs: row.runAtMs, lastError: null })
+          .where(
+            and(
+              eq(sequenceDispatchModel.workspaceId, workspaceId),
+              eq(sequenceDispatchModel.id, row.id),
+            ),
+          )
+      }
+      return { moved: planned, runAt: new Date(first) }
+    })
+    try {
+      await rescheduleDispatches(moved)
+    } catch (err) {
+      // The DB is authoritative: the row stays pending at its DB time.
+      logger.warn(
+        { err, workspaceId },
+        "resumeHeldEnrollment: reschedule failed",
+      )
+    }
+    return { runAt }
   }
 
   async removeStopOnReplyEnrollments(props: {

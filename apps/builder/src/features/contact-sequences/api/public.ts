@@ -1,9 +1,11 @@
 import { contactService } from "@chatbotx.io/business"
 import { contactSequenceService } from "@chatbotx.io/business/contact-sequence"
+import { zodBigintAsString } from "@chatbotx.io/utils"
 import { z } from "zod"
 import {
   contactSequenceIdsPublicRequest,
   listContactSequencesPublicResponse,
+  resumeContactSequencePublicResponse,
   setContactSequencesPublicRequest,
 } from "@/features/contact-sequences/schema/public"
 import { mcpSpec } from "@/lib/orpc/mcp-annotations"
@@ -11,6 +13,7 @@ import {
   possibleErrorsOnDeletingResource,
   possibleErrorsOnFindingResource,
   possibleErrorsOnMutatingResource,
+  possibleErrorsOnResumingSequence,
 } from "@/lib/orpc/orpc-error-helper"
 import { workspaceTokenAuthAPIForScope } from "@/orpc"
 
@@ -87,6 +90,43 @@ export const contactsSequencesPublicRouter = {
         contactIds: [contactId],
         sequenceIds: input.sequenceIds,
       })
+    }),
+
+  resumeSequence: workspaceTokenAuthAPI
+    .route({
+      method: "POST",
+      path: "/v1/contacts/{identifier}/sequences/{sequenceId}/resume",
+      summary: "Resume held sequence subscription",
+      description:
+        "A sequence step can require contact fields (`holdOnMissing`); a contact missing one is HELD at that step, with the reason in `contacts.listSequences` (`status` held, `lastError`). Fill the fields, then call this to put the step back on schedule. The step re-checks the fields when it runs. 409 when the subscription is not held.",
+      tags: ["Contacts"],
+      spec: mcpSpec({ visibility: "default" }),
+    })
+    .input(
+      z.object({
+        identifier: z
+          .string()
+          .min(1)
+          .describe(
+            "Contact identifier: the numeric contact id, an email address, or a phone number.",
+          ),
+        sequenceId: zodBigintAsString().describe("The held sequence's id."),
+      }),
+    )
+    .output(resumeContactSequencePublicResponse)
+    .errors(possibleErrorsOnResumingSequence)
+    .handler(async ({ context, input }) => {
+      const workspaceId = context.workspace.id
+      const contactId = await contactService.resolveIdByIdentifier({
+        identifier: input.identifier,
+        workspaceId,
+      })
+      const { runAt } = await contactSequenceService.resumeHeldEnrollment({
+        workspaceId,
+        contactId,
+        sequenceId: input.sequenceId,
+      })
+      return { runAt: runAt.toISOString() }
     }),
 
   unsubscribeSequences: workspaceTokenAuthAPI

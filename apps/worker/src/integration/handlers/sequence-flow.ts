@@ -11,6 +11,7 @@ import { isFinalAttempt } from "../../lib/job-attempts"
 import { logger } from "../../lib/logger"
 import { StepExecutorService } from "../../sequence-scheduler/services/step-executor.service"
 import { sendFlowDirect } from "./send-flow-direct"
+import { missingHoldFields } from "./sequence-hold"
 
 type SendSequenceFlowData = IntegrationJobSendSequenceFlow["data"]
 
@@ -133,6 +134,31 @@ async function runSendSequenceFlow(
       logger.info(
         { dispatchId, workspaceId, runAtMs: deferred.runAtMs },
         "sendSequenceFlow: enrolment paused (out-of-office), step held",
+      )
+      return
+    }
+    // s227b outreach B-1 H3: a step whose required contact fields are not
+    // all set HOLDS the enrolment (reason shown) instead of running its flow;
+    // nothing of the flow runs. An operator resumes it.
+    const missing = await missingHoldFields({
+      holdOnMissing: validStep.holdOnMissing,
+      contactId: data.contactId,
+      contactInboxId: current.contactInboxId,
+    })
+    if (missing.length > 0) {
+      const held = await contactSequenceService.holdEnrollment({
+        dispatchId,
+        workspaceId,
+        reason: `missing: ${missing.join(", ")}`,
+      })
+      if (!held) {
+        // No longer running, or the enrolment is not active: send nothing.
+        await markDispatchCanceled(dispatchId, workspaceId, "not_active")
+      }
+      await scheduler.removeFromSchedule(bucket, dispatchId)
+      logger.info(
+        { dispatchId, workspaceId, missing, held },
+        "sendSequenceFlow: required fields missing, enrolment held",
       )
       return
     }

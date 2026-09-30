@@ -72,6 +72,9 @@ export type UpdateSequenceSchema = z.infer<typeof updateSequenceSchema>
 // zod object once `.superRefine()` has wrapped it, so the public API's
 // `sequenceId`-less variant below is built by omitting from this base
 // object first and re-applying `validateStepDelayConsistency` after.
+/** A merge-field name: no braces, pipe or newline (the token grammar). */
+const HOLD_FIELD_NAME = /^[^{}|\n]+$/
+
 const upsertSequenceStepBaseShape = z.object({
   stepId: zodBigintAsString()
     .optional()
@@ -129,6 +132,21 @@ const upsertSequenceStepBaseShape = z.object({
     .array(z.string())
     .optional()
     .describe("Days of the week this step may send on."),
+  holdOnMissing: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(100)
+        .regex(HOLD_FIELD_NAME, "Invalid field name"),
+    )
+    .max(10)
+    .nullable()
+    .optional()
+    .describe(
+      "Contact fields (system field ids such as first_name, or custom field names) that must have a value when this step is due. With any missing, the contact is held at this step, with the reason shown, until it is resumed. Empty or null clears the hold.",
+    ),
 })
 
 const validateStepDelayConsistency = (

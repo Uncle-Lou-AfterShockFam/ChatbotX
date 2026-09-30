@@ -4656,6 +4656,12 @@
       "nameExists": "اسم التسلسل مستخدم بالفعل"
     },
     "sendLabel": "إرسال",
+    "holdOnMissingLabel": "إيقاف مؤقت عند النقص",
+    "holdOnMissingDescription": "جهة الاتصال التي ينقصها أي من هذه الحقول تنتظر عند هذه الخطوة مع عرض السبب حتى تستأنفها.",
+    "heldBadge": "موقوف",
+    "heldResume": "استئناف",
+    "heldResumed": "تم الاستئناف",
+    "heldIn": "موقوف في {sequence}: {reason}",
     "selectFlowFirst": "يُرجى اختيار مسار قبل تفعيل الرسالة",
     "invalidTimeRange": "يجب أن يسبق وقت البدء وقت الانتهاء",
     "schedule": "الجدول الزمني",

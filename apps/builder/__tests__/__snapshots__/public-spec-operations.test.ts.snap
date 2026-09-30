@@ -849,6 +849,11 @@ exports[`public API spec — operation naming guard > operation list (operationI
   },
   {
     "method": "POST",
+    "operationId": "contacts.resumeSequence",
+    "path": "/v1/contacts/{identifier}/sequences/{sequenceId}/resume",
+  },
+  {
+    "method": "POST",
     "operationId": "contacts.search",
     "path": "/v1/contacts/search",
   },

@@ -2666,6 +2666,12 @@
       "nameExists": "שם הרצף כבר קיים"
     },
     "sendLabel": "שליחה",
+    "holdOnMissingLabel": "השהה אם חסר",
+    "holdOnMissingDescription": "איש קשר שחסר לו אחד מהשדות האלה ממתין בשלב זה, עם הסיבה מוצגת, עד שתחדש אותו.",
+    "heldBadge": "מושהה",
+    "heldResume": "חידוש",
+    "heldResumed": "חודש",
+    "heldIn": "מושהה ב-{sequence}: {reason}",
     "selectFlowFirst": "בחרו תהליך לפני הפעלת ההודעה",
     "invalidTimeRange": "שעת ההתחלה חייבת להיות לפני שעת הסיום",
     "schedule": "לוח זמנים",

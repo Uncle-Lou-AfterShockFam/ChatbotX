@@ -4656,6 +4656,12 @@
       "nameExists": "Secuencia nombre ya existe"
     },
     "sendLabel": "Enviar",
+    "holdOnMissingLabel": "Retener si falta",
+    "holdOnMissingDescription": "Un contacto al que le falte alguno de estos campos espera en este paso, con el motivo visible, hasta que lo reanudes.",
+    "heldBadge": "Retenido",
+    "heldResume": "Reanudar",
+    "heldResumed": "Reanudado",
+    "heldIn": "Retenido en {sequence}: {reason}",
     "selectFlowFirst": "Por favor, Seleccionar un flujo antes activating el mensaje",
     "invalidTimeRange": "Start tiempo must be antes end tiempo",
     "schedule": "Programación",

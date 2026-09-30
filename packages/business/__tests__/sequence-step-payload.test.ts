@@ -21,7 +21,28 @@ describe("buildCreateData", () => {
       sendTimeStart: null,
       sendTimeEnd: null,
       sendDays: null,
+      holdOnMissing: null,
     })
+  })
+
+  test("s227b: holdOnMissing is trimmed and de-duplicated; empty clears it", () => {
+    expect(
+      buildCreateData(
+        {
+          order: 1,
+          holdOnMissing: [" first_name", "first_name", "Company", " "],
+        },
+        "seq-1",
+        "step-1",
+      ).holdOnMissing,
+    ).toEqual(["first_name", "Company"])
+    expect(
+      buildUpdateData({ order: 1, holdOnMissing: [] }).holdOnMissing,
+    ).toBeNull()
+    expect(
+      buildUpdateData({ order: 1, holdOnMissing: null }).holdOnMissing,
+    ).toBeNull()
+    expect(buildUpdateData({ order: 1 })).not.toHaveProperty("holdOnMissing")
   })
 
   test("keeps explicit values instead of defaults", () => {

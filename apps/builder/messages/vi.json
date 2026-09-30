@@ -4691,6 +4691,12 @@
       "nameExists": "Tên chuỗi chăm sóc đã tồn tại"
     },
     "sendLabel": "Gửi",
+    "holdOnMissingLabel": "Tạm giữ nếu thiếu",
+    "holdOnMissingDescription": "Liên hệ thiếu bất kỳ trường nào trong số này sẽ chờ ở bước này, kèm lý do, cho đến khi bạn tiếp tục.",
+    "heldBadge": "Đang giữ",
+    "heldResume": "Tiếp tục",
+    "heldResumed": "Đã tiếp tục",
+    "heldIn": "Đang giữ trong {sequence}: {reason}",
     "selectFlowFirst": "Vui lòng chọn kịch bản trước khi bật tin nhắn",
     "invalidTimeRange": "Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc",
     "schedule": "Lịch trình",

@@ -6,14 +6,13 @@ import { Switch } from "@chatbotx.io/ui/components/ui/switch"
 import { ChevronDownIcon, XIcon } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useState } from "react"
-
 import { useDelayState } from "../hooks/use-delay-state"
 import { useSequenceStep } from "../hooks/use-sequence-step"
 import { useTimeRangeState } from "../hooks/use-time-range-state"
-
 import { DelaySelector } from "./delay-selector"
 import { DeleteStepDialog } from "./delete-step-dialog"
 import { FlowSelectorSimple } from "./flow-selector"
+import { HoldOnMissingField } from "./hold-on-missing-field"
 import { SequenceStepStats } from "./sequence-step-stats"
 import { TimeRangeSelector } from "./time-range-selector"
 
@@ -32,6 +31,7 @@ type SequenceStepCardProps = {
     sendTimeStart?: string | null
     sendTimeEnd?: string | null
     sendDays?: string | null
+    holdOnMissing?: string[] | null
   }
   stepNumber: number
   sequenceId: string
@@ -199,6 +199,11 @@ export function SequenceStepCard({
                 startTime={startTime}
                 stepId={step?.id}
                 timeOption={timeOption}
+              />
+              <HoldOnMissingField
+                disabled={isSaving}
+                onChange={(holdOnMissing) => handleSave({ holdOnMissing })}
+                value={step?.holdOnMissing}
               />
             </div>
           </CardContent>

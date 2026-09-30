@@ -4656,6 +4656,12 @@
       "nameExists": "Numele secvenței există deja"
     },
     "sendLabel": "Trimite",
+    "holdOnMissingLabel": "Reține dacă lipsește",
+    "holdOnMissingDescription": "Un contact căruia îi lipsește oricare dintre aceste câmpuri așteaptă la acest pas, cu motivul afișat, până îl reiei.",
+    "heldBadge": "Reținut",
+    "heldResume": "Reia",
+    "heldResumed": "Reluat",
+    "heldIn": "Reținut în {sequence}: {reason}",
     "selectFlowFirst": "Te rugăm să selectezi un flux înainte de a activa mesajul",
     "invalidTimeRange": "Ora de start trebuie să fie înainte de ora de sfârșit",
     "schedule": "Program",

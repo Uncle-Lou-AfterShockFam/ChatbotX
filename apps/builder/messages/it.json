@@ -4656,6 +4656,12 @@
       "nameExists": "Il nome della sequenza esiste già"
     },
     "sendLabel": "Invia",
+    "holdOnMissingLabel": "Trattieni se mancante",
+    "holdOnMissingDescription": "Un contatto a cui manca uno di questi campi attende a questo passaggio, con il motivo mostrato, finché non lo riprendi.",
+    "heldBadge": "Trattenuto",
+    "heldResume": "Riprendi",
+    "heldResumed": "Ripreso",
+    "heldIn": "Trattenuto in {sequence}: {reason}",
     "selectFlowFirst": "Seleziona un flusso prima di attivare il messaggio",
     "invalidTimeRange": "L'ora di inizio deve precedere quella di fine",
     "schedule": "Pianificazione",

@@ -4887,6 +4887,12 @@
       "nameExists": "Sequence name already exists"
     },
     "sendLabel": "Send",
+    "holdOnMissingLabel": "Hold if missing",
+    "holdOnMissingDescription": "A contact missing any of these fields waits at this step, with the reason shown, until you resume it.",
+    "heldBadge": "Held",
+    "heldResume": "Resume",
+    "heldResumed": "Resumed",
+    "heldIn": "Held in {sequence}: {reason}",
     "selectFlowFirst": "Please select a flow before activating the message",
     "invalidTimeRange": "Start time must be before end time",
     "schedule": "Schedule",

@@ -4656,6 +4656,12 @@
       "nameExists": "Der Sequenzname ist bereits vorhanden"
     },
     "sendLabel": "Senden",
+    "holdOnMissingLabel": "Anhalten, wenn fehlend",
+    "holdOnMissingDescription": "Ein Kontakt, dem eines dieser Felder fehlt, wartet mit angezeigtem Grund bei diesem Schritt, bis du ihn fortsetzt.",
+    "heldBadge": "Angehalten",
+    "heldResume": "Fortsetzen",
+    "heldResumed": "Fortgesetzt",
+    "heldIn": "Angehalten in {sequence}: {reason}",
     "selectFlowFirst": "Wählen Sie einen Flow aus, bevor Sie die Nachricht aktivieren",
     "invalidTimeRange": "Die Startzeit muss vor der Endzeit liegen",
     "schedule": "Zeitplan",
