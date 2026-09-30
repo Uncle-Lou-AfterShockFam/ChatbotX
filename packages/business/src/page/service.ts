@@ -56,8 +56,14 @@ const DAY_MS = 24 * HOUR_MS
 export const PAGE_TOKEN_LENGTH = 22
 /** Links deleted per sweep statement (bounded work per schedule tick). */
 const SWEEP_BATCH = 1000
+/** The contact field the sendPage flow step writes the link URL to. */
+export const PAGE_LINK_FIELD = "page_link"
 /** A caller-chosen idempotency key per page (a flow run's execution + step). */
 export const PAGE_LINK_REF_REGEX = /^[A-Za-z0-9._:-]{1,200}$/
+
+/** The public URL of one page link. */
+export const pageLinkUrl = (appUrl: string, token: string): string =>
+  new URL(`/p/${token}`, appUrl).toString()
 
 export const isPageToken = (value: unknown): value is string =>
   isBase62Token(value, PAGE_TOKEN_LENGTH)

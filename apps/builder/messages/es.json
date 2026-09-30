@@ -2571,6 +2571,7 @@
       "createTask": "Create task",
       "completeTask": "Complete task",
       "sendDocumentForSignature": "Enviar documento para firmar",
+      "sendPage": "Enviar página",
       "createInvoice": "Create invoice",
       "askForm": "Ask a form"
     },
@@ -7694,7 +7695,15 @@
     "linkTtlHours": "Duración del enlace (horas)",
     "linkHint": "El paso Enviar página de un flujo envía a cada contacto un enlace personal por SMS o correo. Muestra la página con los datos de ese contacto y deja de funcionar al terminar su duración. Archivar la página cierra todos los enlaces.",
     "deleteTitle": "¿Eliminar esta página?",
-    "deleteConfirm": "Todos los enlaces ya enviados dejarán de funcionar. Esta acción no se puede deshacer."
+    "deleteConfirm": "Todos los enlaces ya enviados dejarán de funcionar. Esta acción no se puede deshacer.",
+    "step": {
+      "page": "Página",
+      "hint": "Escribe el enlace personal del contacto en el campo page_link. Envía '{{page_link}}' en el siguiente paso de SMS o correo.",
+      "noPages": "Aún no hay páginas. Crea una en Configuración > Páginas.",
+      "noPagePicked": "Ninguna página elegida",
+      "ttl": "Duración del enlace (horas)",
+      "ttlHint": "Vacío = la duración de enlace de la página."
+    }
   },
   "emailSuppression": {
     "title": "Supresión de correo",

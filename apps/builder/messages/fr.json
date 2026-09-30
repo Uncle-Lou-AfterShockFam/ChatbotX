@@ -2429,6 +2429,7 @@
       "createTask": "Create task",
       "completeTask": "Complete task",
       "sendDocumentForSignature": "Envoyer un document à signer",
+      "sendPage": "Envoyer une page",
       "createInvoice": "Create invoice",
       "askForm": "Ask a form"
     },
@@ -7694,7 +7695,15 @@
     "linkTtlHours": "Durée du lien (heures)",
     "linkHint": "L'étape Envoyer une page d'un flux envoie à chaque contact un lien personnel par SMS ou e-mail. Il affiche la page avec les informations du contact et cesse de fonctionner à la fin de sa durée. Archiver la page ferme tous les liens.",
     "deleteTitle": "Supprimer cette page ?",
-    "deleteConfirm": "Tous les liens déjà envoyés cesseront de fonctionner. Cette action est irréversible."
+    "deleteConfirm": "Tous les liens déjà envoyés cesseront de fonctionner. Cette action est irréversible.",
+    "step": {
+      "page": "Page",
+      "hint": "Écrit le lien personnel du contact dans le champ page_link. Envoyez '{{page_link}}' dans l'étape SMS ou e-mail suivante.",
+      "noPages": "Aucune page pour l'instant. Créez-en une dans Paramètres > Pages.",
+      "noPagePicked": "Aucune page choisie",
+      "ttl": "Durée du lien (heures)",
+      "ttlHint": "Vide = la durée de lien de la page."
+    }
   },
   "emailSuppression": {
     "title": "Suppression d'e-mails",
