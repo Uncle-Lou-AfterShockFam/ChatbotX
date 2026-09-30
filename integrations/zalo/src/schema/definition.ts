@@ -4,7 +4,9 @@ export const DEFAULT_VERSION = "v4"
 
 export const ZALO_MESSAGE_METADATA = "SENT_FROM_CHATBOTX"
 
-export type ZaloConfig = Oauth2Config
+// oaSecretKey signs the webhook (X-ZEvent-Signature); absent = every event
+// is refused.
+export type ZaloConfig = Oauth2Config & { oaSecretKey?: string }
 
 export type ZaloAuthValue = Oauth2AuthValue & {
   oaId: string

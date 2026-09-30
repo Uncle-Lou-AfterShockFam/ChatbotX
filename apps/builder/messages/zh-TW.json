@@ -1277,6 +1277,9 @@
     "webhookVerifyToken": {
       "label": "Webhook 驗證權杖"
     },
+    "oaSecretKey": {
+      "label": "OA Secret Key"
+    },
     "heading": {
       "label": "標題",
       "placeholder": "輸入標題"

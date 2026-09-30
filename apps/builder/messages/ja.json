@@ -2006,6 +2006,9 @@
     "webhookVerifyToken": {
       "label": "Webhook検証トークン"
     },
+    "oaSecretKey": {
+      "label": "OA Secret Key"
+    },
     "heading": {
       "label": "見出し",
       "placeholder": "見出しを入力"

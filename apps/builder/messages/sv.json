@@ -3069,6 +3069,9 @@
     "webhookVerifyToken": {
       "label": "Verifieringstoken för webhook"
     },
+    "oaSecretKey": {
+      "label": "OA Secret Key"
+    },
     "welcomeFlowId": {
       "description": "Välkomstmeddelandet skickas automatiskt när användaren öppnar din webbchatt.",
       "label": "Välkomstflöde"

@@ -65,6 +65,7 @@ describe("credential update schemas", () => {
         version: " v25.0 ",
         verifyToken: " verify-token ",
         clientSecret: " client-secret ",
+        oaSecretKey: " oa-secret-key ",
       },
     ],
     ["GIPHY", giphyCredentialUpdateSchema, { apiKey: " api-key " }],
@@ -93,6 +94,20 @@ describe("credential update schemas", () => {
         expect(value).toBe(value.trim())
       }
     }
+  })
+
+  test("a Zalo save needs the OA Secret Key that signs its webhooks (s230a)", () => {
+    const base = {
+      clientId: "client-id",
+      version: "v25.0",
+      verifyToken: "verify-token",
+      clientSecret: "client-secret",
+    }
+    expect(zaloCredentialUpdateSchema.safeParse(base).success).toBe(false)
+    expect(
+      zaloCredentialUpdateSchema.safeParse({ ...base, oaSecretKey: "  " })
+        .success,
+    ).toBe(false)
   })
 
   test("rejects blank required values", () => {

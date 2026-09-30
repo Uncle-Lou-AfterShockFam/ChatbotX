@@ -3072,6 +3072,9 @@
     "webhookVerifyToken": {
       "label": "Webhook 验证权杖"
     },
+    "oaSecretKey": {
+      "label": "OA Secret Key"
+    },
     "welcomeFlowId": {
       "description": "当用户打开您的网络聊天时，会自动发送欢迎消息。",
       "label": "欢迎流程"

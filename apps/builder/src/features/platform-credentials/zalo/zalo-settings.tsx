@@ -209,6 +209,7 @@ export function EditZaloSettingsForm({
             version: publicConfig?.version ?? "v2.0",
             verifyToken: publicConfig?.verifyToken ?? "",
             clientSecret: "",
+            oaSecretKey: "",
           } satisfies ZaloCredentialUpdate,
         },
       },
@@ -242,6 +243,13 @@ export function EditZaloSettingsForm({
           label={t("fields.webhookVerifyToken.label")}
           name="verifyToken"
           required
+        />
+
+        <InputField
+          label={t("fields.oaSecretKey.label")}
+          name="oaSecretKey"
+          required
+          type="password"
         />
 
         <InputField

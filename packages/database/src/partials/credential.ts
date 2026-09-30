@@ -129,6 +129,9 @@ export const zaloCredentialSchema = z.object({
   version: z.string(),
   verifyToken: z.string(),
   clientSecret: z.string(),
+  // Signs every webhook (X-ZEvent-Signature). Optional in storage only for
+  // rows saved before s230a: without it the webhook refuses every event.
+  oaSecretKey: z.string().optional(),
 })
 export type ZaloCredential = z.infer<typeof zaloCredentialSchema>
 
@@ -377,6 +380,7 @@ export const zaloCredentialUpdateSchema = z.object({
   version: z.string().trim().min(1),
   verifyToken: z.string().trim().min(1),
   clientSecret: z.string().trim().min(1),
+  oaSecretKey: z.string().trim().min(1),
 })
 export type ZaloCredentialUpdate = z.infer<typeof zaloCredentialUpdateSchema>
 
