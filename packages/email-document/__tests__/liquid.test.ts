@@ -4,6 +4,7 @@ import {
   type EmailDocument,
   mergePlain,
   TEMPLATE_MAX_BYTES,
+  TEMPLATE_MAX_DELIMITERS,
   TEMPLATE_MAX_DEPTH,
   TemplateError,
   templateError,
@@ -16,6 +17,7 @@ import { mergeHtml, mergeText, mergeUrl } from "../src/tokens"
 // s227b outreach B-1 H3: Liquid is the one email evaluator.
 const NOT_CLOSED = /not closed/
 const NESTS_TOO_DEEP = /nests more than/
+const TOO_MANY = /more than \d+ merge fields/
 const OWNER =
   "Hi {% if first_name %}{{first_name}}{% else %}{{company}} Team{% endif %},"
 
@@ -94,6 +96,66 @@ describe("legacy grammar keeps rendering", () => {
   })
 })
 
+describe("s227b review fixes", () => {
+  test("a compact {{name|filterword}} keeps its old fallback meaning", () => {
+    for (const word of ["upcase", "first", "size", "date", "append"]) {
+      expect(html(`{{name|${word}}}`, {}).out).toBe(word)
+      expect(html(`{{name|${word}}}`, { name: "bob" }).out).toBe("bob")
+    }
+    // The Liquid spellings are filters.
+    expect(html("{{ name | upcase }}", { name: "bob" }).out).toBe("BOB")
+    expect(html('{{name|default: "x"}}', {}).out).toBe("x")
+    expect(html("{{name|upcase|strip}}", { name: " bob " }).out).toBe("BOB")
+  })
+
+  test("a dotted custom field name stays one legacy name", () => {
+    expect(html("{{order.total}}", { "order.total": "42" }).out).toBe("42")
+    expect(tokenNames("{{order.total|n/a}}")).toEqual(["order.total"])
+  })
+
+  test("empty values and arrays stringify the same in every mode", () => {
+    const template =
+      '{{nil}}|{{ "p,q" | split: "," }}|{{ missing | default: nil }}'
+    const missing = new Set<string>()
+    expect(mergeText(template, {}, missing)).toBe("|pq|")
+    expect(mergePlain(template, {}, missing)).toBe("|pq|")
+    expect(html("{{empty}}{{blank}}", { empty: "e", blank: "b" }).out).toBe(
+      "eb",
+    )
+  })
+
+  test("more than the delimiter cap is refused, before any quadratic step", () => {
+    const many = "{{a}}".repeat(TEMPLATE_MAX_DELIMITERS + 1)
+    const started = performance.now()
+    expect(templateError(many)).toMatch(TOO_MANY)
+    expect(() => html(many, {})).toThrow(TemplateError)
+    expect(html("{{a}}".repeat(TEMPLATE_MAX_DELIMITERS), { a: "x" }).out).toBe(
+      "x".repeat(TEMPLATE_MAX_DELIMITERS),
+    )
+    expect(performance.now() - started).toBeLessThan(2000)
+  })
+
+  test("unclosed {% openers are scanned in linear time", () => {
+    const soup = "{%".repeat(49_000)
+    const started = performance.now()
+    expect(templateError(soup)).toBeDefined()
+    expect(tokenNames(soup)).toEqual([])
+    expect(performance.now() - started).toBeLessThan(500)
+  })
+
+  test("the editor's mention markup (a literal {{ in an attribute) is not a template error", () => {
+    const text =
+      '<p>Hello <span data-type="mention" data-id="first_name" data-mention-suggestion-char="{{">{{first_name}}</span></p>'
+    const inputs = collectRenderInputs({
+      version: 1,
+      settings: {},
+      blocks: [{ id: "1", type: "text", text }],
+    } as EmailDocument)
+    expect(inputs.invalid).toBeUndefined()
+    expect(inputs.tokenNames).toEqual(["first_name"])
+  })
+})
+
 describe("escaping and one-pass rendering", () => {
   test("a contact value is escaped and never re-parsed", () => {
     const vars = {
@@ -155,6 +217,9 @@ describe("refused tags and limits", () => {
     "{% block a %}{% endblock %}",
     "{% tablerow i in (1..2) %}{% endtablerow %}",
     "{% liquid echo 1 %}",
+    "{% echo x %}",
+    '{% cycle x, "b" %}',
+    "{% capture c %}{{ x }}{% endcapture %}{{ c }}",
   ])("%s is refused as a parse error", (template) => {
     expect(templateError(template)).toBeDefined()
     try {

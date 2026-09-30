@@ -1,9 +1,8 @@
-import { templateError } from "./liquid"
+import { hasTemplate, templateError } from "./liquid"
 import { sanitizeHtmlBlock, sanitizeRichText } from "./sanitize"
 import type { Block, EmailDocument, LeafBlock } from "./schema"
 import { tokenNames } from "./tokens"
 
-const HAS_TOKEN = /\{\{|\{%/
 const HTTP_HREF = /\shref="(https?:\/\/[^"]*)"/gi
 const AMP_ENTITY = /&amp;/g
 
@@ -46,7 +45,7 @@ export function collectRenderInputs(doc: EmailDocument): {
     }
   }
   const addLink = (blockId: string, url: string) => {
-    if (!HAS_TOKEN.test(url)) {
+    if (!hasTemplate(url)) {
       links.push({ blockId, url })
     }
   }
@@ -57,9 +56,12 @@ export function collectRenderInputs(doc: EmailDocument): {
       case "text":
       case "html": {
         const raw = leaf.type === "html" ? leaf.html : leaf.text
-        addNames(raw)
         const clean =
           leaf.type === "html" ? sanitizeHtmlBlock(raw) : sanitizeRichText(raw)
+        // The names and the parse check read what the renderer reads: the
+        // SANITIZED text (the editor's mention markup carries a literal
+        // `data-mention-suggestion-char="{{"`, stripped here).
+        addNames(clean)
         for (const match of clean.matchAll(HTTP_HREF)) {
           addLink(leaf.id, (match[1] as string).replace(AMP_ENTITY, "&"))
         }

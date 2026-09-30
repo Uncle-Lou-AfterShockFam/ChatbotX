@@ -1,6 +1,7 @@
 import {
   collectRenderInputs,
   type EmailDocument,
+  hasTemplate,
   mergePlain,
   TemplateError,
   templateError,
@@ -54,7 +55,7 @@ export type HeaderPreview =
  * contact fields at all - the `{% else %}` / fallback a bare contact gets.
  */
 export function headerPreview(text: string): HeaderPreview | undefined {
-  if (!(text.includes("{{") || text.includes("{%"))) {
+  if (!hasTemplate(text)) {
     return
   }
   const invalid = templateError(text, "text")

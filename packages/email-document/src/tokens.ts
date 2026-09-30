@@ -1,8 +1,10 @@
 import {
   escapeHtml,
+  hasTemplate,
   renderTemplate,
   type TokenVars,
   templateNames,
+  unescapeEntities,
 } from "./liquid"
 
 export { escapeHtml, type TokenVars } from "./liquid"
@@ -16,7 +18,6 @@ export { escapeHtml, type TokenVars } from "./liquid"
  * minus `|`, which starts the fallback. Every value is escaped for its
  * context; unknown or empty names are reported in `missing`.
  */
-export const TOKEN_NAME_SOURCE = String.raw`[^{}\n|]+`
 const WHOLE_TOKEN = /^\s*\{\{[^{}]*\}\}\s*$/
 const HAS_TAG = /\{%/
 const SAFE_URL = /^(https?:\/\/|mailto:)/i
@@ -24,7 +25,6 @@ const HTTP_ONLY = /^https?:\/\//i
 /** Any explicit scheme (`x:`) - a merged URL with a foreign scheme is refused. */
 const TOKEN_FREE_SCHEME = /^[a-zA-Z][a-zA-Z0-9+.-]*:/
 const URL_ATTR = /(\s(href|src)=")([^"]*)(")/gi
-const HAS_TEMPLATE = /\{\{|\{%/
 
 /** Tokens in text (HTML context): values escaped, rendered in ONE pass. */
 export function mergeText(
@@ -84,11 +84,13 @@ export function mergeHtml(
   const withSlots = html.replace(
     URL_ATTR,
     (match, open: string, attr: string, url: string, close: string) => {
-      if (!HAS_TEMPLATE.test(url)) {
+      if (!hasTemplate(url)) {
         return match
       }
       const safe = attr.toLowerCase() === "src" ? HTTP_ONLY : SAFE_URL
-      parked.push(escapeHtml(mergeUrl(unescapeAttr(url), vars, missing, safe)))
+      parked.push(
+        escapeHtml(mergeUrl(unescapeEntities(url), vars, missing, safe)),
+      )
       return `${open}\u0000${nonce}:${parked.length - 1}\u0000${close}`
     },
   )
@@ -101,15 +103,6 @@ export function mergeHtml(
     slot,
     (_m, index: string) => parked[Number(index)] ?? "",
   )
-}
-
-function unescapeAttr(value: string): string {
-  return value
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&")
 }
 
 /** Every name `text` reads (trimmed), for a caller that resolves vars first. */

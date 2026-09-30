@@ -1,4 +1,4 @@
-import { Liquid, LiquidError, Tag, type Template } from "liquidjs"
+import { Liquid, LiquidError, Tag, type Template, toValue } from "liquidjs"
 
 /**
  * THE email merge evaluator (s227b, outreach B-1 H3): Liquid, as ManyReach
@@ -9,10 +9,12 @@ import { Liquid, LiquidError, Tag, type Template } from "liquidjs"
  * Safety:
  * - Only control-flow and variable tags exist. include/render/layout (which
  *   read the FILESYSTEM by default), block, raw, tablerow and liquid are
- *   refused at parse time, and the `raw` filter (it bypasses output
- *   escaping) is removed.
- * - A template is capped at 100 KB and 16 nested blocks (checked BEFORE the
- *   recursive parser runs), and a render at 200 ms and 10 M allocated chars.
+ *   refused at parse time; so are echo and cycle (they write WITHOUT the
+ *   output escape) and capture (its escaped text would be escaped again).
+ *   The `raw` filter (it bypasses output escaping) is removed.
+ * - A template is capped at 100 KB, 1000 delimiters and 16 nested blocks
+ *   (checked BEFORE the recursive parser runs, in linear scans), and a
+ *   render at 200 ms and 10 M allocated chars.
  * - Values are rendered once: a contact value is data, never re-parsed.
  * - A var with an empty value is left out of scope, so `{% if x %}` is false
  *   for "" (Liquid's own rule makes "" truthy).
@@ -30,6 +32,8 @@ export type TemplateMode = "html" | "text" | "url"
 
 export const TEMPLATE_MAX_BYTES = 100_000
 export const TEMPLATE_MAX_DEPTH = 16
+/** `{{ }}` + `{% %}` per template; also bounds the name analysis (O(n^2)). */
+export const TEMPLATE_MAX_DELIMITERS = 1000
 const RENDER_LIMIT_MS = 200
 const MEMORY_LIMIT = 10_000_000
 
@@ -53,6 +57,9 @@ const REFUSED_TAGS = [
   "raw",
   "tablerow",
   "liquid",
+  "echo",
+  "cycle",
+  "capture",
 ] as const
 
 class RefusedTag extends Tag {
@@ -80,7 +87,8 @@ function createEngine(outputEscape?: (value: unknown) => string): Liquid {
     strictFilters: false,
     strictVariables: false,
     ownPropertyOnly: true,
-    parseLimit: TEMPLATE_MAX_BYTES,
+    // Legacy slots lengthen the source (<= ~25 chars per delimiter).
+    parseLimit: TEMPLATE_MAX_BYTES * 2,
     renderLimit: RENDER_LIMIT_MS,
     memoryLimit: MEMORY_LIMIT,
     // Never a filesystem root: every file tag is refused anyway.
@@ -97,25 +105,47 @@ function createEngine(outputEscape?: (value: unknown) => string): Liquid {
   return engine
 }
 
+/** Liquid's own output stringification, the SAME for every mode. */
+function stringify(value: unknown): string {
+  const plain = toValue(value)
+  if (plain === null || plain === undefined) {
+    return ""
+  }
+  if (Array.isArray(plain)) {
+    return plain.map(stringify).join("")
+  }
+  return typeof plain === "object" ? "" : String(plain)
+}
+
 const ENGINES: Record<TemplateMode, Liquid> = {
-  html: createEngine((value) => escapeHtml(String(value ?? ""))),
-  text: createEngine(),
-  url: createEngine((value) => encodeURIComponent(String(value ?? ""))),
+  html: createEngine((value) => escapeHtml(stringify(value))),
+  text: createEngine(stringify),
+  url: createEngine((value) => encodeURIComponent(stringify(value))),
 }
 
 const OUTPUT = /\{\{(-?)([^{}]*?)(-?)\}\}/g
-const DELIMITED = /\{\{[^{}]*\}\}|\{%[\s\S]*?%\}/g
-const LIQUID_HEAD = new RegExp(
-  String.raw`^\s*(?:` +
-    String.raw`(?:[A-Za-z_][\w-]*|\[(?:"[^"]*"|'[^']*')\])` +
-    String.raw`(?:\.[A-Za-z_][\w-]*|\[(?:"[^"]*"|'[^']*'|\d+|[A-Za-z_][\w.-]*)\])*` +
-    String.raw`|"[^"]*"|'[^']*'|-?\d+(?:\.\d+)?|\(\s*-?\w+\s*\.\.\s*-?\w+\s*\))\s*$`,
-)
-const FILTER_HEAD = /^\s*([A-Za-z_][\w-]*)\s*(?::|\||$)/
+/**
+ * A Liquid output head: one flat name (vars are flat strings, so a dotted
+ * `{{x.y}}` stays the legacy name "x.y" - custom field names are free
+ * text), a bracketed name, or a literal.
+ */
+const LIQUID_HEAD =
+  /^\s*(?:[A-Za-z_][\w-]*|\[(?:"[^"]*"|'[^']*')\]|"[^"]*"|'[^']*'|-?\d+(?:\.\d+)?)\s*$/
+const TRAILING_SPACE = /\s$/
+/** Bare Liquid literals: a var with such a name still resolves as a var. */
+const LIQUID_KEYWORDS = new Set([
+  "nil",
+  "null",
+  "empty",
+  "blank",
+  "true",
+  "false",
+])
+const FILTER_HEAD = /^(\s*)([A-Za-z_][\w-]*)\s*(:|\||$)/
 const BLOCK_TAG = /\{%-?\s*(end)?(if|unless|for|case|capture|comment)\b/g
 const LEGACY_SCOPE_KEY = "__bt_legacy"
 
-function unescapeEntities(value: string): string {
+export function unescapeEntities(value: string): string {
   return value
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
@@ -127,18 +157,26 @@ function unescapeEntities(value: string): string {
 type Legacy = { name: string; fallback: string | undefined }
 
 /**
- * An output whose head is not a Liquid expression, or whose `|` is followed
- * by something that is not a filter, is a legacy `{{name|fallback}}` token.
+ * An output whose head is not a Liquid expression is a legacy token. So is
+ * `{{name|word}}` unless `word` is a filter written the Liquid way: with an
+ * argument (`| default: "x"`), chained (`| upcase | strip`) or with spacing
+ * around the pipe (`{{ name | upcase }}`). The compact `{{name|upcase}}`
+ * keeps its old meaning - the fallback text "upcase".
  */
 function legacyToken(content: string, engine: Liquid): Legacy | undefined {
   const pipe = content.indexOf("|")
   const head = pipe < 0 ? content : content.slice(0, pipe)
   const tail = pipe < 0 ? undefined : content.slice(pipe + 1)
-  const filter = tail === undefined ? undefined : FILTER_HEAD.exec(tail)?.[1]
+  const filter = tail === undefined ? undefined : FILTER_HEAD.exec(tail)
+  const liquidFilter =
+    filter !== undefined &&
+    filter !== null &&
+    Object.hasOwn(engine.filters, filter[2] as string) &&
+    (filter[3] !== "" || filter[1] !== "" || TRAILING_SPACE.test(head))
   const liquid =
     LIQUID_HEAD.test(head) &&
-    (tail === undefined ||
-      (filter !== undefined && Object.hasOwn(engine.filters, filter)))
+    !LIQUID_KEYWORDS.has(head.trim()) &&
+    (tail === undefined || liquidFilter)
   if (liquid || head.trim() === "" || head.includes("\n")) {
     return
   }
@@ -161,10 +199,7 @@ function prepare(template: string, mode: TemplateMode): Prepared {
   }
   assertDepth(template)
   const engine = ENGINES[mode]
-  const unescaped =
-    mode === "html"
-      ? template.replace(DELIMITED, (match) => unescapeEntities(match))
-      : template
+  const unescaped = scanDelimited(template, mode === "html")
   const legacy: Legacy[] = []
   const source = unescaped.replace(
     OUTPUT,
@@ -178,6 +213,46 @@ function prepare(template: string, mode: TemplateMode): Prepared {
     },
   )
   return { source, legacy }
+}
+
+/**
+ * One linear pass over the delimiters: counts them against the cap and, in
+ * html mode, unescapes entities inside each. An unclosed opener ends the
+ * scan (no later opener can close either; the parser reports it).
+ */
+function scanDelimited(template: string, unescapeInside: boolean): string {
+  let out = ""
+  let from = 0
+  let count = 0
+  while (from < template.length) {
+    const open = template.indexOf("{", from)
+    if (open < 0 || open + 1 >= template.length) {
+      break
+    }
+    const kind = template[open + 1]
+    if (kind !== "{" && kind !== "%") {
+      out += template.slice(from, open + 1)
+      from = open + 1
+      continue
+    }
+    const close = template.indexOf(kind === "{" ? "}}" : "%}", open + 2)
+    if (close < 0) {
+      break
+    }
+    count += 1
+    if (count > TEMPLATE_MAX_DELIMITERS) {
+      throw new TemplateError(
+        "size",
+        `template has more than ${TEMPLATE_MAX_DELIMITERS} merge fields and tags`,
+      )
+    }
+    const segment = template.slice(open, close + 2)
+    out +=
+      template.slice(from, open) +
+      (unescapeInside ? unescapeEntities(segment) : segment)
+    from = close + 2
+  }
+  return out + template.slice(from)
 }
 
 /** Nesting cap BEFORE parsing: the parser itself recurses per block. */
@@ -214,6 +289,11 @@ function toTemplateError(
     err instanceof LiquidError && err.name === "ParseError" ? "parse" : reason,
     message ?? "error",
   )
+}
+
+/** Whether `text` holds a merge field or tag at all (else it is literal). */
+export function hasTemplate(text: string): boolean {
+  return text.includes("{{") || text.includes("{%")
 }
 
 function present(vars: TokenVars, name: string): string | undefined {
@@ -257,7 +337,7 @@ export function renderTemplate(
   if (vars === null || typeof vars !== "object") {
     throw new TypeError("vars must be an object")
   }
-  if (!(template.includes("{{") || template.includes("{%"))) {
+  if (!hasTemplate(template)) {
     return template
   }
   const prepared = prepare(template, mode)
@@ -293,7 +373,7 @@ export function renderTemplate(
  * render then fails with the typed error).
  */
 export function templateNames(template: string): string[] {
-  if (!(template.includes("{{") || template.includes("{%"))) {
+  if (!hasTemplate(template)) {
     return []
   }
   let prepared: Prepared
@@ -318,7 +398,7 @@ export function templateError(
   template: string,
   mode: TemplateMode = "html",
 ): string | undefined {
-  if (!(template.includes("{{") || template.includes("{%"))) {
+  if (!hasTemplate(template)) {
     return
   }
   try {

@@ -8,7 +8,9 @@ export { UNSUBSCRIBE_PLACEHOLDER } from "./context"
 export * from "./errors"
 export { fromLegacyElements } from "./legacy"
 export {
+  hasTemplate,
   TEMPLATE_MAX_BYTES,
+  TEMPLATE_MAX_DELIMITERS,
   TEMPLATE_MAX_DEPTH,
   TemplateError,
   templateError,
