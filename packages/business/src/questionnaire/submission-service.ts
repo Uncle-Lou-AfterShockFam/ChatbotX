@@ -19,7 +19,6 @@ import type {
 import {
   contactModel,
   questionnaireAnswerModel,
-  questionnaireModel,
   type questionnaireQuestionModel,
   questionnaireSubmissionModel,
 } from "@chatbotx.io/database/schema"

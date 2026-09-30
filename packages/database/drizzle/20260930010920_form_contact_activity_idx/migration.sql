@@ -1,0 +1,1 @@
+CREATE INDEX "FormSession_workspaceId_contactId_idx" ON "FormSession" ("workspaceId","contactId");
