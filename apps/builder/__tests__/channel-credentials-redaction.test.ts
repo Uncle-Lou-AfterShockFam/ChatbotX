@@ -10,6 +10,7 @@ const row = (id: string) => ({
   workspaceId: "ws-1",
   auth: { secretText: SECRET, metadata: { webhookSecretToken: SECRET } },
   capiAccessToken: { iv: SECRET },
+  userInfo: { userId: "u1", userName: "Owner", userAccessToken: SECRET },
 })
 
 const listByWorkspace = vi.fn()

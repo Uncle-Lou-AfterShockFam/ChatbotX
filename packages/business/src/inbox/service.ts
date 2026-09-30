@@ -70,14 +70,19 @@ class InboxService extends BaseService {
    * What `list` loads for `includes: ["integration"]`. Its callers hand the
    * rows to the browser (the dashboard, the public QR landing page, the
    * inboxes API), so no credential column is ever selected (s231a): `auth`
-   * holds bot tokens, page tokens and app client secrets in plaintext.
+   * holds bot tokens, page tokens and app client secrets in plaintext, and
+   * Messenger/Instagram `userInfo` holds the connecting user's Facebook token.
    * Server-side code that needs credentials loads `withIntegrations`.
    */
   static readonly listIntegrations = {
     integrationWhatsapp: { columns: { auth: false, capiAccessToken: false } },
     integrationWebchat: { columns: { auth: false } },
-    integrationMessenger: { columns: { auth: false, capiAccessToken: false } },
-    integrationInstagram: { columns: { auth: false, capiAccessToken: false } },
+    integrationMessenger: {
+      columns: { auth: false, capiAccessToken: false, userInfo: false },
+    },
+    integrationInstagram: {
+      columns: { auth: false, capiAccessToken: false, userInfo: false },
+    },
     integrationThreads: { columns: { auth: false } },
     integrationZalo: { columns: { auth: false } },
     integrationTelegram: { columns: { auth: false } },

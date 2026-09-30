@@ -8,6 +8,7 @@ import type { WhatsappTemplateStatus } from "@chatbotx.io/database/partials"
 import { whatsappMessageTemplateModel } from "@chatbotx.io/database/schema"
 import { createId } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
+import { WHATSAPP_LIST_INTEGRATION } from "../integration-whatsapp/schema"
 
 /** WhatsApp's message-template shape, as returned by `listMessageTemplates`. */
 export type MetaWhatsappTemplate = {
@@ -41,9 +42,7 @@ class WhatsappMessageTemplateService extends BaseService {
 
     return tx.query.whatsappMessageTemplateModel.findMany({
       where: queryWhere,
-      with: {
-        integrationWhatsapp: true,
-      },
+      with: WHATSAPP_LIST_INTEGRATION,
       orderBy: { createdAt: "asc" },
     })
   }

@@ -1,5 +1,9 @@
-/** Credential columns an integration row can carry. */
-type CredentialColumn = "auth" | "capiAccessToken"
+/**
+ * Credential columns an integration row can carry. `userInfo`
+ * (Messenger/Instagram) holds the connecting user's Facebook
+ * `userAccessToken` next to their name and avatar.
+ */
+type CredentialColumn = "auth" | "capiAccessToken" | "userInfo"
 
 export type WithoutCredentials<T> = Omit<T, CredentialColumn>
 
@@ -16,7 +20,12 @@ export const withoutCredentials = <T extends object>(
   const {
     auth: _auth,
     capiAccessToken: _capiAccessToken,
+    userInfo: _userInfo,
     ...rest
-  } = row as T & { auth?: unknown; capiAccessToken?: unknown }
+  } = row as T & {
+    auth?: unknown
+    capiAccessToken?: unknown
+    userInfo?: unknown
+  }
   return rest as WithoutCredentials<T>
 }
