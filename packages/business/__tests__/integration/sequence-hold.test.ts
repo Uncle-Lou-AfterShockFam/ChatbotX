@@ -141,6 +141,7 @@ async function row(table: string, id: string) {
 }
 
 const DAY = 86_400_000
+const NUMERIC_ID = /^\d{1,19}$/
 
 async function statusOf(enrollmentId: string, dispatchId: string) {
   const enrol = await row("ContactOnSequence", enrollmentId)
@@ -400,5 +401,132 @@ describe.skipIf(!databaseUrl)("resumeHeldEnrollment", () => {
         WHERE "enrollmentId" = ${held.enrollmentId} AND status = 'pending'`)
       expect(pending.rows).toHaveLength(1)
     }
+  })
+})
+
+describe.skipIf(!databaseUrl)("s227b probe fixes", () => {
+  const DEADLOCK = "40P01"
+  const deadlocked = (results: PromiseSettledResult<unknown>[]) =>
+    results.filter(
+      (r) =>
+        r.status === "rejected" &&
+        JSON.stringify(r.reason, Object.getOwnPropertyNames(r.reason)).includes(
+          DEADLOCK,
+        ),
+    ).length
+
+  test("resume racing an unenrol never deadlocks (40 runs)", async () => {
+    let deadlocks = 0
+    for (let i = 0; i < 40; i++) {
+      const held = await seedHeld()
+      deadlocks += deadlocked(
+        await Promise.allSettled([
+          contactSequenceService.resumeHeldEnrollment({
+            workspaceId: held.workspaceId,
+            contactId: held.contactId,
+            sequenceId: held.sequenceId,
+          }),
+          contactSequenceService.removeContactSequencesForContacts({
+            workspaceId: held.workspaceId,
+            contactIds: [held.contactId],
+            sequenceIds: [held.sequenceId],
+            reason: "subscription_removed",
+          }),
+        ]),
+      )
+    }
+    expect(deadlocks).toBe(0)
+  })
+
+  test("hold racing an unenrol never deadlocks (40 runs)", async () => {
+    let deadlocks = 0
+    for (let i = 0; i < 40; i++) {
+      const workspaceId = mintId()
+      const sequenceId = await seedSequence({ workspaceId, stopOnReply: false })
+      const contactId = mintId()
+      const seededRow = await seedEnrollment({
+        workspaceId,
+        sequenceId,
+        contactId,
+        dispatchStatus: "running",
+      })
+      deadlocks += deadlocked(
+        await Promise.allSettled([
+          contactSequenceService.holdEnrollment({
+            dispatchId: seededRow.dispatchId,
+            workspaceId,
+            reason: "missing: x",
+          }),
+          contactSequenceService.removeContactSequencesForContacts({
+            workspaceId,
+            contactIds: [contactId],
+            sequenceIds: [sequenceId],
+            reason: "subscription_removed",
+          }),
+        ]),
+      )
+    }
+    expect(deadlocks).toBe(0)
+  })
+
+  test("a held enrolment whose step was deleted: a 409 that says so; unenrol clears it", async () => {
+    const held = await seedHeld()
+    await db.execute(
+      sql`DELETE FROM "SequenceDispatch" WHERE id = ${held.dispatchId}`,
+    )
+    await expect(
+      contactSequenceService.resumeHeldEnrollment({
+        workspaceId: held.workspaceId,
+        contactId: held.contactId,
+        sequenceId: held.sequenceId,
+      }),
+    ).rejects.toMatchObject({
+      httpStatusCode: 409,
+      message: expect.stringContaining("no longer exists"),
+    })
+  })
+
+  test.each([
+    ["", "1", "1"],
+    ["abc", "1", "1"],
+    ["1; drop", "1", "1"],
+    ["99999999999999999999", "1", "1"],
+    ["1", "-1", "1"],
+    ["1", "1", " 1"],
+  ])("garbage ids are a typed 422, never SQL (%s, %s, %s)", async (w, c, s) => {
+    await expect(
+      contactSequenceService.resumeHeldEnrollment({
+        workspaceId: w,
+        contactId: c,
+        sequenceId: s,
+      }),
+    ).rejects.toMatchObject({ httpStatusCode: 422 })
+    // holdEnrollment takes no sequenceId: only rows with a bad w or c apply.
+    if (!(NUMERIC_ID.test(w) && NUMERIC_ID.test(c))) {
+      await expect(
+        contactSequenceService.holdEnrollment({
+          dispatchId: c,
+          workspaceId: w,
+          reason: "missing: x",
+        }),
+      ).rejects.toMatchObject({ httpStatusCode: 422 })
+    }
+  })
+
+  test("non-object props and an invalid now are TypeErrors", async () => {
+    await expect(
+      contactSequenceService.resumeHeldEnrollment(null as never),
+    ).rejects.toThrow(TypeError)
+    await expect(
+      contactSequenceService.holdEnrollment(undefined as never),
+    ).rejects.toThrow(TypeError)
+    await expect(
+      contactSequenceService.resumeHeldEnrollment({
+        workspaceId: "1",
+        contactId: "1",
+        sequenceId: "1",
+        now: new Date("x"),
+      }),
+    ).rejects.toThrow(TypeError)
   })
 })

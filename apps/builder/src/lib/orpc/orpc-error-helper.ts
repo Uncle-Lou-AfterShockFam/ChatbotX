@@ -111,6 +111,21 @@ export const possibleErrorsOnAttachingContactInbox = {
   contactInboxOwnedByAnotherContact,
 } satisfies ErrorMap
 
+/**
+ * s227b: resuming a sequence subscription that is not held throws `notHeld`
+ * (409). Same declare-or-vanish rule: code AND status must be declared.
+ */
+const notHeld = {
+  message: "This contact is not held in this sequence",
+  status: 409,
+}
+
+export const possibleErrorsOnResumingSequence = {
+  notFound,
+  businessError,
+  notHeld,
+} satisfies ErrorMap
+
 export const possibleErrorsOnListingResource = {
   businessError,
 } satisfies ErrorMap

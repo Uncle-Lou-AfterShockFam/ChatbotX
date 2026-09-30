@@ -3,7 +3,7 @@
 import { SelectTagsInputField } from "@chatbotx.io/ui/components/form/select-tags-input-field"
 import { Form } from "@chatbotx.io/ui/components/ui/form"
 import { useTranslations } from "next-intl"
-import { useMemo } from "react"
+import { useEffect, useMemo } from "react"
 import { useForm } from "react-hook-form"
 import { useCustomFieldSelectOptions } from "@/features/custom-fields/provider/custom-field-hook"
 
@@ -51,6 +51,12 @@ export function HoldOnMissingField({
   const form = useForm<{ holdOnMissing: string[] }>({
     defaultValues: { holdOnMissing: [...(value ?? [])] },
   })
+  // Re-sync when the saved step changes (a refresh after save, another
+  // editor): defaultValues are read only once.
+  const saved = (value ?? []).join("\u0000")
+  useEffect(() => {
+    form.reset({ holdOnMissing: saved ? saved.split("\u0000") : [] })
+  }, [saved, form])
 
   return (
     <Form {...form}>

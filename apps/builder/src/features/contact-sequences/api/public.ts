@@ -13,6 +13,7 @@ import {
   possibleErrorsOnDeletingResource,
   possibleErrorsOnFindingResource,
   possibleErrorsOnMutatingResource,
+  possibleErrorsOnResumingSequence,
 } from "@/lib/orpc/orpc-error-helper"
 import { workspaceTokenAuthAPIForScope } from "@/orpc"
 
@@ -113,7 +114,7 @@ export const contactsSequencesPublicRouter = {
       }),
     )
     .output(resumeContactSequencePublicResponse)
-    .errors(possibleErrorsOnMutatingResource)
+    .errors(possibleErrorsOnResumingSequence)
     .handler(async ({ context, input }) => {
       const workspaceId = context.workspace.id
       const contactId = await contactService.resolveIdByIdentifier({
