@@ -7681,6 +7681,21 @@
       "onNoThreadStop": "Älä lähetä ja lopeta sekvenssi tälle yhteystiedolle"
     }
   },
+  "pages": {
+    "title": "Sivut",
+    "newPage": "Uusi sivu",
+    "showArchived": "Näytä arkistoidut",
+    "noPages": "Ei vielä sivuja.",
+    "archived": "Arkistoitu",
+    "pickOrCreate": "Valitse sivu tai luo uusi.",
+    "saved": "Sivu tallennettu",
+    "name": "Nimi",
+    "namePlaceholder": "esim. Kevättarjous",
+    "linkTtlHours": "Linkin voimassaolo (tuntia)",
+    "linkHint": "Työnkulun Lähetä sivu -vaihe lähettää jokaiselle yhteystiedolle henkilökohtaisen linkin tekstiviestinä tai sähköpostina. Se näyttää sivun yhteystiedon tiedoilla ja lakkaa toimimasta voimassaolon päätyttyä. Sivun arkistointi sulkee kaikki linkit.",
+    "deleteTitle": "Poistetaanko tämä sivu?",
+    "deleteConfirm": "Kaikki jo lähetetyt linkit lakkaavat toimimasta. Toimintoa ei voi kumota."
+  },
   "emailSuppression": {
     "title": "Sähköpostiesto",
     "description": "Sähköpostivaihe ei koskaan lähetä näihin osoitteisiin tai verkkotunnuksiin. Palautuneet lähetykset lisätään automaattisesti. Verkkotunnusmerkintä koskee vain täsmälleen kyseistä verkkotunnusta.",

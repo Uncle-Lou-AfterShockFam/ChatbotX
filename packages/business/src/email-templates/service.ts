@@ -4,22 +4,15 @@ import {
   db,
   desc,
   eq,
-  inArray,
   isUniqueViolationError,
 } from "@chatbotx.io/database/client"
 import {
   EMAIL_TEMPLATE_MAX_NAME,
   type EmailTemplateStatus,
 } from "@chatbotx.io/database/partials"
-import {
-  emailTemplateModel,
-  mediaLibraryFileModel,
-} from "@chatbotx.io/database/schema"
+import { emailTemplateModel } from "@chatbotx.io/database/schema"
 import type { EmailTemplateModel } from "@chatbotx.io/database/types"
 import {
-  collectRenderInputs,
-  DocumentTooLargeError,
-  DocumentValidationError,
   type EmailDocument,
   parseDocument,
   type RenderAsset,
@@ -28,16 +21,19 @@ import { renderEmail } from "@chatbotx.io/email-document/render-email"
 import { createId } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
 import { notFoundException, validationException } from "../errors"
-import { resolveTenantSettings } from "../platform/settings"
-import { getPublicFileUrl } from "../utils"
+import {
+  assertAssetsOwned,
+  type DocumentIssue,
+  parseNamedDocument,
+  parsePreviewDocument,
+  resolveOwnedAssets,
+} from "./document-data"
 
 const TEMPLATE_NOT_FOUND = "Email template not found"
-const MAX_BIGINT = 9_223_372_036_854_775_807n
 
 export type EmailTemplateData = { name: unknown; document: unknown }
 
-/** One schema miss, addressed by its path in the document. */
-export type DocumentIssue = { path: string; message: string }
+export type { DocumentIssue } from "./document-data"
 
 export type EmailTemplatePreview =
   | {
@@ -49,97 +45,9 @@ export type EmailTemplatePreview =
     }
   | { ok: false; issues: DocumentIssue[] }
 
-/** Issues returned to the editor per preview (the first ones are enough). */
-const MAX_PREVIEW_ISSUES = 20
-
-/**
- * The only write path for a template: a trimmed 1..120 name and a document
- * that passes `parseDocument` (closed schema, 256 KB cap). A miss is a 422 on
- * the offending field, never a stored invalid row.
- */
-function parseTemplateData(data: EmailTemplateData): {
-  name: string
-  document: EmailDocument
-} {
-  if (data === null || typeof data !== "object") {
-    throw validationException("name", "Template data is required")
-  }
-  const name = typeof data.name === "string" ? data.name.trim() : ""
-  if (name.length === 0 || name.length > EMAIL_TEMPLATE_MAX_NAME) {
-    throw validationException(
-      "name",
-      `The name must be 1-${EMAIL_TEMPLATE_MAX_NAME} characters`,
-    )
-  }
-  try {
-    return { name, document: parseDocument(data.document) }
-  } catch (error) {
-    if (error instanceof DocumentTooLargeError) {
-      throw validationException("document", "The email document is too large")
-    }
-    if (error instanceof DocumentValidationError) {
-      const first = error.issues[0]
-      const path = first?.path.map(String).join(".")
-      throw validationException(
-        "document",
-        `Invalid email document${path ? ` at ${path}` : ""}: ${first?.message ?? "invalid"}`,
-      )
-    }
-    throw error
-  }
-}
-
-/**
- * Every media file a document references (images + attachments) must be a
- * MediaLibraryFile of THIS workspace: a foreign or deleted id is a 422 at
- * save, never a send that later attaches someone else's file or fails.
- */
-async function assertAssetsOwned(
-  workspaceId: string,
-  document: EmailDocument,
-  tx: DatabaseClient,
-): Promise<void> {
-  const { assetIds } = collectRenderInputs(document)
-  const found = new Set(
-    (await ownedFiles(workspaceId, assetIds, tx)).map((row) => row.id),
-  )
-  const missing = assetIds.find((id) => !found.has(id))
-  if (missing !== undefined) {
-    throw validationException(
-      "document",
-      `Media file ${missing} is not in this workspace's media library`,
-    )
-  }
-}
-
-/** The workspace's media rows among `ids` (a foreign id matches nothing). */
-async function ownedFiles(
-  workspaceId: string,
-  ids: string[],
-  tx: DatabaseClient,
-) {
-  // The schema allows 20 digits; a bigint column holds 19. An id past it
-  // matches no row, and must not reach Postgres as an out-of-range 500.
-  const queryable = ids.filter((id) => BigInt(id) <= MAX_BIGINT)
-  if (queryable.length === 0) {
-    return []
-  }
-  return await tx
-    .select({
-      id: mediaLibraryFileModel.id,
-      name: mediaLibraryFileModel.name,
-      path: mediaLibraryFileModel.path,
-      size: mediaLibraryFileModel.size,
-      mimeType: mediaLibraryFileModel.mimeType,
-    })
-    .from(mediaLibraryFileModel)
-    .where(
-      and(
-        eq(mediaLibraryFileModel.workspaceId, workspaceId),
-        inArray(mediaLibraryFileModel.id, queryable),
-      ),
-    )
-}
+/** The only write path for a template (see parseNamedDocument). */
+const parseTemplateData = (data: EmailTemplateData) =>
+  parseNamedDocument(data, EMAIL_TEMPLATE_MAX_NAME, "email document")
 
 function nameTaken(error: unknown): never {
   if (isUniqueViolationError(error)) {
@@ -267,41 +175,12 @@ export class EmailTemplateService extends BaseService {
     tx?: DatabaseClient
   }): Promise<EmailTemplatePreview> {
     const { workspaceId, tx = db } = props
-    let document: EmailDocument
-    try {
-      document = parseDocument(props.document)
-    } catch (error) {
-      if (error instanceof DocumentTooLargeError) {
-        return {
-          ok: false,
-          issues: [{ path: "", message: "The email document is too large" }],
-        }
-      }
-      if (error instanceof DocumentValidationError) {
-        return {
-          ok: false,
-          issues: error.issues.slice(0, MAX_PREVIEW_ISSUES).map((issue) => ({
-            path: issue.path.map(String).join("."),
-            message: issue.message,
-          })),
-        }
-      }
-      throw error
+    const parsed = parsePreviewDocument(props.document, "email document")
+    if (!parsed.ok) {
+      return parsed
     }
-    const { assetIds } = collectRenderInputs(document)
-    const rows = await ownedFiles(workspaceId, assetIds, tx)
-    const assets: Record<string, RenderAsset> = {}
-    if (rows.length > 0) {
-      const { storageUrl } = await resolveTenantSettings({ workspaceId })
-      for (const row of rows) {
-        assets[row.id] = {
-          url: getPublicFileUrl(row.path, storageUrl),
-          name: row.name,
-          size: row.size,
-          mimeType: row.mimeType,
-        }
-      }
-    }
+    const { document } = parsed
+    const assets = await resolveOwnedAssets(workspaceId, document, tx)
     const rendered = await renderEmail(document, {
       vars: props.vars ?? {},
       assets,

@@ -61,3 +61,12 @@ describe("invoice pay links (s207b)", () => {
     expect(isPublicRoute("/payroll/1")).toBe(false)
   })
 })
+
+describe("custom pages (s227a)", () => {
+  test("/p/<token> needs no session; a longer first segment stays closed", () => {
+    expect(isPublicRoute("/p/0123456789ABCDEFGHIJKL")).toBe(true)
+    expect(isPublicRoute("/pages")).toBe(false)
+    expect(isPublicRoute("/portal")).toBe(false)
+    expect(isPublicRoute("/space/1/settings/pages")).toBe(false)
+  })
+})

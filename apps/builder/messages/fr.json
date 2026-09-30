@@ -7681,6 +7681,21 @@
       "onNoThreadStop": "Ne pas envoyer et terminer la séquence pour ce contact"
     }
   },
+  "pages": {
+    "title": "Pages",
+    "newPage": "Nouvelle page",
+    "showArchived": "Afficher les archivées",
+    "noPages": "Aucune page pour l'instant.",
+    "archived": "Archivée",
+    "pickOrCreate": "Choisissez une page ou créez-en une.",
+    "saved": "Page enregistrée",
+    "name": "Nom",
+    "namePlaceholder": "ex. Offre de printemps",
+    "linkTtlHours": "Durée du lien (heures)",
+    "linkHint": "L'étape Envoyer une page d'un flux envoie à chaque contact un lien personnel par SMS ou e-mail. Il affiche la page avec les informations du contact et cesse de fonctionner à la fin de sa durée. Archiver la page ferme tous les liens.",
+    "deleteTitle": "Supprimer cette page ?",
+    "deleteConfirm": "Tous les liens déjà envoyés cesseront de fonctionner. Cette action est irréversible."
+  },
   "emailSuppression": {
     "title": "Suppression d'e-mails",
     "description": "L'étape e-mail n'envoie jamais à ces adresses ou domaines. Les envois rejetés sont ajoutés automatiquement. Une entrée de domaine ne correspond qu'à ce domaine exact.",

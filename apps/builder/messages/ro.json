@@ -7681,6 +7681,21 @@
       "onNoThreadStop": "Nu trimite și încheie secvența pentru acest contact"
     }
   },
+  "pages": {
+    "title": "Pagini",
+    "newPage": "Pagină nouă",
+    "showArchived": "Afișează arhivate",
+    "noPages": "Încă nu există pagini.",
+    "archived": "Arhivată",
+    "pickOrCreate": "Alege o pagină sau creează una nouă.",
+    "saved": "Pagină salvată",
+    "name": "Nume",
+    "namePlaceholder": "de ex. Ofertă de primăvară",
+    "linkTtlHours": "Valabilitatea linkului (ore)",
+    "linkHint": "Pasul Trimite pagina dintr-un flux trimite fiecărui contact un link personal prin SMS sau e-mail. Linkul afișează pagina cu datele contactului și nu mai funcționează după expirare. Arhivarea paginii închide toate linkurile.",
+    "deleteTitle": "Ștergi această pagină?",
+    "deleteConfirm": "Toate linkurile deja trimise nu vor mai funcționa. Acțiunea nu poate fi anulată."
+  },
   "emailSuppression": {
     "title": "Suprimare e-mail",
     "description": "Pasul de e-mail nu trimite niciodată către aceste adrese sau domenii. Trimiterile respinse sunt adăugate automat. O intrare de domeniu se potrivește doar cu acel domeniu exact.",

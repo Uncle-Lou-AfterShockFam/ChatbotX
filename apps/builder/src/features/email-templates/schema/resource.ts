@@ -57,7 +57,7 @@ export const emailTemplatePreviewInput = z
   })
   .strict()
 
-const renderAsset = z.object({
+export const renderAsset = z.object({
   url: z.string(),
   name: z.string(),
   size: z.number(),

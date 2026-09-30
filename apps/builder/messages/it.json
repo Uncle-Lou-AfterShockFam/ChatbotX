@@ -7681,6 +7681,21 @@
       "onNoThreadStop": "Non inviare e termina la sequenza per questo contatto"
     }
   },
+  "pages": {
+    "title": "Pagine",
+    "newPage": "Nuova pagina",
+    "showArchived": "Mostra archiviate",
+    "noPages": "Ancora nessuna pagina.",
+    "archived": "Archiviata",
+    "pickOrCreate": "Scegli una pagina o creane una nuova.",
+    "saved": "Pagina salvata",
+    "name": "Nome",
+    "namePlaceholder": "es. Offerta di primavera",
+    "linkTtlHours": "Durata del link (ore)",
+    "linkHint": "Il passaggio Invia pagina di un flusso invia a ogni contatto un link personale via SMS o email. Mostra la pagina con i dati del contatto e smette di funzionare alla scadenza. Archiviare la pagina chiude tutti i link.",
+    "deleteTitle": "Eliminare questa pagina?",
+    "deleteConfirm": "Tutti i link già inviati smetteranno di funzionare. L'operazione non può essere annullata."
+  },
   "emailSuppression": {
     "title": "Soppressione email",
     "description": "Il passaggio email non invia mai a questi indirizzi o domini. Gli invii rimbalzati vengono aggiunti automaticamente. Una voce di dominio corrisponde solo a quel dominio esatto.",

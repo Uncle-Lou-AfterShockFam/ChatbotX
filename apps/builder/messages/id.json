@@ -7681,6 +7681,21 @@
       "onNoThreadStop": "Jangan kirim, dan akhiri urutan untuk kontak ini"
     }
   },
+  "pages": {
+    "title": "Halaman",
+    "newPage": "Halaman baru",
+    "showArchived": "Tampilkan yang diarsipkan",
+    "noPages": "Belum ada halaman.",
+    "archived": "Diarsipkan",
+    "pickOrCreate": "Pilih halaman atau buat yang baru.",
+    "saved": "Halaman disimpan",
+    "name": "Nama",
+    "namePlaceholder": "mis. Penawaran musim semi",
+    "linkTtlHours": "Masa berlaku tautan (jam)",
+    "linkHint": "Langkah Kirim halaman pada alur mengirim tautan pribadi ke setiap kontak lewat SMS atau email. Tautan menampilkan halaman dengan data kontak tersebut dan berhenti berfungsi setelah masa berlakunya habis. Mengarsipkan halaman menutup semua tautan.",
+    "deleteTitle": "Hapus halaman ini?",
+    "deleteConfirm": "Semua tautan yang sudah terkirim akan berhenti berfungsi. Tindakan ini tidak dapat dibatalkan."
+  },
   "emailSuppression": {
     "title": "Penekanan email",
     "description": "Langkah email tidak pernah mengirim ke alamat atau domain ini. Pengiriman yang terpental ditambahkan otomatis. Entri domain hanya cocok dengan domain yang persis itu.",

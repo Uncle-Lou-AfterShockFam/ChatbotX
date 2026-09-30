@@ -85,6 +85,11 @@ export const router = {
       default: m.emailTemplatesAPI,
     })),
   ),
+  pagesAPI: lazy(() =>
+    import("@/features/pages/api").then((m) => ({
+      default: m.pagesAPI,
+    })),
+  ),
   documentsAPI: lazy(() =>
     import("@/features/documents/api").then((m) => ({
       default: m.documentsAPI,

@@ -34,6 +34,44 @@ describe("email flow token (s222b)", () => {
     expect(a.lid).not.toBe(b.lid)
   })
 
+  test("s227a: a page-bound token carries its page link, its fixed link id, and never outlives the link", async () => {
+    const linkId = "0b9f7c1e-2d3a-5b4c-8d6e-7f8091a2b3c4"
+    const soon = new Date(Date.now() + 60_000)
+    const payload = await verifyEmailFlowToken(
+      await signEmailFlowToken({
+        ...input,
+        pageLink: { id: "4242", expiresAt: soon, linkId },
+      }),
+    )
+    expect(payload).toMatchObject({ plid: "4242", lid: linkId })
+    expect(payload.exp).toBe(soon.getTime())
+    // A link longer than a year is still capped at the token's own year.
+    const far = await verifyEmailFlowToken(
+      await signEmailFlowToken({
+        ...input,
+        pageLink: {
+          id: "4242",
+          expiresAt: new Date(Date.now() + 5 * 365 * 86_400_000),
+          linkId,
+        },
+      }),
+    )
+    expect(far.exp).toBeLessThanOrEqual(Date.now() + 366 * 86_400_000)
+    // Already expired link: the token is dead on arrival.
+    await expect(
+      verifyEmailFlowToken(
+        await signEmailFlowToken({
+          ...input,
+          pageLink: { id: "4242", expiresAt: new Date(Date.now() - 1), linkId },
+        }),
+      ),
+    ).rejects.toThrow("expired")
+    // A newsletter token has no page link.
+    expect(
+      (await verifyEmailFlowToken(await signEmailFlowToken(input))).plid,
+    ).toBeUndefined()
+  })
+
   test("a tampered, foreign, oversized or empty token is refused", async () => {
     const token = await signEmailFlowToken(input)
     const mid = Math.floor(token.length / 2)

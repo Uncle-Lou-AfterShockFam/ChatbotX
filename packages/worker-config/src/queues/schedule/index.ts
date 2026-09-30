@@ -24,6 +24,7 @@ export const ScheduleJobData = {
   scanDealTaskOverdue: "scanDealTaskOverdue",
   sweepFormSessions: "sweepFormSessions",
   sweepFormUploads: "sweepFormUploads",
+  sweepPageLinks: "sweepPageLinks",
   syncUserQuota: "syncUserQuota",
   reconcileTenants: "reconcileTenants",
   reconcileMac: "reconcileMac",
@@ -164,6 +165,11 @@ export type ScheduleJobSweepFormSessions = {
 
 export type ScheduleJobSweepFormUploads = {
   type: typeof ScheduleJobData.sweepFormUploads
+  data: Record<string, never>
+}
+
+export type ScheduleJobSweepPageLinks = {
+  type: typeof ScheduleJobData.sweepPageLinks
   data: Record<string, never>
 }
 
@@ -311,6 +317,7 @@ export type ScheduleJobData =
   | ScheduleJobScanDealTaskOverdue
   | ScheduleJobSweepFormSessions
   | ScheduleJobSweepFormUploads
+  | ScheduleJobSweepPageLinks
   | ScheduleJobPollQuickbooksChanges
   | ScheduleJobSweepInvoiceMirrors
   | ScheduleJobRefreshQuickbooksTokens

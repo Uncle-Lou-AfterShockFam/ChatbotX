@@ -296,6 +296,8 @@ export type EmailSuppressionModel =
 export type EmailThreadMailModel =
   typeof schema.emailThreadMailModel.$inferSelect
 export type EmailTemplateModel = typeof schema.emailTemplateModel.$inferSelect
+export type PageModel = typeof schema.pageModel.$inferSelect
+export type PageLinkModel = typeof schema.pageLinkModel.$inferSelect
 export type ContactDocumentModel =
   typeof schema.contactDocumentModel.$inferSelect
 export type FormModel = typeof schema.formModel.$inferSelect

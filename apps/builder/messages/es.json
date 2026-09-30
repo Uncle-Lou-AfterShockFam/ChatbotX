@@ -7681,6 +7681,21 @@
       "onNoThreadStop": "No enviar y terminar la secuencia para este contacto"
     }
   },
+  "pages": {
+    "title": "Páginas",
+    "newPage": "Nueva página",
+    "showArchived": "Mostrar archivadas",
+    "noPages": "Aún no hay páginas.",
+    "archived": "Archivada",
+    "pickOrCreate": "Elige una página o crea una nueva.",
+    "saved": "Página guardada",
+    "name": "Nombre",
+    "namePlaceholder": "p. ej. Oferta de primavera",
+    "linkTtlHours": "Duración del enlace (horas)",
+    "linkHint": "El paso Enviar página de un flujo envía a cada contacto un enlace personal por SMS o correo. Muestra la página con los datos de ese contacto y deja de funcionar al terminar su duración. Archivar la página cierra todos los enlaces.",
+    "deleteTitle": "¿Eliminar esta página?",
+    "deleteConfirm": "Todos los enlaces ya enviados dejarán de funcionar. Esta acción no se puede deshacer."
+  },
   "emailSuppression": {
     "title": "Supresión de correo",
     "description": "El paso de correo nunca envía a estas direcciones o dominios. Los envíos rebotados se añaden automáticamente. Una entrada de dominio solo coincide con ese dominio exacto.",

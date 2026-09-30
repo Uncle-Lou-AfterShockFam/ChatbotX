@@ -7681,6 +7681,21 @@
       "onNoThreadStop": "Não enviar e terminar a sequência para este contacto"
     }
   },
+  "pages": {
+    "title": "Páginas",
+    "newPage": "Nova página",
+    "showArchived": "Mostrar arquivadas",
+    "noPages": "Ainda não há páginas.",
+    "archived": "Arquivada",
+    "pickOrCreate": "Escolha uma página ou crie uma nova.",
+    "saved": "Página guardada",
+    "name": "Nome",
+    "namePlaceholder": "ex.: Oferta de primavera",
+    "linkTtlHours": "Validade da ligação (horas)",
+    "linkHint": "O passo Enviar página de um fluxo envia a cada contacto uma ligação pessoal por SMS ou e-mail. Mostra a página com os dados do contacto e deixa de funcionar no fim da validade. Arquivar a página fecha todas as ligações.",
+    "deleteTitle": "Eliminar esta página?",
+    "deleteConfirm": "Todas as ligações já enviadas deixarão de funcionar. Esta ação não pode ser anulada."
+  },
   "emailSuppression": {
     "title": "Supressão de e-mail",
     "description": "O passo de e-mail nunca envia para estes endereços ou domínios. Envios devolvidos são adicionados automaticamente. Uma entrada de domínio corresponde apenas a esse domínio exato.",

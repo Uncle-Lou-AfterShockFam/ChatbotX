@@ -7681,6 +7681,21 @@
       "onNoThreadStop": "Don't send, and end the sequence for this contact"
     }
   },
+  "pages": {
+    "title": "Pages",
+    "newPage": "New page",
+    "showArchived": "Show archived",
+    "noPages": "No pages yet.",
+    "archived": "Archived",
+    "pickOrCreate": "Pick a page or create a new one.",
+    "saved": "Page saved",
+    "name": "Name",
+    "namePlaceholder": "e.g. Spring offer",
+    "linkTtlHours": "Link lifetime (hours)",
+    "linkHint": "A flow's Send page step texts or emails each contact a personal link. It shows the page with that contact's details and stops working after the link lifetime. Archiving the page closes every link.",
+    "deleteTitle": "Delete this page?",
+    "deleteConfirm": "Every link already sent will stop working. This cannot be undone."
+  },
   "emailSuppression": {
     "title": "Email suppression",
     "description": "The email step never sends to these addresses or domains. Bounced line sends are added automatically. A domain entry matches that exact domain only.",
