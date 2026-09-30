@@ -402,19 +402,28 @@ const handleTiktokWebhook = async (req: NextRequest) => {
       queue: integrationQueue,
     })
 
-    if (eventType === "authorization.removed") {
-      await db
-        .update(inboxModel)
-        .set({ status: inboxStatuses.enum.disconnected })
-        .where(eq(inboxModel.id, integrationTiktok.inboxId))
-      logger.info(
-        { openId: userOpenId },
-        "TikTok authorization removed — inbox marked disconnected",
-      )
+    if (eventType !== "authorization.removed") {
+      return new Response(result as BodyInit)
     }
-
-    return new Response(result as BodyInit)
   } catch (e: unknown) {
     return webhookErrorResponse(e, "tiktok", "TikTok handleRequest failed")
   }
+
+  try {
+    await db
+      .update(inboxModel)
+      .set({ status: inboxStatuses.enum.disconnected })
+      .where(eq(inboxModel.id, integrationTiktok.inboxId))
+  } catch (e: unknown) {
+    return webhookErrorResponse(
+      e,
+      "tiktok",
+      "TikTok authorization removed — inbox disconnect failed",
+    )
+  }
+  logger.info(
+    { openId: userOpenId },
+    "TikTok authorization removed — inbox marked disconnected",
+  )
+  return new Response("ok")
 }

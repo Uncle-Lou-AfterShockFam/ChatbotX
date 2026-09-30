@@ -126,21 +126,6 @@ export const deleteWebhook = (botToken: string): Promise<void> =>
     logger.debug("Deleted Telegram webhook")
   })
 
-export const setWebhook = (
-  botToken: string,
-  webhookUrl: string,
-  secretToken?: string,
-): Promise<void> =>
-  rescue("setWebhook", async () => {
-    const client = createTelegramClient(botToken)
-    await client.post<TelegramApiResponse<boolean>>("setWebhook", {
-      json: {
-        url: webhookUrl,
-        ...(secretToken ? { secret_token: secretToken } : {}),
-      },
-    })
-  })
-
 export const connect = ({
   botToken,
 }: {
