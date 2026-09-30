@@ -10,12 +10,15 @@ export const replyClassManualClasses = z.enum([
   "maybeLater",
   "notInterested",
 ])
-export const replyClassRuleClasses = z.enum(["ooo", "auto", "bounce"])
+const replyClassRuleClasses = z.enum(["ooo", "auto", "bounce"])
 export const replyClasses = z.enum([
   ...replyClassManualClasses.options,
   ...replyClassRuleClasses.options,
 ])
 export type ReplyClass = z.infer<typeof replyClasses>
+
+/** The one-line reason a classification carries, at most (UI, API, service). */
+export const MAX_REPLY_REASON = 300
 export type ReplyClassManual = z.infer<typeof replyClassManualClasses>
 
 /** Who decided: the line's rules, an operator, or (later) an AI classifier. */
@@ -41,7 +44,13 @@ const STAGE_ID = /^\d{1,19}$/
 export const outreachStagesSchema = z
   .object(
     Object.fromEntries(
-      OUTREACH_STAGE_KEYS.map((key) => [key, z.string().regex(STAGE_ID)]),
+      OUTREACH_STAGE_KEYS.map((key) => [
+        key,
+        z
+          .string()
+          .regex(STAGE_ID)
+          .refine((id) => BigInt(id) <= 9_223_372_036_854_775_807n),
+      ]),
     ) as Record<OutreachStageKey, z.ZodString>,
   )
   .strict()

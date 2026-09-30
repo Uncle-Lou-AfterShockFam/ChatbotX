@@ -51,6 +51,7 @@ export const contactsReplyClassificationPublicRouter = {
           class: input.class,
           source: "manual",
           reason: input.reason ?? null,
+          sequenceId: input.sequenceId ?? null,
         },
       )
       if (!classification) {

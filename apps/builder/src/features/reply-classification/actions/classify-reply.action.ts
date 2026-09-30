@@ -2,22 +2,30 @@
 
 import { contactService } from "@chatbotx.io/business"
 import { replyClassificationService } from "@chatbotx.io/business/reply-classification"
-import { replyClassManualClasses } from "@chatbotx.io/database/partials"
+import {
+  MAX_REPLY_REASON,
+  replyClassManualClasses,
+} from "@chatbotx.io/database/partials"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import { z } from "zod"
 import { workspaceIdrequestParams } from "@/features/common/schema"
 import { requireContactPermissionScope } from "@/features/contacts/permissions"
+import { viewerFromActionCtx } from "@/features/deals/lib/viewer"
 import { workspaceActionClient } from "@/lib/safe-action"
 import { toClassificationResource } from "../schema/public"
 
-/** s228b: an operator classifies a contact's answer to outreach. */
+/**
+ * s228b: an operator classifies a contact's answer to outreach. The deal it
+ * opens or moves is scoped to the operator (s193 pipeline access).
+ */
 export const classifyReplyAction = workspaceActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(
     z.object({
       contactId: zodBigintAsString(),
       class: replyClassManualClasses,
-      reason: z.string().max(300).optional(),
+      reason: z.string().max(MAX_REPLY_REASON).optional(),
+      sequenceId: zodBigintAsString().optional(),
     }),
   )
   .action(async (props) => {
@@ -38,30 +46,9 @@ export const classifyReplyAction = workspaceActionClient
       class: parsedInput.class,
       source: "manual",
       reason: parsedInput.reason ?? null,
+      sequenceId: parsedInput.sequenceId ?? null,
       actorId: ctx.user.id,
+      viewer: viewerFromActionCtx(ctx),
     })
     return classification ? toClassificationResource(classification) : null
-  })
-
-/** s228b: the contact's classifications, newest first. */
-export const listReplyClassificationsAction = workspaceActionClient
-  .bindArgsSchemas(workspaceIdrequestParams)
-  .inputSchema(z.object({ contactId: zodBigintAsString() }))
-  .action(async (props) => {
-    const {
-      bindArgsParsedInputs: [workspaceId],
-      parsedInput,
-    } = props
-    const accessScope = await requireContactPermissionScope(workspaceId)
-    const contact = await contactService.findByIdOrFail({
-      workspaceId,
-      id: parsedInput.contactId,
-      accessScope,
-    })
-    const rows = await replyClassificationService.listByContact({
-      workspaceId,
-      contactId: contact.id,
-      limit: 5,
-    })
-    return rows.map(toClassificationResource)
   })

@@ -452,9 +452,16 @@ class DealService extends BaseService {
     workspaceId: string
     data: DealData & { contactId: string }
     actorId?: string | null
+    /** s228b: a member's call is scoped like `create` (s193). */
+    viewer?: DealViewer | null
   }): Promise<{ deal: DealModel; created: boolean }> {
-    const { workspaceId, data } = props
+    const { workspaceId, viewer } = props
     const actorId = props.actorId ?? null
+    const ownerFilter = viewer ? viewerOwnerFilter(viewer) : undefined
+    const data =
+      ownerFilter !== undefined && props.data.ownerId === undefined
+        ? { ...props.data, ownerId: ownerFilter }
+        : props.data
     const parsed = this.parseCreateData(data)
     const outcome = await db.transaction(async (tx) => {
       await tx.execute(
@@ -475,6 +482,7 @@ class DealService extends BaseService {
         data,
         parsed,
         actorId,
+        viewer,
       })
       return { created: true as const, ...inserted }
     })

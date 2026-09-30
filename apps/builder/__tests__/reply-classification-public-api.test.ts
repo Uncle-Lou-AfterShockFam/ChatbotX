@@ -115,6 +115,7 @@ describe("POST /v1/contacts/{identifier}/reply-classification (s228b)", () => {
       class: "interested",
       source: "manual",
       reason: "said yes",
+      sequenceId: null,
     })
   })
 

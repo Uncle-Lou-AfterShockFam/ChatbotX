@@ -7,6 +7,7 @@ import {
   sql,
 } from "@chatbotx.io/database/client"
 import {
+  MAX_REPLY_REASON,
   OUTREACH_STAGE_KEYS,
   type OutreachStageKey,
   type OutreachStages,
@@ -19,6 +20,7 @@ import {
 } from "@chatbotx.io/database/partials"
 import {
   contactsOnSequenceModel,
+  pipelineStageModel,
   replyClassificationModel,
   sequenceModel,
 } from "@chatbotx.io/database/schema"
@@ -28,18 +30,58 @@ import { createId } from "@chatbotx.io/utils"
 import { dealService } from "../deal/service"
 import { notFoundException, validationException } from "../errors"
 import { logger } from "../logger"
+import type { DealViewer } from "../pipeline/access"
 import { pipelineService } from "../pipeline/service"
+import { assertIds } from "../validation"
 
-const BIGINT_ID = /^\d{1,19}$/
-/** The one-line reason an operator (or a rule) gives, capped. */
-export const MAX_REASON = 300
+/**
+ * Manual classifications of one contact in one pipeline run one at a time
+ * (probe s228b: two interleaved create-or-move calls could leave two open
+ * deals, or a lost deal in an open stage). A transaction holds an advisory
+ * lock while the deal service works on its own connections, so at most
+ * MAX_LOCK_HOLDERS such transactions run per process: the pool (10) is
+ * never starved of the connections the deal calls need. lock_timeout bounds
+ * the wait on a contact another process is classifying.
+ */
+const MAX_LOCK_HOLDERS = 3
+let lockHolders = 0
+const lockWaiters: Array<() => void> = []
 
-function assertIds(fn: string, ids: Record<string, unknown>): void {
-  for (const [field, value] of Object.entries(ids)) {
-    if (typeof value !== "string" || !BIGINT_ID.test(value)) {
-      throw validationException(field, `${fn}: ${field} must be a numeric id`)
-    }
+async function withContactPipelineLock<T>(
+  key: { workspaceId: string; contactId: string; pipelineId: string },
+  fn: () => Promise<T>,
+): Promise<T> {
+  if (lockHolders >= MAX_LOCK_HOLDERS) {
+    await new Promise<void>((resolve) => lockWaiters.push(resolve))
   }
+  lockHolders += 1
+  try {
+    return await db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL lock_timeout = '10s'`)
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`outreach-classify:${key.workspaceId}:${key.contactId}:${key.pipelineId}`}))`,
+      )
+      return await fn()
+    })
+  } finally {
+    lockHolders -= 1
+    lockWaiters.shift()?.()
+  }
+}
+
+/**
+ * `value` without the control characters a text column must never carry
+ * (probe s228b: a NUL is a raw 500); tab, newline and CR are kept.
+ */
+function stripControl(value: string, replacement = ""): string {
+  let out = ""
+  for (const ch of value) {
+    const code = ch.charCodeAt(0)
+    const control =
+      (code < 32 && code !== 9 && code !== 10 && code !== 13) || code === 127
+    out += control ? replacement : ch
+  }
+  return out
 }
 
 /** The Outreach pipeline's stages (ManyReach's model), in order. */
@@ -97,7 +139,7 @@ const OUTREACH_STAGES: Record<
   },
 }
 
-export type ClassifyReplyResult = {
+type ClassifyReplyResult = {
   /** null: a rule class for a contact in no outreach sequence (not recorded). */
   classification: ReplyClassificationModel | null
   dealId: string | null
@@ -128,7 +170,10 @@ class ReplyClassificationService {
     }
     const { workspaceId, sequenceId } = props
     assertIds("createOutreachPipeline", { workspaceId, sequenceId })
-    const name = (props.name ?? "Outreach").trim()
+    if (props.name !== undefined && typeof props.name !== "string") {
+      throw validationException("name", "Name must be a string.")
+    }
+    const name = stripControl(props.name ?? "Outreach").trim()
     if (name === "" || name.length > 100) {
       throw validationException("name", "Name must be 1-100 characters.")
     }
@@ -215,6 +260,7 @@ class ReplyClassificationService {
     workspaceId: string,
     contactId: string,
     tx: DatabaseClient,
+    sequenceId?: string,
   ) {
     const [row] = await tx
       .select({
@@ -236,6 +282,11 @@ class ReplyClassificationService {
           eq(contactsOnSequenceModel.workspaceId, workspaceId),
           eq(contactsOnSequenceModel.contactId, contactId),
           sql`${sequenceModel.outreachPipelineId} IS NOT NULL`,
+          // Skeptic s228b: a contact in two outreach sequences is classified
+          // for the one the caller names.
+          sequenceId
+            ? eq(contactsOnSequenceModel.sequenceId, sequenceId)
+            : undefined,
         ),
       )
       .orderBy(
@@ -260,6 +311,14 @@ class ReplyClassificationService {
     reason?: string | null
     messageId?: string | null
     actorId?: string | null
+    /** The outreach sequence it is for; omitted = the most recently answered. */
+    sequenceId?: string | null
+    /**
+     * Skeptic s228b: a member's classification touches deals only as they
+     * may (s193 pipeline access, onlyAssignedContacts). Workers and the
+     * workspace-token API pass none (unscoped, like the deal API).
+     */
+    viewer?: DealViewer | null
   }): Promise<ClassifyReplyResult> {
     if (props === null || typeof props !== "object") {
       throw new TypeError("classifyReply: props must be an object")
@@ -268,6 +327,9 @@ class ReplyClassificationService {
     assertIds("classifyReply", { workspaceId, contactId })
     if (props.actorId != null) {
       assertIds("classifyReply", { actorId: props.actorId })
+    }
+    if (props.sequenceId != null) {
+      assertIds("classifyReply", { sequenceId: props.sequenceId })
     }
     const replyClass = replyClasses.safeParse(props.class)
     const source = replyClassificationSources.safeParse(props.source)
@@ -287,11 +349,24 @@ class ReplyClassificationService {
       throw validationException("reason", "reason must be a string")
     }
     const reason =
-      props.reason?.replace(/\s+/g, " ").trim().slice(0, MAX_REASON) || null
+      props.reason == null
+        ? null
+        : stripControl(props.reason, " ")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, MAX_REPLY_REASON) || null
     const messageId =
       typeof props.messageId === "string" && props.messageId !== ""
-        ? props.messageId.slice(0, 255)
+        ? stripControl(props.messageId).slice(0, 255)
         : null
+    // Skeptic s228b: message:received is redelivered; a message already
+    // classified is not classified (or announced) again.
+    if (messageId) {
+      const existing = await this.findByMessage(workspaceId, messageId)
+      if (existing) {
+        return { classification: existing, dealId: existing.dealId }
+      }
+    }
 
     const contact = await db.query.contactModel.findFirst({
       where: { id: contactId, workspaceId },
@@ -300,27 +375,26 @@ class ReplyClassificationService {
     if (!contact) {
       throw notFoundException("Contact not found")
     }
-    const enrollment = await this.outreachEnrollment(workspaceId, contactId, db)
+    const enrollment = await this.outreachEnrollment(
+      workspaceId,
+      contactId,
+      db,
+      props.sequenceId ?? undefined,
+    )
+    if (props.sequenceId && !enrollment) {
+      throw notFoundException(
+        "The contact is not in that sequence, or it has no Outreach pipeline",
+      )
+    }
     // A rule class only matters to outreach: an out-of-office from a contact
     // in no outreach sequence is not recorded (no noise per inbound mail).
     if (!(manual || enrollment)) {
       return { classification: null, dealId: null }
     }
 
-    let dealId: string | null = null
-    if (manual && enrollment?.pipelineId && enrollment.stages) {
-      dealId = await this.applyToDeal({
-        workspaceId,
-        contactId,
-        replyClass: replyClass.data as OutreachStageKey,
-        pipelineId: enrollment.pipelineId,
-        stages: enrollment.stages,
-        title: `${contact.fullName ?? contact.email ?? "Contact"} - ${enrollment.sequenceName}`,
-        actorId: props.actorId ?? null,
-      })
-    }
-
-    const [classification] = await db
+    // The row first (probe s228b): a sequence deleted mid-flight fails here,
+    // before any deal moved; the deal the class touched is written after.
+    const [inserted] = await db
       .insert(replyClassificationModel)
       .values({
         id: createId(),
@@ -330,14 +404,56 @@ class ReplyClassificationService {
         source: source.data,
         reason,
         messageId,
-        dealId,
         sequenceId: enrollment?.sequenceId ?? null,
         createdById: props.actorId ?? null,
       })
+      .onConflictDoNothing()
       .returning()
-    if (!classification) {
-      throw new Error("classifyReply: insert returned no row")
+    if (!inserted) {
+      // A concurrent delivery of the same message recorded it first.
+      const existing = messageId
+        ? await this.findByMessage(workspaceId, messageId)
+        : undefined
+      if (!existing) {
+        throw new Error("classifyReply: insert returned no row")
+      }
+      return { classification: existing, dealId: existing.dealId }
     }
+    let classification = inserted
+
+    let dealId: string | null = null
+    if (manual && enrollment?.pipelineId && enrollment.stages) {
+      const pipelineId = enrollment.pipelineId
+      const stages = enrollment.stages
+      dealId = await withContactPipelineLock(
+        { workspaceId, contactId, pipelineId },
+        () =>
+          this.applyToDeal({
+            workspaceId,
+            contactId,
+            replyClass: replyClass.data as OutreachStageKey,
+            pipelineId,
+            stages,
+            title: `${contact.fullName ?? contact.email ?? "Contact"} - ${enrollment.sequenceName}`,
+            actorId: props.actorId ?? null,
+            viewer: props.viewer ?? null,
+          }),
+      )
+      if (dealId) {
+        const [updated] = await db
+          .update(replyClassificationModel)
+          .set({ dealId, updatedAt: new Date() })
+          .where(
+            and(
+              eq(replyClassificationModel.workspaceId, workspaceId),
+              eq(replyClassificationModel.id, inserted.id),
+            ),
+          )
+          .returning()
+        classification = updated ?? { ...inserted, dealId }
+      }
+    }
+
     await emitContactReplyClassified(workspaceId, contactId, {
       classificationId: classification.id,
       class: classification.class,
@@ -365,8 +481,9 @@ class ReplyClassificationService {
     stages: OutreachStages
     title: string
     actorId: string | null
+    viewer: DealViewer | null
   }): Promise<string | null> {
-    const { workspaceId, contactId, pipelineId, actorId } = props
+    const { workspaceId, contactId, pipelineId, actorId, viewer } = props
     const stages = outreachStagesSchema.safeParse(props.stages)
     if (!stages.success) {
       logger.warn(
@@ -376,6 +493,24 @@ class ReplyClassificationService {
       return null
     }
     const stageId = stages.data[props.replyClass]
+    // Skeptic s228b: a stage deleted (or a map pointing elsewhere) since the
+    // pipeline was linked never costs the classification itself.
+    const [stage] = await db
+      .select({ id: pipelineStageModel.id })
+      .from(pipelineStageModel)
+      .where(
+        and(
+          eq(pipelineStageModel.id, stageId),
+          eq(pipelineStageModel.pipelineId, pipelineId),
+        ),
+      )
+    if (!stage) {
+      logger.warn(
+        { workspaceId, pipelineId, stage: props.replyClass },
+        "classifyReply: the mapped outreach stage no longer exists",
+      )
+      return null
+    }
     if (props.replyClass === "notInterested") {
       const open = await dealService.findOpenForContactInPipeline({
         workspaceId,
@@ -390,6 +525,7 @@ class ReplyClassificationService {
         id: open.id,
         stageId,
         actorId,
+        viewer,
       })
       return open.id
     }
@@ -402,6 +538,7 @@ class ReplyClassificationService {
         contactId,
       },
       actorId,
+      viewer,
     })
     if (!created && deal.stageId !== stageId) {
       await dealService.moveStage({
@@ -409,9 +546,24 @@ class ReplyClassificationService {
         id: deal.id,
         stageId,
         actorId,
+        viewer,
       })
     }
     return deal.id
+  }
+
+  private async findByMessage(workspaceId: string, messageId: string) {
+    const [row] = await db
+      .select()
+      .from(replyClassificationModel)
+      .where(
+        and(
+          eq(replyClassificationModel.workspaceId, workspaceId),
+          eq(replyClassificationModel.messageId, messageId),
+        ),
+      )
+      .limit(1)
+    return row
   }
 
   /** The contact's classifications, newest first. */
@@ -420,6 +572,9 @@ class ReplyClassificationService {
     contactId: string
     limit?: number
   }): Promise<ReplyClassificationModel[]> {
+    if (props === null || typeof props !== "object") {
+      throw new TypeError("listByContact: props must be an object")
+    }
     const { workspaceId, contactId } = props
     assertIds("listByContact", { workspaceId, contactId })
     const limit = Math.min(Math.max(props.limit ?? 20, 1), 100)

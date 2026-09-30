@@ -25,6 +25,9 @@ import {
 import { sequenceResource } from "../schema/resource"
 
 const workspaceTokenAuthAPI = workspaceTokenAuthAPIForScope("broadcasts")
+// s228b (skeptic): creating CRM pipeline structure needs the deals scope,
+// not only the sequences' (broadcasts) scope.
+const dealsTokenAuthAPI = workspaceTokenAuthAPIForScope("deals")
 
 export const sequencesPublicRouter = {
   list: workspaceTokenAuthAPI
@@ -123,7 +126,7 @@ export const sequencesPublicRouter = {
       )
     }),
 
-  createOutreachPipeline: workspaceTokenAuthAPI
+  createOutreachPipeline: dealsTokenAuthAPI
     .route({
       method: "POST",
       path: "/v1/sequences/{id}/outreach-pipeline",
@@ -164,7 +167,7 @@ export const sequencesPublicRouter = {
       }),
     ),
 
-  unlinkOutreachPipeline: workspaceTokenAuthAPI
+  unlinkOutreachPipeline: dealsTokenAuthAPI
     .route({
       method: "DELETE",
       path: "/v1/sequences/{id}/outreach-pipeline",

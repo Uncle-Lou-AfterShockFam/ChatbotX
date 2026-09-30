@@ -20,17 +20,3 @@ export const createOutreachPipelineAction = workspaceActionClient
       name: parsedInput.name,
     })
   })
-
-/** s228b: unlink the sequence's Outreach pipeline (it and its deals stay). */
-export const unlinkOutreachPipelineAction = workspaceActionClient
-  .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
-  .action(async (props) => {
-    const {
-      bindArgsParsedInputs: [workspaceId, sequenceId],
-    } = props
-    await replyClassificationService.unlinkOutreachPipeline({
-      workspaceId,
-      sequenceId,
-    })
-    return { ok: true }
-  })

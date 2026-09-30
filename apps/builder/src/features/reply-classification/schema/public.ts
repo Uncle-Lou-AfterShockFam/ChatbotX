@@ -1,4 +1,8 @@
-import { replyClassManualClasses } from "@chatbotx.io/database/partials"
+import {
+  MAX_REPLY_REASON,
+  replyClassManualClasses,
+} from "@chatbotx.io/database/partials"
+import { zodBigintAsString } from "@chatbotx.io/utils"
 import { z } from "zod"
 
 export const classifyReplyPublicRequest = z.object({
@@ -7,9 +11,14 @@ export const classifyReplyPublicRequest = z.object({
   ),
   reason: z
     .string()
-    .max(300)
+    .max(MAX_REPLY_REASON)
     .optional()
     .describe("One line on why (shown with the classification)."),
+  sequenceId: zodBigintAsString()
+    .optional()
+    .describe(
+      "The outreach sequence it is for, when the contact is in several; omitted = the one the contact most recently answered.",
+    ),
 })
 
 const classificationResource = z.object({
@@ -28,6 +37,8 @@ const classificationResource = z.object({
   dealId: z.string().nullable().describe("The deal it opened or moved."),
   createdAt: z.iso.datetime(),
 })
+
+export type ClassificationResource = z.infer<typeof classificationResource>
 
 export const classifyReplyPublicResponse = z.object({
   data: classificationResource,

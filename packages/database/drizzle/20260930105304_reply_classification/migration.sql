@@ -15,7 +15,9 @@ CREATE TABLE "ReplyClassification" (
 --> statement-breakpoint
 ALTER TABLE "Sequence" ADD COLUMN "outreachPipelineId" bigint;--> statement-breakpoint
 ALTER TABLE "Sequence" ADD COLUMN "outreachStages" jsonb;--> statement-breakpoint
+CREATE UNIQUE INDEX "ReplyClassification_workspaceId_messageId_key" ON "ReplyClassification" ("workspaceId","messageId") WHERE "messageId" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "ReplyClassification_workspaceId_contactId_createdAt_idx" ON "ReplyClassification" ("workspaceId","contactId","createdAt");--> statement-breakpoint
+ALTER TABLE "ReplyClassification" ADD CONSTRAINT "ReplyClassification_dealId_Deal_id_fkey" FOREIGN KEY ("dealId") REFERENCES "Deal"("id") ON DELETE SET NULL ON UPDATE CASCADE;--> statement-breakpoint
 ALTER TABLE "ReplyClassification" ADD CONSTRAINT "ReplyClassification_workspaceId_Workspace_id_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
 ALTER TABLE "ReplyClassification" ADD CONSTRAINT "ReplyClassification_contactId_Contact_id_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
 ALTER TABLE "ReplyClassification" ADD CONSTRAINT "ReplyClassification_sequenceId_Sequence_id_fkey" FOREIGN KEY ("sequenceId") REFERENCES "Sequence"("id") ON DELETE SET NULL ON UPDATE CASCADE;--> statement-breakpoint

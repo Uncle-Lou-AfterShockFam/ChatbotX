@@ -6,10 +6,8 @@ import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
 import { useState } from "react"
 import { toast } from "sonner"
-import {
-  createOutreachPipelineAction,
-  unlinkOutreachPipelineAction,
-} from "../actions/outreach-pipeline.action"
+import { createOutreachPipelineAction } from "../actions/create-outreach-pipeline.action"
+import { unlinkOutreachPipelineAction } from "../actions/unlink-outreach-pipeline.action"
 
 /**
  * s228b outreach step 2: the sequence's Outreach pipeline. Classified replies

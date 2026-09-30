@@ -30,6 +30,7 @@ vi.mock("@chatbotx.io/events", async (importOriginal) => {
 const { replyClassificationService } = await import(
   "../../src/reply-classification"
 )
+const { dealService } = await import("../../src/deal/service")
 
 const databaseUrl = requireRealDatabaseUrl()
 
@@ -352,3 +353,211 @@ describe.skipIf(!databaseUrl)("classifyReply", () => {
     }
   })
 })
+
+describe.skipIf(!databaseUrl)("skeptic + probe s228b PR 3 fixes", () => {
+  const manual = (
+    s: { workspaceId: string; contactId: string },
+    cls: "interested" | "maybeLater" | "notInterested",
+    extra: Record<string, unknown> = {},
+  ) =>
+    replyClassificationService.classifyReply({
+      workspaceId: s.workspaceId,
+      contactId: s.contactId,
+      class: cls,
+      source: "manual",
+      ...extra,
+    })
+
+  test("CRITICAL: a member who cannot see a members-only Outreach pipeline cannot open a deal in it", async () => {
+    const s = await seed()
+    const { pipelineId } =
+      await replyClassificationService.createOutreachPipeline({
+        workspaceId: s.workspaceId,
+        sequenceId: s.sequenceId,
+      })
+    await db.execute(
+      sql`UPDATE "Pipeline" SET settings = jsonb_set(settings, '{access}', '"members"') WHERE id = ${pipelineId}`,
+    )
+    await expect(
+      manual(s, "interested", {
+        viewer: { userId: mintId(), permissions: {} },
+      }),
+    ).rejects.toMatchObject({ httpStatusCode: 404 })
+    expect(await deals(s.workspaceId)).toEqual([])
+    // No viewer (a workspace token, a worker) is unscoped, like the deal API.
+    await expect(manual(s, "interested")).resolves.toMatchObject({
+      dealId: expect.any(String),
+    })
+  })
+
+  test("HIGH: one classification per message - sequential and concurrent redeliveries record and announce it once", async () => {
+    emitted.mockClear()
+    const s = await seed()
+    await replyClassificationService.createOutreachPipeline({
+      workspaceId: s.workspaceId,
+      sequenceId: s.sequenceId,
+    })
+    const rule = () =>
+      replyClassificationService.classifyReply({
+        workspaceId: s.workspaceId,
+        contactId: s.contactId,
+        class: "ooo",
+        source: "rule",
+        messageId: "msg-1",
+      })
+    const first = await rule()
+    const again = await rule()
+    expect(again.classification?.id).toBe(first.classification?.id)
+    await Promise.all(Array.from({ length: 10 }, () => rule()))
+    const rows = await db.execute(
+      sql`SELECT id FROM "ReplyClassification" WHERE "workspaceId" = ${s.workspaceId}`,
+    )
+    expect(rows.rows).toHaveLength(1)
+    expect(
+      emitted.mock.calls.filter(([n]) => n === "emitContactReplyClassified"),
+    ).toHaveLength(1)
+  })
+
+  test("sequenceId names the outreach sequence; one the contact is not in (or without a pipeline) is a 404", async () => {
+    const s = await seed()
+    await replyClassificationService.createOutreachPipeline({
+      workspaceId: s.workspaceId,
+      sequenceId: s.sequenceId,
+    })
+    await expect(
+      manual(s, "maybeLater", { sequenceId: s.sequenceId }),
+    ).resolves.toMatchObject({ classification: { sequenceId: s.sequenceId } })
+    await expect(
+      manual(s, "maybeLater", { sequenceId: mintId() }),
+    ).rejects.toMatchObject({ httpStatusCode: 404 })
+  })
+
+  test("probe V3: control characters are stripped, never a 500; a 19-digit id past bigint max is a 422", async () => {
+    const s = await seed()
+    const r = await manual(s, "interested", {
+      reason: "yes\u0000 please\u0007",
+    })
+    expect(r.classification?.reason).toBe("yes please")
+    await expect(
+      manual(
+        { workspaceId: s.workspaceId, contactId: "9999999999999999999" },
+        "interested",
+      ),
+    ).rejects.toMatchObject({ httpStatusCode: 422 })
+    await expect(
+      replyClassificationService.createOutreachPipeline({
+        workspaceId: s.workspaceId,
+        sequenceId: s.sequenceId,
+        name: 5 as never,
+      }),
+    ).rejects.toMatchObject({ httpStatusCode: 422 })
+    await expect(
+      replyClassificationService.listByContact(null as never),
+    ).rejects.toThrow(TypeError)
+  })
+
+  test("a deleted mapped stage never costs the classification: recorded, no deal", async () => {
+    const s = await seed()
+    const { stages } = await replyClassificationService.createOutreachPipeline({
+      workspaceId: s.workspaceId,
+      sequenceId: s.sequenceId,
+    })
+    await db.execute(
+      sql`DELETE FROM "PipelineStage" WHERE id = ${stages.interested}`,
+    )
+    const r = await manual(s, "interested")
+    expect(r.classification).toMatchObject({
+      class: "interested",
+      dealId: null,
+    })
+    expect(await deals(s.workspaceId)).toEqual([])
+  })
+
+  test("probe V1/V2: mixed concurrent classifications of one contact leave at most ONE open deal, its status matching its stage (40 runs)", async () => {
+    const order: Array<"interested" | "maybeLater" | "notInterested"> = [
+      "maybeLater",
+      "notInterested",
+      "interested",
+      "interested",
+    ]
+    for (let i = 0; i < 40; i++) {
+      const s = await seed()
+      const { stages } =
+        await replyClassificationService.createOutreachPipeline({
+          workspaceId: s.workspaceId,
+          sequenceId: s.sequenceId,
+        })
+      await Promise.allSettled(order.map((cls) => manual(s, cls)))
+      const rows = await deals(s.workspaceId)
+      expect(
+        rows.filter((d) => d.status === "open").length,
+      ).toBeLessThanOrEqual(1)
+      for (const d of rows) {
+        expect(d.stageId === stages.notInterested).toBe(d.status === "lost")
+      }
+    }
+  })
+})
+
+describe.skipIf(!databaseUrl)(
+  "probe s228b V1 seam: the per-contact lock",
+  () => {
+    test("a classification paused between its create-or-find and its move never lets two others leave a second open deal", async () => {
+      const s = await seed()
+      await replyClassificationService.createOutreachPipeline({
+        workspaceId: s.workspaceId,
+        sequenceId: s.sequenceId,
+      })
+      await replyClassificationService.classifyReply({
+        workspaceId: s.workspaceId,
+        contactId: s.contactId,
+        class: "interested",
+        source: "manual",
+      })
+      const original = dealService.createUnlessOpen.bind(dealService)
+      let release: () => void = () => undefined
+      let paused: () => void = () => undefined
+      const isPaused = new Promise<void>((r) => {
+        paused = r
+      })
+      const gate = new Promise<void>((r) => {
+        release = r
+      })
+      let first = true
+      const spy = vi
+        .spyOn(dealService, "createUnlessOpen")
+        .mockImplementation(async (props) => {
+          const out = await original(props)
+          if (first) {
+            first = false
+            paused()
+            await gate
+          }
+          return out
+        })
+      try {
+        const run = (cls: "interested" | "maybeLater" | "notInterested") =>
+          replyClassificationService.classifyReply({
+            workspaceId: s.workspaceId,
+            contactId: s.contactId,
+            class: cls,
+            source: "manual",
+          })
+        const a = run("maybeLater")
+        await isPaused
+        const b = run("notInterested")
+        await new Promise((r) => setTimeout(r, 300))
+        const c = run("interested")
+        await new Promise((r) => setTimeout(r, 300))
+        release()
+        await Promise.allSettled([a, b, c])
+      } finally {
+        spy.mockRestore()
+      }
+      const open = (await deals(s.workspaceId)).filter(
+        (d) => d.status === "open",
+      )
+      expect(open.length).toBeLessThanOrEqual(1)
+    })
+  },
+)

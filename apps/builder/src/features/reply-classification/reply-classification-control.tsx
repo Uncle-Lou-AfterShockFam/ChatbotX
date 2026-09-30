@@ -7,19 +7,9 @@ import { useTranslations } from "next-intl"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { useWorkspaceId } from "@/hooks/routing"
-import {
-  classifyReplyAction,
-  listReplyClassificationsAction,
-} from "./actions/reply-classification.action"
-
-type Classification = {
-  id: string
-  class: string
-  source: string
-  reason: string | null
-  dealId: string | null
-  createdAt: string
-}
+import { classifyReplyAction } from "./actions/classify-reply.action"
+import { listReplyClassificationsAction } from "./actions/list-reply-classifications.action"
+import type { ClassificationResource } from "./schema/public"
 
 const MANUAL: ReplyClassManual[] = ["interested", "maybeLater", "notInterested"]
 
@@ -35,7 +25,7 @@ export function ReplyClassificationControl({
 }) {
   const t = useTranslations()
   const workspaceId = useWorkspaceId()
-  const [latest, setLatest] = useState<Classification | null>(null)
+  const [latest, setLatest] = useState<ClassificationResource | null>(null)
   const [pending, setPending] = useState<ReplyClassManual | null>(null)
 
   useEffect(() => {
