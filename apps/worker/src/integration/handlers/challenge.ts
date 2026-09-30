@@ -85,9 +85,9 @@ export async function runChallenge(
       triggerMessageId: messageId,
       triggerMessageCreatedAt: messageCreatedAt,
       // Keyed on the REPLY, not the job: a retry of it reuses what its first
-      // attempt made (stepRunRef). Not job.id: the webchat enqueue has no
-      // jobId, so its id is a BullMQ counter that recycles. It has no
-      // messageId either: no key, as before (a keyed step refuses to run).
+      // attempt made (stepRunRef). Every enqueuer (webhook channels, webchat)
+      // passes messageId; a payload without one gets no key, and a keyed
+      // step refuses to run.
       flowExecutionKey: messageId
         ? `step-challenge-${conversation.id}-${messageId}`
         : undefined,

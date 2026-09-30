@@ -464,6 +464,81 @@ describe("handleCreateWebchatMessage", () => {
     })
   })
 
+  describe("pending challenge (s230a)", () => {
+    const challenge = {
+      type: "step",
+      data: { flowId: "flow-1", nodeId: "node-1", stepId: "step-1" },
+    }
+    const send = (text: string) =>
+      handleCreateWebchatMessage({
+        parsedInput: {
+          text,
+          workspaceId: "1",
+          webchatId: "webchat-1",
+          guestConversationId: "1:0f1e2d3c-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+          guestSecret: GUEST_SECRET,
+        },
+      })
+    const challengeCalls = () =>
+      mockIntegrationQueueAdd.mock.calls.filter(
+        ([name]) => name === "runChallenge",
+      )
+
+    beforeEach(() => {
+      mockConversationFindBy.mockResolvedValue({
+        ...conversation,
+        additionalAttributes: { challenge },
+      })
+    })
+
+    test("keys the challenge run on the reply: ids, messageId, createdAt and a per-message jobId", async () => {
+      await send("my answer")
+
+      const messageInput = mockRepositoryCreate.mock.calls[0]?.[0] as {
+        createdAt: Date
+      }
+      expect(challengeCalls()).toEqual([
+        [
+          "runChallenge",
+          {
+            type: "runChallenge",
+            data: {
+              conversationId: "conv-1",
+              contactInboxId: "ci-1",
+              messageId: "msg-1",
+              messageCreatedAt: messageInput.createdAt,
+              challenge,
+            },
+          },
+          { jobId: "step-challenge-conv-1-msg-1" },
+        ],
+      ])
+      expect(mockAutomatedResponseEnqueue).not.toHaveBeenCalled()
+    })
+
+    test("a second reply is its own job, never deduplicated into the first", async () => {
+      mockRepositoryCreate
+        .mockImplementationOnce((input) =>
+          Promise.resolve({ id: "msg-1", ...input, sourceId: null }),
+        )
+        .mockImplementationOnce((input) =>
+          Promise.resolve({ id: "msg-2", ...input, sourceId: null }),
+        )
+
+      await send("first")
+      await send("second")
+
+      const opts = challengeCalls().map(([, , options]) => options)
+      expect(opts).toEqual([
+        { jobId: "step-challenge-conv-1-msg-1" },
+        { jobId: "step-challenge-conv-1-msg-2" },
+      ])
+      for (const o of opts) {
+        expect(o).not.toHaveProperty("deduplication")
+      }
+    })
+  })
+
   test("enqueues webchat postbacks through flow action debounce", async () => {
     await handleCreateWebchatMessage({
       parsedInput: {

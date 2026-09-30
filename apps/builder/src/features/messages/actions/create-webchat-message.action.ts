@@ -374,16 +374,18 @@ export async function handleCreateWebchatMessage({
           {
             type: IntegrationJobAction.runChallenge,
             data: {
-              conversationId: conversation,
-              contactInboxId: contactInbox,
-              challenge: additionalAttributes?.challenge,
+              conversationId: conversation.id,
+              contactInboxId: contactInbox.id,
+              messageId: newMessage.id,
+              messageCreatedAt: newMessage.createdAt,
+              challenge: additionalAttributes.challenge,
             },
           },
-          {
-            deduplication: {
-              id: `conversation-${conversation.id}-challenge`,
-            },
-          },
+          // One job per reply, as on the webhook channels (integration
+          // worker): the reply keys the run (step-challenge-<conv>-<msg>),
+          // and a second reply is its own job, not dropped by a per-
+          // conversation dedup. The ask step claims the challenge atomically.
+          { jobId: `step-challenge-${conversation.id}-${newMessage.id}` },
         ),
       )
     } else if (
