@@ -30,7 +30,7 @@ export const GeminiAIManage = ({ promises }: GeminiAIManageProps) => {
     },
   )
 
-  const isConnected = Boolean(integrationGemini?.auth)
+  const isConnected = Boolean(integrationGemini?.isConnected)
 
   return (
     <AiIntegrationConnect

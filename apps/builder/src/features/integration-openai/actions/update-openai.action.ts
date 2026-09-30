@@ -17,7 +17,13 @@ export const updateIntegrationOpenAIAction = workspaceActionClient
       parsedInput,
     } = props
 
-    return await updateIntegrationOpenAI({ workspaceId, id }, parsedInput)
+    // The row carries the plaintext API key in `auth`; an action result is
+    // serialized to the browser, so return only what the switch reads.
+    const { autoReply } = await updateIntegrationOpenAI(
+      { workspaceId, id },
+      parsedInput,
+    )
+    return { autoReply }
   })
 
 export const updateIntegrationOpenAI = async (

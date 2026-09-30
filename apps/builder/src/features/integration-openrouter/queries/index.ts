@@ -1,9 +1,16 @@
+import "server-only"
+
 import { integrationOpenRouterService } from "@chatbotx.io/business"
-import type { IntegrationOpenrouterResource } from "../schema/resource"
+import {
+  type AiIntegrationSummary,
+  toAiIntegrationSummary,
+} from "@/lib/ai-integration-summary"
 
 export const findIntegrationOpenRouter = async ({
   workspaceId,
 }: {
   workspaceId: string
-}): Promise<IntegrationOpenrouterResource | null> =>
-  (await integrationOpenRouterService.findByWorkspaceId(workspaceId)) ?? null
+}): Promise<AiIntegrationSummary | null> =>
+  toAiIntegrationSummary(
+    await integrationOpenRouterService.findByWorkspaceId(workspaceId),
+  )

@@ -30,7 +30,7 @@ export const DeepSeekConnect = ({ promises }: DeepSeekAIManageProps) => {
     },
   )
 
-  const isConnected = Boolean(integrationDeepseek?.auth)
+  const isConnected = Boolean(integrationDeepseek?.isConnected)
 
   return (
     <AiIntegrationConnect

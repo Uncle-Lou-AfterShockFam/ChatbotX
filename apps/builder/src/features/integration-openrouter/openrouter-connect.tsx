@@ -30,7 +30,7 @@ export const OpenRouterConnect = ({ promises }: OpenRouterConnectProps) => {
     },
   )
 
-  const isConnected = Boolean(integrationOpenrouter?.auth)
+  const isConnected = Boolean(integrationOpenrouter?.isConnected)
 
   return (
     <AiIntegrationConnect
