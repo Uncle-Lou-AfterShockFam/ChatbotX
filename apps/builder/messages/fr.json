@@ -7726,7 +7726,20 @@
       "format": "Format",
       "formatHtml": "HTML (newsletter)",
       "formatText": "Texte brut (message personnel)",
-      "formatHint": "Le texte brut n'a ni pixel d'ouverture ni liens suivis ; dans une séquence, chaque étape en texte brut répond dans un seul fil sous la première."
+      "formatHint": "Le texte brut n'a ni pixel d'ouverture ni liens suivis ; dans une séquence, chaque étape en texte brut répond dans un seul fil sous la première.",
+      "thread": "Fil",
+      "threadHint": "À quel e-mail précédent de cette ligne cette étape répond. Seuls les e-mails envoyés ou reçus après le lancement de cette fonctionnalité comptent.",
+      "threadDefault": "Par défaut (le texte brut dans une séquence répond à l'étape précédente)",
+      "threadPrevious": "E-mail précédent de cette séquence",
+      "threadCampaign": "Une campagne précédente",
+      "threadLatest": "Dernier e-mail avec ce contact (envoyé ou reçu)",
+      "threadNone": "Démarrer un nouveau fil",
+      "threadCampaignPick": "Campagne",
+      "threadCampaignSequence": "Séquence : {name}",
+      "threadCampaignBroadcast": "Diffusion : {name}",
+      "onNoThread": "S'il n'y a pas d'e-mail précédent",
+      "onNoThreadNew": "Démarrer un nouveau fil",
+      "onNoThreadStop": "Ne pas envoyer et terminer la séquence pour ce contact"
     }
   },
   "emailSuppression": {

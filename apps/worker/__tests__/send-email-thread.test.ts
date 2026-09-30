@@ -1,9 +1,12 @@
 // @vitest-environment node
 import { describe, expect, test, vi } from "vitest"
 
-vi.mock("@chatbotx.io/business/email-thread", () => ({
-  emailThreadService: { find: vi.fn() },
-}))
+vi.mock("@chatbotx.io/business/email-thread", async () => {
+  const actual = await vi.importActual<
+    typeof import("@chatbotx.io/business/email-thread")
+  >("@chatbotx.io/business/email-thread")
+  return { isCitableMsgId: actual.isCitableMsgId, emailThreadMailService: {} }
+})
 const { ContentError } = vi.hoisted(() => ({
   ContentError: class extends Error {},
 }))
@@ -20,8 +23,11 @@ vi.mock("../src/integration/handlers/send-email-line", () => ({
 }))
 
 const {
+  broadcastIdOf,
+  citeParent,
   MESSAGE_KEY,
   mintMessageKey,
+  threadModeOf,
   replySubject,
   sequenceIdOf,
   sequenceSendIdOf,
@@ -98,5 +104,79 @@ describe("send-email-thread (s225b)", () => {
       expect(r.length).toBeLessThanOrEqual(200)
     }
     expect(replySubject("a".repeat(196))).toBe(`Re: ${"a".repeat(196)}`)
+  })
+
+  test("threadModeOf: unset keeps s225b (text in a sequence = previous, else none); a set mode wins", () => {
+    expect(threadModeOf({}, "text", { sequenceId: "5" })).toBe("previous")
+    expect(threadModeOf({}, "html", { sequenceId: "5" })).toBe("none")
+    expect(threadModeOf({}, "text", { flowId: "9" })).toBe("none")
+    expect(threadModeOf({ threadMode: "latest" }, "html", {})).toBe("latest")
+  })
+
+  test("broadcastIdOf reads only a real broadcast id", () => {
+    const meta = (broadcastId: unknown) =>
+      ({ type: "broadcast", broadcastId }) as never
+    expect(broadcastIdOf(meta("42"))).toBe("42")
+    expect(broadcastIdOf(meta(42))).toBe("42")
+    for (const junk of ["", "b-1", null, undefined, "1".repeat(20)]) {
+      expect(broadcastIdOf(meta(junk))).toBeUndefined()
+    }
+    expect(
+      broadcastIdOf({ type: "sequenceSchedule", broadcastId: "42" } as never),
+    ).toBeUndefined()
+  })
+
+  test("citeParent: the parent's parents, then the parent itself (key bare, foreign id bracketed), oldest first", () => {
+    expect(
+      citeParent({
+        direction: "outgoing",
+        messageKey: "bt.two-0000001",
+        messageId: null,
+        parents: ["bt.root-000001", "<x@y.example>"],
+      }),
+    ).toEqual(["bt.root-000001", "<x@y.example>", "bt.two-0000001"])
+    expect(
+      citeParent({
+        direction: "incoming",
+        messageKey: null,
+        messageId: "<own@y.example>",
+        parents: ["<bt.root-000001@a.example>"],
+      }),
+    ).toEqual(["<bt.root-000001@a.example>", "<own@y.example>"])
+  })
+
+  test("citeParent keeps the TRUE root of a mixed two-way thread past the cap (skeptic s226b)", () => {
+    // root key, then 24 alternating replies/follow-ups
+    const parents = ["bt.root-000001"]
+    for (let i = 0; i < 24; i++) {
+      parents.push(i % 2 ? `bt.f${i}-0000001` : `<r${i}@y.example>`)
+    }
+    const chain = citeParent({
+      direction: "incoming",
+      messageKey: null,
+      messageId: "<newest@y.example>",
+      parents,
+    })
+    expect(chain).toHaveLength(20)
+    expect(chain[0]).toBe("bt.root-000001")
+    expect(chain.at(-1)).toBe("<newest@y.example>")
+  })
+
+  test("citeParent fails closed on anything the line would refuse", () => {
+    for (const bad of [
+      { messageKey: "x@evil.example", parents: [] },
+      { messageKey: "bt.ok-0000001", parents: ["<a@b>\r\nBcc: x@y"] },
+      { messageKey: "bt.ok-0000001", parents: ["not a key"] },
+      { messageKey: "bt.ok-0000001", parents: ["bt.ok-0000001"] },
+      { messageKey: null, parents: [] },
+    ]) {
+      expect(() =>
+        citeParent({
+          direction: "outgoing",
+          messageId: null,
+          ...bad,
+        } as never),
+      ).toThrow(ContentError)
+    }
   })
 })

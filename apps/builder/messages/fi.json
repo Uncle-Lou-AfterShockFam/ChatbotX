@@ -7726,7 +7726,20 @@
       "format": "Muoto",
       "formatHtml": "HTML (uutiskirje)",
       "formatText": "Pelkkä teksti (henkilökohtainen viesti)",
-      "formatHint": "Pelkässä tekstissä ei ole avauspikseliä eikä seurattuja linkkejä; sarjassa jokainen tekstivaihe vastaa samassa ketjussa ensimmäisen alle."
+      "formatHint": "Pelkässä tekstissä ei ole avauspikseliä eikä seurattuja linkkejä; sarjassa jokainen tekstivaihe vastaa samassa ketjussa ensimmäisen alle.",
+      "thread": "Ketju",
+      "threadHint": "Mihin tämän linjan aiempaan sähköpostiin tämä vaihe vastaa. Vain tämän ominaisuuden julkaisun jälkeen lähetetyt tai vastaanotetut viestit lasketaan.",
+      "threadDefault": "Oletus (pelkkä teksti sekvenssissä vastaa edelliseen vaiheeseen)",
+      "threadPrevious": "Tämän sekvenssin edellinen sähköposti",
+      "threadCampaign": "Aiempi kampanja",
+      "threadLatest": "Viimeisin sähköposti tämän yhteystiedon kanssa (lähetetty tai vastaanotettu)",
+      "threadNone": "Aloita uusi ketju",
+      "threadCampaignPick": "Kampanja",
+      "threadCampaignSequence": "Sekvenssi: {name}",
+      "threadCampaignBroadcast": "Lähetys: {name}",
+      "onNoThread": "Jos aiempaa sähköpostia ei ole",
+      "onNoThreadNew": "Aloita uusi ketju",
+      "onNoThreadStop": "Älä lähetä ja lopeta sekvenssi tälle yhteystiedolle"
     }
   },
   "emailSuppression": {

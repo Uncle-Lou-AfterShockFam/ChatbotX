@@ -7726,7 +7726,20 @@
       "format": "Format",
       "formatHtml": "HTML (buletin)",
       "formatText": "Teks biasa (pesan pribadi)",
-      "formatHint": "Teks biasa tidak memiliki piksel pembukaan atau tautan terlacak; dalam urutan, setiap langkah teks membalas dalam satu utas di bawah yang pertama."
+      "formatHint": "Teks biasa tidak memiliki piksel pembukaan atau tautan terlacak; dalam urutan, setiap langkah teks membalas dalam satu utas di bawah yang pertama.",
+      "thread": "Utas",
+      "threadHint": "Email sebelumnya di jalur ini yang dibalas oleh langkah ini. Hanya email yang dikirim atau diterima setelah fitur ini diluncurkan yang dihitung.",
+      "threadDefault": "Bawaan (teks biasa dalam urutan membalas langkah sebelumnya)",
+      "threadPrevious": "Email sebelumnya dari urutan ini",
+      "threadCampaign": "Kampanye sebelumnya",
+      "threadLatest": "Email terbaru dengan kontak ini (dikirim atau diterima)",
+      "threadNone": "Mulai utas baru",
+      "threadCampaignPick": "Kampanye",
+      "threadCampaignSequence": "Urutan: {name}",
+      "threadCampaignBroadcast": "Siaran: {name}",
+      "onNoThread": "Jika tidak ada email sebelumnya",
+      "onNoThreadNew": "Mulai utas baru",
+      "onNoThreadStop": "Jangan kirim, dan akhiri urutan untuk kontak ini"
     }
   },
   "emailSuppression": {

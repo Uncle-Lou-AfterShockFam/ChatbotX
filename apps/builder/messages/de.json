@@ -7726,7 +7726,20 @@
       "format": "Format",
       "formatHtml": "HTML (Newsletter)",
       "formatText": "Nur Text (persönliche Nachricht)",
-      "formatHint": "Nur-Text hat kein Öffnungspixel und keine getrackten Links; in einer Sequenz antwortet jeder Textschritt im selben Thread unter dem ersten."
+      "formatHint": "Nur-Text hat kein Öffnungspixel und keine getrackten Links; in einer Sequenz antwortet jeder Textschritt im selben Thread unter dem ersten.",
+      "thread": "Verlauf",
+      "threadHint": "Auf welche frühere E-Mail dieser Leitung dieser Schritt antwortet. Es zählen nur E-Mails, die nach dem Start dieser Funktion gesendet oder empfangen wurden.",
+      "threadDefault": "Standard (Nur-Text in einer Sequenz antwortet auf den vorherigen Schritt)",
+      "threadPrevious": "Vorherige E-Mail dieser Sequenz",
+      "threadCampaign": "Eine frühere Kampagne",
+      "threadLatest": "Neueste E-Mail mit diesem Kontakt (gesendet oder empfangen)",
+      "threadNone": "Neuen Verlauf beginnen",
+      "threadCampaignPick": "Kampagne",
+      "threadCampaignSequence": "Sequenz: {name}",
+      "threadCampaignBroadcast": "Broadcast: {name}",
+      "onNoThread": "Wenn es keine frühere E-Mail gibt",
+      "onNoThreadNew": "Neuen Verlauf beginnen",
+      "onNoThreadStop": "Nicht senden und die Sequenz für diesen Kontakt beenden"
     }
   },
   "emailSuppression": {

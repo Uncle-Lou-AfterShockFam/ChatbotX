@@ -7726,7 +7726,20 @@
       "format": "Opmaak",
       "formatHtml": "HTML (nieuwsbrief)",
       "formatText": "Platte tekst (persoonlijk bericht)",
-      "formatHint": "Platte tekst heeft geen openpixel of getrackte links; in een reeks antwoordt elke tekststap in één thread onder de eerste."
+      "formatHint": "Platte tekst heeft geen openpixel of getrackte links; in een reeks antwoordt elke tekststap in één thread onder de eerste.",
+      "thread": "Gesprek",
+      "threadHint": "Op welke eerdere e-mail op deze lijn deze stap antwoordt. Alleen e-mail die na de lancering van deze functie is verzonden of ontvangen telt mee.",
+      "threadDefault": "Standaard (platte tekst in een reeks antwoordt op de vorige stap)",
+      "threadPrevious": "Vorige e-mail van deze reeks",
+      "threadCampaign": "Een eerdere campagne",
+      "threadLatest": "Laatste e-mail met dit contact (verzonden of ontvangen)",
+      "threadNone": "Nieuw gesprek starten",
+      "threadCampaignPick": "Campagne",
+      "threadCampaignSequence": "Reeks: {name}",
+      "threadCampaignBroadcast": "Broadcast: {name}",
+      "onNoThread": "Als er geen eerdere e-mail is",
+      "onNoThreadNew": "Nieuw gesprek starten",
+      "onNoThreadStop": "Niet verzenden en de reeks voor dit contact beëindigen"
     }
   },
   "emailSuppression": {

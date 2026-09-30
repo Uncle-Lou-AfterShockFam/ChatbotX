@@ -7726,7 +7726,20 @@
       "format": "Format",
       "formatHtml": "HTML (newsletter)",
       "formatText": "Plain text (personal note)",
-      "formatHint": "Plain text has no open pixel or tracked links; in a sequence, every plain-text step replies in one thread under the first."
+      "formatHint": "Plain text has no open pixel or tracked links; in a sequence, every plain-text step replies in one thread under the first.",
+      "thread": "Thread",
+      "threadHint": "Which earlier email on this line this step replies under. Only email sent or received after this feature launched counts.",
+      "threadDefault": "Default (plain text in a sequence replies to the previous step)",
+      "threadPrevious": "Previous email of this sequence",
+      "threadCampaign": "An earlier campaign",
+      "threadLatest": "Latest email with this contact (sent or received)",
+      "threadNone": "Start a new thread",
+      "threadCampaignPick": "Campaign",
+      "threadCampaignSequence": "Sequence: {name}",
+      "threadCampaignBroadcast": "Broadcast: {name}",
+      "onNoThread": "If there is no earlier email",
+      "onNoThreadNew": "Start a new thread",
+      "onNoThreadStop": "Don't send, and end the sequence for this contact"
     }
   },
   "emailSuppression": {

@@ -7726,7 +7726,20 @@
       "format": "格式",
       "formatHtml": "HTML(新闻通讯)",
       "formatText": "纯文本(个人便条)",
-      "formatHint": "纯文本不含打开像素或跟踪链接;在序列中,每个纯文本步骤都会在第一封邮件下的同一会话中回复。"
+      "formatHint": "纯文本不含打开像素或跟踪链接;在序列中,每个纯文本步骤都会在第一封邮件下的同一会话中回复。",
+      "thread": "邮件会话",
+      "threadHint": "此步骤回复该线路上的哪一封较早邮件。仅统计此功能上线后发送或收到的邮件。",
+      "threadDefault": "默认(序列中的纯文本回复上一步)",
+      "threadPrevious": "此序列的上一封邮件",
+      "threadCampaign": "较早的活动",
+      "threadLatest": "与此联系人的最新邮件(发送或收到)",
+      "threadNone": "开始新会话",
+      "threadCampaignPick": "活动",
+      "threadCampaignSequence": "序列:{name}",
+      "threadCampaignBroadcast": "群发:{name}",
+      "onNoThread": "如果没有较早的邮件",
+      "onNoThreadNew": "开始新会话",
+      "onNoThreadStop": "不发送,并为此联系人结束序列"
     }
   },
   "emailSuppression": {

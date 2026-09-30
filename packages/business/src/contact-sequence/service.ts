@@ -45,6 +45,7 @@ type RemoveReason =
   | "unsubscribed_via_flow"
   | "company_stopped"
   | "contact_replied"
+  | "no_email_thread"
 
 type RemoveContactSequencesForContactsParams = {
   client?: DrizzleClient

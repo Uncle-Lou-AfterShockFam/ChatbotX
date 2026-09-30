@@ -7726,7 +7726,20 @@
       "format": "格式",
       "formatHtml": "HTML(電子報)",
       "formatText": "純文字(個人便條)",
-      "formatHint": "純文字不含開啟像素或追蹤連結;在序列中,每個純文字步驟都會在第一封郵件下的同一對話中回覆。"
+      "formatHint": "純文字不含開啟像素或追蹤連結;在序列中,每個純文字步驟都會在第一封郵件下的同一對話中回覆。",
+      "thread": "郵件對話",
+      "threadHint": "此步驟回覆該線路上的哪一封較早郵件。僅計算此功能上線後傳送或收到的郵件。",
+      "threadDefault": "預設(序列中的純文字回覆上一步)",
+      "threadPrevious": "此序列的上一封郵件",
+      "threadCampaign": "較早的活動",
+      "threadLatest": "與此聯絡人的最新郵件(傳送或收到)",
+      "threadNone": "開始新對話",
+      "threadCampaignPick": "活動",
+      "threadCampaignSequence": "序列:{name}",
+      "threadCampaignBroadcast": "廣播:{name}",
+      "onNoThread": "如果沒有較早的郵件",
+      "onNoThreadNew": "開始新對話",
+      "onNoThreadStop": "不傳送,並為此聯絡人結束序列"
     }
   },
   "emailSuppression": {

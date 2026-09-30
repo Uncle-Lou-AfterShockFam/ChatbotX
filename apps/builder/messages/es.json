@@ -7726,7 +7726,20 @@
       "format": "Formato",
       "formatHtml": "HTML (boletín)",
       "formatText": "Texto sin formato (nota personal)",
-      "formatHint": "El texto sin formato no tiene píxel de apertura ni enlaces rastreados; en una secuencia, cada paso de texto responde en un solo hilo bajo el primero."
+      "formatHint": "El texto sin formato no tiene píxel de apertura ni enlaces rastreados; en una secuencia, cada paso de texto responde en un solo hilo bajo el primero.",
+      "thread": "Hilo",
+      "threadHint": "A qué correo anterior de esta línea responde este paso. Solo cuenta el correo enviado o recibido después del lanzamiento de esta función.",
+      "threadDefault": "Predeterminado (el texto plano en una secuencia responde al paso anterior)",
+      "threadPrevious": "Correo anterior de esta secuencia",
+      "threadCampaign": "Una campaña anterior",
+      "threadLatest": "Último correo con este contacto (enviado o recibido)",
+      "threadNone": "Iniciar un hilo nuevo",
+      "threadCampaignPick": "Campaña",
+      "threadCampaignSequence": "Secuencia: {name}",
+      "threadCampaignBroadcast": "Difusión: {name}",
+      "onNoThread": "Si no hay un correo anterior",
+      "onNoThreadNew": "Iniciar un hilo nuevo",
+      "onNoThreadStop": "No enviar y terminar la secuencia para este contacto"
     }
   },
   "emailSuppression": {
