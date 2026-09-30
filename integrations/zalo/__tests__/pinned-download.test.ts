@@ -171,10 +171,10 @@ describe("uploadAttachment", () => {
 describe("getMessageAttachmentEntity", () => {
   const attachment = {
     type: "image",
-    payload: { url: "https://zalo-cdn.example.com/in.png" },
+    payload: { url: "https://dl.zdn.vn/in.png" },
   } as MessageAttachment
 
-  test("sends the bearer token through the pinned fetch and stores the bytes", async () => {
+  test("sends the bearer token to a Zalo host through the pinned fetch and stores the bytes", async () => {
     install(
       () =>
         new Response(PNG_1X1, {
@@ -184,7 +184,7 @@ describe("getMessageAttachmentEntity", () => {
 
     const entity = await getMessageAttachmentEntity({ ctx, attachment })
 
-    expect(calls[0]?.url).toBe("https://zalo-cdn.example.com/in.png")
+    expect(calls[0]?.url).toBe("https://dl.zdn.vn/in.png")
     expect(new Headers(calls[0]?.init?.headers).get("authorization")).toBe(
       `Bearer ${ACCESS_TOKEN}`,
     )
@@ -195,6 +195,32 @@ describe("getMessageAttachmentEntity", () => {
       height: 1,
     })
     expect(putObject).toHaveBeenCalledTimes(1)
+  })
+
+  // s229a: the URL comes from an (unsigned) webhook body; the OA token must
+  // never reach a host that is not Zalo's.
+  test.each([
+    "https://attacker.example/in.png",
+    "https://zdn.vn.attacker.example/in.png",
+    "https://evilzdn.vn/in.png",
+    "http://dl.zdn.vn/in.png",
+  ])("never sends the token to %s", async (url) => {
+    install(
+      () =>
+        new Response(PNG_1X1, {
+          headers: { "content-type": "image/png" },
+        }),
+    )
+
+    await getMessageAttachmentEntity({
+      ctx,
+      attachment: { type: "image", payload: { url } } as MessageAttachment,
+    })
+
+    expect(calls[0]?.url).toBe(url)
+    expect(new Headers(calls[0]?.init?.headers).has("authorization")).toBe(
+      false,
+    )
   })
 
   test("a refused webhook URL stores nothing", async () => {
@@ -214,6 +240,29 @@ describe("getMessageAttachmentEntity", () => {
 })
 
 describe("fetchAndReuploadImage", () => {
+  test("the avatar fetch carries the token to a Zalo host only", async () => {
+    install(
+      () =>
+        new Response(PNG_1X1, {
+          headers: { "content-type": "image/png" },
+        }),
+    )
+
+    await fetchAndReuploadImage({
+      ctx,
+      avatarUrl: "https://s120.avatar.zdn.vn/a.jpg",
+    })
+    await fetchAndReuploadImage({
+      ctx,
+      avatarUrl: "https://zalo.example/a.jpg",
+    })
+
+    const tokens = calls.map((call) =>
+      new Headers(call.init?.headers).get("authorization"),
+    )
+    expect(tokens).toEqual([`Bearer ${ACCESS_TOKEN}`, null])
+  })
+
   test("a non-2xx avatar answer is no avatar, as before", async () => {
     install(() => new Response("", { status: 403 }))
 

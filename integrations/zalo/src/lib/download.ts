@@ -20,6 +20,34 @@ export class ZaloAttachmentTooLargeError extends ZaloException {
   }
 }
 
+// Zalo's own domains (API, OAuth, media CDN). The OA access token goes only
+// to these: an attachment or avatar URL arrives in a webhook body (unsigned
+// today) or a profile answer, and a token sent to any other host is leaked.
+const ZALO_TOKEN_HOST_SUFFIXES = ["zalo.me", "zaloapp.com", "zadn.vn", "zdn.vn"]
+
+/** The download headers for `url`: the Bearer token only on an https Zalo host. */
+export const zaloDownloadHeaders = (
+  url: string,
+  accessToken: string,
+  userAgent: string,
+): Record<string, string> => {
+  const headers: Record<string, string> = { "User-Agent": userAgent }
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return headers
+  }
+  const host = parsed.hostname.toLowerCase()
+  const isZaloHost = ZALO_TOKEN_HOST_SUFFIXES.some(
+    (suffix) => host === suffix || host.endsWith(`.${suffix}`),
+  )
+  if (parsed.protocol === "https:" && isZaloHost) {
+    headers.Authorization = `Bearer ${accessToken}`
+  }
+  return headers
+}
+
 /**
  * GETs a flow- or webhook-supplied URL through the pinned outbound fetch
  * (private addresses refused at connect, one download deadline) and reads at

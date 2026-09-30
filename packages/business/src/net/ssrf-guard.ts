@@ -59,53 +59,93 @@ const isBlockedIpv4 = (ip: string): boolean =>
     isIpv4InRange(ip, range, prefixLength),
   )
 
-// IPv4-mapped IPv6 (::ffff:0:0/96) and NAT64 (64:ff9b::/96) embed an IPv4
-// address in the last 32 bits. Node's URL parser always canonicalizes these
-// to pure hex groups (e.g. "::ffff:127.0.0.1" -> "::ffff:7f00:1"), so string
-// literals like "::ffff:169.254.169.254" never actually match anything;
-// extract the embedded IPv4 and re-check it against the same IPv4 blocklist.
-const extractEmbeddedIpv4 = (normalized: string): string | null => {
-  const groups = normalized.split(":")
-  const last = groups.at(-1)
-  const secondLast = groups.at(-2)
-  if (!(last && secondLast) || last.length > 4 || secondLast.length > 4) {
+// IPv6 is judged on its 128-bit value, never on its text: one address has
+// many spellings (zero-padded groups, "::" anywhere, a dotted IPv4 tail,
+// uppercase), and a prefix test on one spelling misses the others.
+const IPV6_GROUPS = 8
+
+/** The address as a 128-bit integer; null when it is not an IPv6 literal. */
+const ipv6ToBigInt = (ip: string): bigint | null => {
+  let canonical: string
+  try {
+    // WHATWG host parsing canonicalizes: lowercase, compressed, a dotted
+    // IPv4 tail rewritten as two hex groups. It refuses zone ids ("%eth0").
+    canonical = new URL(`http://[${ip}]`).hostname.slice(1, -1)
+  } catch {
     return null
   }
-  const highBits = Number.parseInt(secondLast || "0", 16)
-  const lowBits = Number.parseInt(last, 16)
-  if (Number.isNaN(highBits) || Number.isNaN(lowBits)) {
+  const [head = "", tail] = canonical.split("::")
+  const headGroups = head === "" ? [] : head.split(":")
+  const tailGroups = tail === undefined || tail === "" ? [] : tail.split(":")
+  const groups =
+    tail === undefined
+      ? headGroups
+      : [
+          ...headGroups,
+          ...Array.from(
+            { length: IPV6_GROUPS - headGroups.length - tailGroups.length },
+            () => "0",
+          ),
+          ...tailGroups,
+        ]
+  if (groups.length !== IPV6_GROUPS) {
     return null
   }
-  return [
-    Math.floor(highBits / 256) % 256,
-    highBits % 256,
-    Math.floor(lowBits / 256) % 256,
-    lowBits % 256,
-  ].join(".")
+  return groups.reduce(
+    (acc, group) => acc * 0x1_00_00n + BigInt(Number.parseInt(group, 16)),
+    0n,
+  )
 }
 
+const ipv6Cidr = (range: string, prefixLength: number) => {
+  const base = ipv6ToBigInt(range)
+  if (base === null) {
+    throw new Error(`Invalid IPv6 range ${range}`)
+  }
+  const hostSize = 2n ** BigInt(128 - prefixLength)
+  return (value: bigint) => value / hostSize === base / hostSize
+}
+
+// Never a public unicast destination (IANA special-purpose registry).
+const BLOCKED_IPV6_RANGES = [
+  ipv6Cidr("::", 96), // unspecified, loopback, deprecated IPv4-compatible
+  ipv6Cidr("64:ff9b:1::", 48), // local-use NAT64
+  ipv6Cidr("100::", 64), // discard-only
+  ipv6Cidr("2001::", 23), // IETF protocol assignments (Teredo, ORCHID, ...)
+  ipv6Cidr("2001:db8::", 32), // documentation
+  ipv6Cidr("3fff::", 20), // documentation
+  ipv6Cidr("5f00::", 16), // SRv6 SIDs
+  ipv6Cidr("fc00::", 7), // unique local
+  ipv6Cidr("fe80::", 10), // link-local
+  ipv6Cidr("fec0::", 10), // deprecated site-local
+  ipv6Cidr("ff00::", 8), // multicast
+]
+
+const intToIpv4 = (value: bigint): string =>
+  [3n, 2n, 1n, 0n]
+    .map((octet) => Number((value / 256n ** octet) % 256n))
+    .join(".")
+
+// Forms that carry an IPv4 address: judged by that address, so a public one
+// passes and a private one is blocked. [range, where the IPv4 sits]
+const EMBEDDED_IPV4_RANGES: [(value: bigint) => boolean, bigint][] = [
+  [ipv6Cidr("::ffff:0:0", 96), 0n], // IPv4-mapped
+  [ipv6Cidr("::ffff:0:0:0", 96), 0n], // IPv4-translated
+  [ipv6Cidr("64:ff9b::", 96), 0n], // NAT64
+  [ipv6Cidr("2002::", 16), 80n], // 6to4: bits 16-47
+]
+
 const isBlockedIpv6 = (ip: string): boolean => {
-  const normalized = ip.toLowerCase()
-  if (
-    normalized === "::1" ||
-    normalized === "::" ||
-    normalized.startsWith("fe80:") ||
-    normalized.startsWith("fc") ||
-    normalized.startsWith("fd")
-  ) {
+  const value = ipv6ToBigInt(ip)
+  if (value === null) {
     return true
   }
-
-  if (
-    normalized.startsWith("::ffff:") ||
-    normalized.startsWith("0:0:0:0:0:ffff:") ||
-    normalized.startsWith("64:ff9b::")
-  ) {
-    const embeddedIpv4 = extractEmbeddedIpv4(normalized)
-    return embeddedIpv4 === null || isBlockedIpv4(embeddedIpv4)
+  for (const [inRange, shift] of EMBEDDED_IPV4_RANGES) {
+    if (inRange(value)) {
+      return isBlockedIpv4(intToIpv4((value / 2n ** shift) % 2n ** 32n))
+    }
   }
-
-  return false
+  return BLOCKED_IPV6_RANGES.some((inRange) => inRange(value))
 }
 
 /**

@@ -6,7 +6,7 @@ import {
 import { createId } from "@chatbotx.io/utils"
 import imageSize from "image-size"
 import { ZALO_API_ENDPOINTS } from "../constants"
-import { readZaloDownload } from "../lib/download"
+import { readZaloDownload, zaloDownloadHeaders } from "../lib/download"
 import { handleZaloError, ZaloException } from "../lib/exception"
 import { ZaloHttpClient } from "../lib/http-client"
 import type { ZaloAuthValue } from "../schema/definition"
@@ -48,10 +48,11 @@ export const getMessageAttachmentEntity = ({
 
     const { response, bytes } = await readZaloDownload(
       attachment.payload.url,
-      {
-        Authorization: `Bearer ${ctx.auth.tokens.accessToken}`,
-        "User-Agent": "Mozilla/5.0 (compatible; ChatbotX/1.0)",
-      },
+      zaloDownloadHeaders(
+        attachment.payload.url,
+        ctx.auth.tokens.accessToken,
+        "Mozilla/5.0 (compatible; ChatbotX/1.0)",
+      ),
       "attachment",
     )
 
