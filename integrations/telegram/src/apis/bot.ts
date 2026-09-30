@@ -161,14 +161,16 @@ export const connect = ({
 export const registerWebhook = ({
   botToken,
   webhookUrl,
+  secretToken,
 }: {
   botToken: string
   webhookUrl: string
+  secretToken: string
 }): Promise<void> =>
   rescue("setWebhook", async () => {
     const client = createTelegramClient(botToken)
     await client.post<TelegramApiResponse<boolean>>("setWebhook", {
-      json: { url: webhookUrl },
+      json: { url: webhookUrl, secret_token: secretToken },
     })
     logger.debug(`Registered Telegram webhook: ${webhookUrl}`)
   })

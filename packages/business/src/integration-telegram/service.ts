@@ -16,6 +16,16 @@ import { connectChannelIntegration } from "../inbox/connect-channel"
 import { inboxService } from "../inbox/service"
 import { workspaceService } from "../workspace"
 
+/**
+ * The secret_token Telegram echoes in X-Telegram-Bot-Api-Secret-Token on
+ * every update (s231a); the webhook refuses any request without it. 256 bits
+ * as hex, inside Telegram's 1-256 [A-Za-z0-9_-] limit.
+ */
+const mintWebhookSecretToken = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("")
+
 const UNIQUE_VIOLATION_CODE = "23505"
 
 class TelegramIntegrationService extends BaseService {
@@ -60,7 +70,10 @@ class TelegramIntegrationService extends BaseService {
     botId: string
     botUsername: string
     botToken: string
-    onConnected: (ctx: { integrationId: string }) => Promise<void>
+    onConnected: (ctx: {
+      integrationId: string
+      webhookSecretToken: string
+    }) => Promise<void>
   }): Promise<{
     workspaceId: string
     createdWorkspace: boolean
@@ -73,9 +86,11 @@ class TelegramIntegrationService extends BaseService {
 
     try {
       return await db.transaction(async (tx) => {
+        const webhookSecretToken = mintWebhookSecretToken()
         const auth = {
           authType: "secretText" as const,
           secretText: botToken,
+          metadata: { webhookSecretToken },
         }
         let createdWorkspace = false
         let effectiveOwnerId = ownerId
@@ -118,7 +133,7 @@ class TelegramIntegrationService extends BaseService {
           },
         })
 
-        await onConnected({ integrationId })
+        await onConnected({ integrationId, webhookSecretToken })
 
         return {
           workspaceId,

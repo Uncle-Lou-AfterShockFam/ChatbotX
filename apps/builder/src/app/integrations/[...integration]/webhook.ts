@@ -376,18 +376,6 @@ const handleTiktokWebhook = async (req: NextRequest) => {
     )
   }
 
-  if (eventType === "authorization.removed") {
-    await db
-      .update(inboxModel)
-      .set({ status: inboxStatuses.enum.disconnected })
-      .where(eq(inboxModel.id, integrationTiktok.inboxId))
-    logger.info(
-      { openId: userOpenId },
-      "TikTok authorization removed — inbox marked disconnected",
-    )
-    return new Response("ok")
-  }
-
   const auth = integrationTiktok.auth as TiktokAuthValue
 
   // Reconstruct request because req.text() already consumed the body
@@ -405,11 +393,25 @@ const handleTiktokWebhook = async (req: NextRequest) => {
   }
 
   try {
+    // handleRequest verifies TikTok-Signature first, so the disconnect below
+    // only runs for a signed event (s231a: it used to run before any check,
+    // letting anyone who knew an open_id disconnect the inbox).
     const result = await integration.handleRequest({
       config: tiktokConfig,
       req: reqWithBody,
       queue: integrationQueue,
     })
+
+    if (eventType === "authorization.removed") {
+      await db
+        .update(inboxModel)
+        .set({ status: inboxStatuses.enum.disconnected })
+        .where(eq(inboxModel.id, integrationTiktok.inboxId))
+      logger.info(
+        { openId: userOpenId },
+        "TikTok authorization removed — inbox marked disconnected",
+      )
+    }
 
     return new Response(result as BodyInit)
   } catch (e: unknown) {

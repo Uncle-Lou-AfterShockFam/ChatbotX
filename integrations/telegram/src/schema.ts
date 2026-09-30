@@ -19,6 +19,7 @@ export type TelegramActions = {
   registerWebhook: (props: {
     botToken: string
     webhookUrl: string
+    secretToken: string
   }) => Promise<void>
 }
 

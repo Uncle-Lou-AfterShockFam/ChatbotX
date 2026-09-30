@@ -187,33 +187,45 @@ describe("tiktok webhook routing", () => {
     expect(tiktokHandleRequest).not.toHaveBeenCalled()
   })
 
-  test("marks the inbox disconnected on authorization.removed without calling the integration", async () => {
-    findIntegrationTiktokByOpenId.mockResolvedValue({
-      auth: {
-        clientId: "id",
-        clientSecret: "secret",
-        redirectUrl: "https://x",
-      },
-      inboxId: "inbox-1",
-      openId: "open-1",
-      workspaceId: "workspace-1",
-    })
-
-    const response = await handleWebhook(
-      "tiktok",
-      asNextRequest(
-        "http://localhost/integrations/tiktok",
-        JSON.stringify({
-          event: "authorization.removed",
-          user_openid: "open-1",
-        }),
-      ),
+  const removedAccount = {
+    auth: {
+      clientId: "id",
+      clientSecret: "secret",
+      redirectUrl: "https://x",
+    },
+    inboxId: "inbox-1",
+    openId: "open-1",
+    workspaceId: "workspace-1",
+  }
+  const removedRequest = () =>
+    asNextRequest(
+      "http://localhost/integrations/tiktok",
+      JSON.stringify({ event: "authorization.removed", user_openid: "open-1" }),
     )
 
+  // s231a: the disconnect runs only after handleRequest verified the
+  // signature; an unsigned authorization.removed changes nothing.
+  test("marks the inbox disconnected on a verified authorization.removed", async () => {
+    findIntegrationTiktokByOpenId.mockResolvedValue(removedAccount)
+
+    const response = await handleWebhook("tiktok", removedRequest())
+
     expect(await response.text()).toBe("ok")
-    expect(tiktokHandleRequest).not.toHaveBeenCalled()
+    expect(tiktokHandleRequest).toHaveBeenCalledOnce()
     expect(dbUpdate).toHaveBeenCalledTimes(1)
     expect(dbUpdateSet).toHaveBeenCalledWith({ status: "disconnected" })
+  })
+
+  test("leaves the inbox alone when authorization.removed fails verification", async () => {
+    findIntegrationTiktokByOpenId.mockResolvedValue(removedAccount)
+    tiktokHandleRequest.mockRejectedValue(
+      new SdkException("Invalid or missing webhook signature", -1, 401),
+    )
+
+    const response = await handleWebhook("tiktok", removedRequest())
+
+    expect(response.status).toBe(401)
+    expect(dbUpdate).not.toHaveBeenCalled()
   })
 })
 
