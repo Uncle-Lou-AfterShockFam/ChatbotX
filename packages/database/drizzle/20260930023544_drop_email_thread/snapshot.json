@@ -1,9 +1,9 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "ccfa240a-88ec-4476-ac66-3f353f4d2bf0",
+  "id": "2522af6c-9213-4ef3-bce1-437ea6be14bc",
   "prevIds": [
-    "c583d5e3-c716-48f0-b7fa-553fea04acca"
+    "ad6f7f4b-2051-47fb-9d0d-3fc8e8e4a84c"
   ],
   "ddl": [
     {
@@ -40580,6 +40580,34 @@
       "method": "btree",
       "concurrently": false,
       "name": "FormSession_workspaceId_formId_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "FormSession"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "workspaceId",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "contactId",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "FormSession_workspaceId_contactId_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "FormSession"
