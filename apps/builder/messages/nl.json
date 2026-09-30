@@ -4479,7 +4479,8 @@
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
-      "invoicePaymentFailed": "Invoice payment failed"
+      "invoicePaymentFailed": "Invoice payment failed",
+      "contactReplyClassified": "Antwoord van contact geclassificeerd"
     },
     "actions": {
       "addTag": "Tag toevoegen",
@@ -4728,7 +4729,13 @@
     "friday": "Vrijdag",
     "saturday": "Zaterdag",
     "sunday": "Zondag",
-    "afterText": "Na"
+    "afterText": "Na",
+    "outreachPipeline": "Outreach-pijplijn",
+    "outreachPipelineDescription": "Geclassificeerde antwoorden openen of verplaatsen een deal in een outreach-pijplijn. Maak er een voor deze reeks.",
+    "outreachPipelineLinked": "Geclassificeerde antwoorden van contacten in deze reeks openen of verplaatsen een deal in de outreach-pijplijn.",
+    "outreachPipelineOpen": "Deals openen",
+    "outreachPipelineUnlink": "Ontkoppelen",
+    "outreachPipelineCreate": "Outreach-pijplijn maken"
   },
   "tools": {
     "title": "Hulpmiddelen",
@@ -7741,5 +7748,19 @@
     "invalidDescription": "Deze link is ongeldig of verlopen.",
     "unavailableTitle": "Niet beschikbaar",
     "unavailableDescription": "Deze link is niet meer beschikbaar."
+  },
+  "replyClassification": {
+    "title": "Antwoord",
+    "none": "Niet geclassificeerd",
+    "saved": "Antwoord geclassificeerd",
+    "savedDeal": "Antwoord geclassificeerd; deal bijgewerkt",
+    "class": {
+      "interested": "Geïnteresseerd",
+      "maybeLater": "Misschien later",
+      "notInterested": "Niet geïnteresseerd",
+      "ooo": "Afwezig",
+      "auto": "Automatisch antwoord",
+      "bounce": "Gebounced"
+    }
   }
 }

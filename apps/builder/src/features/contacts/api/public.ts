@@ -3,6 +3,7 @@ import { contactsInboxesPublicRouter } from "@/features/contact-inboxes/api/publ
 import { contactsNotesPublicRouter } from "@/features/contact-notes/api/public"
 import { contactsSequencesPublicRouter } from "@/features/contact-sequences/api/public"
 import { importPublicRouter } from "@/features/import/api/public"
+import { contactsReplyClassificationPublicRouter } from "@/features/reply-classification/api/public"
 import { contactsBulkPublicRouter } from "./public/bulk"
 import { contactsCompanyPublicRouter } from "./public/company"
 import { contactsCrudPublicRouter } from "./public/crud"
@@ -22,6 +23,7 @@ export const contactsPublicRouter = {
   ...contactsMessagesPublicRouter,
   ...contactsNotesPublicRouter,
   ...contactsSequencesPublicRouter,
+  ...contactsReplyClassificationPublicRouter,
   ...contactsInboxesPublicRouter,
   ...importPublicRouter,
   ...contactsFilterFieldsPublicRouter,

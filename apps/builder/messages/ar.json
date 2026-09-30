@@ -4479,7 +4479,8 @@
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
-      "invoicePaymentFailed": "Invoice payment failed"
+      "invoicePaymentFailed": "Invoice payment failed",
+      "contactReplyClassified": "تم تصنيف رد جهة الاتصال"
     },
     "actions": {
       "addTag": "إضافة وسم",
@@ -4728,7 +4729,13 @@
     "friday": "الجمعة",
     "saturday": "السبت",
     "sunday": "الأحد",
-    "afterText": "بعد"
+    "afterText": "بعد",
+    "outreachPipeline": "خط التواصل",
+    "outreachPipelineDescription": "الردود المصنفة تفتح صفقة أو تنقلها في خط تواصل. أنشئ واحدًا لهذا التسلسل.",
+    "outreachPipelineLinked": "الردود المصنفة لجهات اتصال هذا التسلسل تفتح صفقة أو تنقلها في خط التواصل الخاص به.",
+    "outreachPipelineOpen": "فتح الصفقات",
+    "outreachPipelineUnlink": "إلغاء الربط",
+    "outreachPipelineCreate": "إنشاء خط تواصل"
   },
   "tools": {
     "title": "الأدوات",
@@ -7741,5 +7748,19 @@
     "invalidDescription": "هذا الرابط غير صالح أو منتهي الصلاحية.",
     "unavailableTitle": "غير متاح",
     "unavailableDescription": "هذا الرابط لم يعد متاحًا."
+  },
+  "replyClassification": {
+    "title": "الرد",
+    "none": "غير مصنف",
+    "saved": "تم تصنيف الرد",
+    "savedDeal": "تم تصنيف الرد وتحديث الصفقة",
+    "class": {
+      "interested": "مهتم",
+      "maybeLater": "ربما لاحقًا",
+      "notInterested": "غير مهتم",
+      "ooo": "خارج المكتب",
+      "auto": "رد تلقائي",
+      "bounce": "مرتد"
+    }
   }
 }

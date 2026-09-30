@@ -25,6 +25,7 @@ import { toast } from "sonner"
 import { FlowStoreProvider } from "../flows/provider/flow-store-context"
 import { updateSequenceAction } from "./actions/update-sequence.action"
 import { upsertSequenceStepAction } from "./actions/upsert-sequence-step.action"
+import { OutreachPipelineSetting } from "./components/outreach-pipeline-setting"
 import { SequenceStepCard } from "./components/sequence-step-card"
 
 type SequenceEditorProps = {
@@ -120,7 +121,7 @@ export function SequenceEditor({ sequence, workspaceId }: SequenceEditorProps) {
         </Breadcrumb>
 
         <Card className="mx-auto max-w-6xl border-none py-1 shadow-none">
-          <CardHeader>
+          <CardHeader className="gap-3">
             <div className="flex items-start justify-between gap-4 rounded-lg border px-4 py-3">
               <div className="min-w-0 space-y-1">
                 <Label htmlFor="sequence-stop-on-reply">
@@ -137,6 +138,11 @@ export function SequenceEditor({ sequence, workspaceId }: SequenceEditorProps) {
                 onCheckedChange={handleStopOnReplyChange}
               />
             </div>
+            <OutreachPipelineSetting
+              pipelineId={sequence.outreachPipelineId}
+              sequenceId={sequence.id}
+              workspaceId={workspaceId}
+            />
           </CardHeader>
 
           <CardContent>

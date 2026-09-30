@@ -2,6 +2,7 @@ import { emailTopicAnalyticsService } from "@chatbotx.io/analytics"
 import { apiChannelOutboxService } from "@chatbotx.io/business"
 import { contactSequenceService } from "@chatbotx.io/business/contact-sequence"
 import { emailSuppressionService } from "@chatbotx.io/business/email-suppression"
+import { replyClassificationService } from "@chatbotx.io/business/reply-classification"
 import { parseEmailSuppression } from "@chatbotx.io/database/partials"
 import { logger } from "../../lib/logger"
 import { bulktextVerdictFor } from "./bulktext-verdict"
@@ -77,6 +78,21 @@ export async function settleLineEmailStatus(props: {
           logger.warn(
             { err, workspaceId: props.workspaceId, ref },
             "line email unreachable: ending the outreach enrolments failed",
+          )
+        })
+      // s228b PR 3: the bounce is the contact's reply classification too.
+      await replyClassificationService
+        .classifyReply({
+          workspaceId: props.workspaceId,
+          contactId: props.contactId,
+          class: "bounce",
+          source: "rule",
+          reason: typeof props.error === "string" ? props.error : null,
+        })
+        .catch((err: unknown) => {
+          logger.warn(
+            { err, workspaceId: props.workspaceId, ref },
+            "line email unreachable: recording the bounce classification failed",
           )
         })
     }

@@ -4479,7 +4479,8 @@
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
-      "invoicePaymentFailed": "Invoice payment failed"
+      "invoicePaymentFailed": "Invoice payment failed",
+      "contactReplyClassified": "Balasan kontak diklasifikasi"
     },
     "actions": {
       "addTag": "Tambahkan Tag",
@@ -4728,7 +4729,13 @@
     "friday": "Jumat",
     "saturday": "Sabtu",
     "sunday": "Minggu",
-    "afterText": "Setelah"
+    "afterText": "Setelah",
+    "outreachPipeline": "Pipeline outreach",
+    "outreachPipelineDescription": "Balasan yang diklasifikasi membuka atau memindahkan deal di pipeline outreach. Buat satu untuk urutan ini.",
+    "outreachPipelineLinked": "Balasan terklasifikasi dari kontak urutan ini membuka atau memindahkan deal di pipeline outreach-nya.",
+    "outreachPipelineOpen": "Buka deal",
+    "outreachPipelineUnlink": "Lepas tautan",
+    "outreachPipelineCreate": "Buat pipeline outreach"
   },
   "tools": {
     "title": "Alat",
@@ -7741,5 +7748,19 @@
     "invalidDescription": "Tautan ini tidak valid atau sudah kedaluwarsa.",
     "unavailableTitle": "Tidak tersedia",
     "unavailableDescription": "Tautan ini sudah tidak tersedia."
+  },
+  "replyClassification": {
+    "title": "Balasan",
+    "none": "Belum diklasifikasi",
+    "saved": "Balasan diklasifikasi",
+    "savedDeal": "Balasan diklasifikasi; deal diperbarui",
+    "class": {
+      "interested": "Tertarik",
+      "maybeLater": "Mungkin nanti",
+      "notInterested": "Tidak tertarik",
+      "ooo": "Di luar kantor",
+      "auto": "Balasan otomatis",
+      "bounce": "Terpental"
+    }
   }
 }

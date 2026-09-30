@@ -21,6 +21,7 @@ import {
   invoicePartiallyPaid,
   invoicePaymentFailed,
 } from "./invoice-conditions"
+import { contactReplyClassified } from "./reply-conditions"
 import {
   archived,
   contactReferredANewContact,
@@ -68,6 +69,7 @@ export const allConditions = {
   dealMentioned,
   formSubmitted,
   formAbandoned,
+  contactReplyClassified,
   invoiceCreated,
   invoicePaid,
   invoicePartiallyPaid,

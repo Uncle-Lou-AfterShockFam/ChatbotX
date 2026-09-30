@@ -61,6 +61,7 @@ const EVENT_NAMES = {
   [triggerEventTypes.enum.dealMentioned]: "deal_mentioned",
   [triggerEventTypes.enum.formSubmitted]: "form_submitted",
   [triggerEventTypes.enum.formAbandoned]: "form_abandoned",
+  [triggerEventTypes.enum.contactReplyClassified]: "contact_reply_classified",
   [triggerEventTypes.enum.invoiceCreated]: "invoice_created",
   [triggerEventTypes.enum.invoicePaid]: "invoice_paid",
   [triggerEventTypes.enum.invoicePartiallyPaid]: "invoice_partially_paid",
@@ -359,6 +360,18 @@ const PAYLOAD_BUILDERS = {
       last_field_key: (data.lastFieldKey as string | null) ?? null,
       asked_count: Number(data.askedCount ?? 0),
       conversation_id: (data.conversationId as string | undefined) ?? null,
+    },
+  }),
+  // s228b outreach step 2: the classified answer and what it touched.
+  [triggerEventTypes.enum.contactReplyClassified]: (basePayload, data) => ({
+    ...basePayload,
+    reply: {
+      classification_id: data.classificationId as string,
+      class: data.class as string,
+      source: data.source as string,
+      reason: (data.reason as string | null) ?? null,
+      sequence_id: (data.sequenceId as string | null) ?? null,
+      deal_id: (data.dealId as string | null) ?? null,
     },
   }),
   [triggerEventTypes.enum.invoiceCreated]: buildInvoicePayload,

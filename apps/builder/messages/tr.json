@@ -4479,7 +4479,8 @@
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
-      "invoicePaymentFailed": "Invoice payment failed"
+      "invoicePaymentFailed": "Invoice payment failed",
+      "contactReplyClassified": "Kişi yanıtı sınıflandırıldı"
     },
     "actions": {
       "addTag": "Etiket Ekle",
@@ -4728,7 +4729,13 @@
     "friday": "Cuma",
     "saturday": "Cumartesi",
     "sunday": "Pazar",
-    "afterText": "Sonra"
+    "afterText": "Sonra",
+    "outreachPipeline": "Erişim hattı",
+    "outreachPipelineDescription": "Sınıflandırılan yanıtlar bir erişim hattında fırsat açar veya taşır. Bu dizi için bir tane oluşturun.",
+    "outreachPipelineLinked": "Bu dizinin kişilerinin sınıflandırılan yanıtları kendi erişim hattında fırsat açar veya taşır.",
+    "outreachPipelineOpen": "Fırsatları aç",
+    "outreachPipelineUnlink": "Bağlantıyı kaldır",
+    "outreachPipelineCreate": "Erişim hattı oluştur"
   },
   "tools": {
     "title": "Araçlar",
@@ -7741,5 +7748,19 @@
     "invalidDescription": "Bu bağlantı geçersiz veya süresi dolmuş.",
     "unavailableTitle": "Kullanılamıyor",
     "unavailableDescription": "Bu bağlantı artık kullanılamıyor."
+  },
+  "replyClassification": {
+    "title": "Yanıt",
+    "none": "Sınıflandırılmadı",
+    "saved": "Yanıt sınıflandırıldı",
+    "savedDeal": "Yanıt sınıflandırıldı; fırsat güncellendi",
+    "class": {
+      "interested": "İlgili",
+      "maybeLater": "Belki sonra",
+      "notInterested": "İlgilenmiyor",
+      "ooo": "Ofis dışında",
+      "auto": "Otomatik yanıt",
+      "bounce": "Geri döndü"
+    }
   }
 }

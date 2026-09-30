@@ -5265,7 +5265,13 @@
       "exception": "验证异常",
       "nameExists": "串行名称已存在"
     },
-    "wednesday": "星期三"
+    "wednesday": "星期三",
+    "outreachPipeline": "外联管道",
+    "outreachPipelineDescription": "已分类的回复会在外联管道中创建或移动交易。为此序列创建一个。",
+    "outreachPipelineLinked": "此序列联系人的已分类回复会在其外联管道中创建或移动交易。",
+    "outreachPipelineOpen": "打开交易",
+    "outreachPipelineUnlink": "取消关联",
+    "outreachPipelineCreate": "创建外联管道"
   },
   "settings": {
     "agents": {
@@ -5449,7 +5455,8 @@
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
-      "invoicePaymentFailed": "Invoice payment failed"
+      "invoicePaymentFailed": "Invoice payment failed",
+      "contactReplyClassified": "联系人回复已分类"
     },
     "day": "日",
     "hour": "小时",
@@ -7741,5 +7748,19 @@
     "invalidDescription": "此链接无效或已过期。",
     "unavailableTitle": "不可用",
     "unavailableDescription": "此链接已不可用。"
+  },
+  "replyClassification": {
+    "title": "回复",
+    "none": "未分类",
+    "saved": "已分类回复",
+    "savedDeal": "已分类回复；已更新交易",
+    "class": {
+      "interested": "有兴趣",
+      "maybeLater": "以后再说",
+      "notInterested": "没兴趣",
+      "ooo": "不在办公室",
+      "auto": "自动回复",
+      "bounce": "退信"
+    }
   }
 }

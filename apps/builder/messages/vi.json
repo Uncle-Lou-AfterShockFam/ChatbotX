@@ -4396,7 +4396,8 @@
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
-      "invoicePaymentFailed": "Invoice payment failed"
+      "invoicePaymentFailed": "Invoice payment failed",
+      "contactReplyClassified": "Phản hồi của liên hệ đã được phân loại"
     },
     "actions": {
       "addTag": "Thêm thẻ",
@@ -4764,7 +4765,13 @@
     "saturday": "Thứ Bảy",
     "sunday": "Chủ Nhật",
     "afterText": "Sau",
-    "title": "Chăm sóc"
+    "title": "Chăm sóc",
+    "outreachPipeline": "Quy trình tiếp cận",
+    "outreachPipelineDescription": "Phản hồi đã phân loại sẽ mở hoặc di chuyển giao dịch trong quy trình tiếp cận. Hãy tạo một quy trình cho chuỗi này.",
+    "outreachPipelineLinked": "Phản hồi đã phân loại của các liên hệ trong chuỗi này mở hoặc di chuyển giao dịch trong quy trình tiếp cận của chuỗi.",
+    "outreachPipelineOpen": "Mở giao dịch",
+    "outreachPipelineUnlink": "Hủy liên kết",
+    "outreachPipelineCreate": "Tạo quy trình tiếp cận"
   },
   "tools": {
     "title": "Công cụ",
@@ -7741,5 +7748,19 @@
     "invalidDescription": "Liên kết này không hợp lệ hoặc đã hết hạn.",
     "unavailableTitle": "Không khả dụng",
     "unavailableDescription": "Liên kết này không còn khả dụng."
+  },
+  "replyClassification": {
+    "title": "Phản hồi",
+    "none": "Chưa phân loại",
+    "saved": "Đã phân loại phản hồi",
+    "savedDeal": "Đã phân loại phản hồi; đã cập nhật giao dịch",
+    "class": {
+      "interested": "Quan tâm",
+      "maybeLater": "Để sau",
+      "notInterested": "Không quan tâm",
+      "ooo": "Vắng mặt",
+      "auto": "Tự động trả lời",
+      "bounce": "Bị trả lại"
+    }
   }
 }

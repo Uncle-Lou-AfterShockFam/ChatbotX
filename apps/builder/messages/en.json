@@ -4667,7 +4667,8 @@
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
-      "invoicePaymentFailed": "Invoice payment failed"
+      "invoicePaymentFailed": "Invoice payment failed",
+      "contactReplyClassified": "Contact reply classified"
     },
     "actions": {
       "addTag": "Add Tag",
@@ -4959,7 +4960,13 @@
     "friday": "Friday",
     "saturday": "Saturday",
     "sunday": "Sunday",
-    "afterText": "After"
+    "afterText": "After",
+    "outreachPipeline": "Outreach pipeline",
+    "outreachPipelineDescription": "Classified replies open or move a deal in an Outreach pipeline. Create one for this sequence.",
+    "outreachPipelineLinked": "Classified replies of this sequence's contacts open or move a deal in its Outreach pipeline.",
+    "outreachPipelineOpen": "Open deals",
+    "outreachPipelineUnlink": "Unlink",
+    "outreachPipelineCreate": "Create Outreach pipeline"
   },
   "tools": {
     "title": "Tools",
@@ -7741,5 +7748,19 @@
     "invalidDescription": "This link is invalid or has expired.",
     "unavailableTitle": "Not available",
     "unavailableDescription": "This link is no longer available."
+  },
+  "replyClassification": {
+    "title": "Reply",
+    "none": "Not classified",
+    "saved": "Reply classified",
+    "savedDeal": "Reply classified; deal updated",
+    "class": {
+      "interested": "Interested",
+      "maybeLater": "Maybe later",
+      "notInterested": "Not interested",
+      "ooo": "Out of office",
+      "auto": "Auto-reply",
+      "bounce": "Bounced"
+    }
   }
 }

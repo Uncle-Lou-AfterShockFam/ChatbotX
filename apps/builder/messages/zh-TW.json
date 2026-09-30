@@ -4512,7 +4512,8 @@
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
-      "invoicePaymentFailed": "Invoice payment failed"
+      "invoicePaymentFailed": "Invoice payment failed",
+      "contactReplyClassified": "聯絡人回覆已分類"
     },
     "actions": {
       "addTag": "新增標籤",
@@ -4761,7 +4762,13 @@
     "friday": "週五",
     "saturday": "星期六",
     "sunday": "週日",
-    "afterText": "之後"
+    "afterText": "之後",
+    "outreachPipeline": "外聯管道",
+    "outreachPipelineDescription": "已分類的回覆會在外聯管道中建立或移動交易。為此序列建立一個。",
+    "outreachPipelineLinked": "此序列聯絡人的已分類回覆會在其外聯管道中建立或移動交易。",
+    "outreachPipelineOpen": "開啟交易",
+    "outreachPipelineUnlink": "取消連結",
+    "outreachPipelineCreate": "建立外聯管道"
   },
   "tools": {
     "title": "工具",
@@ -7741,5 +7748,19 @@
     "invalidDescription": "此連結無效或已過期。",
     "unavailableTitle": "無法使用",
     "unavailableDescription": "此連結已無法使用。"
+  },
+  "replyClassification": {
+    "title": "回覆",
+    "none": "未分類",
+    "saved": "已分類回覆",
+    "savedDeal": "已分類回覆；已更新交易",
+    "class": {
+      "interested": "有興趣",
+      "maybeLater": "以後再說",
+      "notInterested": "沒興趣",
+      "ooo": "不在辦公室",
+      "auto": "自動回覆",
+      "bounce": "退信"
+    }
   }
 }

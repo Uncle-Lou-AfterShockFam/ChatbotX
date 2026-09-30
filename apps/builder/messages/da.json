@@ -4479,7 +4479,8 @@
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
-      "invoicePaymentFailed": "Invoice payment failed"
+      "invoicePaymentFailed": "Invoice payment failed",
+      "contactReplyClassified": "Kontaktens svar klassificeret"
     },
     "actions": {
       "addTag": "Tilføj tag",
@@ -4728,7 +4729,13 @@
     "friday": "Friday",
     "saturday": "Saturday",
     "sunday": "Sunday",
-    "afterText": "Efter"
+    "afterText": "Efter",
+    "outreachPipeline": "Outreach-pipeline",
+    "outreachPipelineDescription": "Klassificerede svar åbner eller flytter en handel i en outreach-pipeline. Opret en til denne sekvens.",
+    "outreachPipelineLinked": "Klassificerede svar fra denne sekvens' kontakter åbner eller flytter en handel i dens outreach-pipeline.",
+    "outreachPipelineOpen": "Åbn handler",
+    "outreachPipelineUnlink": "Fjern kobling",
+    "outreachPipelineCreate": "Opret outreach-pipeline"
   },
   "tools": {
     "title": "Værktøjer",
@@ -7741,5 +7748,19 @@
     "invalidDescription": "Linket er ugyldigt eller udløbet.",
     "unavailableTitle": "Ikke tilgængelig",
     "unavailableDescription": "Linket er ikke længere tilgængeligt."
+  },
+  "replyClassification": {
+    "title": "Svar",
+    "none": "Ikke klassificeret",
+    "saved": "Svar klassificeret",
+    "savedDeal": "Svar klassificeret; handel opdateret",
+    "class": {
+      "interested": "Interesseret",
+      "maybeLater": "Måske senere",
+      "notInterested": "Ikke interesseret",
+      "ooo": "Fraværende",
+      "auto": "Autosvar",
+      "bounce": "Afvist"
+    }
   }
 }

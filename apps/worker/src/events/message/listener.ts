@@ -34,6 +34,7 @@ import { messageEventTypeSchema } from "@chatbotx.io/flow-config"
 import { logger } from "../../lib/logger"
 import { handleCompanyStopOnReply } from "./handlers/company-stop-on-reply"
 import { recordProviderErrorLog } from "./handlers/record-provider-error-log"
+import { handleReplyClassificationRule } from "./handlers/reply-classification-rule"
 import { handleSequenceOooPause } from "./handlers/sequence-ooo-pause"
 import { handleSequenceStopOnReply } from "./handlers/sequence-stop-on-reply"
 
@@ -377,6 +378,10 @@ export const messageListeners: Partial<MessageEvenTypeMap> = {
     {
       name: "sequence-ooo-pause",
       handler: handleSequenceOooPause,
+    },
+    {
+      name: "reply-classification-rule",
+      handler: handleReplyClassificationRule,
     },
   ],
 }

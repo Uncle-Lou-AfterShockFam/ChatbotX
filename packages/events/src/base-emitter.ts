@@ -107,6 +107,20 @@ export type FormSubmittedMetadata = {
  * did not submit within its `abandonAfterMinutes` (reason always timeout);
  * an anonymous web visitor never emits it.
  */
+/**
+ * s228b outreach step 2: a contact's answer to outreach was classified
+ * (manually, or by the line's rules). `sourceId` = the class, so a trigger
+ * condition pins one class ("interested").
+ */
+export type ReplyClassifiedMetadata = {
+  classificationId: string
+  class: string
+  source: string
+  reason: string | null
+  sequenceId: string | null
+  dealId: string | null
+}
+
 export type FormAbandonedMetadata = {
   formId: string
   channel: "chat" | "web"
@@ -667,6 +681,18 @@ export abstract class BaseEventEmitter {
       workspaceId,
       contactId,
       metadata: { ...metadata, sourceId: metadata.formId },
+    })
+  }
+
+  async contactReplyClassified(
+    workspaceId: string,
+    contactId: string,
+    metadata: ReplyClassifiedMetadata,
+  ): Promise<void> {
+    await this.emit(triggerEventTypes.enum.contactReplyClassified, {
+      workspaceId,
+      contactId,
+      metadata: { ...metadata, sourceId: metadata.class },
     })
   }
 

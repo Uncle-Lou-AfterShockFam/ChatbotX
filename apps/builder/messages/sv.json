@@ -5265,7 +5265,13 @@
       "exception": "Valideringsfel",
       "nameExists": "Sekvensnamnet finns redan"
     },
-    "wednesday": "Onsdag"
+    "wednesday": "Onsdag",
+    "outreachPipeline": "Outreach-pipeline",
+    "outreachPipelineDescription": "Klassificerade svar öppnar eller flyttar en affär i en outreach-pipeline. Skapa en för den här sekvensen.",
+    "outreachPipelineLinked": "Klassificerade svar från sekvensens kontakter öppnar eller flyttar en affär i dess outreach-pipeline.",
+    "outreachPipelineOpen": "Öppna affärer",
+    "outreachPipelineUnlink": "Koppla bort",
+    "outreachPipelineCreate": "Skapa outreach-pipeline"
   },
   "settings": {
     "agents": {
@@ -5449,7 +5455,8 @@
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
-      "invoicePaymentFailed": "Invoice payment failed"
+      "invoicePaymentFailed": "Invoice payment failed",
+      "contactReplyClassified": "Kontaktens svar klassificerat"
     },
     "day": "Dag",
     "hour": "Timme",
@@ -7741,5 +7748,19 @@
     "invalidDescription": "Länken är ogiltig eller har gått ut.",
     "unavailableTitle": "Inte tillgänglig",
     "unavailableDescription": "Länken är inte längre tillgänglig."
+  },
+  "replyClassification": {
+    "title": "Svar",
+    "none": "Inte klassificerat",
+    "saved": "Svaret klassificerat",
+    "savedDeal": "Svaret klassificerat; affären uppdaterad",
+    "class": {
+      "interested": "Intresserad",
+      "maybeLater": "Kanske senare",
+      "notInterested": "Inte intresserad",
+      "ooo": "Frånvarande",
+      "auto": "Autosvar",
+      "bounce": "Studsat"
+    }
   }
 }

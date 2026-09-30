@@ -52,6 +52,7 @@
     "./minigame": "./src/minigame/index.ts",
     "./notification": "./src/notification/index.ts",
     "./pipeline": "./src/pipeline/index.ts",
+    "./reply-classification": "./src/reply-classification/index.ts",
     "./smart-delay": "./src/smart-delay/index.ts",
     "./errors": "./src/errors.ts",
     "./referral": "./src/referral/index.ts",
