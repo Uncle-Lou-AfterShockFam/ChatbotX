@@ -1,6 +1,6 @@
 import type { ContextQueue, HandleRequestProps } from "@chatbotx.io/sdk"
 import z from "zod"
-import { InstagramWebhookException } from "../exception"
+import { InstagramException, InstagramWebhookException } from "../exception"
 import { logger } from "../lib/logger"
 import { hmacSha256Hex, timingSafeStringEqual } from "../lib/webhook"
 import {
@@ -30,32 +30,37 @@ const verifyWebhookSignature = async (
   }
 }
 
+const unauthorized = (reason: string) =>
+  new InstagramException(`Unauthorized webhook: ${reason}`, 401, "unauthorized")
+
 const handleWebhookEvent = async (
   req: Request,
   config: InstagramConfig,
   queue: ContextQueue,
 ): Promise<void> => {
+  const body = await req.text()
+  if (!body) {
+    throw new InstagramWebhookException("Empty webhook payload")
+  }
+
+  // Before the processing try, so its re-wrap never turns the 401 into a
+  // 400 (s231a, the Messenger / Zalo pattern).
+  const signature = req.headers.get("x-hub-signature-256") ?? ""
+  if (!signature) {
+    throw unauthorized("missing signature")
+  }
+
+  const isValidSignature = await verifyWebhookSignature(
+    body,
+    signature,
+    config.clientSecret,
+  )
+
+  if (!isValidSignature) {
+    throw unauthorized("invalid signature")
+  }
+
   try {
-    const body = await req.text()
-    if (!body) {
-      throw new InstagramWebhookException("Empty webhook payload")
-    }
-
-    const signature = req.headers.get("x-hub-signature-256") ?? ""
-    if (!signature) {
-      throw new InstagramWebhookException("Missing webhook signature")
-    }
-
-    const isValidSignature = await verifyWebhookSignature(
-      body,
-      signature,
-      config.clientSecret,
-    )
-
-    if (!isValidSignature) {
-      throw new InstagramWebhookException("Invalid webhook signature")
-    }
-
     const parsedWebhook = instagramWebhookEventSchema.safeParse(
       JSON.parse(body),
     )
@@ -277,6 +282,9 @@ export const webhookHandler = async ({
       `Unsupported HTTP method: ${req.method}`,
     )
   } catch (error) {
+    if (error instanceof InstagramException && error.httpStatusCode === 401) {
+      throw error
+    }
     const errorMessage =
       error instanceof Error ? error.message : "Unknown webhook error"
 
