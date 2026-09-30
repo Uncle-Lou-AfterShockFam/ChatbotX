@@ -24,6 +24,7 @@
     "./deal-comment": "./src/deal-comment/index.ts",
     "./deal-task": "./src/deal-task/index.ts",
     "./documents": "./src/documents/index.ts",
+    "./email-sender": "./src/email-sender/index.ts",
     "./email-suppression": "./src/email-suppression/index.ts",
     "./email-thread": "./src/email-thread/index.ts",
     "./email-templates": "./src/email-templates/index.ts",

@@ -7,7 +7,11 @@ import {
   inArray,
   sql,
 } from "@chatbotx.io/database/client"
-import { emailThreadMailModel } from "@chatbotx.io/database/schema"
+import { EMAIL_SENDER_ID } from "@chatbotx.io/database/partials"
+import {
+  emailSenderModel,
+  emailThreadMailModel,
+} from "@chatbotx.io/database/schema"
 import type { EmailThreadMailModel } from "@chatbotx.io/database/types"
 import { createId } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
@@ -98,6 +102,11 @@ export type InboundEmailAttributes = {
   messageId: string
   subject: string
   references: string[]
+  /**
+   * s229b: the EmailSender whose mailbox the line read this mail from
+   * (`email.sender`); absent for the line's env account or a malformed id.
+   */
+  sender?: string
 }
 
 /**
@@ -117,7 +126,7 @@ export function inboundEmailAttributes(
   if (typeof email !== "object" || email === null) {
     return null
   }
-  const { messageId, subject, references, autoReply } = email as Record<
+  const { messageId, subject, references, autoReply, sender } = email as Record<
     string,
     unknown
   >
@@ -134,6 +143,9 @@ export function inboundEmailAttributes(
     subject:
       typeof subject === "string" ? subject.slice(0, EMAIL_SUBJECT_MAX) : "",
     references: refs,
+    ...(typeof sender === "string" && EMAIL_SENDER_ID.test(sender)
+      ? { sender }
+      : {}),
   }
 }
 
@@ -171,6 +183,8 @@ export class EmailThreadMailService extends BaseService {
         subject: string
         /** What the mail cites, oldest first (see the model). */
         parents: string[]
+        /** s229b: the mailbox it goes out from; null = the env account. */
+        senderId?: string | null
         tx?: DatabaseClient
       },
   ): Promise<EmailThreadMailModel | null> {
@@ -189,6 +203,7 @@ export class EmailThreadMailService extends BaseService {
         sequenceId: props.sequenceId ?? null,
         broadcastId: props.broadcastId ?? null,
         flowId: props.flowId ?? null,
+        senderId: props.senderId ?? null,
       })
       .onConflictDoNothing()
       .returning()
@@ -200,7 +215,9 @@ export class EmailThreadMailService extends BaseService {
    * that cites one of OUR keys inherits that mail's campaign, so `previous`
    * and `campaign` follow the contact's latest answer in that thread. Keys
    * are matched only among this contact's mails on this line. Idempotent on
-   * the mail's id (null when already recorded).
+   * the mail's id (null when already recorded). s229b: its sender is the
+   * line's `sender` it arrived in when that id IS a sender of this line
+   * (a foreign id is ignored), else the cited outgoing parent's.
    */
   async recordIncoming(
     props: LineRef & InboundEmailAttributes & { tx?: DatabaseClient },
@@ -226,6 +243,19 @@ export class EmailThreadMailService extends BaseService {
           .orderBy(desc(emailThreadMailModel.createdAt))
           .limit(1)
       : []
+    const [own] = props.sender
+      ? await tx
+          .select({ id: emailSenderModel.id })
+          .from(emailSenderModel)
+          .where(
+            and(
+              eq(emailSenderModel.id, props.sender),
+              eq(emailSenderModel.workspaceId, props.workspaceId),
+              eq(emailSenderModel.lineInboxId, props.lineInboxId),
+            ),
+          )
+          .limit(1)
+      : []
     const [row] = await tx
       .insert(emailThreadMailModel)
       .values({
@@ -240,6 +270,7 @@ export class EmailThreadMailService extends BaseService {
         sequenceId: parent?.sequenceId ?? null,
         broadcastId: parent?.broadcastId ?? null,
         flowId: parent?.flowId ?? null,
+        senderId: own?.id ?? parent?.senderId ?? null,
       })
       .onConflictDoNothing()
       .returning()

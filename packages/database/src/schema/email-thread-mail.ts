@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm"
 import { index, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core"
 import { bigintAsString, sharedColumns } from "../partials/shared"
 import { contactModel } from "./contact"
+import { emailSenderModel } from "./email-sender"
 import { inboxModel } from "./inbox"
 import { workspaceModel } from "./workspace"
 
@@ -50,6 +51,15 @@ export const emailThreadMailModel = pgTable(
     sequenceId: bigintAsString(),
     broadcastId: bigintAsString(),
     flowId: bigintAsString(),
+    /**
+     * ManyReach step 3 (s229b): the mailbox this mail went out from (or, for
+     * an incoming mail, arrived in). Null = the line's legacy env account.
+     * RESTRICT: senders are archived, never deleted.
+     */
+    senderId: bigintAsString().references(() => emailSenderModel.id, {
+      onDelete: "restrict",
+      onUpdate: "cascade",
+    }),
   },
   (table) => [
     uniqueIndex("EmailThreadMail_workspaceId_lineInboxId_messageKey_key").on(
@@ -67,6 +77,10 @@ export const emailThreadMailModel = pgTable(
       table.contactId,
       table.lineInboxId,
       table.createdAt.desc(),
+    ),
+    index("EmailThreadMail_senderId_createdAt_idx").on(
+      table.senderId,
+      table.createdAt,
     ),
   ],
 )

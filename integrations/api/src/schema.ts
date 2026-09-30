@@ -63,6 +63,12 @@ export type LineEmail = {
    * References. Needs `messageKey`; <= 20 ids with the threadKeys.
    */
   replyTo?: { references: string[] }
+  /**
+   * s229b: the EmailSender (mailbox) id to send from, a decimal bigint
+   * string. ABSENT = the line's legacy env account; sent only when set, so a
+   * line without senders never sees the key.
+   */
+  sender?: string
   /** `sha256` of the bytes: the line verifies the download and caches by it. */
   attachments: {
     url: string

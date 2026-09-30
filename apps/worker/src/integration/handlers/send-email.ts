@@ -283,6 +283,7 @@ async function sendViaLine(props: {
       messageKey: props.thread?.messageKey,
       threadKeys: props.thread?.threadKeys,
       replyTo: props.thread?.replyTo,
+      sender: props.thread?.senderId,
     })
   } catch (err) {
     if (!(err instanceof EmailContentError)) {

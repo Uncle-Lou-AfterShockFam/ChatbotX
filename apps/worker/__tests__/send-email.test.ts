@@ -203,6 +203,21 @@ vi.mock("@chatbotx.io/business/email-thread", async () => {
     },
   }
 })
+// s229b: the line's senders. Default: none (the legacy env account).
+const pickForNewThread = vi.fn(async (): Promise<string | null> => null)
+const assertThreadSender = vi.fn(async () => undefined)
+vi.mock("@chatbotx.io/business/email-sender", async () => {
+  const actual = await vi.importActual<
+    typeof import("@chatbotx.io/business/email-sender")
+  >("@chatbotx.io/business/email-sender")
+  return {
+    EmailSenderUnavailableError: actual.EmailSenderUnavailableError,
+    emailSenderService: {
+      pickForNewThread: (...a: unknown[]) => pickForNewThread(...(a as [])),
+      assertThreadSender: (...a: unknown[]) => assertThreadSender(...(a as [])),
+    },
+  }
+})
 const removeEnrollment = vi.fn()
 vi.mock("@chatbotx.io/business/contact-sequence", () => ({
   contactSequenceService: {
@@ -657,6 +672,9 @@ describe("s222b B2 phase 4: a step with an email line sends through bulktext, no
       messageKey: expect.stringMatching(MINTED_KEY),
       threadKeys: [],
       replyTo: [],
+      // s229b: a line without senders = the env account (buildLineEmail
+      // then leaves the key out).
+      sender: null,
     })
     expect(resolveLineContext).toHaveBeenCalledWith({
       workspaceId: "ws-1",
@@ -967,6 +985,10 @@ describe("s225b/s226b outreach B-1: line mail is keyed and recorded; the thread 
 
   beforeEach(() => {
     mails.length = 0
+    pickForNewThread.mockReset()
+    pickForNewThread.mockResolvedValue(null)
+    assertThreadSender.mockReset()
+    assertThreadSender.mockResolvedValue(undefined)
     recordOutgoing.mockClear()
     lineLocks.mockClear()
     removeEnrollment.mockReset()
@@ -1202,6 +1224,71 @@ describe("s225b/s226b outreach B-1: line mail is keyed and recorded; the thread 
       expect(sent(0)).toMatchObject({ format: "text", threadKeys: [] })
       expect(sent(0).messageKey).toMatch(MINTED_KEY)
     }
+  })
+
+  test("s229b: a new thread on a line with senders goes out from the picked sender, recorded and sent as `sender`", async () => {
+    pickForNewThread.mockResolvedValueOnce("7001")
+    await sendEmail(props({ ...textStep, id: "step-s1" }) as never)
+    expect(sent(0).sender).toBe("7001")
+    expect(recordOutgoing).toHaveBeenCalledWith(
+      expect.objectContaining({ senderId: "7001", lineInboxId: "line-1" }),
+    )
+    expect(pickForNewThread.mock.calls[0]?.[0]).toEqual({ tx: true })
+  })
+
+  test("s229b: a retried job replays its recorded sender, never re-picks (a replay cannot switch mailbox)", async () => {
+    createRecipient.mockRejectedValueOnce(new Error("pg down"))
+    pickForNewThread.mockResolvedValueOnce("7001")
+    await expect(
+      sendEmail(props({ ...textStep, id: "step-r1" }) as never),
+    ).rejects.toThrow("pg down")
+    pickForNewThread.mockResolvedValueOnce("7009")
+    await sendEmail(props({ ...textStep, id: "step-r1" }) as never)
+    expect(sent(0).sender).toBe("7001")
+    expect(pickForNewThread).toHaveBeenCalledTimes(1)
+  })
+
+  test("s229b: a follow-up keeps its parent's sender (never re-picks); a legacy parent stays on the env account", async () => {
+    mails.push({
+      ...out({ messageKey: "bt.root-000001" }),
+      senderId: "7001",
+    } as never)
+    await sendEmail(props({ ...textStep, id: "step-s2" }) as never)
+    expect(sent(0).sender).toBe("7001")
+    expect(pickForNewThread).not.toHaveBeenCalled()
+    expect(assertThreadSender).toHaveBeenCalledWith(
+      { tx: true },
+      { workspaceId: "ws-1", lineInboxId: "line-1", senderId: "7001" },
+    )
+    mails.length = 0
+    buildLineEmailMock.mockClear()
+    mails.push(out({ messageKey: "bt.root-000002" }))
+    await sendEmail(props({ ...textStep, id: "step-s3" }) as never)
+    expect(sent(0).sender).toBeNull()
+    expect(pickForNewThread).not.toHaveBeenCalled()
+  })
+
+  test("s229b: an archived thread sender, or no active sender on the line, fails the send closed (nothing queued)", async () => {
+    const { EmailSenderUnavailableError } = await import(
+      "@chatbotx.io/business/email-sender"
+    )
+    mails.push({
+      ...out({ messageKey: "bt.root-000003" }),
+      senderId: "7002",
+    } as never)
+    assertThreadSender.mockRejectedValueOnce(
+      new EmailSenderUnavailableError("sender-removed"),
+    )
+    await sendEmail(props({ ...textStep, id: "step-s4" }) as never)
+    mails.length = 0
+    pickForNewThread.mockRejectedValueOnce(
+      new EmailSenderUnavailableError("no-active-sender"),
+    )
+    await sendEmail(props({ ...textStep, id: "step-s5" }) as never)
+    expect(buildLineEmailMock).not.toHaveBeenCalled()
+    expect(lineRunAction).not.toHaveBeenCalled()
+    expect(recordOutgoing).not.toHaveBeenCalled()
+    expect(markFailed).toHaveBeenCalledTimes(2)
   })
 
   test("an html step on a line is keyed too but tracked as before; a text step over SMTP is untouched", async () => {
