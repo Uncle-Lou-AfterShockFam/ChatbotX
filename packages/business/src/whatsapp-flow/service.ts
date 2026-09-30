@@ -8,6 +8,7 @@ import {
 import { whatsappFlowModel } from "@chatbotx.io/database/schema"
 import { createId } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
+import { WHATSAPP_LIST_INTEGRATION } from "../integration-whatsapp/schema"
 
 /** WhatsApp's flow shape, as returned by `listFlows`. */
 export type MetaWhatsappFlow = {
@@ -39,9 +40,7 @@ class WhatsappFlowService extends BaseService {
 
     return tx.query.whatsappFlowModel.findMany({
       where: queryWhere,
-      with: {
-        integrationWhatsapp: true,
-      },
+      with: WHATSAPP_LIST_INTEGRATION,
       orderBy: { createdAt: "asc" },
     })
   }

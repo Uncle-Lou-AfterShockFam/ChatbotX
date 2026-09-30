@@ -34,3 +34,26 @@ export const listIntegrationWhatsappsResponse = z.array(
 export type ListIntegrationWhatsappResponse = z.infer<
   typeof listIntegrationWhatsappsResponse
 >
+
+/**
+ * The WhatsApp fields a template or flow list carries: the lists reach the
+ * browser (the templates / flows pages, conversion events, the APIs), so the
+ * join is the `integrationWhatsappResource` allowlist, never `auth` or
+ * `capiAccessToken` (s231a).
+ */
+export const WHATSAPP_LIST_INTEGRATION = {
+  integrationWhatsapp: {
+    columns: {
+      id: true,
+      name: true,
+      inboxId: true,
+      displayPhoneNumber: true,
+      tokenRefreshError: true,
+      phoneNumberId: true,
+      wabaId: true,
+      hasCapiScope: true,
+      capiScopeCheckedAt: true,
+      datasetId: true,
+    },
+  },
+} as const
