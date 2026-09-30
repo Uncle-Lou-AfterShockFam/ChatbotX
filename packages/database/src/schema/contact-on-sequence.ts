@@ -35,6 +35,12 @@ export const contactsOnSequenceModel = pgTable(
     lockedAt: timestamp(timestampConfig),
     lockOwner: text(),
     lastError: text(),
+    /**
+     * Outreach B-1 (s226b): an out-of-office answer holds the enrolment's
+     * next step until this instant (its pending dispatches were moved
+     * here; advanceEnrollment never schedules before it). Expires by time.
+     */
+    pausedUntil: timestamp(timestampConfig),
     contactId: bigintAsString()
       .notNull()
       .references(() => contactModel.id, {

@@ -1,0 +1,1 @@
+ALTER TABLE "ContactOnSequence" ADD COLUMN "pausedUntil" timestamp(6) with time zone;

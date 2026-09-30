@@ -5,10 +5,12 @@ import {
   eq,
   inArray,
   lte,
+  sql,
   type Transaction,
 } from "@chatbotx.io/database/client"
 import {
   contactsOnSequenceModel,
+  sequenceDispatchModel,
   sequenceModel,
 } from "@chatbotx.io/database/schema"
 import {
@@ -21,6 +23,7 @@ import {
   enrollContactInSequence,
   enrollContactsInSequenceBulk,
   removeDispatchesFromSchedule,
+  rescheduleDispatches,
   sequenceDispatchUtils,
 } from "@chatbotx.io/sequence-scheduler"
 import { BaseService } from "../base.service"
@@ -134,6 +137,9 @@ function buildEnrollmentRecords(
       }),
   )
 }
+/** Outreach B-1 (owner s223b): an out-of-office pauses a sequence 14 days. */
+export const OOO_PAUSE_MS = 14 * 24 * 60 * 60 * 1000
+
 class ContactSequenceService extends BaseService {
   /**
    * Sequence ids come straight from the public API and are sequential
@@ -322,6 +328,105 @@ class ContactSequenceService extends BaseService {
    * waits, are untouched (a `waitForEvent` replied branch must still fire).
    * Returns the ended sequence ids.
    */
+  /**
+   * Outreach B-1 (s226b, owner s223b): an out-of-office answer PAUSES the
+   * contact's stop-on-reply enrolments for `pauseMs` (14 days) instead of
+   * ending them: `pausedUntil` = now + pauseMs (a repeated OOO re-extends
+   * from now, never stacks), pending dispatches move to at least then (DB
+   * first, the schedule after commit). The enrolment rows are locked, as in
+   * advanceEnrollment, so a step advancing concurrently is never missed.
+   * Only enrolments that existed when the answer arrived. Returns the
+   * paused sequence ids.
+   */
+  async pauseForAutoReply(props: {
+    workspaceId: string
+    contactId: string
+    occurredAt: Date
+    pauseMs?: number
+    now?: Date
+  }): Promise<string[]> {
+    const { workspaceId, contactId, occurredAt } = props
+    if (!(occurredAt instanceof Date) || Number.isNaN(occurredAt.getTime())) {
+      throw new TypeError("pauseForAutoReply: invalid occurredAt")
+    }
+    const pauseMs = props.pauseMs ?? OOO_PAUSE_MS
+    if (
+      !(Number.isInteger(pauseMs) && pauseMs > 0 && pauseMs <= OOO_PAUSE_MS)
+    ) {
+      throw new RangeError("pauseForAutoReply: pauseMs out of range")
+    }
+    const until = new Date((props.now ?? new Date()).getTime() + pauseMs)
+    const { sequenceIds, moved } = await db.transaction(async (tx) => {
+      const rows = await tx
+        .select({
+          id: contactsOnSequenceModel.id,
+          sequenceId: contactsOnSequenceModel.sequenceId,
+        })
+        .from(contactsOnSequenceModel)
+        .innerJoin(
+          sequenceModel,
+          and(
+            eq(sequenceModel.id, contactsOnSequenceModel.sequenceId),
+            eq(sequenceModel.workspaceId, contactsOnSequenceModel.workspaceId),
+          ),
+        )
+        .where(
+          and(
+            eq(contactsOnSequenceModel.workspaceId, workspaceId),
+            eq(contactsOnSequenceModel.contactId, contactId),
+            eq(contactsOnSequenceModel.status, "active"),
+            eq(sequenceModel.stopOnReply, true),
+            lte(contactsOnSequenceModel.enrolledAt, occurredAt),
+          ),
+        )
+        .for("update", { of: contactsOnSequenceModel })
+      if (rows.length === 0) {
+        return { sequenceIds: [] as string[], moved: [] }
+      }
+      const ids = rows.map((row) => row.id)
+      await tx
+        .update(contactsOnSequenceModel)
+        .set({
+          pausedUntil: until,
+          nextRunAt: sql`GREATEST(${contactsOnSequenceModel.nextRunAt}, ${until})`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(contactsOnSequenceModel.workspaceId, workspaceId),
+            inArray(contactsOnSequenceModel.id, ids),
+          ),
+        )
+      const movedRows = await tx
+        .update(sequenceDispatchModel)
+        .set({ runAtMs: String(until.getTime()) })
+        .where(
+          and(
+            eq(sequenceDispatchModel.workspaceId, workspaceId),
+            inArray(sequenceDispatchModel.enrollmentId, ids),
+            eq(sequenceDispatchModel.status, "pending"),
+            sql`${sequenceDispatchModel.runAtMs} < ${until.getTime()}`,
+          ),
+        )
+        .returning({
+          id: sequenceDispatchModel.id,
+          bucket: sequenceDispatchModel.bucket,
+          runAtMs: sequenceDispatchModel.runAtMs,
+        })
+      return {
+        sequenceIds: [...new Set(rows.map((row) => row.sequenceId))],
+        moved: movedRows,
+      }
+    })
+    try {
+      await rescheduleDispatches(moved)
+    } catch (err) {
+      // The DB is authoritative: an early fire is re-queued at its DB time.
+      logger.warn({ err, workspaceId }, "pauseForAutoReply: reschedule failed")
+    }
+    return sequenceIds
+  }
+
   async removeStopOnReplyEnrollments(props: {
     workspaceId: string
     contactId: string

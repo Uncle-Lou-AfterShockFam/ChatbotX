@@ -18,7 +18,8 @@ export async function handleSequenceStopOnReply(
     // Keyed by workspace too (the company handler keys by contact alone): a
     // batch may carry several workspaces, and ids are only unique per one.
     const key = `${payload.workspaceId}:${payload.contactId}`
-    if (payload.origin !== "inbound" || seen.has(key)) {
+    // s226b: an out-of-office pauses instead (sequence-ooo-pause).
+    if (payload.origin !== "inbound" || payload.autoReply || seen.has(key)) {
       continue
     }
     seen.add(key)
