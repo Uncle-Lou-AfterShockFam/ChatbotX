@@ -153,9 +153,15 @@ export async function advanceEnrollment(
         )
         .for("update")
       const scheduled = calculateNextRunAt(nextStep, sentAt)
+      // The pause end, moved into the step's send window (Codex s226b).
       const nextRunAt =
         locked?.pausedUntil && locked.pausedUntil > scheduled
-          ? locked.pausedUntil
+          ? calculateNextValidSendTime(locked.pausedUntil, {
+              anytime: nextStep.anytime,
+              sendTimeStart: nextStep.sendTimeStart,
+              sendTimeEnd: nextStep.sendTimeEnd,
+              sendDays: nextStep.sendDays,
+            })
           : scheduled
 
       await tx
