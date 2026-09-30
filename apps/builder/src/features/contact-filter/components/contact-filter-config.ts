@@ -306,9 +306,9 @@ const CONTACT_FILTER_GROUP_FIELDS = {
     "executedFlow",
     "executedStep",
     "consecutiveAiFailures",
-    "questionnaireStarted",
-    "questionnaireInProgress",
-    "questionnaireFinished",
+    "formStarted",
+    "formInProgress",
+    "formSubmitted",
     "votedOnPoll",
   ],
   facebookInstagramComment: [

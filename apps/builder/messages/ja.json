@@ -605,9 +605,9 @@
       "executedFlow": "実行したフロー",
       "executedStep": "実行したステップ",
       "consecutiveAiFailures": "AIの連続失敗回数",
-      "questionnaireStarted": "アンケートを開始済み",
-      "questionnaireInProgress": "アンケートに回答中",
-      "questionnaireFinished": "アンケートを完了済み",
+      "formStarted": "フォームを開始済み",
+      "formInProgress": "フォームに回答中",
+      "formSubmitted": "フォームを送信済み",
       "couponTopic": "クーポン",
       "votedOnPoll": "投票に参加済み",
       "lastComment": "最新のコメント",
@@ -7359,6 +7359,10 @@
     "noTasks": "No tasks.",
     "taskOf": "Deal: {deal}",
     "noSubmissions": "No submissions yet.",
+    "channel": {
+      "web": "Web",
+      "chat": "Chat"
+    },
     "points": "{points} points",
     "noNotes": "No notes yet.",
     "addNote": "Add note",

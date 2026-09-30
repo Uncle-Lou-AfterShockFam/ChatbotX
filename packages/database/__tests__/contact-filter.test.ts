@@ -253,6 +253,32 @@ describe("applyContactFilter", () => {
     expect(contactFilterHasPredicate(unknownOnlyFilter)).toBe(false)
     expect(contactFilterHasPredicate(validFilter)).toBe(true)
   })
+  test("a stored filter on a retired questionnaire field matches nothing (s226a, fails closed)", () => {
+    const retired = [
+      "questionnaireStarted",
+      "questionnaireInProgress",
+      "questionnaireSubmitted",
+    ]
+    for (const field of retired) {
+      const alone = {
+        operator: "and" as const,
+        conditions: [{ field, operator: operatorTypes.enum.eq, value: "true" }],
+      }
+      const withValid = {
+        operator: "and" as const,
+        conditions: [
+          ...alone.conditions,
+          {
+            field: "fullName",
+            operator: operatorTypes.enum.contains,
+            value: "Ada",
+          },
+        ],
+      }
+      expect(applyContactFilter(alone)).toEqual(matchesNothing)
+      expect(applyContactFilter(withValid)).toEqual(matchesNothing)
+    }
+  })
 
   test("threads workspaceId through so a botField-only criteria reports a real predicate", () => {
     // Regression guard: `botField` is workspace-scoped (see the "bot fields"

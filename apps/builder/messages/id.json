@@ -605,9 +605,9 @@
       "executedFlow": "Menjalankan flow",
       "executedStep": "Menjalankan Langkah",
       "consecutiveAiFailures": "Jumlah kegagalan AI berturut-turut",
-      "questionnaireStarted": "Kuesioner dimulai",
-      "questionnaireInProgress": "Kuesioner sedang berlangsung",
-      "questionnaireFinished": "Kuesioner selesai",
+      "formStarted": "Formulir dimulai",
+      "formInProgress": "Formulir sedang berlangsung",
+      "formSubmitted": "Formulir dikirim",
       "couponTopic": "Kupon",
       "votedOnPoll": "Memberikan suara pada jajak pendapat",
       "lastComment": "Komentar terakhir",
@@ -7359,6 +7359,10 @@
     "noTasks": "No tasks.",
     "taskOf": "Deal: {deal}",
     "noSubmissions": "No submissions yet.",
+    "channel": {
+      "web": "Web",
+      "chat": "Chat"
+    },
     "points": "{points} points",
     "noNotes": "No notes yet.",
     "addNote": "Add note",

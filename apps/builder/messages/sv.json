@@ -915,9 +915,9 @@
       "optedInForSms": "Samtyckt till SMS",
       "phone": "Telefon",
       "phoneWasVerified": "Telefonen har verifierats",
-      "questionnaireFinished": "Frågeformulär slutfört",
-      "questionnaireInProgress": "Frågeformulär pågår",
-      "questionnaireStarted": "Frågeformulär påbörjat",
+      "formSubmitted": "Formulär skickat",
+      "formInProgress": "Formulär pågår",
+      "formStarted": "Formulär påbörjat",
       "reactedOnPost": "Reagerat på inlägg",
       "sentMessage": "Skickat meddelande",
       "shoppingCartContainsItems": "Kundvagnen innehåller varor",
@@ -7359,6 +7359,10 @@
     "noTasks": "No tasks.",
     "taskOf": "Deal: {deal}",
     "noSubmissions": "No submissions yet.",
+    "channel": {
+      "web": "Web",
+      "chat": "Chat"
+    },
     "points": "{points} points",
     "noNotes": "No notes yet.",
     "addNote": "Add note",

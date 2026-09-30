@@ -4,10 +4,10 @@ import {
   companyService,
   conversationService,
   crmTimelineService,
-  questionnaireSubmissionService,
 } from "@chatbotx.io/business"
 import { dealService } from "@chatbotx.io/business/deal"
 import { dealTaskService } from "@chatbotx.io/business/deal-task"
+import { formService } from "@chatbotx.io/business/form"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import z from "zod"
 import { requireContactPermissionScope } from "@/features/contacts/permissions"
@@ -255,7 +255,7 @@ const privateListCompanySubmissionsAPI = authorizedAPI
   .route({
     method: "GET",
     path: "/workspaces/{workspaceId}/companies/{id}/submissions",
-    summary: "Questionnaire submissions of the company's contacts",
+    summary: "Form submissions of the company's contacts",
     tags,
   })
   .input(withCompanyId.and(z.object({ limit: limitField })))
@@ -272,7 +272,7 @@ const privateListCompanySubmissionsAPI = authorizedAPI
       accessScope: await requireContactPermissionScope(input.workspaceId),
     })
     return {
-      data: await questionnaireSubmissionService.listByContactIds({
+      data: await formService.listByContactIds({
         workspaceId: input.workspaceId,
         contactIds,
         limit: input.limit,
@@ -462,7 +462,7 @@ const privateListContactSubmissionsAPI = authorizedAPI
   .route({
     method: "GET",
     path: "/workspaces/{workspaceId}/contacts/{contactId}/submissions",
-    summary: "Questionnaire submissions of a contact",
+    summary: "Form submissions of a contact",
     tags,
   })
   .input(withContactId.and(z.object({ limit: limitField })))
@@ -476,7 +476,7 @@ const privateListContactSubmissionsAPI = authorizedAPI
       accessScope: scope,
     })
     return {
-      data: await questionnaireSubmissionService.listByContactIds({
+      data: await formService.listByContactIds({
         workspaceId: input.workspaceId,
         contactIds: [input.contactId],
         limit: input.limit,

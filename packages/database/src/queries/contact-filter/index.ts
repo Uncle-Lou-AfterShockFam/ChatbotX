@@ -12,8 +12,9 @@ import {
   contactModel,
   conversationModel,
   couponModel,
-  questionnaireModel,
-  questionnaireSubmissionModel,
+  formSessionModel,
+  formSubmissionModel,
+  formVisitModel,
 } from "../../schema"
 import { escapeLikePattern, likeContains } from "../../utils"
 import { buildBotFieldWhere } from "./bot-field-predicates"
@@ -42,6 +43,7 @@ import {
   buildLatestContactInboxTextWhere,
   buildMinutesAgoWhere,
   contactInboxInteractedWithin24hSQL as buildRecentInteractionPredicate,
+  existsBooleanMode,
 } from "./predicates"
 import { buildRelationSetWhere } from "./relation-sets"
 import { resolveFilterTimezone } from "./timezone"
@@ -137,10 +139,37 @@ const conversationExists = joinTableExists(
   conversationModel.contactId,
 )
 
-const questionnaireSubmissionExists = joinTableExists(
-  questionnaireSubmissionModel,
-  questionnaireSubmissionModel.contactId,
-)
+/**
+ * Form activity of a contact (s226a, replaced the questionnaire fields):
+ * `submitted` = a FormSubmission (web or chat); `inProgress` = a chat
+ * FormSession still asking, or a web FormVisit neither submitted nor
+ * abandoned; `started` = any of the three. Every branch is pinned to the
+ * contact's own workspace.
+ */
+type FormActivity = "started" | "inProgress" | "submitted"
+
+function buildFormActivityWhere(
+  activity: FormActivity,
+  operator: string,
+  value: unknown,
+): ContactWhere {
+  const mode = existsBooleanMode(operator, value)
+  if (mode === null) {
+    return {}
+  }
+  return existsWhere((contactId, contactTable) => {
+    const submission = sql`SELECT 1 FROM ${formSubmissionModel} WHERE ${formSubmissionModel.contactId} = ${contactId} AND ${formSubmissionModel.workspaceId} = ${contactTable.workspaceId}`
+    if (activity === "submitted") {
+      return submission
+    }
+    const session = sql`SELECT 1 FROM ${formSessionModel} WHERE ${formSessionModel.contactId} = ${contactId} AND ${formSessionModel.workspaceId} = ${contactTable.workspaceId}`
+    const visit = sql`SELECT 1 FROM ${formVisitModel} WHERE ${formVisitModel.contactId} = ${contactId} AND ${formVisitModel.workspaceId} = ${contactTable.workspaceId}`
+    if (activity === "inProgress") {
+      return sql`${session} AND ${formSessionModel.status} = 'inProgress' UNION ALL ${visit} AND ${formVisitModel.submittedAt} IS NULL AND ${formVisitModel.abandonEmittedAt} IS NULL`
+    }
+    return sql`${submission} UNION ALL ${session} UNION ALL ${visit}`
+  }, mode === "no")
+}
 
 const couponExists = (
   predicate: (contactId: AnyColumn, workspaceId: AnyColumn) => SQL,
@@ -611,29 +640,14 @@ function buildConditionWhere(
     case "ctwaConversion":
       return buildRelationSetWhere(field, operator, value)
 
-    case "questionnaireStarted":
-      return buildExistsBooleanWhere(
-        questionnaireSubmissionExists,
-        sql`${questionnaireSubmissionModel.questionnaireId} IN (SELECT ${questionnaireModel.id} FROM ${questionnaireModel} WHERE ${questionnaireModel.workspaceId} = ${questionnaireSubmissionModel.workspaceId})`,
-        operator,
-        value,
-      )
+    case "formStarted":
+      return buildFormActivityWhere("started", operator, value)
 
-    case "questionnaireInProgress":
-      return buildExistsBooleanWhere(
-        questionnaireSubmissionExists,
-        sql`${questionnaireSubmissionModel.status} = 'inProgress' AND ${questionnaireSubmissionModel.questionnaireId} IN (SELECT ${questionnaireModel.id} FROM ${questionnaireModel} WHERE ${questionnaireModel.workspaceId} = ${questionnaireSubmissionModel.workspaceId})`,
-        operator,
-        value,
-      )
+    case "formInProgress":
+      return buildFormActivityWhere("inProgress", operator, value)
 
-    case "questionnaireFinished":
-      return buildExistsBooleanWhere(
-        questionnaireSubmissionExists,
-        sql`${questionnaireSubmissionModel.status} = 'completed' AND ${questionnaireSubmissionModel.questionnaireId} IN (SELECT ${questionnaireModel.id} FROM ${questionnaireModel} WHERE ${questionnaireModel.workspaceId} = ${questionnaireSubmissionModel.workspaceId})`,
-        operator,
-        value,
-      )
+    case "formSubmitted":
+      return buildFormActivityWhere("submitted", operator, value)
 
     case "couponTopic":
       return buildCouponTopicWhere(condition.topicId, operator, value)

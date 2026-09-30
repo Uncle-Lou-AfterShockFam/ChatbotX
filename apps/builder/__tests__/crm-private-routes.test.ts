@@ -70,7 +70,7 @@ const companyNoteService = proxy(() => ({ id: "n-1" }))
 const companyActivityService = proxy(() => [])
 const conversationService = proxy(() => [])
 const crmTimelineService = proxy(() => ({ data: [], nextCursor: null }))
-const questionnaireSubmissionService = proxy(() => [])
+const formService = proxy(() => [])
 vi.mock("@chatbotx.io/business/deal", () => ({ dealService }))
 vi.mock("@chatbotx.io/business/deal-task", () => ({ dealTaskService }))
 vi.mock("@chatbotx.io/business", () => ({
@@ -79,8 +79,8 @@ vi.mock("@chatbotx.io/business", () => ({
   companyActivityService,
   conversationService,
   crmTimelineService,
-  questionnaireSubmissionService,
 }))
+vi.mock("@chatbotx.io/business/form", () => ({ formService }))
 
 await import("../src/features/crm/api/private")
 
@@ -322,16 +322,14 @@ describe("crm private routes (s195)", () => {
     )
     // a scope failure propagates before any read
     crmTimelineService.assertContact.mockRejectedValueOnce(new Error("nope"))
-    questionnaireSubmissionService.listByContactIds.mockClear()
+    formService.listByContactIds.mockClear()
     await expect(
       find("GET", "/contacts/{contactId}/submissions").handler?.({
         context,
         input,
       }),
     ).rejects.toThrow("nope")
-    expect(
-      questionnaireSubmissionService.listByContactIds,
-    ).not.toHaveBeenCalled()
+    expect(formService.listByContactIds).not.toHaveBeenCalled()
   })
 
   test("conversations: only DM rows (sourceId null), newest activity first, contact name flattened", async () => {

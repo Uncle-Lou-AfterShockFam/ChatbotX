@@ -605,9 +605,9 @@
       "executedFlow": "Ausgeführter Flow",
       "executedStep": "Ausgeführter Schritt",
       "consecutiveAiFailures": "Anzahl aufeinanderfolgender KI-Fehler",
-      "questionnaireStarted": "Fragebogen begonnen",
-      "questionnaireInProgress": "Fragebogen in Bearbeitung",
-      "questionnaireFinished": "Fragebogen abgeschlossen",
+      "formStarted": "Formular begonnen",
+      "formInProgress": "Formular in Bearbeitung",
+      "formSubmitted": "Formular abgeschickt",
       "couponTopic": "Gutschein",
       "votedOnPoll": "An der Umfrage teilgenommen",
       "lastComment": "Letzter Kommentar",
@@ -7359,6 +7359,10 @@
     "noTasks": "No tasks.",
     "taskOf": "Deal: {deal}",
     "noSubmissions": "No submissions yet.",
+    "channel": {
+      "web": "Web",
+      "chat": "Chat"
+    },
     "points": "{points} points",
     "noNotes": "No notes yet.",
     "addNote": "Add note",

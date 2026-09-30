@@ -605,9 +605,9 @@
       "executedFlow": "Suoritettu flow",
       "executedStep": "Suoritettu vaihe",
       "consecutiveAiFailures": "Peräkkäisten AI-virheiden määrä",
-      "questionnaireStarted": "Kysely aloitettu",
-      "questionnaireInProgress": "Kysely käynnissä",
-      "questionnaireFinished": "Kysely valmis",
+      "formStarted": "Lomake aloitettu",
+      "formInProgress": "Lomake käynnissä",
+      "formSubmitted": "Lomake lähetetty",
       "couponTopic": "Kuponki",
       "votedOnPoll": "Äänesti kyselyssä",
       "lastComment": "Viimeisin kommentti",
@@ -7359,6 +7359,10 @@
     "noTasks": "No tasks.",
     "taskOf": "Deal: {deal}",
     "noSubmissions": "No submissions yet.",
+    "channel": {
+      "web": "Web",
+      "chat": "Chat"
+    },
     "points": "{points} points",
     "noNotes": "No notes yet.",
     "addNote": "Add note",

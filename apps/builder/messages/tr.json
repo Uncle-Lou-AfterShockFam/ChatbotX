@@ -605,9 +605,9 @@
       "executedFlow": "Yürütülen akış",
       "executedStep": "Yürütülen Adım",
       "consecutiveAiFailures": "Art arda yapay zekâ hatası sayısı",
-      "questionnaireStarted": "Anket başlatıldı",
-      "questionnaireInProgress": "Anket devam ediyor",
-      "questionnaireFinished": "Anket tamamlandı",
+      "formStarted": "Form başlatıldı",
+      "formInProgress": "Form devam ediyor",
+      "formSubmitted": "Form gönderildi",
       "couponTopic": "Kupon",
       "votedOnPoll": "Ankette oy kullandı",
       "lastComment": "Son yorum",
@@ -7359,6 +7359,10 @@
     "noTasks": "No tasks.",
     "taskOf": "Deal: {deal}",
     "noSubmissions": "No submissions yet.",
+    "channel": {
+      "web": "Web",
+      "chat": "Chat"
+    },
     "points": "{points} points",
     "noNotes": "No notes yet.",
     "addNote": "Add note",

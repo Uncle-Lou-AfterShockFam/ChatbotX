@@ -2158,9 +2158,9 @@
       "executedFlow": "Uitgevoerde flow",
       "executedStep": "Uitgevoerde stap",
       "consecutiveAiFailures": "Aantal opeenvolgende AI-fouten",
-      "questionnaireStarted": "Vragenlijst gestart",
-      "questionnaireInProgress": "Vragenlijst bezig",
-      "questionnaireFinished": "Vragenlijst voltooid",
+      "formStarted": "Formulier gestart",
+      "formInProgress": "Formulier bezig",
+      "formSubmitted": "Formulier verzonden",
       "couponTopic": "Coupon",
       "votedOnPoll": "Op de peiling gestemd",
       "lastComment": "Laatste opmerking",
@@ -7359,6 +7359,10 @@
     "noTasks": "No tasks.",
     "taskOf": "Deal: {deal}",
     "noSubmissions": "No submissions yet.",
+    "channel": {
+      "web": "Web",
+      "chat": "Chat"
+    },
     "points": "{points} points",
     "noNotes": "No notes yet.",
     "addNote": "Add note",

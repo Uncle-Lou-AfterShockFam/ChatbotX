@@ -605,9 +605,9 @@
       "executedFlow": "نفّذ التدفق",
       "executedStep": "نفّذ الخطوة",
       "consecutiveAiFailures": "عدد أخطاء الذكاء الاصطناعي المتتالية",
-      "questionnaireStarted": "بدأ الاستبيان",
-      "questionnaireInProgress": "الاستبيان قيد التقدم",
-      "questionnaireFinished": "أنهى الاستبيان",
+      "formStarted": "بدأ النموذج",
+      "formInProgress": "النموذج قيد التقدم",
+      "formSubmitted": "تم إرسال النموذج",
       "couponTopic": "الكوبون",
       "votedOnPoll": "صوّت في الاستطلاع",
       "lastComment": "آخر تعليق",
@@ -7359,6 +7359,10 @@
     "noTasks": "No tasks.",
     "taskOf": "Deal: {deal}",
     "noSubmissions": "No submissions yet.",
+    "channel": {
+      "web": "Web",
+      "chat": "Chat"
+    },
     "points": "{points} points",
     "noNotes": "No notes yet.",
     "addNote": "Add note",

@@ -271,6 +271,11 @@ export const formSessionModel = pgTable(
       table.workspaceId,
       table.formId,
     ),
+    // Contact-filter `formStarted` probes sessions of any status (s226a).
+    index("FormSession_workspaceId_contactId_idx").on(
+      table.workspaceId,
+      table.contactId,
+    ),
   ],
 )
 
