@@ -167,6 +167,8 @@ describe("whatsapp manual webhook route — POST", () => {
     const response = await POST(makeRequest(), { params: makeParams() })
 
     expect(response.status).toBe(401)
+    // s231a: the exception text stays in the log.
+    expect(await response.json()).toEqual({ message: "Unauthorized" })
     expect(logWebhookRequestBody).not.toHaveBeenCalled()
     expect(loggerWarn).toHaveBeenCalled()
   })
@@ -175,11 +177,14 @@ describe("whatsapp manual webhook route — POST", () => {
     findIntegrationWhatsappById.mockResolvedValue(
       manualRow({ webhookVerifiedAt: "2026-01-01T00:00:00.000Z" }),
     )
-    handleRequest.mockRejectedValue(new Error("boom"))
+    handleRequest.mockRejectedValue(new Error("boom: clientSecret missing"))
 
     const response = await POST(makeRequest(), { params: makeParams() })
 
     expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({
+      message: "Invalid webhook request",
+    })
     expect(logWebhookRequestBody).not.toHaveBeenCalled()
   })
 })

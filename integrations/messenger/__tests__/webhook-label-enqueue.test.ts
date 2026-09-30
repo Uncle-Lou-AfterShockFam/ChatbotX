@@ -1,10 +1,12 @@
 import { createHmac } from "node:crypto"
 import type { HandleRequestProps } from "@chatbotx.io/sdk"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { MessengerException } from "../src/exception"
 import { webhookHandler } from "../src/handlers/webhook"
 import type { MessengerConfig } from "../src/schema"
 
 const CLIENT_SECRET = "test-client-secret"
+const UNAUTHORIZED = /^Unauthorized webhook: /
 
 const config = {
   clientSecret: CLIENT_SECRET,
@@ -148,5 +150,49 @@ describe("webhookHandler inbox_labels enqueue", () => {
     ).rejects.toThrow()
 
     expect(queue.add).not.toHaveBeenCalled()
+  })
+})
+
+// s231a: a signature failure is a 401 that no catch re-wraps into a 400.
+describe("webhookHandler signature failures", () => {
+  const body = buildBody({ messaging: [] })
+
+  const rejection = async (signature: string) => {
+    const queue = { add: vi.fn().mockResolvedValue(undefined) }
+    const error = await webhookHandler(makeProps(body, signature, queue)).catch(
+      (e: unknown) => e,
+    )
+    expect(queue.add).not.toHaveBeenCalled()
+    return error as MessengerException
+  }
+
+  it.each([
+    ["an invalid signature", "sha256=deadbeef"],
+    ["a malformed signature", "deadbeef"],
+    ["a signature over another body", sign(`${body} `)],
+    ["a missing signature", ""],
+  ])("answers 401 for %s", async (_label, signature) => {
+    const error = await rejection(signature)
+
+    expect(error).toBeInstanceOf(MessengerException)
+    expect(error.httpStatusCode).toBe(401)
+    expect(error.message).toMatch(UNAUTHORIZED)
+  })
+
+  it("keeps an empty payload a 400", async () => {
+    const error = await webhookHandler({
+      config,
+      req: makeRequest("", sign("")),
+      queue: { add: vi.fn() } as never,
+    } as HandleRequestProps<MessengerConfig>).catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(MessengerException)
+    expect((error as MessengerException).httpStatusCode).toBe(400)
+  })
+
+  it("still accepts a valid signature", async () => {
+    await expect(
+      webhookHandler(makeProps(body, sign(body), { add: vi.fn() })),
+    ).resolves.toBe("ok")
   })
 })
