@@ -2,7 +2,11 @@ import type { Context } from "@chatbotx.io/sdk"
 import { isSsrfFetchError } from "@chatbotx.io/sdk/outbound-fetch"
 import { createId } from "@chatbotx.io/utils"
 import type { ZaloAuthValue } from "../schema/definition"
-import { fetchZaloDownload, ZaloAttachmentTooLargeError } from "./download"
+import {
+  fetchZaloDownload,
+  ZaloAttachmentTooLargeError,
+  zaloDownloadHeaders,
+} from "./download"
 
 export const fetchAndReuploadImage = async ({
   ctx,
@@ -15,10 +19,7 @@ export const fetchAndReuploadImage = async ({
   // oversized one is no avatar, never a failed profile sync (s219).
   const download = await fetchZaloDownload(
     avatarUrl,
-    {
-      Authorization: `Bearer ${ctx.auth.tokens.accessToken}`,
-      "User-Agent": "node",
-    },
+    zaloDownloadHeaders(avatarUrl, ctx.auth.tokens.accessToken, "node"),
     "avatar",
   ).catch((error: unknown) => {
     if (
