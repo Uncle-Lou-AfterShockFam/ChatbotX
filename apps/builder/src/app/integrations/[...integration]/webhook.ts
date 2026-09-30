@@ -11,7 +11,6 @@ import type {
   TiktokAuthValue,
   TiktokConfig,
 } from "@chatbotx.io/integration-tiktok"
-import { SdkException } from "@chatbotx.io/sdk"
 import { integrationQueue } from "@chatbotx.io/worker-config"
 import type { NextRequest } from "next/server"
 import { isCloud } from "@/env"
@@ -20,6 +19,7 @@ import { findIntegrationTiktokByOpenId } from "@/features/integration-tiktok/que
 import { type IntegrationKey, integrations } from "@/integration"
 import { logger } from "@/lib/log"
 import { isBrokerHost } from "@/lib/oauth-broker"
+import { publicWebhookErrorResponse } from "@/lib/webhook-error-response"
 import { logWebhookRequestBody } from "@/lib/webhook-log"
 
 type CredentialType = Parameters<
@@ -37,6 +37,19 @@ const THREADS_BAD_REQUEST_MESSAGES = new Set([
   "Missing webhook signature",
   "Webhook app_id does not match configured clientId",
 ])
+
+const webhookErrorResponse = (
+  error: unknown,
+  integrationType: string,
+  logMessage: string,
+) => {
+  const response = publicWebhookErrorResponse(error)
+  logger.error(
+    { err: error, integrationType, status: response.status },
+    logMessage,
+  )
+  return response
+}
 
 const createThreadsErrorResponse = (error: unknown) => {
   const safeError = getSafeErrorDetails(error)
@@ -189,20 +202,13 @@ export const handleWebhook = async (
 
     return new Response(result as BodyInit)
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    logger.error(
-      { err: e, integrationType },
+    // Respect the exception's own status (e.g. 401 from a failed inbound
+    // webhook signature check); every SdkException defaults it to 400.
+    return webhookErrorResponse(
+      e,
+      integrationType,
       "Integration handleRequest failed",
     )
-    // Respect the exception's own status (e.g. 401 from a failed inbound
-    // webhook signature check) instead of always answering 400 — every
-    // SdkException still defaults its httpStatusCode to 400, so this is a
-    // no-op for exceptions that never set one.
-    const status = e instanceof SdkException ? e.httpStatusCode : 400
-    return new Response(JSON.stringify({ message }), {
-      status,
-      headers: { "Content-Type": "application/json" },
-    })
   }
 }
 
@@ -321,15 +327,7 @@ const handleTelegramWebhook = async (req: NextRequest) => {
 
     return new Response(result as BodyInit)
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    logger.error(
-      { err: e, integrationType: "telegram" },
-      "Telegram handleRequest failed",
-    )
-    return new Response(JSON.stringify({ message }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    })
+    return webhookErrorResponse(e, "telegram", "Telegram handleRequest failed")
   }
 }
 
@@ -415,14 +413,6 @@ const handleTiktokWebhook = async (req: NextRequest) => {
 
     return new Response(result as BodyInit)
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e)
-    logger.error(
-      { err: e, integrationType: "tiktok" },
-      "TikTok handleRequest failed",
-    )
-    return new Response(JSON.stringify({ message }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    })
+    return webhookErrorResponse(e, "tiktok", "TikTok handleRequest failed")
   }
 }

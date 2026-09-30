@@ -1,6 +1,6 @@
 import type { ContextQueue, HandleRequestProps } from "@chatbotx.io/sdk"
 import z from "zod"
-import { MessengerWebhookException } from "../exception"
+import { MessengerException, MessengerWebhookException } from "../exception"
 import { logger } from "../lib/logger"
 import { hmacSha256Hex, timingSafeStringEqual } from "../lib/webhook"
 import {
@@ -31,32 +31,37 @@ const verifyWebhookSignature = async (
   }
 }
 
+const unauthorized = (reason: string) =>
+  new MessengerException(`Unauthorized webhook: ${reason}`, 401, "unauthorized")
+
 const handleWebhookEvent = async (
   req: Request,
   config: MessengerConfig,
   queue: ContextQueue,
 ): Promise<void> => {
+  const body = await req.text()
+  if (!body) {
+    throw new MessengerWebhookException("Empty webhook payload")
+  }
+
+  // Before the processing try, so its re-wrap never turns the 401 into a
+  // 400 (s231a, the Zalo #169 pattern).
+  const signature = req.headers.get("x-hub-signature-256") ?? ""
+  if (!signature) {
+    throw unauthorized("missing signature")
+  }
+
+  const isValidSignature = await verifyWebhookSignature(
+    body,
+    signature,
+    config.clientSecret,
+  )
+
+  if (!isValidSignature) {
+    throw unauthorized("invalid signature")
+  }
+
   try {
-    const body = await req.text()
-    if (!body) {
-      throw new MessengerWebhookException("Empty webhook payload")
-    }
-
-    const signature = req.headers.get("x-hub-signature-256") ?? ""
-    if (!signature) {
-      throw new MessengerWebhookException("Missing webhook signature")
-    }
-
-    const isValidSignature = await verifyWebhookSignature(
-      body,
-      signature,
-      config.clientSecret,
-    )
-
-    if (!isValidSignature) {
-      throw new MessengerWebhookException("Invalid webhook signature")
-    }
-
     const parsedWebhook = incomingWebhookEventSchema.safeParse(JSON.parse(body))
     if (!parsedWebhook.success) {
       logger.warn(
@@ -355,6 +360,9 @@ export const webhookHandler = async ({
       `Unsupported HTTP method: ${req.method}`,
     )
   } catch (error) {
+    if (error instanceof MessengerException && error.httpStatusCode === 401) {
+      throw error
+    }
     const errorMessage =
       error instanceof Error ? error.message : "Unknown webhook error"
 
