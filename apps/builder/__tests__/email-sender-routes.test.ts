@@ -13,6 +13,7 @@ type Captured = {
   api: "authorized" | "channel"
   route: { method: string; path: string; outputStructure?: string }
   uses: unknown[]
+  input?: { safeParse: (v: unknown) => { success: boolean } }
   handler?: (args: unknown) => unknown
 }
 const { captured } = vi.hoisted(() => ({ captured: [] as Captured[] }))
@@ -24,7 +25,11 @@ vi.mock("@/orpc", () => {
       entry.route = r
       return chain
     }
-    for (const k of ["input", "output", "errors"]) {
+    chain.input = (schema: Captured["input"]) => {
+      entry.input = schema
+      return chain
+    }
+    for (const k of ["output", "errors"]) {
       chain[k] = () => chain
     }
     chain.use = (mw: unknown) => {
@@ -138,6 +143,57 @@ describe("email sender private routes (s229b)", () => {
       }),
     ).resolves.toEqual({ ok: true })
     expect(service.archive).toHaveBeenCalledWith({ workspaceId: "1", id: "5" })
+  })
+})
+
+describe("email sender route inputs are CLOSED (review s229b)", () => {
+  const conn = {
+    smtp: { host: "smtp.gmail.com", port: 465, secure: true, user: "a@b.co" },
+    imap: { host: "imap.gmail.com", port: 993, secure: true, user: "a@b.co" },
+  }
+  const create = {
+    workspaceId: "1",
+    lineInboxId: "2",
+    provider: "smtp",
+    address: "a@b.co",
+    fromName: "A",
+    firstName: "A",
+    lastName: "B",
+    connection: conn,
+  }
+  const cases: [string, string, Record<string, unknown>][] = [
+    ["GET", base, { workspaceId: "1" }],
+    ["POST", base, create],
+    ["PATCH", `${base}/{id}`, { workspaceId: "1", id: "5", connection: conn }],
+    [
+      "POST",
+      `${base}/{id}/status`,
+      { workspaceId: "1", id: "5", status: "paused" },
+    ],
+    ["DELETE", `${base}/{id}`, { workspaceId: "1", id: "5" }],
+  ]
+
+  test("a valid body parses; an unknown top-level key is refused on every route", () => {
+    for (const [method, path, body] of cases) {
+      const input = byPath(method, path).input
+      expect(input?.safeParse(body).success, `${method} ${path}`).toBe(true)
+      expect(
+        input?.safeParse({ ...body, extra: 1 }).success,
+        `${method} ${path}`,
+      ).toBe(false)
+    }
+  })
+
+  test("an unknown NESTED key is refused, not silently stripped", () => {
+    for (const [method, path, body] of cases.filter(
+      ([, , b]) => b.connection,
+    )) {
+      const nested = {
+        ...body,
+        connection: { ...conn, smtp: { ...conn.smtp, sneaky: true } },
+      }
+      expect(byPath(method, path).input?.safeParse(nested).success).toBe(false)
+    }
   })
 })
 

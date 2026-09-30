@@ -1246,6 +1246,28 @@ describe("s225b/s226b outreach B-1: line mail is keyed and recorded; the thread 
     await sendEmail(props({ ...textStep, id: "step-r1" }) as never)
     expect(sent(0).sender).toBe("7001")
     expect(pickForNewThread).toHaveBeenCalledTimes(1)
+    expect(assertThreadSender).toHaveBeenCalledWith(
+      { tx: true },
+      { workspaceId: "ws-1", lineInboxId: "line-1", senderId: "7001" },
+    )
+  })
+
+  test("s229b review: a replay whose recorded sender was archived meanwhile fails closed, never sends with it", async () => {
+    const { EmailSenderUnavailableError } = await import(
+      "@chatbotx.io/business/email-sender"
+    )
+    createRecipient.mockRejectedValueOnce(new Error("pg down"))
+    pickForNewThread.mockResolvedValueOnce("7001")
+    await expect(
+      sendEmail(props({ ...textStep, id: "step-r2" }) as never),
+    ).rejects.toThrow("pg down")
+    assertThreadSender.mockRejectedValueOnce(
+      new EmailSenderUnavailableError("sender-removed"),
+    )
+    await sendEmail(props({ ...textStep, id: "step-r2" }) as never)
+    expect(buildLineEmailMock).not.toHaveBeenCalled()
+    expect(lineRunAction).not.toHaveBeenCalled()
+    expect(markFailed).toHaveBeenCalledTimes(1)
   })
 
   test("s229b: a follow-up keeps its parent's sender (never re-picks); a legacy parent stays on the env account", async () => {

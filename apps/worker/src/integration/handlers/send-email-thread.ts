@@ -262,6 +262,9 @@ async function planLocked(
     tx,
   })
   if (replay) {
+    // Review s229b: a replay re-checks its recorded sender (an archived one
+    // fails closed), and never picks another.
+    await threadSenderOf(replay, line, tx)
     return planOf(messageKey, replay)
   }
   const scope = scopeOf(props)
@@ -301,6 +304,7 @@ async function planLocked(
  * line's least-used active sender today, or null when the line has none.
  */
 async function threadSenderOf(
+  /** The parent, or the replayed row itself (its own sender is sticky). */
   parent: Pick<EmailThreadMailModel, "senderId"> | null,
   line: { workspaceId: string; lineInboxId: string },
   tx: DatabaseClient,

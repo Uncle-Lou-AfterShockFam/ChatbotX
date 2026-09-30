@@ -215,82 +215,51 @@ export class EmailSenderService extends BaseService {
   }
 
   /**
-   * A blank (or absent) password keeps the stored one. A NEW password
-   * reconnects a disconnected sender (status active, reason cleared); it
-   * leaves any other status as it is.
+   * A blank (or whitespace-only, or absent) password keeps the stored one. A
+   * NEW password reconnects a disconnected sender (status active, reason
+   * cleared); it leaves any other status as it is.
    */
   async update(input: unknown): Promise<EmailSenderView> {
     const { workspaceId, id, connection, ...fields } = parseInput(
       updateEmailSenderInput,
       input,
     )
-    const current = await this.findLive(workspaceId, id)
-    const rampStart =
-      fields.rampStart === undefined ? current.rampStart : fields.rampStart
-    const rampPercent =
-      fields.rampPercent === undefined
-        ? current.rampPercent
-        : fields.rampPercent
-    if ((rampStart === null) !== (rampPercent === null)) {
-      throw validationException(
-        "rampPercent",
-        "Set both the ramp start and the ramp percent, or neither",
-      )
-    }
-    let secret: unknown
-    if (connection) {
-      const needsStored = !(
-        connection.smtp.password && connection.imap.password
-      )
-      const stored = needsStored
-        ? await decryptEmailSenderSecret(current).catch(() => {
-            throw validationException(
-              "connection",
-              "The stored password cannot be read: enter both passwords again",
-            )
+    const row = await this.withLockedSender(
+      workspaceId,
+      id,
+      async (tx, current) => {
+        const rampStart =
+          fields.rampStart === undefined ? current.rampStart : fields.rampStart
+        const rampPercent =
+          fields.rampPercent === undefined
+            ? current.rampPercent
+            : fields.rampPercent
+        if ((rampStart === null) !== (rampPercent === null)) {
+          throw validationException(
+            "rampPercent",
+            "Set both the ramp start and the ramp percent, or neither",
+          )
+        }
+        const reconnect = Boolean(
+          connection?.smtp.password || connection?.imap.password,
+        )
+        const secret = connection
+          ? await this.nextSecret(current, connection)
+          : undefined
+        const [updated] = await tx
+          .update(emailSenderModel)
+          .set({
+            ...fields,
+            ...(secret ? { secret } : {}),
+            ...(reconnect && current.status === "disconnected"
+              ? { status: "active" as const, disconnectionReason: null }
+              : {}),
           })
-        : null
-      const next: EmailSenderSmtpSecret = {
-        smtp: {
-          ...connection.smtp,
-          password:
-            connection.smtp.password || (stored?.smtp.password as string),
-        },
-        imap: {
-          ...connection.imap,
-          password:
-            connection.imap.password || (stored?.imap.password as string),
-        },
-      }
-      assertOnePassword(next)
-      secret = await encryptEmailSenderSecret(next, id)
-    }
-    const reconnect = Boolean(
-      connection && (connection.smtp.password || connection.imap.password),
+          .where(eq(emailSenderModel.id, id))
+          .returning()
+        return updated
+      },
     )
-    const [row] = await db
-      .update(emailSenderModel)
-      .set({
-        ...fields,
-        ...(secret ? { secret } : {}),
-        ...(reconnect
-          ? {
-              status: sql`CASE WHEN ${emailSenderModel.status} = 'disconnected' THEN 'active' ELSE ${emailSenderModel.status} END`,
-              disconnectionReason: null,
-            }
-          : {}),
-      })
-      .where(
-        and(
-          eq(emailSenderModel.id, id),
-          eq(emailSenderModel.workspaceId, workspaceId),
-          ne(emailSenderModel.status, "archived"),
-        ),
-      )
-      .returning()
-    if (!row) {
-      throw notFoundException(SENDER_NOT_FOUND)
-    }
     await this.audit("update", `updated an email sender (#${id})`)
     return await this.toView(row)
   }
@@ -305,26 +274,21 @@ export class EmailSenderService extends BaseService {
       setEmailSenderStatusInput,
       input,
     )
-    const [row] = await db
-      .update(emailSenderModel)
-      .set({ status })
-      .where(
-        and(
-          eq(emailSenderModel.id, id),
-          eq(emailSenderModel.workspaceId, workspaceId),
-          ne(emailSenderModel.status, "archived"),
-          ne(emailSenderModel.status, "disconnected"),
-        ),
-      )
-      .returning()
-    if (!row) {
-      const current = await this.findLive(workspaceId, id)
-      if (current.status === "disconnected") {
-        throw emailSenderCredentialsRequiredException()
-      }
-      // Changed between the update and this read: the caller retries.
-      throw notFoundException(SENDER_NOT_FOUND)
-    }
+    const row = await this.withLockedSender(
+      workspaceId,
+      id,
+      async (tx, current) => {
+        if (current.status === "disconnected") {
+          throw emailSenderCredentialsRequiredException()
+        }
+        const [updated] = await tx
+          .update(emailSenderModel)
+          .set({ status })
+          .where(eq(emailSenderModel.id, id))
+          .returning()
+        return updated
+      },
+    )
     await this.audit("update", `set email sender #${id} ${status}`)
     return await this.toView(row)
   }
@@ -336,20 +300,14 @@ export class EmailSenderService extends BaseService {
    */
   async archive(input: unknown): Promise<void> {
     const { workspaceId, id } = parseInput(emailSenderRefInput, input)
-    const [row] = await db
-      .update(emailSenderModel)
-      .set({ status: "archived" })
-      .where(
-        and(
-          eq(emailSenderModel.id, id),
-          eq(emailSenderModel.workspaceId, workspaceId),
-          ne(emailSenderModel.status, "archived"),
-        ),
-      )
-      .returning({ id: emailSenderModel.id })
-    if (!row) {
-      throw notFoundException(SENDER_NOT_FOUND)
-    }
+    await this.withLockedSender(workspaceId, id, async (tx) => {
+      const [updated] = await tx
+        .update(emailSenderModel)
+        .set({ status: "archived" })
+        .where(eq(emailSenderModel.id, id))
+        .returning()
+      return updated
+    })
     await this.audit("delete", `archived an email sender (#${id})`)
   }
 
@@ -432,8 +390,11 @@ export class EmailSenderService extends BaseService {
   }
 
   /**
-   * The sender of a NEW thread on this line (wire contract sec. 4), under the
-   * caller's line lock: null when the line has no non-archived sender (the
+   * The sender of a NEW thread on this line (wire contract sec. 4). Called
+   * inside the caller's (contact, line) transaction; it then takes the
+   * LINE-wide advisory lock (lock order: contact lock, line lock, rows), so
+   * the day's counts are serialized per line and no status write lands
+   * before the plan commits. Null when the line has no non-archived sender (the
    * legacy env account); else the `active` sender with the fewest outgoing
    * mails since UTC midnight, ties to the smallest id. Throws
    * EmailSenderUnavailableError when senders exist but none is active.
@@ -453,6 +414,7 @@ export class EmailSenderService extends BaseService {
         "pickForNewThread needs a workspaceId and lineInboxId",
       )
     }
+    await this.lockLine(tx, props.lineInboxId)
     const since = utcMidnight(props.now ?? new Date())
     const rows = await tx
       .select({
@@ -497,7 +459,8 @@ export class EmailSenderService extends BaseService {
 
   /**
    * A thread's sticky sender must still exist on the line and not be
-   * archived (wire contract sec. 4); paused / draining / disconnected are the
+   * archived (wire contract sec. 4), read under a row lock held until the
+   * caller's transaction ends; paused / draining / disconnected are the
    * daemon's to hold. Throws EmailSenderUnavailableError otherwise.
    */
   async assertThreadSender(
@@ -521,7 +484,9 @@ export class EmailSenderService extends BaseService {
           eq(emailSenderModel.lineInboxId, props.lineInboxId),
         ),
       )
-      .limit(1)
+      // FOR SHARE until the plan commits: an archive (FOR UPDATE) waits for
+      // it, or this read waits for the archive and sees it (review s229b).
+      .for("share")
     if (!row || row.status === "archived") {
       throw new EmailSenderUnavailableError("sender-removed")
     }
@@ -555,25 +520,92 @@ export class EmailSenderService extends BaseService {
     )
   }
 
-  private async findLive(
+  /**
+   * Runs `fn` on the sender's row under the lock order every writer and
+   * planner shares (review s229b): the line advisory lock first, then the
+   * row FOR UPDATE. A thread plan holds the (contact, line) lock, then the
+   * line lock (a new thread) or the row FOR SHARE (a follow-up), so a status
+   * write either waits for the plan's commit or the plan sees the new
+   * status. `lineInboxId` never changes, so reading it unlocked is safe.
+   * 404 for a missing, foreign or archived sender.
+   */
+  private async withLockedSender(
     workspaceId: string,
     id: string,
+    fn: (
+      tx: DatabaseClient,
+      current: EmailSenderModel,
+    ) => Promise<EmailSenderModel | undefined>,
   ): Promise<EmailSenderModel> {
-    const [row] = await db
-      .select()
-      .from(emailSenderModel)
-      .where(
-        and(
-          eq(emailSenderModel.id, id),
-          eq(emailSenderModel.workspaceId, workspaceId),
-          ne(emailSenderModel.status, "archived"),
-        ),
-      )
-      .limit(1)
+    const row = await db.transaction(async (tx) => {
+      const [line] = await tx
+        .select({ lineInboxId: emailSenderModel.lineInboxId })
+        .from(emailSenderModel)
+        .where(
+          and(
+            eq(emailSenderModel.id, id),
+            eq(emailSenderModel.workspaceId, workspaceId),
+          ),
+        )
+        .limit(1)
+      if (!line) {
+        return
+      }
+      await this.lockLine(tx, line.lineInboxId)
+      const [current] = await tx
+        .select()
+        .from(emailSenderModel)
+        .where(
+          and(
+            eq(emailSenderModel.id, id),
+            eq(emailSenderModel.workspaceId, workspaceId),
+          ),
+        )
+        .for("update")
+      if (!current || current.status === "archived") {
+        return
+      }
+      return await fn(tx, current)
+    })
     if (!row) {
       throw notFoundException(SENDER_NOT_FOUND)
     }
     return row
+  }
+
+  /** The encrypted secret an update stores; blank passwords keep the stored one. */
+  private async nextSecret(
+    current: EmailSenderModel,
+    connection: {
+      smtp: Omit<EmailSenderSmtpSecret["smtp"], "password"> & {
+        password?: string
+      }
+      imap: Omit<EmailSenderSmtpSecret["imap"], "password"> & {
+        password?: string
+      }
+    },
+  ): Promise<unknown> {
+    const needsStored = !(connection.smtp.password && connection.imap.password)
+    const stored = needsStored
+      ? await decryptEmailSenderSecret(current).catch(() => {
+          throw validationException(
+            "connection",
+            "The stored password cannot be read: enter the password again",
+          )
+        })
+      : null
+    const next: EmailSenderSmtpSecret = {
+      smtp: {
+        ...connection.smtp,
+        password: connection.smtp.password || (stored?.smtp.password as string),
+      },
+      imap: {
+        ...connection.imap,
+        password: connection.imap.password || (stored?.imap.password as string),
+      },
+    }
+    assertOnePassword(next)
+    return await encryptEmailSenderSecret(next, current.id)
   }
 
   private async toView(row: EmailSenderModel): Promise<EmailSenderView> {

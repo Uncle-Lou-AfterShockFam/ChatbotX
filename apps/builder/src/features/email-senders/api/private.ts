@@ -1,13 +1,13 @@
 import { emailSenderService } from "@chatbotx.io/business/email-sender"
-import { zodBigintAsString } from "@chatbotx.io/utils"
 import z from "zod"
-import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
 import { superAdminAuthorizedMiddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
 import {
   createEmailSenderData,
   emailSenderLineResource,
+  emailSenderRefData,
   emailSenderResource,
+  listEmailSendersQuery,
   setEmailSenderStatusData,
   updateEmailSenderData,
 } from "../schema/resource"
@@ -28,7 +28,7 @@ const privateListEmailSendersAPI = authorizedAPI
     summary: "List the email lines and their mailbox senders",
     tags,
   })
-  .input(withWorkspaceIdSchema)
+  .input(listEmailSendersQuery)
   .use(superAdminAuthorizedMiddleware, (input) => input.workspaceId)
   .output(
     z.object({
@@ -51,7 +51,7 @@ const privateCreateEmailSenderAPI = authorizedAPI
     summary: "Add an SMTP/IMAP mailbox sender to an email line",
     tags,
   })
-  .input(withWorkspaceIdSchema.and(createEmailSenderData))
+  .input(createEmailSenderData)
   .use(superAdminAuthorizedMiddleware, (input) => input.workspaceId)
   .output(emailSenderResource)
   .handler(
@@ -66,7 +66,7 @@ const privateUpdateEmailSenderAPI = authorizedAPI
     summary: "Edit a mailbox sender (a blank password keeps the stored one)",
     tags,
   })
-  .input(withWorkspaceIdSchema.and(updateEmailSenderData))
+  .input(updateEmailSenderData)
   .use(superAdminAuthorizedMiddleware, (input) => input.workspaceId)
   .output(emailSenderResource)
   .handler(async ({ input }) => await emailSenderService.update(input))
@@ -78,7 +78,7 @@ const privateSetEmailSenderStatusAPI = authorizedAPI
     summary: "Set a mailbox sender active, paused or draining",
     tags,
   })
-  .input(withWorkspaceIdSchema.and(setEmailSenderStatusData))
+  .input(setEmailSenderStatusData)
   .use(superAdminAuthorizedMiddleware, (input) => input.workspaceId)
   .output(emailSenderResource)
   .handler(async ({ input }) => await emailSenderService.setStatus(input))
@@ -90,7 +90,7 @@ const privateArchiveEmailSenderAPI = authorizedAPI
     summary: "Archive a mailbox sender (its threads fail closed)",
     tags,
   })
-  .input(withWorkspaceIdSchema.and(z.object({ id: zodBigintAsString() })))
+  .input(emailSenderRefData)
   .use(superAdminAuthorizedMiddleware, (input) => input.workspaceId)
   .output(z.object({ ok: z.literal(true) }))
   .handler(async ({ input }) => {

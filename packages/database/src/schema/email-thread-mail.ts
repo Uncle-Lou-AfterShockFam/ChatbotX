@@ -54,10 +54,12 @@ export const emailThreadMailModel = pgTable(
     /**
      * ManyReach step 3 (s229b): the mailbox this mail went out from (or, for
      * an incoming mail, arrived in). Null = the line's legacy env account.
-     * RESTRICT: senders are archived, never deleted.
+     * SET NULL (review s229b): the service never deletes a sender (archive
+     * is its only removal), so this fires only when the whole inbox or
+     * workspace goes; RESTRICT could abort those cascades by row order.
      */
     senderId: bigintAsString().references(() => emailSenderModel.id, {
-      onDelete: "restrict",
+      onDelete: "set null",
       onUpdate: "cascade",
     }),
   },

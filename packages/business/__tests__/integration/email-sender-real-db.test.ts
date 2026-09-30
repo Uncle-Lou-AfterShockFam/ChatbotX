@@ -509,10 +509,6 @@ describe.skipIf(!databaseUrl)("emailSenderService (s229b)", () => {
       messageId: "<in4@x.example>",
     })
     expect(none?.senderId).toBeNull()
-    // A referenced sender is never hard-deleted (archive instead).
-    await expect(
-      db.execute(sql`DELETE FROM "EmailSender" WHERE id = ${a.id}`),
-    ).rejects.toThrow()
   })
 
   test("disconnected: no status change brings it back (409); only an update with a NEW password reconnects it", async () => {
@@ -614,5 +610,171 @@ describe.skipIf(!databaseUrl)("emailSenderService (s229b)", () => {
       await emailSenderService.list({ workspaceId: s.workspaceId })
     ).find((v) => v.id === bad.id)
     expect(view?.connection).toBeNull()
+  })
+
+  describe("review s229b: FK ON DELETE SET NULL never blocks a cascade", () => {
+    const senderOf = async (mailId: string) => {
+      const { rows } = await db.execute(
+        sql`SELECT "senderId" FROM "EmailThreadMail" WHERE id = ${mailId}`,
+      )
+      return (rows[0] as { senderId: string | null } | undefined)?.senderId
+    }
+
+    test("deleting the workspace succeeds with referenced senders", async () => {
+      const s = await seed()
+      const a = await create(s, s.lineA, "a@example.com")
+      await mail({ s, lineInboxId: s.lineA, senderId: a.id })
+      await db.execute(sql`DELETE FROM "Workspace" WHERE id = ${s.workspaceId}`)
+      const { rows } = await db.execute(
+        sql`SELECT count(*)::int AS n FROM "EmailSender" WHERE "workspaceId" = ${s.workspaceId}`,
+      )
+      expect((rows[0] as { n: number }).n).toBe(0)
+    })
+
+    test("deleting the inbox succeeds; deleting a line whose sender a mail on ANOTHER line cites nulls that mail's sender", async () => {
+      const s = await seed()
+      const a = await create(s, s.lineA, "a@example.com")
+      const b = await create(s, s.lineB, "b@example.com")
+      await mail({ s, lineInboxId: s.lineA, senderId: a.id })
+      // Not writable by today's code paths, but reachable in the DB.
+      const crossLine = await mail({ s, lineInboxId: s.lineA, senderId: b.id })
+      await db.execute(sql`DELETE FROM "Inbox" WHERE id = ${s.lineB}`)
+      expect(await senderOf(crossLine)).toBeNull()
+      await db.execute(sql`DELETE FROM "Inbox" WHERE id = ${s.lineA}`)
+      expect(await senderOf(crossLine)).toBeUndefined()
+    })
+  })
+
+  test("review s229b: a whitespace-only password keeps the stored one and does not reconnect", async () => {
+    const s = await seed()
+    const a = await create(s, s.lineA, "a@example.com")
+    await db.execute(sql`
+      UPDATE "EmailSender" SET status = 'disconnected', "disconnectionReason" = 'AUTH failed'
+      WHERE id = ${a.id}`)
+    const spaces = connection("a@example.com", "   ")
+    await expect(
+      emailSenderService.update({
+        workspaceId: s.workspaceId,
+        id: a.id,
+        connection: spaces,
+      }),
+    ).resolves.toMatchObject({ status: "disconnected" })
+    const [row] = await emailSenderService.listForLine({
+      workspaceId: s.workspaceId,
+      lineInboxId: s.lineA,
+    })
+    expect(row?.auth).toEqual({ type: "password", password: PASSWORD })
+  })
+
+  describe("review s229b: status writes and thread plans are serialized", () => {
+    /** Resolves once some backend of this database waits on a lock. */
+    const lockWaiter = async () => {
+      for (let i = 0; i < 200; i++) {
+        const { rows } = await db.execute(sql`
+          SELECT count(*)::int AS n FROM pg_stat_activity
+          WHERE datname = current_database() AND wait_event_type = 'Lock'`)
+        if ((rows[0] as { n: number }).n > 0) {
+          return
+        }
+        await new Promise((r) => setTimeout(r, 25))
+      }
+      throw new Error("no backend ever waited on a lock")
+    }
+    const hold = () => {
+      let release!: () => void
+      const released = new Promise<void>((r) => {
+        release = r
+      })
+      return { release, released }
+    }
+
+    test("a follow-up plan holds its sender: archive waits for the plan's commit", async () => {
+      const s = await seed()
+      const a = await create(s, s.lineA, "a@example.com")
+      const gate = hold()
+      const ready = hold()
+      const order: string[] = []
+      const plan = db.transaction(async (tx) => {
+        await emailSenderService.assertThreadSender(tx, {
+          workspaceId: s.workspaceId,
+          lineInboxId: s.lineA,
+          senderId: a.id,
+        })
+        ready.release()
+        await gate.released
+        order.push("plan committed")
+      })
+      await ready.released
+      const archive = emailSenderService
+        .archive({ workspaceId: s.workspaceId, id: a.id })
+        .then(() => order.push("archived"))
+      await lockWaiter()
+      expect(order).toEqual([])
+      gate.release()
+      await Promise.all([plan, archive])
+      expect(order).toEqual(["plan committed", "archived"])
+    })
+
+    test("an archive in flight makes the follow-up plan fail closed once it commits", async () => {
+      const s = await seed()
+      const a = await create(s, s.lineA, "a@example.com")
+      const gate = hold()
+      const ready = hold()
+      // The archive's own lock order, held open: line lock, row FOR UPDATE.
+      const archiving = db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${`email-sender:${s.lineA}`}, 0))`,
+        )
+        await tx.execute(
+          sql`SELECT id FROM "EmailSender" WHERE id = ${a.id} FOR UPDATE`,
+        )
+        await tx.execute(
+          sql`UPDATE "EmailSender" SET status = 'archived' WHERE id = ${a.id}`,
+        )
+        ready.release()
+        await gate.released
+      })
+      await ready.released
+      const plan = db.transaction((tx) =>
+        emailSenderService.assertThreadSender(tx, {
+          workspaceId: s.workspaceId,
+          lineInboxId: s.lineA,
+          senderId: a.id,
+        }),
+      )
+      await lockWaiter()
+      gate.release()
+      await archiving
+      await expect(plan).rejects.toMatchObject({ reason: "sender-removed" })
+    })
+
+    test("a new-thread pick holds the LINE lock: a status write waits for the plan's commit", async () => {
+      const s = await seed()
+      const a = await create(s, s.lineA, "a@example.com")
+      const gate = hold()
+      const ready = hold()
+      const order: string[] = []
+      const plan = db.transaction(async (tx) => {
+        const picked = await emailSenderService.pickForNewThread(tx, {
+          workspaceId: s.workspaceId,
+          lineInboxId: s.lineA,
+        })
+        // No mail recorded here: its FK key-share lock would also hold the
+        // status write, hiding whether the LINE lock does.
+        expect(picked).toBe(a.id)
+        ready.release()
+        await gate.released
+        order.push("plan committed")
+      })
+      await ready.released
+      const pause = emailSenderService
+        .setStatus({ workspaceId: s.workspaceId, id: a.id, status: "paused" })
+        .then(() => order.push("paused"))
+      await lockWaiter()
+      expect(order).toEqual([])
+      gate.release()
+      await Promise.all([plan, pause])
+      expect(order).toEqual(["plan committed", "paused"])
+    })
   })
 })

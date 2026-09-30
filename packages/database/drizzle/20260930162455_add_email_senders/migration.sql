@@ -28,4 +28,4 @@ CREATE INDEX "EmailSender_workspaceId_lineInboxId_idx" ON "EmailSender" ("worksp
 CREATE INDEX "EmailThreadMail_senderId_createdAt_idx" ON "EmailThreadMail" ("senderId","createdAt");--> statement-breakpoint
 ALTER TABLE "EmailSender" ADD CONSTRAINT "EmailSender_workspaceId_Workspace_id_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
 ALTER TABLE "EmailSender" ADD CONSTRAINT "EmailSender_lineInboxId_Inbox_id_fkey" FOREIGN KEY ("lineInboxId") REFERENCES "Inbox"("id") ON DELETE CASCADE ON UPDATE CASCADE;--> statement-breakpoint
-ALTER TABLE "EmailThreadMail" ADD CONSTRAINT "EmailThreadMail_senderId_EmailSender_id_fkey" FOREIGN KEY ("senderId") REFERENCES "EmailSender"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "EmailThreadMail" ADD CONSTRAINT "EmailThreadMail_senderId_EmailSender_id_fkey" FOREIGN KEY ("senderId") REFERENCES "EmailSender"("id") ON DELETE SET NULL ON UPDATE CASCADE;

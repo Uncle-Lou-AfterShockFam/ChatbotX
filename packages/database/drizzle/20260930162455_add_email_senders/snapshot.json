@@ -50454,7 +50454,7 @@
         "id"
       ],
       "onUpdate": "CASCADE",
-      "onDelete": "RESTRICT",
+      "onDelete": "SET NULL",
       "name": "EmailThreadMail_senderId_EmailSender_id_fkey",
       "entityType": "fks",
       "schema": "public",

@@ -5,7 +5,14 @@ import {
 } from "@chatbotx.io/database/partials"
 import { z } from "zod"
 import { validationException } from "../errors"
-import { secretHost, secretPort, secretUser } from "./secret"
+import {
+  imapPort,
+  noControlChars,
+  secretHost,
+  secretMailbox,
+  secretUser,
+  smtpPort,
+} from "./secret"
 
 /** Closed input schemas of the EmailSender service (ManyReach step 3, s229b). */
 
@@ -14,14 +21,20 @@ const bigintId = z.string().regex(/^\d{1,19}$/, "Invalid id")
 /** One single address, trimmed and lower-cased (the suppression parser). */
 const emailAddress = z.string().transform((value, ctx) => {
   const parsed = parseEmailSuppression(value)
-  if (!parsed.ok || parsed.kind !== "address") {
+  if (!(parsed.ok && parsed.kind === "address" && noControlChars(value))) {
     ctx.addIssue({ code: "custom", message: "Enter a valid email address" })
     return z.NEVER
   }
   return parsed.value
 })
 
-const name = z.string().trim().min(1).max(L.string)
+/** Identity fields end up in From / headers: no control characters (CR/LF). */
+const name = z
+  .string()
+  .trim()
+  .min(1)
+  .max(L.string)
+  .refine(noControlChars, "Remove control characters")
 const optionalText = (max: number) =>
   z
     .string()
@@ -36,7 +49,7 @@ const optionalEmail = z
       return null
     }
     const parsed = parseEmailSuppression(v)
-    if (!parsed.ok || parsed.kind !== "address") {
+    if (!(parsed.ok && parsed.kind === "address" && noControlChars(v))) {
       ctx.addIssue({ code: "custom", message: "Enter a valid email address" })
       return z.NEVER
     }
@@ -47,7 +60,6 @@ const int = (range: { min: number; max: number }) =>
   z.number().int().min(range.min).max(range.max)
 
 const host = secretHost
-const port = secretPort
 const user = secretUser
 
 const connectionInput = <P extends z.ZodType<string | undefined>>(
@@ -56,24 +68,37 @@ const connectionInput = <P extends z.ZodType<string | undefined>>(
   z
     .object({
       smtp: z
-        .object({ host, port, secure: z.boolean(), user, password })
+        .object({ host, port: smtpPort, secure: z.boolean(), user, password })
         .strict(),
       imap: z
         .object({
           host,
-          port,
+          port: imapPort,
           secure: z.boolean(),
           user,
           password,
-          mailbox: z.string().trim().min(1).max(L.string).default("INBOX"),
+          mailbox: secretMailbox.default("INBOX"),
         })
         .strict(),
     })
     .strict()
 
-/** A new password is required on create; blank on update keeps the stored one. */
-const requiredPassword = z.string().min(1).max(L.string)
-const keptPassword = z.string().max(L.string).optional()
+/**
+ * A new password is required on create. On update a blank or WHITESPACE-ONLY
+ * one keeps the stored password (review s229b: it must neither replace it
+ * nor reconnect the sender). Otherwise stored exactly as given: an app
+ * password may be pasted with spaces.
+ */
+const isBlank = (v: string) => v.trim() === ""
+const requiredPassword = z
+  .string()
+  .max(L.string)
+  .refine((v) => !isBlank(v), "Enter the password")
+const keptPassword = z
+  .string()
+  .max(L.string)
+  .optional()
+  .transform((v) => (v === undefined || isBlank(v) ? undefined : v))
 
 const pacing = {
   dailyLimit: int(L.dailyLimit),

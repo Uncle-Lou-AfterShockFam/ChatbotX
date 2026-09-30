@@ -4,6 +4,7 @@ import {
   emailSenderUserStatuses,
   EMAIL_SENDER_LIMITS as L,
 } from "@chatbotx.io/database/partials"
+import { zodBigintAsString } from "@chatbotx.io/utils"
 import z from "zod"
 
 /**
@@ -102,8 +103,18 @@ const senderFields = {
   minGapMinutes: z.number().optional(),
 }
 
+/**
+ * Route inputs are single STRICT objects (review s229b): a zod intersection
+ * (`withWorkspaceIdSchema.and(...)`) ignores `.strict()` and silently drops
+ * unknown keys, nested ones included; these answer 422 instead.
+ */
+const workspaceId = zodBigintAsString()
+
+export const listEmailSendersQuery = z.object({ workspaceId }).strict()
+
 export const createEmailSenderData = z
   .object({
+    workspaceId,
     lineInboxId: z.string().max(32),
     provider: z.literal("smtp"),
     address: z.string().max(L.string + 16),
@@ -114,7 +125,8 @@ export const createEmailSenderData = z
 
 export const updateEmailSenderData = z
   .object({
-    id: z.string().max(32),
+    workspaceId,
+    id: zodBigintAsString(),
     fromName: senderFields.fromName.optional(),
     firstName: senderFields.firstName.optional(),
     lastName: senderFields.lastName.optional(),
@@ -129,5 +141,13 @@ export const updateEmailSenderData = z
   .strict()
 
 export const setEmailSenderStatusData = z
-  .object({ id: z.string().max(32), status: emailSenderUserStatuses })
+  .object({
+    workspaceId,
+    id: zodBigintAsString(),
+    status: emailSenderUserStatuses,
+  })
+  .strict()
+
+export const emailSenderRefData = z
+  .object({ workspaceId, id: zodBigintAsString() })
   .strict()

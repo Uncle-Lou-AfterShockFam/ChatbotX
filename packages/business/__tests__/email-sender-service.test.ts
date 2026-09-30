@@ -24,13 +24,15 @@ vi.mock("@chatbotx.io/database/client", async (importOriginal) => {
 vi.mock("@chatbotx.io/redis", () => ({ invalidateCacheByTags: vi.fn() }))
 vi.mock("../src/audit/dispatcher", () => ({ dispatchAuditRecord: vi.fn() }))
 
+const { EmailSenderUnavailableError, emailSenderService } = await import(
+  "../src/email-sender"
+)
 const {
   decryptEmailSenderSecret,
   emailSenderAad,
-  EmailSenderUnavailableError,
-  emailSenderService,
   encryptEmailSenderSecret,
-} = await import("../src/email-sender")
+  isAllowedMailHost,
+} = await import("../src/email-sender/secret")
 
 const PASSWORD = "app-pass-SECRET-1234"
 const secret = {
@@ -101,6 +103,51 @@ describe("email sender secret (s229b)", () => {
         "701",
       ),
     ).rejects.toThrow()
+  })
+})
+
+describe("isAllowedMailHost (review s229b)", () => {
+  test("public names and public IP literals pass; every port in the allow-list is accepted", () => {
+    for (const host of [
+      "smtp.gmail.com",
+      "imap.gmail.com",
+      "mail.example.co.uk",
+      "8.8.8.8",
+      "2001:4860:4860::8888",
+      "SMTP.Example.COM",
+    ]) {
+      expect(isAllowedMailHost(host)).toBe(true)
+    }
+    expect(isAllowedMailHost("192.168.1.1")).toBe(false)
+  })
+
+  test("the allowed ports parse; a pasted app password keeps its inner spaces", async () => {
+    const { createEmailSenderInput } = await import(
+      "../src/email-sender/schema"
+    )
+    for (const [smtp, imap] of [
+      [25, 143],
+      [465, 993],
+      [587, 993],
+      [2525, 143],
+    ]) {
+      const parsed = createEmailSenderInput.parse({
+        ...validCreate,
+        connection: {
+          smtp: {
+            ...connection.smtp,
+            port: smtp,
+            password: "abcd efgh ijkl mnop",
+          },
+          imap: {
+            ...connection.imap,
+            port: imap,
+            password: "abcd efgh ijkl mnop",
+          },
+        },
+      })
+      expect(parsed.connection.smtp.password).toBe("abcd efgh ijkl mnop")
+    }
   })
 })
 
@@ -180,6 +227,74 @@ describe("email sender entry points refuse bad input before any query (s229b)", 
           },
         },
         "connection.imap.password",
+      ],
+      // Review s229b: control characters in identity fields.
+      [{ ...validCreate, fromName: "Lou\r\nBcc: x@y.com" }, "fromName"],
+      [{ ...validCreate, firstName: "L\u0000ou" }, "firstName"],
+      [{ ...validCreate, lastName: "P\u007f" }, "lastName"],
+      [{ ...validCreate, address: "lou\u0001@example.com" }, "address"],
+      [
+        {
+          ...validCreate,
+          connection: {
+            ...connection,
+            smtp: { ...connection.smtp, user: "a\nb" },
+          },
+        },
+        "connection.smtp.user",
+      ],
+      // Review s229b: hosts and ports refused at write time.
+      ...[
+        "127.0.0.1",
+        "10.1.2.3",
+        "192.168.0.10",
+        "172.16.5.5",
+        "169.254.169.254",
+        "100.64.0.1",
+        "0.0.0.0",
+        "::1",
+        "fe80::1",
+        "fc00::1",
+        "::ffff:127.0.0.1",
+        "::",
+        "localhost",
+        "mail.localhost",
+        "intranet",
+        "mail..example.com",
+        "-mail.example.com",
+        "mail-.example.com",
+        "mail.example.123",
+      ].map((host): [unknown, string] => [
+        {
+          ...validCreate,
+          connection: { ...connection, smtp: { ...connection.smtp, host } },
+        },
+        "connection.smtp.host",
+      ]),
+      ...[1, 22, 80, 993, 8025].map((port): [unknown, string] => [
+        {
+          ...validCreate,
+          connection: { ...connection, smtp: { ...connection.smtp, port } },
+        },
+        "connection.smtp.port",
+      ]),
+      ...[110, 465, 587].map((port): [unknown, string] => [
+        {
+          ...validCreate,
+          connection: { ...connection, imap: { ...connection.imap, port } },
+        },
+        "connection.imap.port",
+      ]),
+      // A whitespace-only password is no password on create.
+      [
+        {
+          ...validCreate,
+          connection: {
+            smtp: { ...connection.smtp, password: "   " },
+            imap: { ...connection.imap, password: "   " },
+          },
+        },
+        "connection.smtp.password",
       ],
     ]
     for (const [input, field] of cases) {
