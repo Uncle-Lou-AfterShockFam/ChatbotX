@@ -144,7 +144,7 @@ test("withIntegrations covers every integration relation inboxModel defines", as
 // inboxes API), so it must never select a credential column. Driven by the
 // real table definitions: a new credential column, or a new channel, fails
 // here until `listIntegrations` excludes it.
-const CREDENTIAL_COLUMNS = ["auth", "capiAccessToken"]
+const CREDENTIAL_COLUMNS = ["auth", "capiAccessToken", "userInfo"]
 
 test("list with includes=integration loads every channel but no credential column", async () => {
   const schema = (await import("../../database/src/schema")) as Record<
