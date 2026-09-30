@@ -150,10 +150,11 @@ export const receivedPayloadSchema = z.object({
   // `lastIncomingMessageAt` get set by outbound sends too and can't be used
   // to infer this after the fact.
   isFirstIncomingMessage: z.boolean().optional(),
-  // Outreach B-1 (s226b): an automatic answer (the bulktext email line flags
-  // an out-of-office). Not a reply: stop-on-reply rules skip it, and a
-  // sequence PAUSES instead (sequence-ooo-pause).
-  autoReply: z.literal("ooo").optional(),
+  // Outreach B-1 (s226b, s228b): an automatic answer the bulktext email line
+  // flagged. Not a reply: stop-on-reply rules skip it. "ooo" (out of office)
+  // PAUSES a sequence (sequence-ooo-pause); "auto" (a ticket ack, a notice)
+  // neither stops nor pauses.
+  autoReply: z.enum(["ooo", "auto"]).optional(),
 })
 export type MessageReceivedPayload = z.infer<typeof receivedPayloadSchema>
 

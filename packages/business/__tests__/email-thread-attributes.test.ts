@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, test } from "vitest"
 import {
+  autoReplyClass,
   inboundEmailAttributes,
   isCitableMsgId,
   isOutOfOffice,
@@ -65,6 +66,24 @@ describe("email thread attributes (s226b)", () => {
       { autoReply: "ooo" },
     ]) {
       expect(isOutOfOffice(no)).toBe(false)
+    }
+  })
+
+  test("autoReplyClass (s228b): exactly ooo or auto, anything else is a person", () => {
+    expect(autoReplyClass({ email: { autoReply: "ooo" } })).toBe("ooo")
+    expect(autoReplyClass({ email: { autoReply: "auto" } })).toBe("auto")
+    for (const no of [
+      null,
+      undefined,
+      "auto",
+      {},
+      { email: null },
+      { email: { autoReply: "bounce" } },
+      { email: { autoReply: "AUTO" } },
+      { email: { autoReply: ["auto"] } },
+      { autoReply: "auto" },
+    ]) {
+      expect(autoReplyClass(no)).toBeUndefined()
     }
   })
 })

@@ -867,3 +867,91 @@ describe.skipIf(!databaseUrl)(
     })
   },
 )
+
+describe.skipIf(!databaseUrl)(
+  "endOutreach (s228b PR 2): a bounce or an unsubscribe",
+  () => {
+    test("a bounce ends the contact's outreach (stop-on-reply) enrolments for good, with the reply state; others are untouched", async () => {
+      const outreach = await seed({ stopOnReply: true })
+      const other = await seed({ stopOnReply: false })
+      const at = new Date()
+      expect(
+        await contactSequenceService.endOutreach({
+          workspaceId: outreach.workspaceId,
+          contactId: outreach.contactId,
+          reason: "bounced",
+          at,
+        }),
+      ).toEqual([outreach.sequenceId])
+      expect(await enrolment(outreach.enrollmentId)).toMatchObject({
+        status: "ended",
+        endReason: "bounced",
+        replyState: "bounced",
+      })
+      expect(await enrolment(other.enrollmentId)).toMatchObject({
+        status: "active",
+      })
+      await expect(
+        contactSequenceService.reactivateEnrollment({
+          workspaceId: outreach.workspaceId,
+          contactId: outreach.contactId,
+          sequenceId: outreach.sequenceId,
+          expectedUpdatedAt: (await enrolment(outreach.enrollmentId))
+            ?.updatedAt as Date,
+        }),
+      ).rejects.toMatchObject({ code: "notReactivatable" })
+    })
+
+    test("an unsubscribe overwrites an earlier reply end; the reply state stays", async () => {
+      const s = await seed({ stopOnReply: true })
+      await contactSequenceService.removeStopOnReplyEnrollments({
+        workspaceId: s.workspaceId,
+        contactId: s.contactId,
+        repliedAt: new Date(),
+      })
+      await contactSequenceService.endOutreach({
+        workspaceId: s.workspaceId,
+        contactId: s.contactId,
+        reason: "unsubscribed",
+      })
+      expect(await enrolment(s.enrollmentId)).toMatchObject({
+        status: "ended",
+        endReason: "unsubscribed",
+        replyState: "replied",
+      })
+    })
+
+    test("an out-of-office pause records replyState ooo", async () => {
+      const s = await seed({ stopOnReply: true })
+      await contactSequenceService.pauseForAutoReply({
+        workspaceId: s.workspaceId,
+        contactId: s.contactId,
+        occurredAt: new Date(),
+      })
+      expect(await enrolment(s.enrollmentId)).toMatchObject({
+        status: "active",
+        replyState: "ooo",
+      })
+    })
+
+    test("bad input is refused before any query", async () => {
+      await expect(
+        contactSequenceService.endOutreach(null as never),
+      ).rejects.toThrow(TypeError)
+      await expect(
+        contactSequenceService.endOutreach({
+          workspaceId: "x",
+          contactId: "1",
+          reason: "bounced",
+        }),
+      ).rejects.toMatchObject({ httpStatusCode: 422 })
+      await expect(
+        contactSequenceService.endOutreach({
+          workspaceId: "1",
+          contactId: "1",
+          reason: "replied" as never,
+        }),
+      ).rejects.toThrow(TypeError)
+    })
+  },
+)

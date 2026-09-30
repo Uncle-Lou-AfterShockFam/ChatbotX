@@ -19,6 +19,12 @@ vi.mock("@chatbotx.io/business/email-suppression", () => ({
     add: (...args: unknown[]) => addSuppression(...args),
   },
 }))
+const endOutreach = vi.fn()
+vi.mock("@chatbotx.io/business/contact-sequence", () => ({
+  contactSequenceService: {
+    endOutreach: (...args: unknown[]) => endOutreach(...args),
+  },
+}))
 vi.mock("../src/lib/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
@@ -190,5 +196,64 @@ describe("settleLineEmailStatus (s224b): an unreachable email send suppresses it
       settleLineEmailStatus({ ...base, error: "bounce" }),
     ).rejects.toThrow("db down")
     expect(markFailed).not.toHaveBeenCalled()
+  })
+})
+
+describe("settleLineEmailStatus (s228b): an unreachable verdict ends the contact's outreach", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    newsletterRef.mockResolvedValue("email:u:uuid-1")
+    endOutreach.mockResolvedValue(["seq-1"])
+  })
+
+  test("a bounce on an email ref with a contact ends it as bounced; no contact, or a delivered status, ends nothing", async () => {
+    await settleLineEmailStatus({
+      workspaceId: "ws-1",
+      inboxId: "in-1",
+      messageId: "outbox:ob_1",
+      status: "failed",
+      error: "hard-bounce",
+      recipient: "gone@example.com",
+      contactId: "c-1",
+    })
+    expect(endOutreach).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      contactId: "c-1",
+      reason: "bounced",
+    })
+    endOutreach.mockClear()
+    await settleLineEmailStatus({
+      workspaceId: "ws-1",
+      inboxId: "in-1",
+      messageId: "outbox:ob_2",
+      status: "failed",
+      error: "hard-bounce",
+      recipient: "gone@example.com",
+    })
+    await settleLineEmailStatus({
+      workspaceId: "ws-1",
+      inboxId: "in-1",
+      messageId: "outbox:ob_3",
+      status: "delivered",
+      recipient: "gone@example.com",
+      contactId: "c-1",
+    })
+    expect(endOutreach).not.toHaveBeenCalled()
+  })
+
+  test("ending the enrolments failing never fails the status (the suppression already stops sends)", async () => {
+    endOutreach.mockRejectedValueOnce(new Error("db down"))
+    await expect(
+      settleLineEmailStatus({
+        workspaceId: "ws-1",
+        inboxId: "in-1",
+        messageId: "outbox:ob_4",
+        status: "failed",
+        error: "hard-bounce",
+        recipient: "gone@example.com",
+        contactId: "c-1",
+      }),
+    ).resolves.toBe(false)
+    expect(addSuppression).toHaveBeenCalled()
   })
 })

@@ -1,5 +1,6 @@
 import { emailTopicAnalyticsService } from "@chatbotx.io/analytics"
 import { apiChannelOutboxService } from "@chatbotx.io/business"
+import { contactSequenceService } from "@chatbotx.io/business/contact-sequence"
 import { emailSuppressionService } from "@chatbotx.io/business/email-suppression"
 import { parseEmailSuppression } from "@chatbotx.io/database/partials"
 import { logger } from "../../lib/logger"
@@ -26,7 +27,8 @@ const OUTBOX_ID = /^outbox:(.+)$/
  *
  * Outreach B-1 (s224b): a failure whose reason is an UNREACHABLE verdict
  * (bounce, bad address, complaint) on any email ref, tracked or not, also
- * suppresses the recipient address for the workspace. Only email refs reach
+ * suppresses the recipient address for the workspace, and (s228b) ends the
+ * contact's outreach enrolments as bounced. Only email refs reach
  * this, so an SMS line's bad number never suppresses an address.
  */
 export async function settleLineEmailStatus(props: {
@@ -36,6 +38,8 @@ export async function settleLineEmailStatus(props: {
   status: string
   error?: unknown
   recipient?: unknown
+  /** The recipient's contact: an unreachable verdict ends its outreach. */
+  contactId?: string
 }): Promise<boolean> {
   if (props.status !== "delivered" && props.status !== "failed") {
     return false
@@ -59,6 +63,23 @@ export async function settleLineEmailStatus(props: {
       recipient: props.recipient,
       ref,
     })
+    // s228b: the address is dead: the contact's outreach sequences end for
+    // good (bounced, reply state bounced). Best effort: the suppression above
+    // already stops every later send.
+    if (props.contactId) {
+      await contactSequenceService
+        .endOutreach({
+          workspaceId: props.workspaceId,
+          contactId: props.contactId,
+          reason: "bounced",
+        })
+        .catch((err: unknown) => {
+          logger.warn(
+            { err, workspaceId: props.workspaceId, ref },
+            "line email unreachable: ending the outreach enrolments failed",
+          )
+        })
+    }
   }
   const token = TRACKED_REF.exec(ref)?.[1]
   if (!token) {

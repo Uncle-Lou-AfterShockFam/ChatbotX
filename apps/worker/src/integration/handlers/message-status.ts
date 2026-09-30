@@ -102,6 +102,12 @@ export const handleMessageStatus = async (
   // B2 phase 4 (s222b): a queued email-step newsletter has no message row;
   // its line's status settles the email-topic recipient. First, so a line
   // contact with no conversation (thrown below) still settles it.
+  // Resolved first (it never throws): the line status needs the contact to
+  // end its outreach on a bounce (s228b).
+  const contactInbox = await resolveStatusContactInbox(
+    inbox.id,
+    contact.sourceId,
+  )
   if (inbox.channel === "api") {
     await settleLineEmailStatus({
       workspaceId: inbox.workspaceId,
@@ -110,15 +116,11 @@ export const handleMessageStatus = async (
       status: eventStatus,
       error: payload.error,
       recipient: contact.sourceId,
+      contactId: contactInbox?.contact?.id,
     })
   }
 
   try {
-    const contactInbox = await resolveStatusContactInbox(
-      inbox.id,
-      contact.sourceId,
-    )
-
     if (!contactInbox?.conversation) {
       throw new SdkException("Unable to find conversation")
     }

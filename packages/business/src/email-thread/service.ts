@@ -64,21 +64,34 @@ export function isCitableMsgId(id: unknown): id is string {
   )
 }
 
+/** The automatic-answer classes a bulktext email line flags (s226b, s228b). */
+export const AUTO_REPLY_CLASSES = ["ooo", "auto"] as const
+export type AutoReplyClass = (typeof AUTO_REPLY_CLASSES)[number]
+
 /**
- * True for an out-of-office answer the bulktext email line flagged
- * (`contentAttributes.email.autoReply === "ooo"`, s226b): a sequence pauses
- * on it instead of stopping.
+ * The automatic-answer class the bulktext email line flagged on an inbound
+ * mail (`contentAttributes.email.autoReply`): "ooo" = an out-of-office (a
+ * sequence pauses on it, s226b), "auto" = any other automatic answer, e.g. a
+ * ticket acknowledgement (s228b: never a reply, never a pause). Anything else
+ * is undefined: a person wrote it.
  */
-export function isOutOfOffice(contentAttributes: unknown): boolean {
+export function autoReplyClass(
+  contentAttributes: unknown,
+): AutoReplyClass | undefined {
   const email =
     typeof contentAttributes === "object" && contentAttributes !== null
       ? (contentAttributes as { email?: unknown }).email
       : undefined
-  return (
-    typeof email === "object" &&
-    email !== null &&
-    (email as { autoReply?: unknown }).autoReply === "ooo"
-  )
+  const value =
+    typeof email === "object" && email !== null
+      ? (email as { autoReply?: unknown }).autoReply
+      : undefined
+  return AUTO_REPLY_CLASSES.find((c) => c === value)
+}
+
+/** True for an out-of-office answer (s226b): a sequence pauses on it. */
+export function isOutOfOffice(contentAttributes: unknown): boolean {
+  return autoReplyClass(contentAttributes) === "ooo"
 }
 
 export type InboundEmailAttributes = {
