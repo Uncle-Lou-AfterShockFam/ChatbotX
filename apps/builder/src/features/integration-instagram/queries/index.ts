@@ -2,6 +2,10 @@ import { instagramIntegrationService } from "@chatbotx.io/business"
 import { findOrFail } from "@chatbotx.io/database/client"
 import { integrationInstagramModel } from "@chatbotx.io/database/schema"
 import type { IntegrationInstagramModel } from "@chatbotx.io/database/types"
+import {
+  type WithoutCredentials,
+  withoutCredentials,
+} from "@/lib/without-credentials"
 
 export const findIntegrationInstagram = async (where: {
   workspaceId: string
@@ -16,8 +20,8 @@ export const listIntegrationInstagrams = async ({
   workspaceId,
 }: {
   workspaceId: string
-}): Promise<{ data: IntegrationInstagramModel[] }> => {
+}): Promise<{ data: WithoutCredentials<IntegrationInstagramModel>[] }> => {
   const data = await instagramIntegrationService.listByWorkspaceId(workspaceId)
 
-  return { data }
+  return { data: data.map(withoutCredentials) }
 }

@@ -48,6 +48,7 @@ import { useFieldArray } from "react-hook-form"
 import { toast } from "sonner"
 import { MediaLibraryOrInsertLink } from "@/components/media-library-or-insert-link"
 import { useFlowSelectOptions } from "@/features/flows/provider/flow-hook"
+import type { WithoutCredentials } from "@/lib/without-credentials"
 import PersistentMenuField from "../integration-webchat/components/persistent-menu-field"
 import { updateMessengerAction } from "./actions/update-messenger-action"
 import { TagSyncCard } from "./components/tag-sync-card"
@@ -55,7 +56,7 @@ import { updateMessengerRequest } from "./schema/action"
 
 type UpdateMessengerFormProps = {
   workspaceId: string
-  integrationMessenger: IntegrationMessengerModel
+  integrationMessenger: WithoutCredentials<IntegrationMessengerModel>
 }
 
 export function UpdateMessengerForm({

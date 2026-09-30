@@ -66,6 +66,28 @@ class InboxService extends BaseService {
     integrationTiktok: true,
   }
 
+  /**
+   * What `list` loads for `includes: ["integration"]`. Its callers hand the
+   * rows to the browser (the dashboard, the public QR landing page, the
+   * inboxes API), so no credential column is ever selected (s231a): `auth`
+   * holds bot tokens, page tokens and app client secrets in plaintext.
+   * Server-side code that needs credentials loads `withIntegrations`.
+   */
+  static readonly listIntegrations = {
+    integrationWhatsapp: { columns: { auth: false, capiAccessToken: false } },
+    integrationWebchat: { columns: { auth: false } },
+    integrationMessenger: { columns: { auth: false, capiAccessToken: false } },
+    integrationInstagram: { columns: { auth: false, capiAccessToken: false } },
+    integrationThreads: { columns: { auth: false } },
+    integrationZalo: { columns: { auth: false } },
+    integrationTelegram: { columns: { auth: false } },
+    integrationSmtp: { columns: { auth: false } },
+    integrationTiktok: { columns: { auth: false } },
+  } as const satisfies Record<
+    keyof typeof InboxService.withIntegrations,
+    { columns: Record<string, false> }
+  >
+
   async list(input: ListInboxesRequest): Promise<ListInboxesResponse> {
     // One `where`, shared by the page query and the count, so the two can
     // never drift (they previously repeated the same literal side by side).
@@ -83,7 +105,7 @@ class InboxService extends BaseService {
         // unordered offset pages can repeat or skip rows.
         orderBy: { id: "asc" },
         with: input.includes?.includes("integration")
-          ? InboxService.withIntegrations
+          ? InboxService.listIntegrations
           : undefined,
       }),
       db.$count(inboxModel, relationsFilterToSQL(inboxModel, where)),

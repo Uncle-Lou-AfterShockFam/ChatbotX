@@ -3,6 +3,7 @@
 import { integrationWebchatService } from "@chatbotx.io/business"
 import type { IntegrationWebchatModel } from "@chatbotx.io/database/types"
 import { assertCurrentUserCanAccessChatbot } from "@/lib/auth/utils"
+import { withoutCredentials } from "@/lib/without-credentials"
 import type { ListIntegrationWebchatsRequest } from "../schema/query"
 
 export const listIntegrationWebchats = async (
@@ -10,11 +11,12 @@ export const listIntegrationWebchats = async (
 ) => {
   await assertCurrentUserCanAccessChatbot(input.workspaceId)
 
-  return await integrationWebchatService.list({
+  const { data, pageCount } = await integrationWebchatService.list({
     workspaceId: input.workspaceId,
     page: input.page,
     perPage: input.perPage,
   })
+  return { data: data.map(withoutCredentials), pageCount }
 }
 
 export async function findIntegrationWebchat(

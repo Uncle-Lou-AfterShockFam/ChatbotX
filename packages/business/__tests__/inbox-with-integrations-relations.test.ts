@@ -139,3 +139,44 @@ test("withIntegrations covers every integration relation inboxModel defines", as
       .sort(),
   )
 })
+
+// s231a: `list` feeds client components (dashboard, public QR landing page,
+// inboxes API), so it must never select a credential column. Driven by the
+// real table definitions: a new credential column, or a new channel, fails
+// here until `listIntegrations` excludes it.
+const CREDENTIAL_COLUMNS = ["auth", "capiAccessToken"]
+
+test("list with includes=integration loads every channel but no credential column", async () => {
+  const schema = (await import("../../database/src/schema")) as Record<
+    string,
+    unknown
+  >
+  const { getColumns } = await import("drizzle-orm")
+  const listWith = await captureWithClause(
+    (service) =>
+      (
+        service as unknown as {
+          list: (input: unknown) => Promise<unknown>
+        }
+      ).list({ workspaceId: "workspace-1", includes: ["integration"] }),
+    findManyMock,
+  )
+  const fullWith = await captureWithClause(
+    (service) => service.listWithIntegrationsByWorkspace("workspace-1"),
+    findManyMock,
+  )
+
+  expect(Object.keys(listWith).sort()).toEqual(Object.keys(fullWith).sort())
+
+  for (const [relation, clause] of Object.entries(listWith)) {
+    const table = schema[`${relation}Model`]
+    expect(table, `no table for ${relation}`).toBeDefined()
+    const columns = Object.keys(getColumns(table as never))
+    const excluded = (clause as { columns?: Record<string, boolean> }).columns
+    for (const column of CREDENTIAL_COLUMNS.filter((c) =>
+      columns.includes(c),
+    )) {
+      expect(excluded?.[column], `${relation}.${column}`).toBe(false)
+    }
+  }
+})
