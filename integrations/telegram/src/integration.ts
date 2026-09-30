@@ -37,8 +37,8 @@ const config: IntegrationDefinition<
         username: botData.username as string,
       }
     },
-    registerWebhook: async ({ botToken, webhookUrl }) =>
-      registerWebhook({ botToken, webhookUrl }),
+    registerWebhook: async ({ botToken, webhookUrl, secretToken }) =>
+      registerWebhook({ botToken, webhookUrl, secretToken }),
   },
   handleRequest: async (props) => {
     const segments = new URL(props.req.url).pathname.split("/")

@@ -6,6 +6,7 @@ const {
   mockDelete,
   mockDisconnect,
   mockInsert,
+  mockInsertValues,
   mockTransaction,
   mockWorkspaceCreate,
 } = vi.hoisted(() => {
@@ -19,12 +20,15 @@ const {
     mockDelete,
     mockDisconnect: vi.fn(async () => undefined),
     mockInsert,
+    mockInsertValues,
     mockTransaction: vi.fn(async (callback: (tx: unknown) => unknown) =>
       callback({ delete: mockDelete, insert: mockInsert }),
     ),
     mockWorkspaceCreate: vi.fn(async () => ({ id: "ws-new" })),
   }
 })
+
+const HEX_TOKEN = /^[0-9a-f]{64}$/
 
 class DatabaseErrorStub extends Error {
   cause: { code: string }
@@ -149,6 +153,48 @@ describe("telegramIntegrationService.connect", () => {
     expect(mockWorkspaceCreate).toHaveBeenCalledTimes(1)
     expect(result.createdWorkspace).toBe(true)
     expect(result.workspaceId).toBe("ws-new")
+  })
+
+  // s231a: the webhook refuses updates without X-Telegram-Bot-Api-Secret-Token,
+  // so connect stores a fresh token and hands the same one to setWebhook.
+  test("stores a fresh webhook secret token and hands it to onConnected", async () => {
+    mockConnectChannelIntegration.mockImplementation(
+      async ({
+        insertIntegration,
+      }: {
+        insertIntegration: (inboxId: string) => Promise<void>
+      }) => {
+        await insertIntegration("inbox-1")
+        return { wasCreated: true }
+      },
+    )
+    const tokens: string[] = []
+    const connectOnce = () =>
+      telegramIntegrationService.connect({
+        workspaceId: "ws-1",
+        ownerId: "owner-1",
+        createdBy: "user-1",
+        botId: "bot-1",
+        botUsername: "mybot",
+        botToken: "token-1",
+        onConnected: vi.fn(({ webhookSecretToken }) => {
+          tokens.push(webhookSecretToken)
+          return Promise.resolve()
+        }),
+      })
+
+    await connectOnce()
+    await connectOnce()
+
+    expect(tokens[0]).toMatch(HEX_TOKEN)
+    expect(tokens[1]).toMatch(HEX_TOKEN)
+    expect(tokens[0]).not.toBe(tokens[1])
+    const stored = mockInsertValues.mock.calls.map(
+      ([values]) =>
+        (values as { auth: { metadata: { webhookSecretToken: string } } }).auth
+          .metadata.webhookSecretToken,
+    )
+    expect(stored).toEqual(tokens)
   })
 
   test("a 23505 database error surfaces as ChatbotXException('Bot already connected')", async () => {
