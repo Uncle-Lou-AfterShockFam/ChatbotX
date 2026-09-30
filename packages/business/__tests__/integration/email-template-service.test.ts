@@ -10,7 +10,11 @@
  */
 
 import { db, sql } from "@chatbotx.io/database/client"
-import { DocumentValidationError } from "@chatbotx.io/email-document"
+import {
+  DocumentValidationError,
+  parseDocument,
+} from "@chatbotx.io/email-document"
+import { renderEmail } from "@chatbotx.io/email-document/render-email"
 import { requireRealDatabaseUrl } from "@chatbotx.io/vitest-config/real-db"
 import { afterAll, afterEach, describe, expect, test, vi } from "vitest"
 
@@ -83,6 +87,8 @@ const withAssets = (attachmentId: string, imageId: string) => ({
     },
   ],
 })
+
+const MERGE_TEMPLATE_ISSUE = /^Merge template: /
 
 const DOCUMENT = {
   version: 1,
@@ -353,5 +359,48 @@ describe.skipIf(!databaseUrl)("emailTemplateService", () => {
       ok: false,
       issues: [{ path: "", message: "The email document is too large" }],
     })
+  })
+
+  test("s227b H3: preview = send (byte-identical render) for a Liquid document", async () => {
+    const workspaceId = await seedWorkspace()
+    const document = {
+      ...DOCUMENT,
+      settings: { preheader: "{{ first_name | default: 'you' }}" },
+      blocks: [
+        {
+          id: "1",
+          type: "text",
+          text: "<p>Hi {% if first_name %}{{first_name}}{% else %}{{company}} Team{% endif %}, {{coupon:X|no code}}</p>",
+        },
+      ],
+    }
+    for (const vars of [{ company: "Acme" }, { first_name: "<i>Ada</i>" }]) {
+      const out = await emailTemplateService.preview({
+        workspaceId,
+        document,
+        vars,
+      })
+      const sent = await renderEmail(parseDocument(document), { vars })
+      if (!out.ok) {
+        throw new Error("expected a render")
+      }
+      expect(out.html).toBe(sent.html)
+      expect(out.text).toBe(sent.text)
+      expect(out.missing).toEqual(sent.missing)
+    }
+  })
+
+  test("s227b H3: a Liquid error is a preview issue, never a throw", async () => {
+    const workspaceId = await seedWorkspace()
+    for (const text of ["<p>{% if a %}</p>", '<p>{% include "x" %}</p>']) {
+      const out = await emailTemplateService.preview({
+        workspaceId,
+        document: { ...DOCUMENT, blocks: [{ id: "1", type: "text", text }] },
+      })
+      expect(out.ok).toBe(false)
+      if (!out.ok) {
+        expect(out.issues[0]?.message).toMatch(MERGE_TEMPLATE_ISSUE)
+      }
+    }
   })
 })

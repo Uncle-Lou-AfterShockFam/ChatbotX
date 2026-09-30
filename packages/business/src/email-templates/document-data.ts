@@ -78,8 +78,9 @@ export function parsePreviewDocument(
 ):
   | { ok: true; document: EmailDocument }
   | { ok: false; issues: DocumentIssue[] } {
+  let document: EmailDocument
   try {
-    return { ok: true, document: parseDocument(input) }
+    document = parseDocument(input)
   } catch (error) {
     if (error instanceof DocumentTooLargeError) {
       return {
@@ -98,6 +99,16 @@ export function parsePreviewDocument(
     }
     throw error
   }
+  // s227b: a Liquid template that cannot render is an editor issue (a send
+  // of the same document fails closed as content).
+  const { invalid } = collectRenderInputs(document)
+  if (invalid) {
+    return {
+      ok: false,
+      issues: [{ path: "", message: `Merge template: ${invalid}` }],
+    }
+  }
+  return { ok: true, document }
 }
 
 /** The workspace's media rows among `ids` (a foreign id matches nothing). */

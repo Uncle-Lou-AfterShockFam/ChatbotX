@@ -7679,7 +7679,10 @@
       "threadCampaignBroadcast": "廣播:{name}",
       "onNoThread": "如果沒有較早的郵件",
       "onNoThreadNew": "開始新對話",
-      "onNoThreadStop": "不傳送,並為此聯絡人結束序列"
+      "onNoThreadStop": "不傳送,並為此聯絡人結束序列",
+      "subjectPreview": "預覽:{text}",
+      "subjectPreviewEmpty": "無聯絡人欄位:{text}",
+      "subjectPreviewError": "合併範本錯誤:{error}"
     }
   },
   "pages": {

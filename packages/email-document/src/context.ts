@@ -1,4 +1,5 @@
 import { DocumentDepthError } from "./errors"
+import { hasTemplate } from "./liquid"
 import { sanitizeHtmlBlock, sanitizeRichText } from "./sanitize"
 import type { AssetRef, Block, EmailDocument, LeafBlock } from "./schema"
 import {
@@ -32,7 +33,6 @@ export type RenderContext = {
 
 export const UNSUBSCRIBE_PLACEHOLDER = "<<unsubscribeUrl>>"
 const UNSUBSCRIBE_SENTINEL = "__UNSUBSCRIBE_URL__"
-const HAS_TOKEN = /\{\{/
 const HTTP_URL = /^https?:\/\//i
 const AMP_ENTITY = /&amp;/g
 const HTTP_HREF = /(\shref=")(https?:\/\/[^"]*)(")/gi
@@ -62,7 +62,7 @@ export function prepareRich(
     html = html.replace(
       HTTP_HREF,
       (_m, open: string, href: string, close: string) =>
-        HAS_TOKEN.test(href)
+        hasTemplate(href)
           ? `${open}${href}${close}`
           : `${open}${escapeHtml(link(href.replace(AMP_ENTITY, "&"), blockId))}${close}`,
     )
@@ -115,9 +115,7 @@ export function resolveTemplateUrl(
   missing: Set<string>,
 ): string {
   const tracked =
-    ctx.link && !HAS_TOKEN.test(template)
-      ? ctx.link(template, blockId)
-      : template
+    ctx.link && !hasTemplate(template) ? ctx.link(template, blockId) : template
   return mergeUrl(tracked, ctx.vars, missing)
 }
 

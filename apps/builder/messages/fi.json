@@ -7679,7 +7679,10 @@
       "threadCampaignBroadcast": "Lähetys: {name}",
       "onNoThread": "Jos aiempaa sähköpostia ei ole",
       "onNoThreadNew": "Aloita uusi ketju",
-      "onNoThreadStop": "Älä lähetä ja lopeta sekvenssi tälle yhteystiedolle"
+      "onNoThreadStop": "Älä lähetä ja lopeta sekvenssi tälle yhteystiedolle",
+      "subjectPreview": "Esikatselu: {text}",
+      "subjectPreviewEmpty": "Ilman yhteystietokenttiä: {text}",
+      "subjectPreviewError": "Yhdistämismallin virhe: {error}"
     }
   },
   "pages": {

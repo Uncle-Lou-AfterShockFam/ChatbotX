@@ -7679,7 +7679,10 @@
       "threadCampaignBroadcast": "Broadcast: {name}",
       "onNoThread": "Wenn es keine frühere E-Mail gibt",
       "onNoThreadNew": "Neuen Verlauf beginnen",
-      "onNoThreadStop": "Nicht senden und die Sequenz für diesen Kontakt beenden"
+      "onNoThreadStop": "Nicht senden und die Sequenz für diesen Kontakt beenden",
+      "subjectPreview": "Vorschau: {text}",
+      "subjectPreviewEmpty": "Ohne Kontaktfelder: {text}",
+      "subjectPreviewError": "Fehler in der Seriendruckvorlage: {error}"
     }
   },
   "pages": {

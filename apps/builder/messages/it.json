@@ -7679,7 +7679,10 @@
       "threadCampaignBroadcast": "Broadcast: {name}",
       "onNoThread": "Se non c'è un'email precedente",
       "onNoThreadNew": "Avvia una nuova conversazione",
-      "onNoThreadStop": "Non inviare e termina la sequenza per questo contatto"
+      "onNoThreadStop": "Non inviare e termina la sequenza per questo contatto",
+      "subjectPreview": "Anteprima: {text}",
+      "subjectPreviewEmpty": "Senza campi del contatto: {text}",
+      "subjectPreviewError": "Errore nel modello di unione: {error}"
     }
   },
   "pages": {

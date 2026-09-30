@@ -7679,7 +7679,10 @@
       "threadCampaignBroadcast": "Broadcast: {name}",
       "onNoThread": "Als er geen eerdere e-mail is",
       "onNoThreadNew": "Nieuw gesprek starten",
-      "onNoThreadStop": "Niet verzenden en de reeks voor dit contact beëindigen"
+      "onNoThreadStop": "Niet verzenden en de reeks voor dit contact beëindigen",
+      "subjectPreview": "Voorbeeld: {text}",
+      "subjectPreviewEmpty": "Zonder contactvelden: {text}",
+      "subjectPreviewError": "Fout in samenvoegsjabloon: {error}"
     }
   },
   "pages": {

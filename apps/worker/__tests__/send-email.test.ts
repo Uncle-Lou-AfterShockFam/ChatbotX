@@ -68,6 +68,14 @@ vi.mock("@chatbotx.io/variables", () => ({
         ),
       ),
     ),
+    // s227b: subject/preheader/legacy text resolve names, then render Liquid.
+    resolveMapping: vi.fn(({ text }: { text: string }) =>
+      Promise.resolve(
+        text.includes("{{evil}}")
+          ? { evil: '<a href="https://phish.test/steal">Verify</a>' }
+          : { first_name: "Jane" },
+      ),
+    ),
   },
 }))
 
@@ -517,6 +525,45 @@ test("s220b review: a transient render error propagates (queue retry), nothing s
   expect(runAction).not.toHaveBeenCalled()
 })
 
+describe("s227b H3: subject, preheader and legacy text are Liquid", () => {
+  const OWNER =
+    "Hi {% if first_name %}{{first_name}}{% else %}{{company}} Team{% endif %}"
+
+  test("the subject renders the else branch when first_name is missing", async () => {
+    const { contactVariableService } = await import("@chatbotx.io/variables")
+    vi.mocked(contactVariableService.resolveMapping).mockResolvedValueOnce({
+      company: "Acme",
+    })
+    runAction.mockClear()
+    await sendEmail(makeProps({ subject: OWNER }) as never)
+    const args = runAction.mock.calls.at(-1)?.[1] as { subject: string }
+    expect(args.subject).toBe("Hi Acme Team")
+  })
+
+  test("the subject renders the if branch when first_name is set", async () => {
+    runAction.mockClear()
+    await sendEmail(makeProps({ subject: OWNER }) as never)
+    const args = runAction.mock.calls.at(-1)?.[1] as { subject: string }
+    expect(args.subject).toBe("Hi Jane")
+  })
+
+  test.each([
+    ["subject", { subject: "Hi {% if first_name %}" }],
+    ["preheader", { preheader: '{% include "x" %}' }],
+    [
+      "legacy text",
+      { elements: [{ id: "1", type: "text", text: "{% for %}" }] },
+    ],
+  ])("an invalid %s template fails closed: counted, marked failed, never sent", async (_label, override) => {
+    createRecipient.mockClear()
+    markFailed.mockClear()
+    runAction.mockClear()
+    await sendEmail(makeProps(override) as never)
+    expect(runAction).not.toHaveBeenCalled()
+    expect(markFailed).toHaveBeenCalledWith("test-token-xyz")
+  })
+})
+
 describe("s221b skeptic HIGH: document reads happen before the tracking row", () => {
   test("a transient read error retries with NO recipient row written (no double count)", async () => {
     prepareStepDocumentMock.mockRejectedValueOnce(new Error("ECONNRESET"))
@@ -720,7 +767,7 @@ describe("personal form links in email (s220c)", () => {
   test("an email LINE send is judged by the line's address, not step.to (Codex review s220c)", async () => {
     const { contactVariableService } = await import("@chatbotx.io/variables")
     const getAll = vi.mocked(contactVariableService.getAll)
-    const replaceAll = vi.mocked(contactVariableService.replaceAll)
+    const resolveMapping = vi.mocked(contactVariableService.resolveMapping)
     for (const [lineAddress, expected] of [
       ["other@example.com", false],
       ["jane@example.com", true],
@@ -733,16 +780,17 @@ describe("personal form links in email (s220c)", () => {
         inboxId: "line-1",
         sourceId: lineAddress,
       })
-      replaceAll.mockClear()
+      resolveMapping.mockClear()
       await sendEmail(
         makeProps({
           to: "jane@example.com",
           lineInboxId: "line-1",
           templateId: "77",
+          subject: "Hi {{first_name}}",
         }) as never,
       )
-      const subjectCall = replaceAll.mock.calls.find(
-        ([arg]) => (arg as { text: string }).text === "Hello",
+      const subjectCall = resolveMapping.mock.calls.find(
+        ([arg]) => (arg as { text: string }).text === "{{first_name}}",
       )?.[0] as { variables: { personalLinks?: boolean } }
       expect(subjectCall.variables.personalLinks).toBe(expected)
     }
@@ -751,7 +799,7 @@ describe("personal form links in email (s220c)", () => {
   test("the body is resolved with the opt-in only when the recipient is the contact", async () => {
     const { contactVariableService } = await import("@chatbotx.io/variables")
     const getAll = vi.mocked(contactVariableService.getAll)
-    const replaceAll = vi.mocked(contactVariableService.replaceAll)
+    const resolveMapping = vi.mocked(contactVariableService.resolveMapping)
     for (const [to, expected] of [
       ["jane@example.com", true],
       ["boss@example.com", false],
@@ -759,10 +807,10 @@ describe("personal form links in email (s220c)", () => {
       getAll.mockResolvedValueOnce({
         contact: { email: "jane@example.com" },
       } as never)
-      replaceAll.mockClear()
-      await sendEmail(makeProps({ to }) as never)
-      const subjectCall = replaceAll.mock.calls.find(
-        ([arg]) => (arg as { text: string }).text === "Hello",
+      resolveMapping.mockClear()
+      await sendEmail(makeProps({ to, subject: "Hi {{first_name}}" }) as never)
+      const subjectCall = resolveMapping.mock.calls.find(
+        ([arg]) => (arg as { text: string }).text === "{{first_name}}",
       )?.[0] as { variables: { personalLinks?: boolean } }
       expect(subjectCall.variables.personalLinks).toBe(expected)
     }

@@ -1,5 +1,6 @@
-import { expect, test } from "vitest"
+import { describe, expect, test } from "vitest"
 import {
+  headerPreview,
   PREVIEW_SAMPLE_VALUES,
   previewSampleVars,
 } from "@/features/email-templates/lib/preview-samples"
@@ -45,4 +46,21 @@ test("samples fit the preview input caps (<= 50 vars, <= 1000 chars)", () => {
   for (const v of values) {
     expect(v.length).toBeLessThanOrEqual(1000)
   }
+})
+
+describe("s227b headerPreview (subject/preheader, Liquid)", () => {
+  test("renders the sample contact and the bare-contact branch", () => {
+    expect(
+      headerPreview(
+        "Hi {% if first_name %}{{first_name}}{% else %}there{% endif %}",
+      ),
+    ).toEqual({ ok: true, sample: "Hi Alex", empty: "Hi there" })
+  })
+
+  test("plain text has no preview; a broken template reports its error", () => {
+    expect(headerPreview("Hello")).toBeUndefined()
+    const broken = headerPreview("Hi {% if first_name %}")
+    expect(broken?.ok).toBe(false)
+    expect(headerPreview('{% include "x" %}')?.ok).toBe(false)
+  })
 })

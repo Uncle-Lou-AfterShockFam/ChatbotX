@@ -7679,7 +7679,10 @@
       "threadCampaignBroadcast": "Broadcast: {name}",
       "onNoThread": "If there is no earlier email",
       "onNoThreadNew": "Start a new thread",
-      "onNoThreadStop": "Don't send, and end the sequence for this contact"
+      "onNoThreadStop": "Don't send, and end the sequence for this contact",
+      "subjectPreview": "Preview: {text}",
+      "subjectPreviewEmpty": "Without contact fields: {text}",
+      "subjectPreviewError": "Merge template error: {error}"
     }
   },
   "pages": {

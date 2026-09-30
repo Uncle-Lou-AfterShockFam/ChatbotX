@@ -7679,7 +7679,10 @@
       "threadCampaignBroadcast": "Udsendelse: {name}",
       "onNoThread": "Hvis der ikke er nogen tidligere e-mail",
       "onNoThreadNew": "Start en ny tråd",
-      "onNoThreadStop": "Send ikke, og afslut sekvensen for denne kontakt"
+      "onNoThreadStop": "Send ikke, og afslut sekvensen for denne kontakt",
+      "subjectPreview": "Forhåndsvisning: {text}",
+      "subjectPreviewEmpty": "Uden kontaktfelter: {text}",
+      "subjectPreviewError": "Fejl i fletteskabelon: {error}"
     }
   },
   "pages": {

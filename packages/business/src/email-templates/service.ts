@@ -16,6 +16,7 @@ import {
   type EmailDocument,
   parseDocument,
   type RenderAsset,
+  TemplateError,
 } from "@chatbotx.io/email-document"
 import { renderEmail } from "@chatbotx.io/email-document/render-email"
 import { createId } from "@chatbotx.io/utils"
@@ -181,10 +182,22 @@ export class EmailTemplateService extends BaseService {
     }
     const { document } = parsed
     const assets = await resolveOwnedAssets(workspaceId, document, tx)
-    const rendered = await renderEmail(document, {
-      vars: props.vars ?? {},
-      assets,
-    })
+    let rendered: Awaited<ReturnType<typeof renderEmail>>
+    try {
+      rendered = await renderEmail(document, {
+        vars: props.vars ?? {},
+        assets,
+      })
+    } catch (error) {
+      // s227b: a Liquid render limit is an editor issue, never a 500.
+      if (error instanceof TemplateError) {
+        return {
+          ok: false,
+          issues: [{ path: "", message: `Merge template: ${error.message}` }],
+        }
+      }
+      throw error
+    }
     return {
       ok: true,
       html: rendered.html,
