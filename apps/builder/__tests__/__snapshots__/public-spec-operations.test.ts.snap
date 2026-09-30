@@ -839,6 +839,11 @@ exports[`public API spec — operation naming guard > operation list (operationI
   },
   {
     "method": "POST",
+    "operationId": "contacts.reactivateSequence",
+    "path": "/v1/contacts/{identifier}/sequences/{sequenceId}/reactivate",
+  },
+  {
+    "method": "POST",
     "operationId": "contacts.refreshProfile",
     "path": "/v1/contacts/{identifier}/refresh-profile",
   },

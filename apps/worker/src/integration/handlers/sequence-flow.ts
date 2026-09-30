@@ -111,9 +111,8 @@ async function runSendSequenceFlow(
   if (completedAt) {
     sentAt = completedAt
   } else {
-    // Re-read right before sending: the enrolment may have been removed (a
-    // stop-on-reply reply, an unsubscribe) while the step was looked up, and
-    // its dispatch cascades away with it.
+    // Re-read right before sending: the dispatch may be gone (its step or
+    // contact was deleted, which cascades) while the step was looked up.
     const current = await fetchDispatch(dispatchId, workspaceId)
     if (!current) {
       await scheduler.removeFromSchedule(bucket, dispatchId)
@@ -125,6 +124,16 @@ async function runSendSequenceFlow(
       dispatchId,
       workspaceId,
     })
+    if (deferred === "ended") {
+      // s228b: the enrolment ended (its row is kept, so this dispatch no
+      // longer cascades away); the gate canceled it. Send nothing.
+      await scheduler.removeFromSchedule(bucket, dispatchId)
+      logger.info(
+        { dispatchId, workspaceId },
+        "sendSequenceFlow: enrolment ended, step canceled",
+      )
+      return
+    }
     if (deferred) {
       await scheduler.addToSchedule(
         deferred.bucket,
@@ -194,9 +203,9 @@ async function runSendSequenceFlow(
       scheduler,
     })
   } catch (err) {
-    // The enrolment was removed (a stop-on-reply reply, an unsubscribe, a
-    // company stop) while this step was sending: its dispatch cascaded away,
-    // so there is nothing to advance and nothing a retry could do.
+    // The enrolment row is gone (its contact or workspace was deleted) while
+    // this step was sending: nothing to advance, nothing a retry could do.
+    // An ENDED enrolment (s228b) is kept and simply not advanced.
     if (!(err instanceof EnrollmentNotFoundError)) {
       throw err
     }

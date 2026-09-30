@@ -28,7 +28,6 @@ type PendingDispatch = {
 }
 
 type PendingDispatchWhere = {
-  enrollmentId?: string
   status: "pending"
   workspaceId: string
 }
@@ -46,18 +45,6 @@ const pendingDispatchColumns = {
   contactId: true,
   stepId: true,
 } as const
-
-export interface CancelPendingDispatchesParams {
-  client?: DatabaseClient | Transaction
-  enrollmentId: string
-  reason?: string
-  /**
-   * Set to false only when the caller removes scheduler entries after its
-   * surrounding database transaction has committed.
-   */
-  removeFromSchedule?: boolean
-  workspaceId: string
-}
 
 async function cancelPendingDispatchesByWhere(
   options: CancelPendingDispatchesOptions,
@@ -95,20 +82,6 @@ async function cancelPendingDispatchesByWhere(
     id: dispatch.id,
     bucket: dispatch.bucket,
   }))
-}
-
-export async function cancelPendingDispatches(
-  params: CancelPendingDispatchesParams,
-): Promise<ScheduledDispatch[]> {
-  return await cancelPendingDispatchesByWhere({
-    client: params.client,
-    removeFromSchedule: params.removeFromSchedule,
-    where: {
-      enrollmentId: params.enrollmentId,
-      status: "pending",
-      workspaceId: params.workspaceId,
-    },
-  })
 }
 
 export async function cancelPendingDispatchesForWorkspace(params: {

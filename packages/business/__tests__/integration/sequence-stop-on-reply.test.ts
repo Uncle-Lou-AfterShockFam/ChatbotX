@@ -106,6 +106,13 @@ async function exists(table: string, id: string): Promise<boolean> {
   return (result.rows[0]?.n ?? 0) > 0
 }
 
+async function statusOf(table: string, id: string) {
+  const result = await db.execute<Record<string, unknown>>(sql`
+    SELECT * FROM ${sql.identifier(table)} WHERE id = ${id}`)
+  const row = result.rows[0]
+  return { status: row?.status, endReason: row?.endReason }
+}
+
 afterEach(async () => {
   if (!databaseUrl) {
     return
@@ -161,16 +168,23 @@ describe.skipIf(!databaseUrl)("removeStopOnReplyEnrollments", () => {
     })
 
     expect(ended).toEqual([stopSeq])
-    expect(await exists("ContactOnSequence", stopped.enrollmentId)).toBe(false)
-    // The queued step goes with the enrolment (FK cascade).
-    expect(await exists("SequenceDispatch", stopped.dispatchId)).toBe(false)
+    // s228b: the enrolment ENDS (kept, with the reason); its queued step is
+    // canceled.
+    expect(await statusOf("ContactOnSequence", stopped.enrollmentId)).toEqual({
+      status: "ended",
+      endReason: "contact_replied",
+    })
+    expect(await statusOf("SequenceDispatch", stopped.dispatchId)).toEqual({
+      status: "canceled",
+      endReason: undefined,
+    })
     expect(await exists("ContactOnSequence", ruleOff.enrollmentId)).toBe(true)
     expect(await exists("SequenceDispatch", ruleOff.dispatchId)).toBe(true)
     expect(await exists("ContactOnSequence", other.enrollmentId)).toBe(true)
     expect(await exists("SequenceDispatch", other.dispatchId)).toBe(true)
   })
 
-  test("a dispatch already claimed (running) is gone too, so the consumer's findRunning misses it", async () => {
+  test("a dispatch already claimed (running) is stopped at the send gate, never sent (s228b)", async () => {
     const workspaceId = mintId()
     const stopSeq = await seedSequence({ workspaceId, stopOnReply: true })
     const contactId = mintId()
@@ -188,11 +202,15 @@ describe.skipIf(!databaseUrl)("removeStopOnReplyEnrollments", () => {
     })
 
     expect(
-      await contactSequenceService.findRunningDispatch({
+      await contactSequenceService.deferIfPaused({
         dispatchId: claimed.dispatchId,
         workspaceId,
       }),
-    ).toBeUndefined()
+    ).toBe("ended")
+    expect(await statusOf("SequenceDispatch", claimed.dispatchId)).toEqual({
+      status: "canceled",
+      endReason: undefined,
+    })
   })
 
   test("an enrolment made after the reply (a late or re-delivered event) is kept", async () => {

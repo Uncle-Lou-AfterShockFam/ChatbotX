@@ -4,6 +4,7 @@ import type {
   ContactsOnSequenceModel,
   SequenceModel,
 } from "@chatbotx.io/database/types"
+import { TERMINAL_END_REASONS } from "@chatbotx.io/sequence-scheduler/enrollment-constants"
 import { SelectTagsInputField } from "@chatbotx.io/ui/components/form/select-tags-input-field"
 import { Badge } from "@chatbotx.io/ui/components/ui/badge"
 import { Button } from "@chatbotx.io/ui/components/ui/button"
@@ -16,12 +17,22 @@ import { toast } from "sonner"
 import { useSequenceOptions } from "@/features/sequences/provider/sequence-hook"
 import { useWorkspaceId } from "@/hooks/routing"
 import type { ContactResource } from "../contacts/schema/resource"
+import { reactivateContactSequenceAction } from "./actions/reactivate-contact-sequence.action"
 import { resumeContactSequenceAction } from "./actions/resume-contact-sequence.action"
 import { updateContactSequenceAction } from "./actions/update-contact-sequence.action"
 import {
   type ContactOnSequenceWithRelations,
   updateContactSequenceRequest,
 } from "./schema"
+
+/** s228b: ended subscriptions are kept as history, never shown as "in". */
+const subscribedIds = (
+  sequences: ContactOnSequenceWithRelations[] | undefined,
+) =>
+  sequences
+    ?.filter((cos) => cos.status !== "ended")
+    .map((cos) => cos.sequence.id)
+    .filter(Boolean) ?? []
 
 export default function UpdateContactSequenceField({
   contact,
@@ -42,8 +53,8 @@ export default function UpdateContactSequenceField({
     value: sequence.id,
   }))
 
-  const [currentSequencesIds, setCurrentSequencesIds] = useState<string[]>(
-    () => sequences?.map((cos) => cos.sequence.id).filter(Boolean) ?? [],
+  const [currentSequencesIds, setCurrentSequencesIds] = useState<string[]>(() =>
+    subscribedIds(sequences),
   )
 
   const { form, handleSubmitWithAction } = useHookFormAction(
@@ -76,8 +87,7 @@ export default function UpdateContactSequenceField({
   )
 
   useEffect(() => {
-    const newSequencesIds =
-      sequences?.map((cos) => cos.sequence.id).filter(Boolean) ?? []
+    const newSequencesIds = subscribedIds(sequences)
     setCurrentSequencesIds(newSequencesIds)
     form.setValue("sequences", newSequencesIds)
   }, [sequences, form])
@@ -106,6 +116,19 @@ export default function UpdateContactSequenceField({
               sequences.map((cos) =>
                 cos.sequence.id === sequenceId
                   ? { ...cos, status: "active", lastError: null }
+                  : cos,
+              ),
+            )
+          }
+          sequences={sequences}
+        />
+        <EndedSequences
+          contactId={contact?.id ?? ""}
+          onReactivated={(sequenceId) =>
+            onSuccess?.(
+              sequences.map((cos) =>
+                cos.sequence.id === sequenceId
+                  ? { ...cos, status: "active", endReason: null, endedAt: null }
                   : cos,
               ),
             )
@@ -179,6 +202,77 @@ function HeldSequences({
           >
             {t("sequences.heldResume")}
           </Button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/**
+ * s228b: each sequence this contact's subscription ENDED in, with the
+ * reason, and a Reactivate action unless it ended for good.
+ */
+function EndedSequences({
+  contactId,
+  sequences,
+  onReactivated,
+}: {
+  contactId: string
+  sequences: ContactOnSequenceWithRelations[]
+  onReactivated: (sequenceId: string) => void
+}) {
+  const t = useTranslations()
+  const workspaceId = useWorkspaceId()
+  const [pending, setPending] = useState<string | null>(null)
+  const ended = sequences.filter((cos) => cos.status === "ended")
+  if (ended.length === 0) {
+    return null
+  }
+  const reactivate = async (cos: ContactOnSequenceWithRelations) => {
+    setPending(cos.sequence.id)
+    try {
+      const result = await reactivateContactSequenceAction(workspaceId, {
+        contactId,
+        sequenceId: cos.sequence.id,
+        expectedUpdatedAt: new Date(cos.updatedAt).toISOString(),
+      })
+      if (result?.serverError) {
+        toast.error(result.serverError)
+        return
+      }
+      toast.success(t("sequences.endedReactivated"))
+      onReactivated(cos.sequence.id)
+    } finally {
+      setPending(null)
+    }
+  }
+  return (
+    <ul className="flex flex-col gap-1" data-testid="contact-ended-sequences">
+      {ended.map((cos) => (
+        <li
+          className="flex items-center justify-between gap-2 rounded-md border px-2 py-1 text-xs"
+          key={cos.sequence.id}
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <Badge variant="outline">{t("sequences.endedBadge")}</Badge>
+            <span className="truncate">
+              {t("sequences.endedIn", {
+                sequence: cos.sequence.name,
+                reason: cos.endReason ?? "",
+              })}
+            </span>
+          </span>
+          {cos.endReason && TERMINAL_END_REASONS.has(cos.endReason) ? null : (
+            <Button
+              disabled={pending !== null}
+              onClick={() => reactivate(cos)}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {t("sequences.endedReactivate")}
+            </Button>
+          )}
         </li>
       ))}
     </ul>

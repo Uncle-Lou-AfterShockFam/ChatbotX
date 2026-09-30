@@ -246,103 +246,12 @@ describe("createDispatch", () => {
   })
 })
 
-describe("cancelPendingDispatches", () => {
+describe("dispatch cancellation (workspace) and schedule removal", () => {
   beforeEach(() => {
     findManyMock.mockResolvedValue([])
     updateWhereMock.mockResolvedValue(undefined)
     useExistingMock.mockResolvedValue({})
     removeFromScheduleMock.mockResolvedValue(undefined)
-  })
-
-  test("returns empty array and skips update when no pending dispatches exist", async () => {
-    const { cancelPendingDispatches } = await import("../src/dispatch-cancel")
-    findManyMock.mockResolvedValue([])
-
-    const result = await cancelPendingDispatches({
-      enrollmentId: "enroll-1",
-      workspaceId: "ws-1",
-    })
-
-    expect(result).toEqual([])
-    expect(updateWhereMock).not.toHaveBeenCalled()
-    expect(removeFromScheduleMock).not.toHaveBeenCalled()
-  })
-
-  test("cancels pending dispatches, calls removeFromSchedule for each, and returns id+bucket", async () => {
-    const { cancelPendingDispatches } = await import("../src/dispatch-cancel")
-    const pendingDispatches = [
-      {
-        id: "d-1",
-        bucket: 10,
-        sequenceId: "seq-1",
-        contactId: "c-1",
-        stepId: "s-1",
-      },
-      {
-        id: "d-2",
-        bucket: 20,
-        sequenceId: "seq-1",
-        contactId: "c-1",
-        stepId: "s-2",
-      },
-    ]
-    findManyMock.mockResolvedValue(pendingDispatches)
-
-    const result = await cancelPendingDispatches({
-      enrollmentId: "enroll-1",
-      workspaceId: "ws-1",
-    })
-
-    expect(updateWhereMock).toHaveBeenCalledTimes(1)
-    expect(removeFromScheduleMock).toHaveBeenCalledTimes(2)
-    expect(removeFromScheduleMock).toHaveBeenCalledWith(10, "d-1")
-    expect(removeFromScheduleMock).toHaveBeenCalledWith(20, "d-2")
-    expect(result).toEqual([
-      { id: "d-1", bucket: 10 },
-      { id: "d-2", bucket: 20 },
-    ])
-  })
-
-  test("calls useExisting to obtain the redis client before scheduling removal", async () => {
-    const { cancelPendingDispatches } = await import("../src/dispatch-cancel")
-    findManyMock.mockResolvedValue([
-      {
-        id: "d-1",
-        bucket: 5,
-        sequenceId: "seq-1",
-        contactId: "c-1",
-        stepId: "s-1",
-      },
-    ])
-
-    await cancelPendingDispatches({
-      enrollmentId: "enroll-1",
-      workspaceId: "ws-1",
-    })
-
-    expect(useExistingMock).toHaveBeenCalledTimes(1)
-  })
-
-  test("uses provided client instead of default db for the query", async () => {
-    const { cancelPendingDispatches } = await import("../src/dispatch-cancel")
-    const customFindManyMock = vi.fn().mockResolvedValue([])
-    const customClient = {
-      query: {
-        sequenceDispatchModel: { findMany: customFindManyMock },
-      },
-      update: () => ({
-        set: () => ({ where: vi.fn().mockResolvedValue(undefined) }),
-      }),
-    } as never
-
-    await cancelPendingDispatches({
-      enrollmentId: "enroll-1",
-      workspaceId: "ws-1",
-      client: customClient,
-    })
-
-    expect(customFindManyMock).toHaveBeenCalledTimes(1)
-    expect(findManyMock).not.toHaveBeenCalled()
   })
 
   test("cancels all pending dispatches for a workspace without enrollmentId", async () => {

@@ -182,6 +182,16 @@ export const sequenceNotHeldException = (
   message = "This contact is not held in this sequence",
 ) => new ChatbotXException(message, "notHeld", 409)
 
+/** s228b: a reactivate whose `expectedUpdatedAt` no longer matches the row. */
+export const enrollmentChangedException = (
+  message = "This subscription changed since it was read; reload it and try again",
+) => new ChatbotXException(message, "enrollmentChanged", 409)
+
+/** s228b: a reactivate of a subscription that is not ended, or ended for good. */
+export const enrollmentNotReactivatableException = (
+  message = "This subscription cannot be reactivated",
+) => new ChatbotXException(message, "notReactivatable", 409)
+
 /**
  * A field-scoped validation failure raised from inside a service. The
  * caller-facing action maps `error.field` back to a

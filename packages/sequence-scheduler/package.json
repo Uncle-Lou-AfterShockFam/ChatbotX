@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./dispatch-cancel": "./src/dispatch-cancel.ts"
+    "./dispatch-cancel": "./src/dispatch-cancel.ts",
+    "./enrollment-constants": "./src/enrollment-constants.ts"
   },
   "dependencies": {
     "@chatbotx.io/database": "workspace:*",

@@ -8,13 +8,21 @@ const whereUpdateMock = vi.fn()
 const selectLimitMock = vi.fn()
 // s226b: the advance transaction reads the enrolment's pausedUntil FOR UPDATE.
 let lockedPausedUntil: Date | null = null
+// s228b: and its status, re-checked under the lock.
+let lockedStatus: string | null = "active"
 const lockForMock = vi.fn()
+// s228b: and whether another live dispatch is already queued (the "ahead"
+// check, a plain select ... limit 1).
+const aheadMock = vi.fn()
 const lockedSelect = () => ({
   from: () => ({
     where: () => ({
+      limit: (...args: unknown[]) => aheadMock(...args),
       for: (mode: string) => {
         lockForMock(mode)
-        return Promise.resolve([{ pausedUntil: lockedPausedUntil }])
+        return Promise.resolve([
+          { status: lockedStatus, pausedUntil: lockedPausedUntil },
+        ])
       },
     }),
   }),
@@ -70,6 +78,8 @@ vi.mock("@chatbotx.io/database/client", () => ({
   },
   and: (...a: unknown[]) => ({ __and: a }),
   eq: (c: unknown, v: unknown) => ({ __eq: [c, v] }),
+  inArray: (c: unknown, v: unknown) => ({ __inArray: [c, v] }),
+  sql: () => ({ __sql: true }),
   asc: (c: unknown) => ({ __asc: c }),
   gt: (c: unknown, v: unknown) => ({ __gt: [c, v] }),
   isForeignKeyViolationError: (err: unknown, constraint?: string) => {
@@ -84,6 +94,7 @@ vi.mock("@chatbotx.io/database/client", () => ({
 
 vi.mock("@chatbotx.io/database/schema", () => ({
   contactsOnSequenceModel: { id: "__cos_id", workspaceId: "__cos_ws" },
+  sequenceDispatchModel: { id: "__d_id", status: "__d_status" },
   sequenceStepModel: {
     sequenceId: "__step_seqId",
     order: "__step_order",
@@ -164,6 +175,29 @@ const FAKE_DISPATCH = { id: "dispatch-1", bucket: 7, runAtMs: "1700000000000" }
 beforeEach(() => {
   vi.clearAllMocks()
   order.length = 0
+  lockedStatus = "active"
+  aheadMock.mockResolvedValue([])
+  // default: the advance transaction runs against the same update spies.
+  transactionMock.mockImplementation(
+    async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
+      const result = await cb({
+        select: lockedSelect,
+        update: (table: unknown) => {
+          updateMock(table)
+          return {
+            set: (vals: unknown) => {
+              setMock(vals)
+              return {
+                where: (...args: unknown[]) => whereUpdateMock(...args),
+              }
+            },
+          }
+        },
+      })
+      order.push("tx-done")
+      return result
+    },
+  )
   // default: active enrollment exists
   findFirstMock.mockResolvedValue(makeActiveEnrollment())
   // default: no next step
@@ -283,12 +317,22 @@ describe("advanceEnrollment", () => {
       expect(vi.mocked(createDispatch)).not.toHaveBeenCalled()
     })
 
-    test("does not start a transaction", async () => {
+    test("completes inside the locked transaction (s228b)", async () => {
       selectLimitMock.mockResolvedValue([])
 
       await advanceEnrollment(makeParams())
 
-      expect(transactionMock).not.toHaveBeenCalled()
+      expect(transactionMock).toHaveBeenCalledTimes(1)
+      expect(lockForMock).toHaveBeenCalledWith("update")
+    })
+
+    test("s228b: never completes an enrolment a reactivation already moved on (a live dispatch exists)", async () => {
+      selectLimitMock.mockResolvedValue([])
+      aheadMock.mockResolvedValueOnce([{ id: "dispatch-ahead" }])
+
+      await advanceEnrollment(makeParams())
+
+      expect(setMock).not.toHaveBeenCalled()
     })
   })
 
@@ -346,6 +390,21 @@ describe("advanceEnrollment", () => {
       await advanceEnrollment(makeParams())
 
       expect(transactionMock).toHaveBeenCalledTimes(1)
+    })
+
+    test("s228b: an enrolment ENDED after the unlocked read is never advanced (re-checked under the lock)", async () => {
+      selectLimitMock.mockResolvedValue([NEXT_STEP])
+      vi.mocked(getDispatchContactInboxes).mockResolvedValue([
+        { id: "inbox-1" },
+      ] as unknown as Awaited<ReturnType<typeof getDispatchContactInboxes>>)
+      lockedStatus = "ended"
+      const txUpdate = setUpTransactionWithTxMocks()
+
+      await advanceEnrollment(makeParams())
+
+      expect(lockForMock).toHaveBeenCalledWith("update")
+      expect(txUpdate).not.toHaveBeenCalled()
+      expect(vi.mocked(createDispatch)).not.toHaveBeenCalled()
     })
 
     test("does NOT call the top-level db.update (uses tx.update instead)", async () => {
