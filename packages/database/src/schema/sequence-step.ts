@@ -30,6 +30,10 @@ export const sequenceStepModel = pgTable(
     sendDays: text().default(
       '["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]',
     ),
+    // s227b outreach B-1 H3: contact fields that must have a value when this
+    // step is due; with any missing the enrolment is HELD (reason in
+    // ContactOnSequence.lastError) until an operator resumes it.
+    holdOnMissing: text().array(),
     flowId: bigintAsString().references(() => flowModel.id, {
       onDelete: "set null",
       onUpdate: "cascade",

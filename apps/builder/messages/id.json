@@ -4656,6 +4656,12 @@
       "nameExists": "Nama urutan sudah ada"
     },
     "sendLabel": "Kirim",
+    "holdOnMissingLabel": "Tahan jika kosong",
+    "holdOnMissingDescription": "Kontak yang tidak memiliki salah satu kolom ini menunggu di langkah ini, dengan alasan ditampilkan, sampai Anda melanjutkannya.",
+    "heldBadge": "Ditahan",
+    "heldResume": "Lanjutkan",
+    "heldResumed": "Dilanjutkan",
+    "heldIn": "Ditahan di {sequence}: {reason}",
     "selectFlowFirst": "Pilih alur sebelum mengaktifkan pesan",
     "invalidTimeRange": "Waktu mulai harus sebelum waktu berakhir",
     "schedule": "Jadwal",

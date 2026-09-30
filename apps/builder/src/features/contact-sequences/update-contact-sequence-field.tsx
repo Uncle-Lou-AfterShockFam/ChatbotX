@@ -5,6 +5,8 @@ import type {
   SequenceModel,
 } from "@chatbotx.io/database/types"
 import { SelectTagsInputField } from "@chatbotx.io/ui/components/form/select-tags-input-field"
+import { Badge } from "@chatbotx.io/ui/components/ui/badge"
+import { Button } from "@chatbotx.io/ui/components/ui/button"
 import { Form } from "@chatbotx.io/ui/components/ui/form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useHookFormAction } from "@next-safe-action/adapter-react-hook-form/hooks"
@@ -14,6 +16,7 @@ import { toast } from "sonner"
 import { useSequenceOptions } from "@/features/sequences/provider/sequence-hook"
 import { useWorkspaceId } from "@/hooks/routing"
 import type { ContactResource } from "../contacts/schema/resource"
+import { resumeContactSequenceAction } from "./actions/resume-contact-sequence.action"
 import { updateContactSequenceAction } from "./actions/update-contact-sequence.action"
 import {
   type ContactOnSequenceWithRelations,
@@ -96,7 +99,88 @@ export default function UpdateContactSequenceField({
           placeholder={t("fields.search.placeholder")}
           searchPlaceholder={t("fields.search.placeholder")}
         />
+        <HeldSequences
+          contactId={contact?.id ?? ""}
+          onResumed={(sequenceId) =>
+            onSuccess?.(
+              sequences.map((cos) =>
+                cos.sequence.id === sequenceId
+                  ? { ...cos, status: "active", lastError: null }
+                  : cos,
+              ),
+            )
+          }
+          sequences={sequences}
+        />
       </form>
     </Form>
+  )
+}
+
+/**
+ * s227b outreach B-1 H3: each sequence this contact is HELD in (a step's
+ * required fields were missing), with the reason and a Resume action.
+ */
+function HeldSequences({
+  contactId,
+  sequences,
+  onResumed,
+}: {
+  contactId: string
+  sequences: ContactOnSequenceWithRelations[]
+  onResumed: (sequenceId: string) => void
+}) {
+  const t = useTranslations()
+  const workspaceId = useWorkspaceId()
+  const [pending, setPending] = useState<string | null>(null)
+  const held = sequences.filter((cos) => cos.status === "held")
+  if (held.length === 0) {
+    return null
+  }
+  const resume = async (sequenceId: string) => {
+    setPending(sequenceId)
+    try {
+      const result = await resumeContactSequenceAction(workspaceId, {
+        contactId,
+        sequenceId,
+      })
+      if (result?.serverError) {
+        toast.error(result.serverError)
+        return
+      }
+      toast.success(t("sequences.heldResumed"))
+      onResumed(sequenceId)
+    } finally {
+      setPending(null)
+    }
+  }
+  return (
+    <ul className="flex flex-col gap-1" data-testid="contact-held-sequences">
+      {held.map((cos) => (
+        <li
+          className="flex items-center justify-between gap-2 rounded-md border px-2 py-1 text-xs"
+          key={cos.sequence.id}
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <Badge variant="secondary">{t("sequences.heldBadge")}</Badge>
+            <span className="truncate">
+              {t("sequences.heldIn", {
+                sequence: cos.sequence.name,
+                reason: cos.lastError ?? "",
+              })}
+            </span>
+          </span>
+          <Button
+            disabled={pending !== null}
+            onClick={() => resume(cos.sequence.id)}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            {t("sequences.heldResume")}
+          </Button>
+        </li>
+      ))}
+    </ul>
   )
 }

@@ -4656,6 +4656,12 @@
       "nameExists": "Sekvens navn already exists"
     },
     "sendLabel": "Send",
+    "holdOnMissingLabel": "Hold tilbage hvis mangler",
+    "holdOnMissingDescription": "En kontakt, der mangler et af disse felter, venter ved dette trin med årsagen vist, indtil du genoptager den.",
+    "heldBadge": "Tilbageholdt",
+    "heldResume": "Genoptag",
+    "heldResumed": "Genoptaget",
+    "heldIn": "Tilbageholdt i {sequence}: {reason}",
     "selectFlowFirst": "Vælg a flow før activating den besked",
     "invalidTimeRange": "Start tid must være før slut tid",
     "schedule": "Schedule",

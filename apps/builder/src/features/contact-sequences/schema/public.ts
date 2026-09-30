@@ -6,6 +6,16 @@ export const listContactSequencesPublicResponse = z.object({
     z.object({
       sequenceId: z.string(),
       sequenceName: z.string(),
+      status: z
+        .string()
+        .nullable()
+        .describe(
+          "active, completed, or held (a step's required contact fields are missing; see lastError, then contacts.resumeSequence).",
+        ),
+      lastError: z
+        .string()
+        .nullable()
+        .describe("Why the subscription is held, e.g. `missing: first_name`."),
     }),
   ),
 })
@@ -34,3 +44,7 @@ export const setContactSequencesPublicRequest = z.object({
 export type SetContactSequencesPublicRequest = z.infer<
   typeof setContactSequencesPublicRequest
 >
+
+export const resumeContactSequencePublicResponse = z.object({
+  runAt: z.string().describe("When the held step is now scheduled (ISO 8601)."),
+})

@@ -4656,6 +4656,12 @@
       "nameExists": "Sekvenssin nimi on jo käytössä"
     },
     "sendLabel": "Lähetä",
+    "holdOnMissingLabel": "Pidätä, jos puuttuu",
+    "holdOnMissingDescription": "Yhteystieto, jolta puuttuu jokin näistä kentistä, odottaa tässä vaiheessa syy näkyvissä, kunnes jatkat sitä.",
+    "heldBadge": "Pidätetty",
+    "heldResume": "Jatka",
+    "heldResumed": "Jatkettu",
+    "heldIn": "Pidätetty sekvenssissä {sequence}: {reason}",
     "selectFlowFirst": "Valitse flow ennen viestin aktivoimista",
     "invalidTimeRange": "Alkamisajan on oltava ennen päättymisaikaa",
     "schedule": "Aikataulu",

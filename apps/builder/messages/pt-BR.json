@@ -4549,6 +4549,12 @@
       "nameExists": "O nome da sequência já existe"
     },
     "sendLabel": "Enviar",
+    "holdOnMissingLabel": "Reter se faltar",
+    "holdOnMissingDescription": "Um contato sem algum destes campos aguarda nesta etapa, com o motivo exibido, até você retomá-lo.",
+    "heldBadge": "Retido",
+    "heldResume": "Retomar",
+    "heldResumed": "Retomado",
+    "heldIn": "Retido em {sequence}: {reason}",
     "selectFlowFirst": "Selecione um fluxo antes de ativar a mensagem",
     "invalidTimeRange": "O horário de início deve ser anterior ao horário de término",
     "schedule": "Programação",

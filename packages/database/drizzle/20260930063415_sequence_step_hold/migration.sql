@@ -1,0 +1,1 @@
+ALTER TABLE "SequenceStep" ADD COLUMN "holdOnMissing" text[];

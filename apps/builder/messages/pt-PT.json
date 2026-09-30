@@ -4652,6 +4652,12 @@
       "nameExists": "Já existe uma sequência com este nome"
     },
     "sendLabel": "Enviar",
+    "holdOnMissingLabel": "Reter se faltar",
+    "holdOnMissingDescription": "Um contacto sem algum destes campos aguarda neste passo, com o motivo apresentado, até o retomar.",
+    "heldBadge": "Retido",
+    "heldResume": "Retomar",
+    "heldResumed": "Retomado",
+    "heldIn": "Retido em {sequence}: {reason}",
     "selectFlowFirst": "Selecione um fluxo antes de ativar a mensagem",
     "invalidTimeRange": "A hora de início tem de ser anterior à hora de fim",
     "schedule": "Horário",

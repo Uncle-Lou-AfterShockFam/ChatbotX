@@ -40,6 +40,8 @@ const markCompletedSpy = vi.fn()
 const markCanceledSpy = vi.fn()
 const markFailedSpy = vi.fn()
 const deferIfPausedSpy = vi.fn()
+const holdEnrollmentSpy = vi.fn()
+const missingHoldFieldsSpy = vi.fn()
 
 vi.mock("@chatbotx.io/business/contact-sequence", () => ({
   contactSequenceService: {
@@ -48,7 +50,12 @@ vi.mock("@chatbotx.io/business/contact-sequence", () => ({
     markDispatchCanceled: (...args: unknown[]) => markCanceledSpy(...args),
     markDispatchFailed: (...args: unknown[]) => markFailedSpy(...args),
     deferIfPaused: (...args: unknown[]) => deferIfPausedSpy(...args),
+    holdEnrollment: (...args: unknown[]) => holdEnrollmentSpy(...args),
   },
+}))
+
+vi.mock("../src/integration/handlers/sequence-hold", () => ({
+  missingHoldFields: (...args: unknown[]) => missingHoldFieldsSpy(...args),
 }))
 
 // ---------- step executor spy (module-level singleton in source) ----------
@@ -152,6 +159,8 @@ beforeEach(() => {
   markCanceledSpy.mockResolvedValue(undefined)
   markFailedSpy.mockResolvedValue(undefined)
   deferIfPausedSpy.mockResolvedValue(null)
+  missingHoldFieldsSpy.mockResolvedValue([])
+  holdEnrollmentSpy.mockResolvedValue(true)
 
   // scheduler defaults
   removeFromScheduleSpy.mockResolvedValue(undefined)
@@ -202,6 +211,64 @@ describe("handleSendSequenceFlow", () => {
       expect(markCompletedSpy).not.toHaveBeenCalled()
       expect(advanceEnrollmentSpy).not.toHaveBeenCalled()
       expect(removeFromScheduleSpy).not.toHaveBeenCalled()
+    })
+  })
+
+  describe("step fields missing: the enrolment is held (s227b H3)", () => {
+    test("holds with the reason; the flow never runs, nothing completes or advances", async () => {
+      const step = makeStep({ holdOnMissing: ["first_name", "company"] })
+      fetchStepSpy.mockResolvedValueOnce(step)
+      validateStepSpy.mockReturnValueOnce({ valid: true, step })
+      missingHoldFieldsSpy.mockResolvedValueOnce(["first_name", "company"])
+
+      await handleSendSequenceFlow(makeData(), makeJob())
+
+      expect(missingHoldFieldsSpy).toHaveBeenCalledWith({
+        holdOnMissing: ["first_name", "company"],
+        contactId: "contact-1",
+        contactInboxId: expect.any(String),
+      })
+      expect(holdEnrollmentSpy).toHaveBeenCalledWith({
+        dispatchId: "dispatch-1",
+        workspaceId: "ws-1",
+        reason: "missing: first_name, company",
+      })
+      expect(sendFlowDirectSpy).not.toHaveBeenCalled()
+      expect(markCompletedSpy).not.toHaveBeenCalled()
+      expect(markCanceledSpy).not.toHaveBeenCalled()
+      expect(advanceEnrollmentSpy).not.toHaveBeenCalled()
+      expect(removeFromScheduleSpy).toHaveBeenCalledWith(42, "dispatch-1")
+    })
+
+    test("nothing to hold (no longer running / not active): canceled, never sent", async () => {
+      missingHoldFieldsSpy.mockResolvedValueOnce(["first_name"])
+      holdEnrollmentSpy.mockResolvedValueOnce(false)
+
+      await handleSendSequenceFlow(makeData(), makeJob())
+
+      expect(markCanceledSpy).toHaveBeenCalledWith({
+        dispatchId: "dispatch-1",
+        workspaceId: "ws-1",
+        reason: "not_active",
+      })
+      expect(sendFlowDirectSpy).not.toHaveBeenCalled()
+      expect(advanceEnrollmentSpy).not.toHaveBeenCalled()
+    })
+
+    test("an out-of-office pause wins: a paused step is deferred before any hold check", async () => {
+      deferIfPausedSpy.mockResolvedValueOnce({ bucket: 42, runAtMs: 1_800_000 })
+
+      await handleSendSequenceFlow(makeData(), makeJob())
+
+      expect(missingHoldFieldsSpy).not.toHaveBeenCalled()
+      expect(holdEnrollmentSpy).not.toHaveBeenCalled()
+    })
+
+    test("all fields present: the step sends as before", async () => {
+      await handleSendSequenceFlow(makeData(), makeJob())
+
+      expect(holdEnrollmentSpy).not.toHaveBeenCalled()
+      expect(sendFlowDirectSpy).toHaveBeenCalledOnce()
     })
   })
 

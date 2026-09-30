@@ -4656,6 +4656,12 @@
       "nameExists": "Er bestaat al een reeks met deze naam"
     },
     "sendLabel": "Verzenden",
+    "holdOnMissingLabel": "Vasthouden als ontbreekt",
+    "holdOnMissingDescription": "Een contact waarbij een van deze velden ontbreekt, wacht bij deze stap, met de reden zichtbaar, tot je het hervat.",
+    "heldBadge": "Vastgehouden",
+    "heldResume": "Hervatten",
+    "heldResumed": "Hervat",
+    "heldIn": "Vastgehouden in {sequence}: {reason}",
     "selectFlowFirst": "Selecteer een flow voordat je het bericht activeert",
     "invalidTimeRange": "De starttijd moet vóór de eindtijd liggen",
     "schedule": "Planning",

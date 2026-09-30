@@ -4656,6 +4656,12 @@
       "nameExists": "Sıra adı zaten mevcut"
     },
     "sendLabel": "Gönder",
+    "holdOnMissingLabel": "Eksikse beklet",
+    "holdOnMissingDescription": "Bu alanlardan herhangi biri eksik olan kişi, siz devam ettirene kadar nedeni gösterilerek bu adımda bekler.",
+    "heldBadge": "Bekletiliyor",
+    "heldResume": "Devam ettir",
+    "heldResumed": "Devam ettirildi",
+    "heldIn": "{sequence} içinde bekletiliyor: {reason}",
     "selectFlowFirst": "Mesajı etkinleştirmeden önce lütfen bir akış seçin",
     "invalidTimeRange": "Başlangıç saati bitiş saatinden önce olmalıdır",
     "schedule": "Zamanlama",

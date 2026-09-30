@@ -21,6 +21,7 @@ type SavePayload = {
   sendTimeStart?: string | null
   sendTimeEnd?: string | null
   sendDays?: string[]
+  holdOnMissing?: string[] | null
 }
 
 const WEEKDAY_ORDER = [
@@ -47,6 +48,7 @@ type Step = {
   sendTimeStart?: string | null
   sendTimeEnd?: string | null
   sendDays?: string | null
+  holdOnMissing?: string[] | null
 }
 
 type UseSequenceStepProps = {
@@ -67,6 +69,7 @@ type PassthroughFields = Pick<
   | "sendTimeStart"
   | "sendTimeEnd"
   | "sendDays"
+  | "holdOnMissing"
 >
 
 type ChangedFields = PassthroughFields & {

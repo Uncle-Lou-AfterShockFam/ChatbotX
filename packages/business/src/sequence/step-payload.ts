@@ -30,6 +30,15 @@ export type SequenceStepPayloadInput = {
   sendTimeStart?: string | null
   sendTimeEnd?: string | null
   sendDays?: string[]
+  holdOnMissing?: string[] | null
+}
+
+/** Unique, trimmed names; an empty list clears the hold (null). */
+function holdFields(names: string[] | null): string[] | null {
+  const unique = [...new Set((names ?? []).map((name) => name.trim()))].filter(
+    Boolean,
+  )
+  return unique.length > 0 ? unique : null
 }
 
 export function buildUpdateData(
@@ -47,6 +56,7 @@ export function buildUpdateData(
     sendTimeStart,
     sendTimeEnd,
     sendDays,
+    holdOnMissing,
   } = parsedInput
 
   return {
@@ -66,6 +76,9 @@ export function buildUpdateData(
     ...(sendTimeEnd !== undefined && { sendTimeEnd: sendTimeEnd || null }),
     ...(sendDays !== undefined && {
       sendDays: sendDays ? JSON.stringify(sendDays) : null,
+    }),
+    ...(holdOnMissing !== undefined && {
+      holdOnMissing: holdFields(holdOnMissing),
     }),
   }
 }
@@ -87,6 +100,7 @@ export function buildCreateData(
     sendTimeStart,
     sendTimeEnd,
     sendDays,
+    holdOnMissing,
   } = parsedInput
 
   return {
@@ -103,5 +117,6 @@ export function buildCreateData(
     sendTimeStart: sendTimeStart || null,
     sendTimeEnd: sendTimeEnd || null,
     sendDays: sendDays ? JSON.stringify(sendDays) : null,
+    holdOnMissing: holdFields(holdOnMissing ?? null),
   }
 }
