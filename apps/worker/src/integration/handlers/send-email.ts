@@ -10,7 +10,8 @@ import {
   signEmailClickUrl,
   workspaceService,
 } from "@chatbotx.io/business"
-import { emailThreadService } from "@chatbotx.io/business/email-thread"
+import { contactSequenceService } from "@chatbotx.io/business/contact-sequence"
+import { emailThreadMailService } from "@chatbotx.io/business/email-thread"
 import type { InboxWithIntegrations } from "@chatbotx.io/database/types"
 import type {
   EmailStepSchema,
@@ -50,10 +51,13 @@ import {
 import { buildLineEmail, resolveEmailLine } from "./send-email-line"
 import { isSendSuppressed, SUPPRESSED_ERROR } from "./send-email-suppression"
 import {
+  broadcastIdOf,
   planThread,
   sequenceIdOf,
   sequenceSendIdOf,
   type ThreadPlan,
+  type ThreadSource,
+  threadModeOf,
 } from "./send-email-thread"
 
 async function resolveElements({
@@ -280,6 +284,7 @@ async function sendViaLine(props: {
       format: props.format,
       messageKey: props.thread?.messageKey,
       threadKeys: props.thread?.threadKeys,
+      replyTo: props.thread?.replyTo,
     })
   } catch (err) {
     if (!(err instanceof EmailContentError)) {
@@ -311,27 +316,73 @@ async function sendViaLine(props: {
 }
 
 /**
- * s225b: the queued mail joins its thread. Outside the send's result: the
- * mail is already queued, so a failed write only costs the NEXT step its
- * References (it still goes out as `Re: <subject>` if the thread exists, or
- * starts one), never a second send.
+ * A line send's identity, stable across job retries, so a retry derives the
+ * same Message-ID key: a sequence dispatch + step (the s225b derivation), a
+ * broadcast + step, or a flow run's execution key + step. Undefined (no
+ * execution key) = a random key.
  */
-async function recordThreadSend(
-  props: Parameters<typeof emailThreadService.recordSent>[0],
-) {
+function lineSendIdOf(
+  source: ThreadSource,
+  metadata: ExecuteStepProps<EmailStepSchema>["metadata"],
+  stepId: string,
+  flowExecutionKey: string | undefined,
+): string | undefined {
+  const sequenceSendId = sequenceSendIdOf(metadata, stepId)
+  if (source.sequenceId && sequenceSendId) {
+    return `${source.sequenceId}:${sequenceSendId}`
+  }
+  if (source.broadcastId) {
+    return `broadcast:${source.broadcastId}:${stepId}`
+  }
+  // A flow run's job id (Codex s226b: a retry must reuse its key, not reply
+  // under its own first attempt); the invoice/signature steps key the same way.
+  return flowExecutionKey ? `flow:${flowExecutionKey}:${stepId}` : undefined
+}
+
+/**
+ * Best effort: the send already failed and is counted; a failed cleanup only
+ * leaves the phantom parent s225b accepted, never a second failure.
+ */
+async function forgetThreadMail(props: {
+  workspaceId: string
+  contactId: string
+  lineInboxId: string
+  messageKey: string
+}) {
   try {
-    const row = await emailThreadService.recordSent(props)
-    if (!row) {
-      logger.warn(
-        { workspaceId: props.workspaceId, sequenceId: props.sequenceId },
-        "handleSendEmail: the thread belongs to another line, key not recorded",
-      )
-    }
+    await emailThreadMailService.forgetOutgoing(props)
   } catch (err) {
     logger.warn(
-      { err, workspaceId: props.workspaceId, sequenceId: props.sequenceId },
-      "handleSendEmail: recording the thread key failed",
+      { err, workspaceId: props.workspaceId },
+      "handleSendEmail: forgetting the failed mail's thread record failed",
     )
+  }
+}
+
+/**
+ * `onNoThread: stop` with nothing to reply under (s226b): no mail, no
+ * tracking row, and a sequence's enrolment ends (the contact never wrote on
+ * this line, so its follow-ups would all stop the same way).
+ */
+async function stopWithoutThread(props: {
+  workspaceId: string
+  contactId: string
+  contactInboxId: string
+  sequenceId?: string
+}) {
+  logger.info(
+    props,
+    "handleSendEmail: no email thread to reply under, not sent",
+  )
+  if (props.sequenceId) {
+    await contactSequenceService.removeContactSequencesForContact({
+      workspaceId: props.workspaceId,
+      contactId: props.contactId,
+      sequenceIds: [props.sequenceId],
+      reason: "no_email_thread",
+      removeFromSchedule: true,
+      contactInboxId: props.contactInboxId,
+    })
   }
 }
 
@@ -361,6 +412,7 @@ export async function sendEmail({
   step,
   contactInbox,
   metadata,
+  flowExecutionKey,
 }: ExecuteStepProps<EmailStepSchema>) {
   const contact = await contactService.findBy({
     where: { id: conversation.contactId },
@@ -477,27 +529,12 @@ export async function sendEmail({
     contactVariableService.replaceAll({ text: step.preheader, variables }),
   ])
   // Outreach B-1 (s225b): a `text` step on a line goes out text/plain only,
-  // with no open pixel or signed links; inside a sequence it replies under
-  // the contact's first mail of that sequence. SMTP sends stay html.
+  // with no open pixel or signed links. SMTP sends stay html.
   const format = lineContactInbox && step.format === "text" ? "text" : "html"
-  const sequenceId = format === "text" ? sequenceIdOf(metadata) : undefined
-  let thread: ThreadPlan | undefined
-  if (sequenceId && lineContactInbox && !contentError && !suppressed) {
-    try {
-      thread = await planThread({
-        workspaceId: conversation.workspaceId,
-        contactId: conversation.contactId,
-        sequenceId,
-        lineInboxId: lineContactInbox.inboxId,
-        subject,
-        sendId: sequenceSendIdOf(metadata, step.id),
-      })
-    } catch (err) {
-      if (!(err instanceof EmailContentError)) {
-        throw err
-      }
-      contentError = err
-    }
+  const source: ThreadSource = {
+    sequenceId: sequenceIdOf(metadata),
+    broadcastId: broadcastIdOf(metadata),
+    flowId: flowVersion.flowId,
   }
   if (isDocument && !contentError && !suppressed) {
     try {
@@ -506,14 +543,44 @@ export async function sendEmail({
         workspaceId: conversation.workspaceId,
         variables,
         // Job metadata is not runtime-validated: only a real id scopes the cache.
-        broadcastId:
-          metadata?.type === BROADCAST_PAYLOAD_TYPE &&
-          (typeof metadata.broadcastId === "string" ||
-            typeof metadata.broadcastId === "number") &&
-          String(metadata.broadcastId) !== ""
-            ? String(metadata.broadcastId)
-            : undefined,
+        broadcastId: source.broadcastId,
       })
+    } catch (err) {
+      if (!(err instanceof EmailContentError)) {
+        throw err
+      }
+      contentError = err
+    }
+  }
+
+  // Outreach B-1 PR 3 (s226b): every line mail is keyed and recorded, so a
+  // later step can reply under it; the step's thread mode picks the parent.
+  // Planned after the content is known good (a content failure records
+  // nothing) and before the tracking row (`stop` counts no send).
+  let thread: ThreadPlan | undefined
+  if (lineContactInbox && !contentError && !suppressed) {
+    try {
+      const planned = await planThread({
+        workspaceId: conversation.workspaceId,
+        contactId: conversation.contactId,
+        lineInboxId: lineContactInbox.inboxId,
+        subject,
+        source,
+        mode: threadModeOf(step, format, source),
+        threadCampaign: step.threadCampaign,
+        onNoThread: step.onNoThread ?? "new",
+        sendId: lineSendIdOf(source, metadata, step.id, flowExecutionKey),
+      })
+      if (!planned) {
+        await stopWithoutThread({
+          workspaceId: conversation.workspaceId,
+          contactId: conversation.contactId,
+          contactInboxId: contactInbox.id,
+          sequenceId: source.sequenceId,
+        })
+        return
+      }
+      thread = planned
     } catch (err) {
       if (!(err instanceof EmailContentError)) {
         throw err
@@ -661,22 +728,21 @@ export async function sendEmail({
     if (token) {
       await emailTopicAnalyticsService.markFailed(token)
     }
+    // A failed line send is final for this job (no retry replays the key):
+    // its thread record must not become a later step's parent.
+    if (thread && lineContactInbox) {
+      await forgetThreadMail({
+        workspaceId: conversation.workspaceId,
+        contactId: conversation.contactId,
+        lineInboxId: lineContactInbox.inboxId,
+        messageKey: thread.messageKey,
+      })
+    }
     return
   }
   // The line only QUEUED it: its own delivered / failed status settles the
   // row (line-email-status.ts), since failed never overrides delivered.
   if (lineContactInbox) {
-    // A claimed root is already stored; only follow-ups are recorded.
-    if (thread && !thread.root && sequenceId) {
-      await recordThreadSend({
-        workspaceId: conversation.workspaceId,
-        contactId: conversation.contactId,
-        sequenceId,
-        lineInboxId: lineContactInbox.inboxId,
-        subject,
-        key: thread.messageKey,
-      })
-    }
     return
   }
 

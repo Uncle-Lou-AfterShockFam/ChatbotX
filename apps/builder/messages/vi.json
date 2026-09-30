@@ -7726,7 +7726,20 @@
       "format": "Định dạng",
       "formatHtml": "HTML (bản tin)",
       "formatText": "Văn bản thuần (ghi chú cá nhân)",
-      "formatHint": "Văn bản thuần không có pixel mở thư hay liên kết theo dõi; trong một chuỗi, mỗi bước văn bản trả lời trong một luồng dưới email đầu tiên."
+      "formatHint": "Văn bản thuần không có pixel mở thư hay liên kết theo dõi; trong một chuỗi, mỗi bước văn bản trả lời trong một luồng dưới email đầu tiên.",
+      "thread": "Chuỗi thư",
+      "threadHint": "Bước này trả lời email nào trước đó trên đường dây này. Chỉ tính email đã gửi hoặc nhận sau khi ra mắt tính năng này.",
+      "threadDefault": "Mặc định (văn bản thuần trong chuỗi trả lời bước trước)",
+      "threadPrevious": "Email trước của chuỗi này",
+      "threadCampaign": "Một chiến dịch trước",
+      "threadLatest": "Email mới nhất với liên hệ này (đã gửi hoặc đã nhận)",
+      "threadNone": "Bắt đầu chuỗi thư mới",
+      "threadCampaignPick": "Chiến dịch",
+      "threadCampaignSequence": "Chuỗi: {name}",
+      "threadCampaignBroadcast": "Phát sóng: {name}",
+      "onNoThread": "Nếu không có email trước đó",
+      "onNoThreadNew": "Bắt đầu chuỗi thư mới",
+      "onNoThreadStop": "Không gửi và kết thúc chuỗi cho liên hệ này"
     }
   },
   "emailSuppression": {

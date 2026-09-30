@@ -90,6 +90,8 @@ export async function buildLineEmail(props: {
   format?: "html" | "text"
   messageKey?: string
   threadKeys?: string[]
+  /** s226b: foreign parent msg-ids (see LineEmail.replyTo). */
+  replyTo?: string[]
 }): Promise<LineEmail> {
   const format = props.format ?? "html"
   if (format === "html" && typeof props.html !== "string") {
@@ -99,10 +101,11 @@ export async function buildLineEmail(props: {
     throw new EmailContentError("a plain-text line mail needs a text body")
   }
   const threadKeys = props.threadKeys ?? []
-  if (threadKeys.length > 0 && !props.messageKey) {
+  const replyTo = props.replyTo ?? []
+  if (threadKeys.length + replyTo.length > 0 && !props.messageKey) {
     throw new EmailContentError("a threaded line mail needs its own messageKey")
   }
-  if (threadKeys.length > LINE_EMAIL_LIMITS.threadKeys) {
+  if (threadKeys.length + replyTo.length > LINE_EMAIL_LIMITS.threadKeys) {
     throw new EmailContentError(
       `a line mail threads under at most ${LINE_EMAIL_LIMITS.threadKeys} earlier mails`,
     )
@@ -154,6 +157,7 @@ export async function buildLineEmail(props: {
     headers: props.headers,
     ...(props.messageKey ? { messageKey: props.messageKey } : {}),
     ...(threadKeys.length > 0 ? { threadKeys } : {}),
+    ...(replyTo.length > 0 ? { replyTo: { references: replyTo } } : {}),
     attachments,
   }
 }

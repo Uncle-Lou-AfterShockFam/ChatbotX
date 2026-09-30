@@ -7726,7 +7726,20 @@
       "format": "Biçim",
       "formatHtml": "HTML (bülten)",
       "formatText": "Düz metin (kişisel not)",
-      "formatHint": "Düz metinde açılma pikseli veya izlenen bağlantı yoktur; bir dizide her düz metin adımı ilkinin altında tek bir ileti dizisinde yanıtlanır."
+      "formatHint": "Düz metinde açılma pikseli veya izlenen bağlantı yoktur; bir dizide her düz metin adımı ilkinin altında tek bir ileti dizisinde yanıtlanır.",
+      "thread": "Konu dizisi",
+      "threadHint": "Bu adımın bu hattaki hangi önceki e-postaya yanıt verdiği. Yalnızca bu özellik yayınlandıktan sonra gönderilen veya alınan e-postalar sayılır.",
+      "threadDefault": "Varsayılan (dizideki düz metin önceki adıma yanıt verir)",
+      "threadPrevious": "Bu dizinin önceki e-postası",
+      "threadCampaign": "Önceki bir kampanya",
+      "threadLatest": "Bu kişiyle en son e-posta (gönderilen veya alınan)",
+      "threadNone": "Yeni konu dizisi başlat",
+      "threadCampaignPick": "Kampanya",
+      "threadCampaignSequence": "Dizi: {name}",
+      "threadCampaignBroadcast": "Toplu gönderim: {name}",
+      "onNoThread": "Önceki e-posta yoksa",
+      "onNoThreadNew": "Yeni konu dizisi başlat",
+      "onNoThreadStop": "Gönderme ve bu kişi için diziyi sonlandır"
     }
   },
   "emailSuppression": {

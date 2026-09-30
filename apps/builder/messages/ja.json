@@ -7726,7 +7726,20 @@
       "format": "形式",
       "formatHtml": "HTML(ニュースレター)",
       "formatText": "プレーンテキスト(個人的なメモ)",
-      "formatHint": "プレーンテキストには開封ピクセルや追跡リンクがありません。シーケンスでは、各テキストステップが最初のメールの下に1つのスレッドとして返信されます。"
+      "formatHint": "プレーンテキストには開封ピクセルや追跡リンクがありません。シーケンスでは、各テキストステップが最初のメールの下に1つのスレッドとして返信されます。",
+      "thread": "スレッド",
+      "threadHint": "このステップがこの回線のどの過去のメールに返信するか。この機能のリリース後に送受信したメールのみが対象です。",
+      "threadDefault": "既定(シーケンス内のプレーンテキストは前のステップに返信)",
+      "threadPrevious": "このシーケンスの前のメール",
+      "threadCampaign": "以前のキャンペーン",
+      "threadLatest": "この連絡先との最新のメール(送信・受信)",
+      "threadNone": "新しいスレッドを開始",
+      "threadCampaignPick": "キャンペーン",
+      "threadCampaignSequence": "シーケンス: {name}",
+      "threadCampaignBroadcast": "一斉配信: {name}",
+      "onNoThread": "以前のメールがない場合",
+      "onNoThreadNew": "新しいスレッドを開始",
+      "onNoThreadStop": "送信せず、この連絡先のシーケンスを終了"
     }
   },
   "emailSuppression": {

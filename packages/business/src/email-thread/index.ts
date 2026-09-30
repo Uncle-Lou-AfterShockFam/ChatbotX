@@ -1,5 +1,8 @@
 export {
-  EMAIL_THREAD_MAX_KEYS,
-  EmailThreadService,
-  emailThreadService,
+  EmailThreadMailService,
+  emailThreadMailService,
+  type InboundEmailAttributes,
+  inboundEmailAttributes,
+  isCitableMsgId,
+  type ThreadScope,
 } from "./service"

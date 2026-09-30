@@ -7726,7 +7726,20 @@
       "format": "Format",
       "formatHtml": "HTML (newsletter)",
       "formatText": "Text simplu (notă personală)",
-      "formatHint": "Textul simplu nu are pixel de deschidere și nici linkuri urmărite; într-o secvență, fiecare pas text răspunde într-un singur fir sub primul."
+      "formatHint": "Textul simplu nu are pixel de deschidere și nici linkuri urmărite; într-o secvență, fiecare pas text răspunde într-un singur fir sub primul.",
+      "thread": "Conversație",
+      "threadHint": "La ce e-mail anterior de pe această linie răspunde acest pas. Contează doar e-mailurile trimise sau primite după lansarea acestei funcții.",
+      "threadDefault": "Implicit (textul simplu dintr-o secvență răspunde pasului anterior)",
+      "threadPrevious": "E-mailul anterior din această secvență",
+      "threadCampaign": "O campanie anterioară",
+      "threadLatest": "Cel mai recent e-mail cu acest contact (trimis sau primit)",
+      "threadNone": "Începe o conversație nouă",
+      "threadCampaignPick": "Campanie",
+      "threadCampaignSequence": "Secvență: {name}",
+      "threadCampaignBroadcast": "Difuzare: {name}",
+      "onNoThread": "Dacă nu există un e-mail anterior",
+      "onNoThreadNew": "Începe o conversație nouă",
+      "onNoThreadStop": "Nu trimite și încheie secvența pentru acest contact"
     }
   },
   "emailSuppression": {

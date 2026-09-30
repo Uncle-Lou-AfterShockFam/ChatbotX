@@ -20,6 +20,10 @@ import {
   finalizeContactProfile,
   normalizeLanguage,
 } from "@chatbotx.io/business/contact-locale"
+import {
+  emailThreadMailService,
+  inboundEmailAttributes,
+} from "@chatbotx.io/business/email-thread"
 import { workspaceAvatarsPrefix } from "@chatbotx.io/business/storage-paths"
 import { isUniqueViolationError } from "@chatbotx.io/database/client"
 import {
@@ -856,6 +860,23 @@ const saveAndBroadcastMessage = async (props: {
       origin: isInboundMessage ? "inbound" : undefined,
       messageId: newMessage.id,
       isFirstIncomingMessage,
+    })
+  }
+
+  // Outreach B-1 PR 3 (s226b): the contact's own mail on an email line is a
+  // thread a later email step may reply under (`latest` / `previous`). Only
+  // an inbound, citable, non-automatic mail. Recorded on a replay too, and
+  // after the event (Codex s226b): a failed write throws, the delivery
+  // retries, and the idempotent record lands then; the event is not lost.
+  const inboundEmail = isInboundMessage
+    ? inboundEmailAttributes(incomingMessage.contentAttributes)
+    : null
+  if (inboundEmail) {
+    await emailThreadMailService.recordIncoming({
+      ...inboundEmail,
+      workspaceId: inbox.workspaceId,
+      contactId: contactInbox.contactId,
+      lineInboxId: inbox.id,
     })
   }
 

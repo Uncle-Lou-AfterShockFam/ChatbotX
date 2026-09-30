@@ -7726,7 +7726,20 @@
       "format": "Format",
       "formatHtml": "HTML (nyhetsbrev)",
       "formatText": "Oformaterad text (personligt meddelande)",
-      "formatHint": "Oformaterad text har ingen öppningspixel eller spårade länkar; i en sekvens svarar varje textsteg i en tråd under det första."
+      "formatHint": "Oformaterad text har ingen öppningspixel eller spårade länkar; i en sekvens svarar varje textsteg i en tråd under det första.",
+      "thread": "Tråd",
+      "threadHint": "Vilket tidigare e-postmeddelande på den här linjen steget svarar på. Endast e-post som skickats eller tagits emot efter lanseringen av funktionen räknas.",
+      "threadDefault": "Standard (oformaterad text i en sekvens svarar på föregående steg)",
+      "threadPrevious": "Föregående e-post i den här sekvensen",
+      "threadCampaign": "En tidigare kampanj",
+      "threadLatest": "Senaste e-post med den här kontakten (skickad eller mottagen)",
+      "threadNone": "Starta en ny tråd",
+      "threadCampaignPick": "Kampanj",
+      "threadCampaignSequence": "Sekvens: {name}",
+      "threadCampaignBroadcast": "Utskick: {name}",
+      "onNoThread": "Om det inte finns något tidigare e-postmeddelande",
+      "onNoThreadNew": "Starta en ny tråd",
+      "onNoThreadStop": "Skicka inte, och avsluta sekvensen för den här kontakten"
     }
   },
   "emailSuppression": {

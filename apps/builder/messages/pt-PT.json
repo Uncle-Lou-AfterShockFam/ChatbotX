@@ -7726,7 +7726,20 @@
       "format": "Formato",
       "formatHtml": "HTML (newsletter)",
       "formatText": "Texto simples (nota pessoal)",
-      "formatHint": "O texto simples não tem píxel de abertura nem ligações rastreadas; numa sequência, cada passo de texto responde num único fio sob o primeiro."
+      "formatHint": "O texto simples não tem píxel de abertura nem ligações rastreadas; numa sequência, cada passo de texto responde num único fio sob o primeiro.",
+      "thread": "Conversa",
+      "threadHint": "A que e-mail anterior desta linha este passo responde. Só conta o e-mail enviado ou recebido após o lançamento desta funcionalidade.",
+      "threadDefault": "Predefinição (texto simples numa sequência responde ao passo anterior)",
+      "threadPrevious": "E-mail anterior desta sequência",
+      "threadCampaign": "Uma campanha anterior",
+      "threadLatest": "E-mail mais recente com este contacto (enviado ou recebido)",
+      "threadNone": "Iniciar uma nova conversa",
+      "threadCampaignPick": "Campanha",
+      "threadCampaignSequence": "Sequência: {name}",
+      "threadCampaignBroadcast": "Difusão: {name}",
+      "onNoThread": "Se não houver e-mail anterior",
+      "onNoThreadNew": "Iniciar uma nova conversa",
+      "onNoThreadStop": "Não enviar e terminar a sequência para este contacto"
     }
   },
   "emailSuppression": {

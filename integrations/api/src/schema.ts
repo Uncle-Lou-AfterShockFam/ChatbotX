@@ -57,6 +57,12 @@ export type LineEmail = {
    */
   messageKey?: string
   threadKeys?: string[]
+  /**
+   * s226b: FOREIGN parents (the contact's own mail and what it cited), full
+   * RFC msg-ids, oldest first; the line writes them before the threadKeys in
+   * References. Needs `messageKey`; <= 20 ids with the threadKeys.
+   */
+  replyTo?: { references: string[] }
   /** `sha256` of the bytes: the line verifies the download and caches by it. */
   attachments: {
     url: string

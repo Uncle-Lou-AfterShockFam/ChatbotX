@@ -186,5 +186,16 @@ export const useBroadcastSelectOptions = (): SelectOption[] =>
     whatsappBroadcastSearchParams,
   )
 
+const omnichannelBroadcastSearchParams: BroadcastSearchParams = {
+  channel: "omnichannel",
+}
+
+/** s226b: the broadcasts an email step can reply under (email lives on omnichannel). */
+export const useOmnichannelBroadcastSelectOptions = (): SelectOption[] =>
+  useWorkspaceOptionEndpoint(
+    "broadcasts/options",
+    omnichannelBroadcastSearchParams,
+  )
+
 export const useReflinkSelectOptions = (): SelectOption[] =>
   useWorkspaceOptionEndpoint("ref-links/options")

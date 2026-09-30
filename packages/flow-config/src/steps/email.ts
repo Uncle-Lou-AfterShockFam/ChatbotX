@@ -141,6 +141,24 @@ export const emailStepSchema = z.object({
    * re-parsed on publish.
    */
   format: z.enum(["html", "text"]).optional(),
+  /**
+   * Outreach B-1 PR 3 (s226b), honored only with `lineInboxId`: which earlier
+   * mail on this line (with this contact) the step replies under.
+   * `previous` = this sequence's (or broadcast's, or flow's) newest mail,
+   * `campaign` = the newest mail of `threadCampaign`, `latest` = the newest
+   * mail either way, including the contact's own; `none` = a new thread.
+   * Unset keeps s225b: a text step in a sequence is `previous`, else `none`.
+   * Every mode sees only mail recorded after s226b.
+   */
+  threadMode: z.enum(["previous", "campaign", "latest", "none"]).optional(),
+  threadCampaign: z
+    .union([
+      z.strictObject({ sequenceId: zodBigintAsString() }),
+      z.strictObject({ broadcastId: zodBigintAsString() }),
+    ])
+    .optional(),
+  /** No earlier mail in scope: `new` (default) starts a thread, `stop` sends nothing and ends the contact's enrolment. */
+  onNoThread: z.enum(["new", "stop"]).optional(),
 })
 export type EmailStepSchema = z.infer<typeof emailStepSchema>
 

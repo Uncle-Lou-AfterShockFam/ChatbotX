@@ -7726,7 +7726,20 @@
       "format": "Format",
       "formatHtml": "HTML (nyhedsbrev)",
       "formatText": "Almindelig tekst (personlig besked)",
-      "formatHint": "Almindelig tekst har ingen åbningspixel eller sporede links; i en sekvens svarer hvert teksttrin i én tråd under det første."
+      "formatHint": "Almindelig tekst har ingen åbningspixel eller sporede links; i en sekvens svarer hvert teksttrin i én tråd under det første.",
+      "thread": "Tråd",
+      "threadHint": "Hvilken tidligere e-mail på denne linje trinnet svarer på. Kun e-mail sendt eller modtaget efter lanceringen af denne funktion tæller.",
+      "threadDefault": "Standard (almindelig tekst i en sekvens svarer på forrige trin)",
+      "threadPrevious": "Forrige e-mail i denne sekvens",
+      "threadCampaign": "En tidligere kampagne",
+      "threadLatest": "Seneste e-mail med denne kontakt (sendt eller modtaget)",
+      "threadNone": "Start en ny tråd",
+      "threadCampaignPick": "Kampagne",
+      "threadCampaignSequence": "Sekvens: {name}",
+      "threadCampaignBroadcast": "Udsendelse: {name}",
+      "onNoThread": "Hvis der ikke er nogen tidligere e-mail",
+      "onNoThreadNew": "Start en ny tråd",
+      "onNoThreadStop": "Send ikke, og afslut sekvensen for denne kontakt"
     }
   },
   "emailSuppression": {
