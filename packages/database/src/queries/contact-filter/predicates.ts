@@ -493,22 +493,40 @@ export function buildExistingContactWhere(
   return {}
 }
 
+/**
+ * How a boolean "has related rows" condition reads: `yes` = EXISTS, `no` =
+ * NOT EXISTS, `null` = an operator a boolean field does not support.
+ */
+export function existsBooleanMode(
+  operator: string,
+  value: unknown,
+): "yes" | "no" | null {
+  if (
+    (operator === operatorTypes.enum.eq && value === "true") ||
+    operator === operatorTypes.enum.isNotEmpty
+  ) {
+    return "yes"
+  }
+  if (
+    (operator === operatorTypes.enum.eq && value !== "true") ||
+    operator === operatorTypes.enum.isEmpty
+  ) {
+    return "no"
+  }
+  return null
+}
+
 export function buildExistsBooleanWhere(
   exists: RelationExists,
   yesPredicate: SQL,
   operator: string,
   value: unknown,
 ): ContactWhere {
-  const isYes =
-    (operator === operatorTypes.enum.eq && value === "true") ||
-    operator === operatorTypes.enum.isNotEmpty
-  const isNo =
-    (operator === operatorTypes.enum.eq && value !== "true") ||
-    operator === operatorTypes.enum.isEmpty
-  if (!(isYes || isNo)) {
+  const mode = existsBooleanMode(operator, value)
+  if (mode === null) {
     return {}
   }
-  return exists(yesPredicate, isNo)
+  return exists(yesPredicate, mode === "no")
 }
 
 export function buildLastCommentWhere(
