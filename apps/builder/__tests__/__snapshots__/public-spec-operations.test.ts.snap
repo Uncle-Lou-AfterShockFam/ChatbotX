@@ -708,6 +708,11 @@ exports[`public API spec — operation naming guard > operation list (operationI
     "path": "/v1/contacts/bulk/sequences",
   },
   {
+    "method": "POST",
+    "operationId": "contacts.classifyReply",
+    "path": "/v1/contacts/{identifier}/reply-classification",
+  },
+  {
     "method": "DELETE",
     "operationId": "contacts.clearCompany",
     "path": "/v1/contacts/{identifier}/company",
@@ -826,6 +831,11 @@ exports[`public API spec — operation naming guard > operation list (operationI
     "method": "GET",
     "operationId": "contacts.listNotes",
     "path": "/v1/contacts/{identifier}/notes",
+  },
+  {
+    "method": "GET",
+    "operationId": "contacts.listReplyClassifications",
+    "path": "/v1/contacts/{identifier}/reply-classifications",
   },
   {
     "method": "GET",
@@ -2008,6 +2018,11 @@ exports[`public API spec — operation naming guard > operation list (operationI
     "path": "/v1/sequences",
   },
   {
+    "method": "POST",
+    "operationId": "sequences.createOutreachPipeline",
+    "path": "/v1/sequences/{id}/outreach-pipeline",
+  },
+  {
     "method": "DELETE",
     "operationId": "sequences.delete",
     "path": "/v1/sequences/{id}",
@@ -2031,6 +2046,11 @@ exports[`public API spec — operation naming guard > operation list (operationI
     "method": "GET",
     "operationId": "sequences.listStepContacts",
     "path": "/v1/sequences/{id}/steps/{stepId}/contacts",
+  },
+  {
+    "method": "DELETE",
+    "operationId": "sequences.unlinkOutreachPipeline",
+    "path": "/v1/sequences/{id}/outreach-pipeline",
   },
   {
     "method": "PATCH",

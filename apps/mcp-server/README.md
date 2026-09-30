@@ -94,6 +94,7 @@ Tool names are derived from the OpenAPI `operationId` converted to `snake_case` 
 | `contacts_subscribe_sequences` | Subscribe contact to sequences |
 | `contacts_resume_sequence` | Resume held sequence subscription |
 | `contacts_reactivate_sequence` | Reactivate ended sequence subscription |
+| `contacts_classify_reply` | Classify contact reply |
 
 ### Conversations
 

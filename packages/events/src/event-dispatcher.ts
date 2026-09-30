@@ -17,6 +17,7 @@ import type {
   FormSubmittedMetadata,
   IncomingCallMetadata,
   InvoiceEventMetadata,
+  ReplyClassifiedMetadata,
 } from "./base-emitter"
 import { CompanyStopEventEmitter } from "./company-stop/emitter"
 import { logger } from "./logger"
@@ -435,6 +436,19 @@ export const emitFormAbandoned = async (
   contactId: string,
   metadata: FormAbandonedMetadata,
 ) => await emitToAllEmitters("formAbandoned", workspaceId, contactId, metadata)
+
+// s228b outreach step 2
+export const emitContactReplyClassified = async (
+  workspaceId: string,
+  contactId: string,
+  metadata: ReplyClassifiedMetadata,
+) =>
+  await emitToAllEmitters(
+    "contactReplyClassified",
+    workspaceId,
+    contactId,
+    metadata,
+  )
 
 // Hub invoicing (s205b)
 export const emitInvoiceCreated = async (

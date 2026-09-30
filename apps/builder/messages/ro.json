@@ -4479,7 +4479,8 @@
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
-      "invoicePaymentFailed": "Invoice payment failed"
+      "invoicePaymentFailed": "Invoice payment failed",
+      "contactReplyClassified": "Răspunsul contactului a fost clasificat"
     },
     "actions": {
       "addTag": "Adaugă etichetă",
@@ -4728,7 +4729,13 @@
     "friday": "Vineri",
     "saturday": "Sâmbătă",
     "sunday": "Duminică",
-    "afterText": "După"
+    "afterText": "După",
+    "outreachPipeline": "Pipeline de outreach",
+    "outreachPipelineDescription": "Răspunsurile clasificate deschid sau mută o tranzacție într-un pipeline de outreach. Creează unul pentru această secvență.",
+    "outreachPipelineLinked": "Răspunsurile clasificate ale contactelor acestei secvențe deschid sau mută o tranzacție în pipeline-ul ei de outreach.",
+    "outreachPipelineOpen": "Deschide tranzacțiile",
+    "outreachPipelineUnlink": "Dezleagă",
+    "outreachPipelineCreate": "Creează pipeline de outreach"
   },
   "tools": {
     "title": "Instrumente",
@@ -7741,5 +7748,19 @@
     "invalidDescription": "Acest link nu este valid sau a expirat.",
     "unavailableTitle": "Indisponibil",
     "unavailableDescription": "Acest link nu mai este disponibil."
+  },
+  "replyClassification": {
+    "title": "Răspuns",
+    "none": "Neclasificat",
+    "saved": "Răspuns clasificat",
+    "savedDeal": "Răspuns clasificat; tranzacție actualizată",
+    "class": {
+      "interested": "Interesat",
+      "maybeLater": "Poate mai târziu",
+      "notInterested": "Neinteresat",
+      "ooo": "În afara biroului",
+      "auto": "Răspuns automat",
+      "bounce": "Returnat"
+    }
   }
 }

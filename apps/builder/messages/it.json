@@ -4479,7 +4479,8 @@
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
-      "invoicePaymentFailed": "Invoice payment failed"
+      "invoicePaymentFailed": "Invoice payment failed",
+      "contactReplyClassified": "Risposta del contatto classificata"
     },
     "actions": {
       "addTag": "Aggiungi tag",
@@ -4728,7 +4729,13 @@
     "friday": "Venerdì",
     "saturday": "Sabato",
     "sunday": "Domenica",
-    "afterText": "Dopo"
+    "afterText": "Dopo",
+    "outreachPipeline": "Pipeline di outreach",
+    "outreachPipelineDescription": "Le risposte classificate aprono o spostano una trattativa in una pipeline di outreach. Creane una per questa sequenza.",
+    "outreachPipelineLinked": "Le risposte classificate dei contatti di questa sequenza aprono o spostano una trattativa nella sua pipeline di outreach.",
+    "outreachPipelineOpen": "Apri trattative",
+    "outreachPipelineUnlink": "Scollega",
+    "outreachPipelineCreate": "Crea pipeline di outreach"
   },
   "tools": {
     "title": "Strumenti",
@@ -7741,5 +7748,19 @@
     "invalidDescription": "Questo link non è valido o è scaduto.",
     "unavailableTitle": "Non disponibile",
     "unavailableDescription": "Questo link non è più disponibile."
+  },
+  "replyClassification": {
+    "title": "Risposta",
+    "none": "Non classificata",
+    "saved": "Risposta classificata",
+    "savedDeal": "Risposta classificata; trattativa aggiornata",
+    "class": {
+      "interested": "Interessato",
+      "maybeLater": "Forse più tardi",
+      "notInterested": "Non interessato",
+      "ooo": "Fuori sede",
+      "auto": "Risposta automatica",
+      "bounce": "Respinta"
+    }
   }
 }

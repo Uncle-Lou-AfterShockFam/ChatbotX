@@ -53,6 +53,8 @@ export const triggerEventTypes = z.enum([
   "formSubmitted",
   // a chat form run that timed out or ran out of attempts (s220 A2-3); sourceId = formId
   "formAbandoned",
+  // s228b outreach step 2: a contact's answer was classified; sourceId = the class
+  "contactReplyClassified",
   // hub invoicing (s205b); no sourceId, metadata carries the invoice
   "invoiceCreated",
   "invoicePaid",

@@ -14,6 +14,7 @@ import { useHookFormAction } from "@next-safe-action/adapter-react-hook-form/hoo
 import { useTranslations } from "next-intl"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import { ReplyClassificationControl } from "@/features/reply-classification/reply-classification-control"
 import { useSequenceOptions } from "@/features/sequences/provider/sequence-hook"
 import { useWorkspaceId } from "@/hooks/routing"
 import type { ContactResource } from "../contacts/schema/resource"
@@ -135,6 +136,9 @@ export default function UpdateContactSequenceField({
           }
           sequences={sequences}
         />
+        {contact?.id ? (
+          <ReplyClassificationControl contactId={contact.id} />
+        ) : null}
       </form>
     </Form>
   )

@@ -1,4 +1,5 @@
 import {
+  replyClasses,
   type TriggerEventType,
   triggerEventTypes,
 } from "@chatbotx.io/database/partials"
@@ -104,6 +105,19 @@ export const ConditionEditor = ({
           name={`${parentName}.sourceId`}
           options={formOptions}
           placeholder={t("forms.singular")}
+          popoverClassName="w-[var(--anchor-width)]"
+        />
+      )
+    case triggerEventTypes.enum.contactReplyClassified:
+      return (
+        <ComboboxField
+          emptyText=""
+          name={`${parentName}.sourceId`}
+          options={replyClasses.options.map((value) => ({
+            value,
+            label: t(`replyClassification.class.${value}`),
+          }))}
+          placeholder={t("replyClassification.title")}
           popoverClassName="w-[var(--anchor-width)]"
         />
       )

@@ -4479,7 +4479,8 @@
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
-      "invoicePaymentFailed": "Invoice payment failed"
+      "invoicePaymentFailed": "Invoice payment failed",
+      "contactReplyClassified": "Respuesta del contacto clasificada"
     },
     "actions": {
       "addTag": "Añadir Etiqueta",
@@ -4728,7 +4729,13 @@
     "friday": "Fridía",
     "saturday": "Saturdía",
     "sunday": "Sundía",
-    "afterText": "Después"
+    "afterText": "Después",
+    "outreachPipeline": "Pipeline de outreach",
+    "outreachPipelineDescription": "Las respuestas clasificadas abren o mueven un negocio en un pipeline de outreach. Crea uno para esta secuencia.",
+    "outreachPipelineLinked": "Las respuestas clasificadas de los contactos de esta secuencia abren o mueven un negocio en su pipeline de outreach.",
+    "outreachPipelineOpen": "Abrir negocios",
+    "outreachPipelineUnlink": "Desvincular",
+    "outreachPipelineCreate": "Crear pipeline de outreach"
   },
   "tools": {
     "title": "Herramientas",
@@ -7741,5 +7748,19 @@
     "invalidDescription": "Este enlace no es válido o ha caducado.",
     "unavailableTitle": "No disponible",
     "unavailableDescription": "Este enlace ya no está disponible."
+  },
+  "replyClassification": {
+    "title": "Respuesta",
+    "none": "Sin clasificar",
+    "saved": "Respuesta clasificada",
+    "savedDeal": "Respuesta clasificada; negocio actualizado",
+    "class": {
+      "interested": "Interesado",
+      "maybeLater": "Quizá más tarde",
+      "notInterested": "No interesado",
+      "ooo": "Fuera de la oficina",
+      "auto": "Respuesta automática",
+      "bounce": "Rebotado"
+    }
   }
 }

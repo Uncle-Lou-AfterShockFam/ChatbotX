@@ -90,6 +90,8 @@ export const BaseEditor = ({
         return t("trigger.conditions.formSubmitted")
       case triggerEventTypes.enum.formAbandoned:
         return t("trigger.conditions.formAbandoned")
+      case triggerEventTypes.enum.contactReplyClassified:
+        return t("trigger.conditions.contactReplyClassified")
       case triggerEventTypes.enum.invoiceCreated:
         return t("trigger.conditions.invoiceCreated")
       case triggerEventTypes.enum.invoicePaid:

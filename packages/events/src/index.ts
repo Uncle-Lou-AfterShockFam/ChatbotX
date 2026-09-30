@@ -13,6 +13,7 @@ export type {
   FormAbandonedMetadata,
   FormSubmittedMetadata,
   InvoiceEventMetadata,
+  ReplyClassifiedMetadata,
 } from "./base-emitter"
 export * from "./contact-inbox-context"
 export * from "./context"

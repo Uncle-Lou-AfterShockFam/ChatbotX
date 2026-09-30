@@ -65,7 +65,9 @@ function isWorkspaceTokenOperation(operation: McpSpecOperation): boolean {
 // deliberate cap, not a tuned performance number. Bump only alongside an
 // explicit decision to add a tool to the default set (see the plan's P0.2
 // table), never as a side effect of an unrelated change.
-const MAX_DEFAULT_VISIBLE_OPERATIONS = 45
+// 46: s228b outreach step 2 (plan approved by the owner 2026-09-30) adds
+// contacts.classifyReply to the default set.
+const MAX_DEFAULT_VISIBLE_OPERATIONS = 46
 
 const MCP_SERVER_ROOT = join(import.meta.dirname, "..", "..", "mcp-server")
 const SKILLS_ROOT = join(import.meta.dirname, "..", "..", "..", "skills")

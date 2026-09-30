@@ -1,3 +1,4 @@
+import { replyClassificationService } from "@chatbotx.io/business/reply-classification"
 import { sequenceService } from "@chatbotx.io/business/sequence"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import z from "zod"
@@ -24,6 +25,9 @@ import {
 import { sequenceResource } from "../schema/resource"
 
 const workspaceTokenAuthAPI = workspaceTokenAuthAPIForScope("broadcasts")
+// s228b (skeptic): creating CRM pipeline structure needs the deals scope,
+// not only the sequences' (broadcasts) scope.
+const dealsTokenAuthAPI = workspaceTokenAuthAPIForScope("deals")
 
 export const sequencesPublicRouter = {
   list: workspaceTokenAuthAPI
@@ -120,6 +124,72 @@ export const sequencesPublicRouter = {
         { workspaceId: context.workspace.id, id },
         data,
       )
+    }),
+
+  createOutreachPipeline: dealsTokenAuthAPI
+    .route({
+      method: "POST",
+      path: "/v1/sequences/{id}/outreach-pipeline",
+      summary: "Create sequence outreach pipeline",
+      description:
+        "Creates an Outreach pipeline (Interested, Maybe later, Meeting booked, Meeting completed, Won, Not interested) and links it to the sequence: a contact's reply classified with `contacts.classifyReply` then opens or moves their deal there. A taken name is a 400; pass another `name`.",
+      tags: ["Sequences"],
+    })
+    .input(
+      z.object({
+        id: zodBigintAsString().describe(
+          "Sequence id. Get it from `sequences.list`.",
+        ),
+        name: z
+          .string()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe('The pipeline name; default "Outreach".'),
+      }),
+    )
+    .output(
+      z.object({
+        pipelineId: z.string(),
+        stages: z
+          .record(z.string(), z.string())
+          .describe(
+            "Stage ids by key: interested, maybeLater, meetingBooked, meetingCompleted, won, notInterested.",
+          ),
+      }),
+    )
+    .errors(possibleErrorsOnCreatingResource)
+    .handler(async ({ context, input }) =>
+      replyClassificationService.createOutreachPipeline({
+        workspaceId: context.workspace.id,
+        sequenceId: input.id,
+        name: input.name,
+      }),
+    ),
+
+  unlinkOutreachPipeline: dealsTokenAuthAPI
+    .route({
+      method: "DELETE",
+      path: "/v1/sequences/{id}/outreach-pipeline",
+      summary: "Unlink sequence outreach pipeline",
+      description:
+        "Stops the sequence's classified replies from opening or moving deals. The pipeline and its deals stay.",
+      successStatus: 204,
+      tags: ["Sequences"],
+    })
+    .input(
+      z.object({
+        id: zodBigintAsString().describe(
+          "Sequence id. Get it from `sequences.list`.",
+        ),
+      }),
+    )
+    .errors(possibleErrorsOnDeletingResource)
+    .handler(async ({ context, input }) => {
+      await replyClassificationService.unlinkOutreachPipeline({
+        workspaceId: context.workspace.id,
+        sequenceId: input.id,
+      })
     }),
 
   delete: workspaceTokenAuthAPI

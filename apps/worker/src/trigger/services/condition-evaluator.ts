@@ -82,6 +82,7 @@ export class ConditionEvaluator {
       case triggerEventTypes.enum.dealMentioned:
       case triggerEventTypes.enum.formSubmitted:
       case triggerEventTypes.enum.formAbandoned:
+      case triggerEventTypes.enum.contactReplyClassified:
         return this.evaluateSourceIdMatch(
           sourceId,
           eventData.eventData.sourceId as string,

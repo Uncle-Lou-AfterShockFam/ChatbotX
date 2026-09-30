@@ -4458,7 +4458,8 @@
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
-      "invoicePaymentFailed": "Invoice payment failed"
+      "invoicePaymentFailed": "Invoice payment failed",
+      "contactReplyClassified": "連絡先の返信が分類された"
     },
     "actions": {
       "addTag": "タグを追加",
@@ -4707,7 +4708,13 @@
     "friday": "金曜日",
     "saturday": "土曜日",
     "sunday": "日曜日",
-    "afterText": "後"
+    "afterText": "後",
+    "outreachPipeline": "アウトリーチパイプライン",
+    "outreachPipelineDescription": "分類された返信はアウトリーチパイプラインで商談を作成または移動します。このシーケンス用に作成してください。",
+    "outreachPipelineLinked": "このシーケンスの連絡先の分類済み返信は、そのアウトリーチパイプラインで商談を作成または移動します。",
+    "outreachPipelineOpen": "商談を開く",
+    "outreachPipelineUnlink": "リンク解除",
+    "outreachPipelineCreate": "アウトリーチパイプラインを作成"
   },
   "tools": {
     "title": "ツール",
@@ -7741,5 +7748,19 @@
     "invalidDescription": "このリンクは無効か、期限切れです。",
     "unavailableTitle": "利用できません",
     "unavailableDescription": "このリンクは現在利用できません。"
+  },
+  "replyClassification": {
+    "title": "返信",
+    "none": "未分類",
+    "saved": "返信を分類しました",
+    "savedDeal": "返信を分類し、商談を更新しました",
+    "class": {
+      "interested": "興味あり",
+      "maybeLater": "また今度",
+      "notInterested": "興味なし",
+      "ooo": "不在",
+      "auto": "自動返信",
+      "bounce": "不達"
+    }
   }
 }

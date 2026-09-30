@@ -4479,7 +4479,8 @@
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
-      "invoicePaymentFailed": "Invoice payment failed"
+      "invoicePaymentFailed": "Invoice payment failed",
+      "contactReplyClassified": "Yhteystiedon vastaus luokiteltu"
     },
     "actions": {
       "addTag": "Lisää tunniste",
@@ -4728,7 +4729,13 @@
     "friday": "Perjantai",
     "saturday": "Lauantai",
     "sunday": "Sunnuntai",
-    "afterText": "Jälkeen"
+    "afterText": "Jälkeen",
+    "outreachPipeline": "Outreach-putki",
+    "outreachPipelineDescription": "Luokitellut vastaukset avaavat tai siirtävät kaupan outreach-putkessa. Luo sellainen tälle sarjalle.",
+    "outreachPipelineLinked": "Tämän sarjan yhteystietojen luokitellut vastaukset avaavat tai siirtävät kaupan sen outreach-putkessa.",
+    "outreachPipelineOpen": "Avaa kaupat",
+    "outreachPipelineUnlink": "Poista linkitys",
+    "outreachPipelineCreate": "Luo outreach-putki"
   },
   "tools": {
     "title": "Työkalut",
@@ -7741,5 +7748,19 @@
     "invalidDescription": "Linkki on virheellinen tai vanhentunut.",
     "unavailableTitle": "Ei saatavilla",
     "unavailableDescription": "Linkki ei ole enää käytettävissä."
+  },
+  "replyClassification": {
+    "title": "Vastaus",
+    "none": "Luokittelematon",
+    "saved": "Vastaus luokiteltu",
+    "savedDeal": "Vastaus luokiteltu; kauppa päivitetty",
+    "class": {
+      "interested": "Kiinnostunut",
+      "maybeLater": "Ehkä myöhemmin",
+      "notInterested": "Ei kiinnostunut",
+      "ooo": "Poissa",
+      "auto": "Automaattivastaus",
+      "bounce": "Palautunut"
+    }
   }
 }

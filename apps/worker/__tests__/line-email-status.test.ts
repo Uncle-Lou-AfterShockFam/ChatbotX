@@ -25,6 +25,12 @@ vi.mock("@chatbotx.io/business/contact-sequence", () => ({
     endOutreach: (...args: unknown[]) => endOutreach(...args),
   },
 }))
+const classifyReply = vi.fn()
+vi.mock("@chatbotx.io/business/reply-classification", () => ({
+  replyClassificationService: {
+    classifyReply: (...args: unknown[]) => classifyReply(...args),
+  },
+}))
 vi.mock("../src/lib/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
@@ -204,6 +210,7 @@ describe("settleLineEmailStatus (s228b): an unreachable verdict ends the contact
     vi.clearAllMocks()
     newsletterRef.mockResolvedValue("email:u:uuid-1")
     endOutreach.mockResolvedValue(["seq-1"])
+    classifyReply.mockResolvedValue({ classification: null, dealId: null })
   })
 
   test("a bounce on an email ref with a contact ends it as bounced; no contact, or a delivered status, ends nothing", async () => {
@@ -220,6 +227,14 @@ describe("settleLineEmailStatus (s228b): an unreachable verdict ends the contact
       workspaceId: "ws-1",
       contactId: "c-1",
       reason: "bounced",
+    })
+    // s228b PR 3: the bounce is also the contact's reply classification.
+    expect(classifyReply).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      contactId: "c-1",
+      class: "bounce",
+      source: "rule",
+      reason: "hard-bounce",
     })
     endOutreach.mockClear()
     await settleLineEmailStatus({

@@ -2489,7 +2489,8 @@
       "invoiceCreated": "Invoice created",
       "invoicePaid": "Invoice paid",
       "invoicePartiallyPaid": "Invoice deposit paid",
-      "invoicePaymentFailed": "Invoice payment failed"
+      "invoicePaymentFailed": "Invoice payment failed",
+      "contactReplyClassified": "תגובת איש הקשר סווגה"
     },
     "actions": {
       "addTag": "הוספת תגית",
@@ -2738,7 +2739,13 @@
     "friday": "יום שישי",
     "saturday": "שבת",
     "sunday": "יום ראשון",
-    "afterText": "אחרי"
+    "afterText": "אחרי",
+    "outreachPipeline": "צינור פנייה",
+    "outreachPipelineDescription": "תגובות מסווגות פותחות או מזיזות עסקה בצינור פנייה. צור אחד לרצף הזה.",
+    "outreachPipelineLinked": "תגובות מסווגות של אנשי הקשר ברצף הזה פותחות או מזיזות עסקה בצינור הפנייה שלו.",
+    "outreachPipelineOpen": "פתח עסקאות",
+    "outreachPipelineUnlink": "נתק",
+    "outreachPipelineCreate": "צור צינור פנייה"
   },
   "tools": {
     "title": "כלים",
@@ -7741,5 +7748,19 @@
     "invalidDescription": "הקישור אינו תקין או שפג תוקפו.",
     "unavailableTitle": "לא זמין",
     "unavailableDescription": "הקישור כבר אינו זמין."
+  },
+  "replyClassification": {
+    "title": "תגובה",
+    "none": "לא מסווג",
+    "saved": "התגובה סווגה",
+    "savedDeal": "התגובה סווגה; העסקה עודכנה",
+    "class": {
+      "interested": "מעוניין",
+      "maybeLater": "אולי מאוחר יותר",
+      "notInterested": "לא מעוניין",
+      "ooo": "מחוץ למשרד",
+      "auto": "תשובה אוטומטית",
+      "bounce": "הוחזר"
+    }
   }
 }

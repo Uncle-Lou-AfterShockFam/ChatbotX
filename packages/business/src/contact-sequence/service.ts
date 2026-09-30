@@ -40,20 +40,11 @@ import {
   validationException,
 } from "../errors"
 import { logger } from "../logger"
+import { assertIds } from "../validation"
 
 type DrizzleClient = DatabaseClient | Transaction
 /** lastError is operator-facing: the missing names, capped. */
 const MAX_HOLD_REASON = 500
-/** A bigint id as the API carries it; anything else never reaches SQL. */
-const BIGINT_ID = /^\d{1,19}$/
-
-function assertIds(fn: string, ids: Record<string, unknown>): void {
-  for (const [field, value] of Object.entries(ids)) {
-    if (typeof value !== "string" || !BIGINT_ID.test(value)) {
-      throw validationException(field, `${fn}: ${field} must be a numeric id`)
-    }
-  }
-}
 type DispatchToRemove = { id: string; bucket: number }
 type RemovedEnrollment = {
   contactId: string
