@@ -469,6 +469,36 @@ describe.skipIf(!databaseUrl)("s227b probe fixes", () => {
     expect(deadlocks).toBe(0)
   })
 
+  test("hold on a PENDING dispatch racing an unenrol never deadlocks (40 runs)", async () => {
+    let deadlocks = 0
+    for (let i = 0; i < 40; i++) {
+      const workspaceId = mintId()
+      const sequenceId = await seedSequence({ workspaceId, stopOnReply: false })
+      const contactId = mintId()
+      const seededRow = await seedEnrollment({
+        workspaceId,
+        sequenceId,
+        contactId,
+      })
+      deadlocks += deadlocked(
+        await Promise.allSettled([
+          contactSequenceService.holdEnrollment({
+            dispatchId: seededRow.dispatchId,
+            workspaceId,
+            reason: "missing: x",
+          }),
+          contactSequenceService.removeContactSequencesForContacts({
+            workspaceId,
+            contactIds: [contactId],
+            sequenceIds: [sequenceId],
+            reason: "subscription_removed",
+          }),
+        ]),
+      )
+    }
+    expect(deadlocks).toBe(0)
+  })
+
   test("a held enrolment whose step was deleted: a 409 that says so; unenrol clears it", async () => {
     const held = await seedHeld()
     await db.execute(

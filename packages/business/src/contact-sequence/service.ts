@@ -589,8 +589,14 @@ class ContactSequenceService extends BaseService {
     }
     const reason = props.reason.slice(0, MAX_HOLD_REASON)
     return await db.transaction(async (tx) => {
+      // A plain read first: a dispatch that is not running is never locked
+      // (a removal locks PENDING dispatches before the enrolment, so taking
+      // the enrolment first and then a pending dispatch would deadlock).
       const [ref] = await tx
-        .select({ enrollmentId: sequenceDispatchModel.enrollmentId })
+        .select({
+          enrollmentId: sequenceDispatchModel.enrollmentId,
+          status: sequenceDispatchModel.status,
+        })
         .from(sequenceDispatchModel)
         .where(
           and(
@@ -598,7 +604,7 @@ class ContactSequenceService extends BaseService {
             eq(sequenceDispatchModel.workspaceId, workspaceId),
           ),
         )
-      if (!ref) {
+      if (ref?.status !== "running") {
         return false
       }
       const [enrollment] = await tx
