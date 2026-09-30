@@ -1,5 +1,9 @@
 import { createHash, randomBytes } from "node:crypto"
 import {
+  EmailSenderUnavailableError,
+  emailSenderService,
+} from "@chatbotx.io/business/email-sender"
+import {
   emailThreadMailService,
   isCitableMsgId,
   type ThreadScope,
@@ -140,6 +144,11 @@ export type ThreadPlan = {
   replyTo: string[]
   /** The subject to send: the step's own, or `Re: <parent subject>`. */
   subject: string
+  /**
+   * s229b: the mailbox (EmailSender id) the mail goes out from, sticky per
+   * thread; null = the line's legacy env account (`LineEmail.sender` absent).
+   */
+  senderId: string | null
 }
 
 const isForeign = (parent: string) => parent.startsWith("<")
@@ -253,6 +262,9 @@ async function planLocked(
     tx,
   })
   if (replay) {
+    // Review s229b: a replay re-checks its recorded sender (an archived one
+    // fails closed), and never picks another.
+    await threadSenderOf(replay, line, tx)
     return planOf(messageKey, replay)
   }
   const scope = scopeOf(props)
@@ -267,12 +279,14 @@ async function planLocked(
     parent && parent.subject.trim() !== ""
       ? replySubject(parent.subject)
       : props.subject
+  const senderId = await threadSenderOf(parent, line, tx)
   const recorded = await emailThreadMailService.recordOutgoing({
     ...line,
     ...props.source,
     messageKey,
     subject,
     parents,
+    senderId,
     tx,
   })
   if (!recorded) {
@@ -283,14 +297,50 @@ async function planLocked(
   return planOf(messageKey, recorded)
 }
 
+/**
+ * s229b (wire contract sec. 4): a follow-up NEVER switches mailbox. A parent
+ * keeps its sender (a null one is a legacy env-account thread and stays
+ * null); an archived parent sender fails closed. A new thread takes the
+ * line's least-used active sender today, or null when the line has none.
+ */
+async function threadSenderOf(
+  /** The parent, or the replayed row itself (its own sender is sticky). */
+  parent: Pick<EmailThreadMailModel, "senderId"> | null,
+  line: { workspaceId: string; lineInboxId: string },
+  tx: DatabaseClient,
+): Promise<string | null> {
+  try {
+    if (parent) {
+      if (parent.senderId) {
+        await emailSenderService.assertThreadSender(tx, {
+          workspaceId: line.workspaceId,
+          lineInboxId: line.lineInboxId,
+          senderId: parent.senderId,
+        })
+      }
+      return parent.senderId ?? null
+    }
+    return await emailSenderService.pickForNewThread(tx, {
+      workspaceId: line.workspaceId,
+      lineInboxId: line.lineInboxId,
+    })
+  } catch (err) {
+    if (err instanceof EmailSenderUnavailableError) {
+      throw new EmailContentError(err.message)
+    }
+    throw err
+  }
+}
+
 function planOf(
   messageKey: string,
-  row: Pick<EmailThreadMailModel, "subject" | "parents">,
+  row: Pick<EmailThreadMailModel, "subject" | "parents" | "senderId">,
 ): ThreadPlan {
   return {
     messageKey,
     threadKeys: row.parents.filter((id) => !isForeign(id)),
     replyTo: row.parents.filter(isForeign),
     subject: row.subject,
+    senderId: row.senderId ?? null,
   }
 }

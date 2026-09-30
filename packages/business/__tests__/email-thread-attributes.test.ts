@@ -54,6 +54,28 @@ describe("email thread attributes (s226b)", () => {
     ).toHaveLength(998)
   })
 
+  test("s229b: email.sender is kept only as a bigint id string; anything else is dropped, never the mail", () => {
+    const mail = (sender: unknown) =>
+      inboundEmailAttributes({
+        email: { messageId: "<a@b.example>", subject: "Hi", sender },
+      })
+    expect(mail("117")?.sender).toBe("117")
+    for (const bad of [
+      undefined,
+      null,
+      117,
+      "",
+      "abc",
+      "1".repeat(20),
+      "1; drop",
+      { id: "1" },
+    ]) {
+      const got = mail(bad)
+      expect(got?.messageId).toBe("<a@b.example>")
+      expect(got && "sender" in got).toBe(false)
+    }
+  })
+
   test("isOutOfOffice: only email.autoReply === 'ooo'", () => {
     expect(isOutOfOffice({ email: { autoReply: "ooo" } })).toBe(true)
     for (const no of [

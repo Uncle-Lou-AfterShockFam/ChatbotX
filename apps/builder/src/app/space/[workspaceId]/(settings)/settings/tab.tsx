@@ -59,6 +59,10 @@ export function SettingsTab({
         label: t("emailSuppression.title"),
         value: "email-suppression",
       },
+      {
+        label: t("emailSenders.title"),
+        value: "email-senders",
+      },
       // {
       //   label: t("billing.title"),
       //   value: "billing",

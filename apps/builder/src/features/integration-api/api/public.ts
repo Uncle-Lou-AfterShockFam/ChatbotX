@@ -3,6 +3,11 @@ import {
   normalizeAck,
   OUTBOX_MAX_PULL,
 } from "@chatbotx.io/business"
+import { emailSenderService } from "@chatbotx.io/business/email-sender"
+import {
+  emailSenderProviders,
+  emailSenderStatuses,
+} from "@chatbotx.io/database/partials"
 import { incomingApiMessageSchema } from "@chatbotx.io/integration-api"
 import { enqueueIntegrationJob } from "@chatbotx.io/worker-config"
 import { z } from "zod"
@@ -307,6 +312,72 @@ export const channelsPublicRouter = {
         })
       }
       return { outcome: settled.outcome }
+    }),
+
+  /**
+   * ManyReach step 3 (s229b, wire contract sec. 2): the line's mailbox
+   * senders WITH their credentials, for the bulktext daemon holding this
+   * inbox's token. Only this inbox's non-archived senders; never cached.
+   */
+  senders: channelApiTokenAPI
+    .route({
+      method: "GET",
+      path: "/v1/channels/api/senders",
+      summary: "List email line mailbox senders with credentials",
+      description:
+        "Returns the mailbox senders of the token's inbox that are not archived (at most 50, oldest first), with the SMTP/IMAP login and its credential (`auth`, null when the sender is not usable now). The response is never cached (`Cache-Control: no-store`); never log or persist `auth`.",
+      tags: ["API Channel"],
+      outputStructure: "detailed",
+    })
+    .output(
+      z.object({
+        headers: z.object({ "cache-control": z.literal("no-store") }),
+        body: z.object({
+          senders: z.array(
+            z.object({
+              id: z.string(),
+              address: z.string(),
+              fromName: z.string(),
+              replyTo: z.string().nullable(),
+              provider: emailSenderProviders,
+              status: emailSenderStatuses.exclude(["archived"]),
+              dailyLimit: z.number(),
+              rampStart: z.number().nullable(),
+              rampPercent: z.number().nullable(),
+              minGapMinutes: z.number(),
+              createdAt: z.string(),
+              smtp: z.object({
+                host: z.string(),
+                port: z.number(),
+                secure: z.boolean(),
+                user: z.string(),
+              }),
+              imap: z.object({
+                host: z.string(),
+                port: z.number(),
+                secure: z.boolean(),
+                user: z.string(),
+                mailbox: z.string(),
+              }),
+              auth: z
+                .object({ type: z.literal("password"), password: z.string() })
+                .nullable(),
+            }),
+          ),
+        }),
+      }),
+    )
+    .errors(possibleErrorsOnCreatingResource)
+    .handler(async ({ context }) => {
+      await assertNotRateLimited(context.inbox.id)
+      const senders = await emailSenderService.listForLine({
+        workspaceId: context.workspace.id,
+        lineInboxId: context.inbox.id,
+      })
+      return {
+        headers: { "cache-control": "no-store" as const },
+        body: { senders },
+      }
     }),
 
   me: channelApiTokenAPI

@@ -28,6 +28,9 @@ export const LINE_EMAIL_LIMITS = {
  */
 export const LINE_ATTACHMENT_URL_TTL_SECONDS = 24 * 60 * 60
 
+/** An EmailSender id as it travels (wire contract sec. 1). */
+const SENDER_ID = /^\d{1,19}$/
+
 // biome-ignore lint/suspicious/noControlCharactersInRegex: collapsing them
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]+/g
 
@@ -92,6 +95,8 @@ export async function buildLineEmail(props: {
   threadKeys?: string[]
   /** s226b: foreign parent msg-ids (see LineEmail.replyTo). */
   replyTo?: string[]
+  /** s229b: the EmailSender id; null / absent = the line's env account. */
+  sender?: string | null
 }): Promise<LineEmail> {
   const format = props.format ?? "html"
   if (format === "html" && typeof props.html !== "string") {
@@ -102,6 +107,9 @@ export async function buildLineEmail(props: {
   }
   const threadKeys = props.threadKeys ?? []
   const replyTo = props.replyTo ?? []
+  if (props.sender != null && !SENDER_ID.test(props.sender)) {
+    throw new EmailContentError("the line mail's sender id is not valid")
+  }
   if (threadKeys.length + replyTo.length > 0 && !props.messageKey) {
     throw new EmailContentError("a threaded line mail needs its own messageKey")
   }
@@ -158,6 +166,8 @@ export async function buildLineEmail(props: {
     ...(props.messageKey ? { messageKey: props.messageKey } : {}),
     ...(threadKeys.length > 0 ? { threadKeys } : {}),
     ...(replyTo.length > 0 ? { replyTo: { references: replyTo } } : {}),
+    // Only when set: an old line refuses the unknown key (contract sec. 1).
+    ...(props.sender == null ? {} : { sender: props.sender }),
     attachments,
   }
 }

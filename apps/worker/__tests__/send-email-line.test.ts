@@ -102,6 +102,21 @@ describe("buildLineEmail (s222b): the line's caps enforced before enqueue", () =
     )
   })
 
+  test("s229b: `sender` travels only when set (an old line refuses the unknown key) and only as a bigint id", async () => {
+    for (const sender of [undefined, null]) {
+      const out = await buildLineEmail(mail({ sender }) as never)
+      expect("sender" in out).toBe(false)
+    }
+    await expect(
+      buildLineEmail(mail({ sender: "117" }) as never),
+    ).resolves.toMatchObject({ sender: "117" })
+    for (const bad of ["", "abc", "1".repeat(20), "1 2", "-1"]) {
+      await expect(
+        buildLineEmail(mail({ sender: bad }) as never),
+      ).rejects.toBeInstanceOf(ContentError)
+    }
+  })
+
   test("attachments become signed public downloads (24 h) with their MEASURED size", async () => {
     const out = await buildLineEmail(
       mail({
