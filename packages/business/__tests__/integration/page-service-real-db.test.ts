@@ -34,6 +34,7 @@ const workspaces: string[] = []
 const HOUR_MS = 3_600_000
 const UUID_V5 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+const MERGE_TEMPLATE_ISSUE = /^Merge template: /
 const FLOW_HREF = /href="(https:\/\/hub\.example\/email-topic\/flow\?t=[^"]+)"/
 
 async function asReplica(statement: ReturnType<typeof sql>): Promise<void> {
@@ -98,6 +99,38 @@ afterAll(async () => {
 })
 
 describe.skipIf(!databaseUrl)("pageService", () => {
+  test("s228a: a page whose Liquid cannot render is a 422 on create and update", async () => {
+    const workspaceId = await seedWorkspace()
+    const text = (t: string) => [{ id: "2", type: "text", text: t }]
+    for (const bad of ["<p>{% if a %}</p>", "<p>Hi {{ first_name</p>"]) {
+      const error = await pageService
+        .create({
+          workspaceId,
+          data: { name: "Bad", document: document(text(bad)) },
+        })
+        .catch((e: unknown) => e)
+      expectValidation(error, "document")
+      expect((error as Error).message).toMatch(MERGE_TEMPLATE_ISSUE)
+    }
+    const good = document(text("<p>{% if first_name %}Hi{% endif %}</p>"))
+    const page = await pageService.create({
+      workspaceId,
+      data: { name: "Good", document: good },
+    })
+    expectValidation(
+      await pageService
+        .update({
+          workspaceId,
+          id: page.id,
+          data: { name: "Good", document: document(text("<p>{% if a %}</p>")) },
+        })
+        .catch((e: unknown) => e),
+      "document",
+    )
+    const stored = await pageService.get({ workspaceId, id: page.id })
+    expect(stored.document).toEqual(good)
+  })
+
   test("create applies the shared document rules, the TTL default and bounds", async () => {
     const workspaceId = await seedWorkspace()
     const page = await pageService.create({
@@ -358,6 +391,9 @@ describe.skipIf(!databaseUrl)("pageService", () => {
     ])
     expect(html).toContain("Hi Ada")
     expect(html).toContain("<title>Render &lt;me&gt;</title>")
+    expect(html).toContain(
+      '<link rel="icon" type="image/svg+xml" href="/brand/favicon/favicon.svg">',
+    )
     expect(html).not.toContain("<script>")
     expect(html).not.toContain("javascript:")
     expect(missing).toEqual([])
