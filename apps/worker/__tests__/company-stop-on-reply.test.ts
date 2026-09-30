@@ -58,6 +58,14 @@ describe("handleCompanyStopOnReply", () => {
     expect(mockStopForContact).not.toHaveBeenCalled()
   })
 
+  test("s226b: an out-of-office never stops a company", async () => {
+    await handleCompanyStopOnReply([
+      { ...base, contactId: "c-1", origin: "inbound", autoReply: "ooo" },
+    ])
+    expect(mockCount).not.toHaveBeenCalled()
+    expect(mockStopForContact).not.toHaveBeenCalled()
+  })
+
   test("a workspace with no companies costs one count and nothing else", async () => {
     mockCount.mockResolvedValue(0)
     await handleCompanyStopOnReply([

@@ -5,10 +5,12 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 // removeFromScheduleSpy is accessed at instance-creation time (during tests,
 // not at import time), so vi.hoisted is not needed.
 const removeFromScheduleSpy = vi.fn()
+const addToScheduleSpy = vi.fn()
 
 vi.mock("@chatbotx.io/scheduler", () => ({
   SchedulerClient: class MockSchedulerClient {
     removeFromSchedule = removeFromScheduleSpy
+    addToSchedule = addToScheduleSpy
   },
 }))
 
@@ -37,6 +39,7 @@ const findRunningSpy = vi.fn()
 const markCompletedSpy = vi.fn()
 const markCanceledSpy = vi.fn()
 const markFailedSpy = vi.fn()
+const deferIfPausedSpy = vi.fn()
 
 vi.mock("@chatbotx.io/business/contact-sequence", () => ({
   contactSequenceService: {
@@ -44,6 +47,7 @@ vi.mock("@chatbotx.io/business/contact-sequence", () => ({
     markDispatchCompleted: (...args: unknown[]) => markCompletedSpy(...args),
     markDispatchCanceled: (...args: unknown[]) => markCanceledSpy(...args),
     markDispatchFailed: (...args: unknown[]) => markFailedSpy(...args),
+    deferIfPaused: (...args: unknown[]) => deferIfPausedSpy(...args),
   },
 }))
 
@@ -147,6 +151,7 @@ beforeEach(() => {
   markCompletedSpy.mockResolvedValue(undefined)
   markCanceledSpy.mockResolvedValue(undefined)
   markFailedSpy.mockResolvedValue(undefined)
+  deferIfPausedSpy.mockResolvedValue(null)
 
   // scheduler defaults
   removeFromScheduleSpy.mockResolvedValue(undefined)
@@ -179,6 +184,24 @@ describe("handleSendSequenceFlow", () => {
       expect(markCompletedSpy).not.toHaveBeenCalled()
       expect(advanceEnrollmentSpy).not.toHaveBeenCalled()
       expect(removeFromScheduleSpy).toHaveBeenCalledOnce()
+    })
+  })
+
+  describe("enrolment paused by an out-of-office (s226b)", () => {
+    test("the step is held at the pause end: re-scheduled, never sent, completed or advanced", async () => {
+      deferIfPausedSpy.mockResolvedValueOnce({ bucket: 42, runAtMs: 1_800_000 })
+
+      await handleSendSequenceFlow(makeData(), makeJob())
+
+      expect(deferIfPausedSpy).toHaveBeenCalledWith({
+        dispatchId: "dispatch-1",
+        workspaceId: expect.any(String),
+      })
+      expect(addToScheduleSpy).toHaveBeenCalledWith(42, "dispatch-1", 1_800_000)
+      expect(sendFlowDirectSpy).not.toHaveBeenCalled()
+      expect(markCompletedSpy).not.toHaveBeenCalled()
+      expect(advanceEnrollmentSpy).not.toHaveBeenCalled()
+      expect(removeFromScheduleSpy).not.toHaveBeenCalled()
     })
   })
 

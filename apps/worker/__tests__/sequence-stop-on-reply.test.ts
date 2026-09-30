@@ -49,6 +49,13 @@ describe("handleSequenceStopOnReply", () => {
     expect(mockInfo).toHaveBeenCalledTimes(1)
   })
 
+  test("s226b: an out-of-office never ends an enrolment (it pauses instead)", async () => {
+    await handleSequenceStopOnReply([
+      { ...base, contactId: "c-1", origin: "inbound", autoReply: "ooo" },
+    ])
+    expect(mockRemove).not.toHaveBeenCalled()
+  })
+
   test("each contact is handled once per batch, per workspace", async () => {
     await handleSequenceStopOnReply([
       { ...base, contactId: "c-1", origin: "inbound" },

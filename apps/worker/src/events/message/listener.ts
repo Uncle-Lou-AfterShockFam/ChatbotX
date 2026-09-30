@@ -34,6 +34,7 @@ import { messageEventTypeSchema } from "@chatbotx.io/flow-config"
 import { logger } from "../../lib/logger"
 import { handleCompanyStopOnReply } from "./handlers/company-stop-on-reply"
 import { recordProviderErrorLog } from "./handlers/record-provider-error-log"
+import { handleSequenceOooPause } from "./handlers/sequence-ooo-pause"
 import { handleSequenceStopOnReply } from "./handlers/sequence-stop-on-reply"
 
 /**
@@ -149,6 +150,8 @@ async function enqueueContactRepliedEvaluations(
   const eligiblePayloads = payloads.filter(
     (payload) =>
       payload.origin === "inbound" &&
+      // s226b: an out-of-office is not the contact replying.
+      !payload.autoReply &&
       adsConversionService.isEligibleChannel(payload.channel),
   )
   if (eligiblePayloads.length === 0) {
@@ -370,6 +373,10 @@ export const messageListeners: Partial<MessageEvenTypeMap> = {
     {
       name: "sequence-stop-on-reply",
       handler: handleSequenceStopOnReply,
+    },
+    {
+      name: "sequence-ooo-pause",
+      handler: handleSequenceOooPause,
     },
   ],
 }

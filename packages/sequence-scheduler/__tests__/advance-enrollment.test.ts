@@ -6,6 +6,19 @@ const updateMock = vi.fn()
 const setMock = vi.fn()
 const whereUpdateMock = vi.fn()
 const selectLimitMock = vi.fn()
+// s226b: the advance transaction reads the enrolment's pausedUntil FOR UPDATE.
+let lockedPausedUntil: Date | null = null
+const lockForMock = vi.fn()
+const lockedSelect = () => ({
+  from: () => ({
+    where: () => ({
+      for: (mode: string) => {
+        lockForMock(mode)
+        return Promise.resolve([{ pausedUntil: lockedPausedUntil }])
+      },
+    }),
+  }),
+})
 const transactionMock = vi.fn()
 const order: string[] = []
 
@@ -311,6 +324,7 @@ describe("advanceEnrollment", () => {
       transactionMock.mockImplementation(
         async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
           const tx = {
+            select: lockedSelect,
             update: (_table: unknown) => ({
               set: (_vals: unknown) => ({
                 where: txUpdateWhereMock,
@@ -380,6 +394,27 @@ describe("advanceEnrollment", () => {
       )
     })
 
+    test("s226b: a pause later than the step's time holds the next dispatch until it (read FOR UPDATE); an earlier one is ignored", async () => {
+      selectLimitMock.mockResolvedValue([NEXT_STEP])
+      vi.mocked(calculateNextValidSendTime).mockImplementation(
+        (date: unknown) => date as Date,
+      )
+      setUpTransactionWithTxMocks()
+      const later = new Date(NEXT_RUN_AT.getTime() + 86_400_000)
+      lockedPausedUntil = later
+      await advanceEnrollment(makeParams())
+      expect(lockForMock).toHaveBeenCalledWith("update")
+      expect(vi.mocked(createDispatch)).toHaveBeenLastCalledWith(
+        expect.objectContaining({ runAt: later }),
+      )
+      lockedPausedUntil = new Date(NEXT_RUN_AT.getTime() - 1)
+      await advanceEnrollment(makeParams())
+      expect(vi.mocked(createDispatch)).toHaveBeenLastCalledWith(
+        expect.objectContaining({ runAt: NEXT_RUN_AT }),
+      )
+      lockedPausedUntil = null
+    })
+
     test("calls scheduler.addToSchedule for each dispatch created", async () => {
       selectLimitMock.mockResolvedValue([NEXT_STEP])
       vi.mocked(getDispatchContactInboxes).mockResolvedValue([
@@ -446,6 +481,7 @@ describe("advanceEnrollment", () => {
       transactionMock.mockImplementation(
         (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
           const tx = {
+            select: lockedSelect,
             update: (_table: unknown) => ({
               set: (vals: unknown) => {
                 txSetSpy(vals)

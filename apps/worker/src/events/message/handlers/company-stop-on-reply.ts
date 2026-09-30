@@ -18,7 +18,12 @@ export async function handleCompanyStopOnReply(
   const companyCountByWorkspace = new Map<string, number>()
 
   for (const payload of payloads) {
-    if (payload.origin !== "inbound" || seen.has(payload.contactId)) {
+    // s226b: an out-of-office is not a reply (it never stops a company).
+    if (
+      payload.origin !== "inbound" ||
+      payload.autoReply ||
+      seen.has(payload.contactId)
+    ) {
       continue
     }
     seen.add(payload.contactId)

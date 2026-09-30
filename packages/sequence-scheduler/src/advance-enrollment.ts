@@ -139,7 +139,30 @@ export async function advanceEnrollment(
 
   const dispatches = await db
     .transaction(async (tx) => {
-      const nextRunAt = calculateNextRunAt(nextStep, sentAt)
+      // s226b: an out-of-office pause holds the next step. Read under the
+      // row lock the pause also takes, so a pause landing now either sees
+      // this dispatch (and moves it) or is seen here.
+      const [locked] = await tx
+        .select({ pausedUntil: contactsOnSequenceModel.pausedUntil })
+        .from(contactsOnSequenceModel)
+        .where(
+          and(
+            eq(contactsOnSequenceModel.id, enrollmentId),
+            eq(contactsOnSequenceModel.workspaceId, workspaceId),
+          ),
+        )
+        .for("update")
+      const scheduled = calculateNextRunAt(nextStep, sentAt)
+      // The pause end, moved into the step's send window (Codex s226b).
+      const nextRunAt =
+        locked?.pausedUntil && locked.pausedUntil > scheduled
+          ? calculateNextValidSendTime(locked.pausedUntil, {
+              anytime: nextStep.anytime,
+              sendTimeStart: nextStep.sendTimeStart,
+              sendTimeEnd: nextStep.sendTimeEnd,
+              sendDays: nextStep.sendDays,
+            })
+          : scheduled
 
       await tx
         .update(contactsOnSequenceModel)

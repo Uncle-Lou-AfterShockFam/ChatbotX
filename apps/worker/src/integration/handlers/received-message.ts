@@ -23,6 +23,7 @@ import {
 import {
   emailThreadMailService,
   inboundEmailAttributes,
+  isOutOfOffice,
 } from "@chatbotx.io/business/email-thread"
 import { workspaceAvatarsPrefix } from "@chatbotx.io/business/storage-paths"
 import { isUniqueViolationError } from "@chatbotx.io/database/client"
@@ -860,6 +861,10 @@ const saveAndBroadcastMessage = async (props: {
       origin: isInboundMessage ? "inbound" : undefined,
       messageId: newMessage.id,
       isFirstIncomingMessage,
+      autoReply:
+        isInboundMessage && isOutOfOffice(incomingMessage.contentAttributes)
+          ? "ooo"
+          : undefined,
     })
   }
 
