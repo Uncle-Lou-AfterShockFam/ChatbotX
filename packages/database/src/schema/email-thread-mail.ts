@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm"
 import { index, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core"
 import { bigintAsString, sharedColumns } from "../partials/shared"
 import { contactModel } from "./contact"
+import { emailSenderModel } from "./email-sender"
 import { inboxModel } from "./inbox"
 import { workspaceModel } from "./workspace"
 
@@ -50,6 +51,17 @@ export const emailThreadMailModel = pgTable(
     sequenceId: bigintAsString(),
     broadcastId: bigintAsString(),
     flowId: bigintAsString(),
+    /**
+     * ManyReach step 3 (s229b): the mailbox this mail went out from (or, for
+     * an incoming mail, arrived in). Null = the line's legacy env account.
+     * SET NULL (review s229b): the service never deletes a sender (archive
+     * is its only removal), so this fires only when the whole inbox or
+     * workspace goes; RESTRICT could abort those cascades by row order.
+     */
+    senderId: bigintAsString().references(() => emailSenderModel.id, {
+      onDelete: "set null",
+      onUpdate: "cascade",
+    }),
   },
   (table) => [
     uniqueIndex("EmailThreadMail_workspaceId_lineInboxId_messageKey_key").on(
@@ -67,6 +79,10 @@ export const emailThreadMailModel = pgTable(
       table.contactId,
       table.lineInboxId,
       table.createdAt.desc(),
+    ),
+    index("EmailThreadMail_senderId_createdAt_idx").on(
+      table.senderId,
+      table.createdAt,
     ),
   ],
 )

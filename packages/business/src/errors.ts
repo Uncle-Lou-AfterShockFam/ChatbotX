@@ -193,6 +193,14 @@ export const enrollmentNotReactivatableException = (
 ) => new ChatbotXException(message, "notReactivatable", 409)
 
 /**
+ * s229b: a DISCONNECTED mailbox sender comes back only through an update
+ * carrying a new password, never a bare status change.
+ */
+export const emailSenderCredentialsRequiredException = (
+  message = "This sender is disconnected: update its credentials (a new password) to reconnect it",
+) => new ChatbotXException(message, "emailSenderCredentialsRequired", 409)
+
+/**
  * A field-scoped validation failure raised from inside a service. The
  * caller-facing action maps `error.field` back to a
  * `returnValidationErrors(schema, { [field]: { _errors: [message] } })`
