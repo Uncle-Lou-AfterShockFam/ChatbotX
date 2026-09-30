@@ -14,7 +14,7 @@ const UPDATE = JSON.stringify({
   },
 })
 
-const call = (header: string | null, configured: string | undefined) => {
+const call = (header: string | null, configured: unknown) => {
   const add = vi.fn()
   const headers: Record<string, string> = {}
   if (header !== null) {
@@ -50,6 +50,8 @@ describe("telegram webhook secret token", () => {
     ["the token plus a byte", `${TOKEN}a`, TOKEN],
     ["no token on record (fail closed)", TOKEN, undefined],
     ["a blank token on record (fail closed)", "", "   "],
+    ["a non-string token on record (fail closed)", "12345", 12_345],
+    ["an object token on record (fail closed)", "[object Object]", {}],
   ])("%s answers 401 and queues nothing", async (_label, header, configured) => {
     const { add, result } = call(header, configured)
     const error = await result.catch((e: unknown) => e)

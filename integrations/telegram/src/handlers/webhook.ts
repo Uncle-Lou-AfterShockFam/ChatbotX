@@ -15,7 +15,8 @@ export const webhookHandler = async (
   // every update. Fail closed (s231a): a bot with no token on record, or a
   // request without the matching header, is refused before anything is read
   // or queued. A bot connected before s231a has no token: reconnect it.
-  const expected = config.webhookSecretToken?.trim() ?? ""
+  const configured: unknown = config.webhookSecretToken
+  const expected = typeof configured === "string" ? configured.trim() : ""
   const received = req.headers.get(SECRET_TOKEN_HEADER) ?? ""
   if (!(expected && timingSafeStringEqual(received, expected))) {
     throw new TelegramException(
