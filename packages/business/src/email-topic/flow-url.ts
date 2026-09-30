@@ -20,6 +20,12 @@ const emailFlowPayloadSchema = z
      * re-serialized JSON) claim a second start.
      */
     lid: z.string().uuid(),
+    /**
+     * s227a: the custom page link (PageLink id) the button was rendered on.
+     * A start re-checks that link: it must still be live (not expired, page
+     * active), so a button copied off an expired or archived page is dead.
+     */
+    plid: id.optional(),
     exp: z.number(),
   })
   .strict()
@@ -39,7 +45,15 @@ export async function signEmailFlowToken(input: {
   nodeId?: string
   contactId: string
   contactInboxId: string
+  /** A custom page's button (s227a): bound to its page link. */
+  pageLink?: {
+    id: string
+    expiresAt: Date
+    /** The once-per-link id: stable per (page link, button), so a reload cannot start it again. */
+    linkId: string
+  }
 }): Promise<string> {
+  const defaultExp = Date.now() + TOKEN_TTL_MS
   const encrypted = await encryptUtils.encryptObject({
     wid: input.workspaceId,
     fid: input.flowId,
@@ -47,8 +61,14 @@ export async function signEmailFlowToken(input: {
     cid: input.contactId,
     ciid: input.contactInboxId,
     // Web Crypto, not node:crypto: the business barrel stays Edge-safe.
-    lid: globalThis.crypto.randomUUID(),
-    exp: Date.now() + TOKEN_TTL_MS,
+    lid: input.pageLink?.linkId ?? globalThis.crypto.randomUUID(),
+    ...(input.pageLink
+      ? {
+          plid: input.pageLink.id,
+          // Never outlives the page link it was rendered on.
+          exp: Math.min(defaultExp, input.pageLink.expiresAt.getTime()),
+        }
+      : { exp: defaultExp }),
   })
   return Buffer.from(JSON.stringify(encrypted)).toString("base64url")
 }

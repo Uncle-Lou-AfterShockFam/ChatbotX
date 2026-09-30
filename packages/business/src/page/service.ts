@@ -4,6 +4,8 @@ import {
   db,
   desc,
   eq,
+  gt,
+  isForeignKeyViolationError,
   isUniqueViolationError,
   lt,
   sql,
@@ -33,7 +35,10 @@ import { renderWeb } from "@chatbotx.io/email-document/render-web"
 import { createId, isBase62Token, mintBase62Token } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
 import type { ResolveDocumentVariables } from "../documents/service"
-import { documentFlowButton } from "../email-templates/buttons"
+import {
+  documentFlowButton,
+  sealedFlowButtonUrl,
+} from "../email-templates/buttons"
 import {
   assertAssetsOwned,
   type DocumentIssue,
@@ -41,7 +46,6 @@ import {
   parsePreviewDocument,
   resolveOwnedAssets,
 } from "../email-templates/document-data"
-import { signEmailFlowToken } from "../email-topic/flow-url"
 import { notFoundException, validationException } from "../errors"
 import { pageHtml } from "./html"
 
@@ -115,16 +119,43 @@ function nameTaken(error: unknown): never {
 }
 
 /**
- * Button URLs for one render. A flow button (start a flow / node) becomes a
- * sealed /email-topic/flow confirm link for THIS contact + contact inbox:
- * the confirm POST starts it, a scanner's GET never does. An openWebsite
- * button is its URL (the renderer drops a non-http(s) one). Anything else,
- * or a link without a contact inbox, renders no button.
+ * The once-per-link id of one button on one page link: a UUID derived from
+ * (page link, block), so reloading the page renders the SAME start link and
+ * the flow still starts at most once per button per page link.
+ */
+export async function pageButtonLinkId(
+  pageLinkId: string,
+  blockId: string,
+): Promise<string> {
+  const digest = new Uint8Array(
+    await globalThis.crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(`page-button:${pageLinkId}:${blockId}`),
+    ),
+  )
+  const raw = [...digest.slice(0, 16)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+  // RFC 4122 layout: version nibble 5 (name-based, SHA), variant 8..b.
+  const variant = ((Number.parseInt(raw[16], 16) % 4) + 8).toString(16)
+  const hex = `${raw.slice(0, 12)}5${raw.slice(13, 16)}${variant}${raw.slice(17)}`
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
+/**
+ * Button URLs for one render. A start-flow / start-node button becomes a
+ * sealed /email-topic/flow link for THIS contact + contact inbox, bound to
+ * the page link (it dies with the link: expired, archived page, deleted). An
+ * openWebsite button is its URL (the renderer drops a non-http(s) one).
+ * Anything else, or a link without a contact inbox, renders no button.
  */
 async function buttonUrls(props: {
   document: EmailDocument
   appUrl: string
-  link: Pick<PageLinkModel, "workspaceId" | "contactId" | "contactInboxId">
+  link: Pick<
+    PageLinkModel,
+    "id" | "workspaceId" | "contactId" | "contactInboxId" | "expiresAt"
+  >
 }): Promise<Map<string, string>> {
   const { link } = props
   const urls = new Map<string, string>()
@@ -140,26 +171,23 @@ async function buttonUrls(props: {
       urls.set(leaf.id, button.beforeStep.url)
       continue
     }
-    if (
-      (button.buttonType !== "startExternalFlow" &&
-        button.buttonType !== "startExternalNode") ||
-      !link.contactInboxId
-    ) {
+    if (!link.contactInboxId) {
       continue
     }
-    const sealed = await signEmailFlowToken({
+    const url = await sealedFlowButtonUrl({
+      appUrl: props.appUrl,
+      button,
       workspaceId: link.workspaceId,
-      flowId: button.beforeStep.flowId,
-      ...(button.buttonType === "startExternalNode"
-        ? { nodeId: button.beforeStep.nodeId }
-        : {}),
-      contactId: link.contactId,
-      contactInboxId: link.contactInboxId,
+      contact: { id: link.contactId, contactInboxId: link.contactInboxId },
+      pageLink: {
+        id: link.id,
+        expiresAt: link.expiresAt,
+        linkId: await pageButtonLinkId(link.id, leaf.id),
+      },
     })
-    urls.set(
-      leaf.id,
-      `${props.appUrl}/email-topic/flow?${new URLSearchParams({ t: sealed })}`,
-    )
+    if (url) {
+      urls.set(leaf.id, url)
+    }
   }
   return urls
 }
@@ -373,6 +401,13 @@ export class PageService extends BaseService {
         target: [pageLinkModel.pageId, pageLinkModel.ref],
       })
       .returning()
+      .catch((error: unknown) => {
+        // The contact or page was deleted between the checks and the insert.
+        if (isForeignKeyViolationError(error)) {
+          throw notFoundException("Contact or page not found")
+        }
+        throw error
+      })
     if (inserted) {
       return inserted
     }
@@ -454,6 +489,37 @@ export class PageService extends BaseService {
       html: pageHtml({ title: view.page.name, document, body: rendered.html }),
       missing: rendered.missing,
     }
+  }
+
+  /**
+   * Whether a page link can still act (a flow button bound to it, s227a):
+   * the link exists for this workspace + contact, has not expired, and its
+   * page is active.
+   */
+  async isLinkLive(props: {
+    id: string
+    workspaceId: string
+    contactId: string
+    now?: Date
+    tx?: DatabaseClient
+  }): Promise<boolean> {
+    const { tx = db } = props
+    const now = props.now ?? new Date()
+    const [row] = await tx
+      .select({ id: pageLinkModel.id })
+      .from(pageLinkModel)
+      .innerJoin(pageModel, eq(pageModel.id, pageLinkModel.pageId))
+      .where(
+        and(
+          eq(pageLinkModel.id, props.id),
+          eq(pageLinkModel.workspaceId, props.workspaceId),
+          eq(pageLinkModel.contactId, props.contactId),
+          gt(pageLinkModel.expiresAt, now),
+          eq(pageModel.status, "active"),
+        ),
+      )
+      .limit(1)
+    return row !== undefined
   }
 
   /** One atomic increment per view (no read-modify-write race). */

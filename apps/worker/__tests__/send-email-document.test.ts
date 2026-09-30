@@ -18,6 +18,9 @@ const { getDocument, findFile, resolveMapping, getObjectStream, NotFound } =
 vi.mock("@chatbotx.io/business", () => ({
   mediaLibraryService: { findFile },
   signEmailClickUrl: vi.fn(async (url: string) => `signed(${url})`),
+}))
+// The sealer used by the shared sealedFlowButtonUrl (business, s227a).
+vi.mock("../../../packages/business/src/email-topic/flow-url", () => ({
   signEmailFlowToken: vi.fn(
     async (p: Record<string, string>) =>
       `sealed.${p.workspaceId}.${p.flowId}.${p.nodeId ?? "-"}.${p.contactId}.${p.contactInboxId}`,
@@ -34,6 +37,11 @@ vi.mock("@chatbotx.io/business/email-templates", async (importOriginal) => ({
       typeof import("@chatbotx.io/business/email-templates")
     >()
   ).documentFlowButton,
+  sealedFlowButtonUrl: (
+    await importOriginal<
+      typeof import("@chatbotx.io/business/email-templates")
+    >()
+  ).sealedFlowButtonUrl,
   emailTemplateService: { getDocument },
 }))
 vi.mock("@chatbotx.io/variables", () => ({

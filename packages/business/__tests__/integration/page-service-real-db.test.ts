@@ -18,7 +18,9 @@ vi.mock("../../src/audit/dispatcher", () => ({
   dispatchAuditRecord: vi.fn().mockResolvedValue(undefined),
 }))
 
-const { pageService, mintPageToken } = await import("../../src/page")
+const { pageService, mintPageToken, pageButtonLinkId } = await import(
+  "../../src/page"
+)
 
 const databaseUrl = requireRealDatabaseUrl()
 
@@ -30,6 +32,8 @@ function mintId(): string {
 
 const workspaces: string[] = []
 const HOUR_MS = 3_600_000
+const UUID_V5 =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 const FLOW_HREF = /href="(https:\/\/hub\.example\/email-topic\/flow\?t=[^"]+)"/
 
 async function asReplica(statement: ReturnType<typeof sql>): Promise<void> {
@@ -362,12 +366,17 @@ describe.skipIf(!databaseUrl)("pageService", () => {
     const sealed = new URL(
       (href as string).replaceAll("&amp;", "&"),
     ).searchParams.get("t") as string
-    expect(await verifyEmailFlowToken(sealed)).toMatchObject({
+    const payload = await verifyEmailFlowToken(sealed)
+    expect(payload).toMatchObject({
       wid: workspaceId,
       fid: "11700000000000001",
       cid: contactId,
       ciid: contactInboxId,
+      // Bound to the page link, dies with it, once per button per link.
+      plid: link.id,
+      lid: await pageButtonLinkId(link.id, "2"),
     })
+    expect(payload.exp).toBe(link.expiresAt.getTime())
 
     // Without a contact inbox a flow button renders nothing (no dead link).
     const bare = await pageService.renderView({
@@ -377,6 +386,77 @@ describe.skipIf(!databaseUrl)("pageService", () => {
     })
     expect(bare.html).not.toContain("email-topic/flow")
     expect(bare.html).toContain("Hi friend")
+  })
+
+  test("pageButtonLinkId is a stable RFC 4122 v5 UUID per (link, button)", async () => {
+    const a = await pageButtonLinkId("1", "b")
+    expect(a).toMatch(UUID_V5)
+    expect(await pageButtonLinkId("1", "b")).toBe(a)
+    expect(await pageButtonLinkId("1", "c")).not.toBe(a)
+    expect(await pageButtonLinkId("2", "b")).not.toBe(a)
+  })
+
+  test("isLinkLive: live only for its own contact + workspace, before expiry, on an active page", async () => {
+    const workspaceId = await seedWorkspace()
+    const contactId = await seedContact(workspaceId)
+    const other = await seedContact(workspaceId)
+    const page = await pageService.create({
+      workspaceId,
+      data: { name: "L", document: document(), linkTtlHours: 1 },
+    })
+    const now = new Date("2026-09-30T12:00:00Z")
+    const link = await pageService.mintLink({
+      workspaceId,
+      pageId: page.id,
+      contactId,
+      now,
+    })
+    const live = (over: Record<string, unknown> = {}) =>
+      pageService.isLinkLive({
+        id: link.id,
+        workspaceId,
+        contactId,
+        now,
+        ...over,
+      })
+    expect(await live()).toBe(true)
+    expect(await live({ contactId: other })).toBe(false)
+    expect(await live({ workspaceId: await seedWorkspace() })).toBe(false)
+    expect(await live({ now: new Date(now.getTime() + HOUR_MS) })).toBe(false)
+    await pageService.setStatus({
+      workspaceId,
+      id: page.id,
+      status: "archived",
+    })
+    expect(await live()).toBe(false)
+    await pageService.setStatus({ workspaceId, id: page.id, status: "active" })
+    await pageService.delete({ workspaceId, id: page.id })
+    expect(await live()).toBe(false)
+  })
+
+  test("a contact deleted between the checks and the insert is a 404, not a raw FK error", async () => {
+    const workspaceId = await seedWorkspace()
+    const contactId = await seedContact(workspaceId)
+    const page = await pageService.create({
+      workspaceId,
+      data: { name: "R", document: document() },
+    })
+    // Stand-in for the race: the insert itself deletes its contact first.
+    await db.execute(sql`
+      CREATE OR REPLACE FUNCTION s227a_drop_contact() RETURNS trigger AS $$
+      BEGIN DELETE FROM "Contact" WHERE id = NEW."contactId"; RETURN NEW; END
+      $$ LANGUAGE plpgsql`)
+    await db.execute(sql`
+      CREATE TRIGGER s227a_drop_contact BEFORE INSERT ON "PageLink"
+      FOR EACH ROW EXECUTE FUNCTION s227a_drop_contact()`)
+    try {
+      await expect(
+        pageService.mintLink({ workspaceId, pageId: page.id, contactId }),
+      ).rejects.toMatchObject({ httpStatusCode: 404 })
+    } finally {
+      await db.execute(sql`DROP TRIGGER s227a_drop_contact ON "PageLink"`)
+      await db.execute(sql`DROP FUNCTION s227a_drop_contact()`)
+    }
   })
 
   test("recordView counts every concurrent view", async () => {

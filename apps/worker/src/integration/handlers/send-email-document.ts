@@ -1,11 +1,8 @@
-import {
-  mediaLibraryService,
-  signEmailClickUrl,
-  signEmailFlowToken,
-} from "@chatbotx.io/business"
+import { mediaLibraryService, signEmailClickUrl } from "@chatbotx.io/business"
 import {
   documentFlowButton,
   emailTemplateService,
+  sealedFlowButtonUrl,
 } from "@chatbotx.io/business/email-templates"
 import { ChatbotXException } from "@chatbotx.io/business/errors"
 import type { InboxWithIntegrations } from "@chatbotx.io/database/types"
@@ -292,43 +289,6 @@ async function loadDocument(
   }
 }
 
-/**
- * B2 phase 4 (s222b): a start-flow button whose inbox has no chat to open (an
- * SMTP or API-channel email line: `buildInboxLink` has no link for them).
- * The button opens /email-topic/flow with a sealed token naming this exact
- * contact + contact inbox; its confirm POST starts the flow (a scanner's GET
- * never does) and counts the click, so it is not wrapped in the click tracker.
- */
-async function startFlowUrl(props: {
-  appUrl: string
-  button: NonNullable<ReturnType<typeof documentFlowButton>>
-  workspaceId: string
-  contact: { id: string; contactInboxId: string }
-  token: string | undefined
-}): Promise<string | undefined> {
-  const { button } = props
-  if (
-    button.buttonType !== "startExternalFlow" &&
-    button.buttonType !== "startExternalNode"
-  ) {
-    return
-  }
-  const sealed = await signEmailFlowToken({
-    workspaceId: props.workspaceId,
-    flowId: button.beforeStep.flowId,
-    ...(button.buttonType === "startExternalNode"
-      ? { nodeId: button.beforeStep.nodeId }
-      : {}),
-    contactId: props.contact.id,
-    contactInboxId: props.contact.contactInboxId,
-  })
-  const query = new URLSearchParams({ t: sealed })
-  if (props.token) {
-    query.set("r", props.token)
-  }
-  return `${props.appUrl}/email-topic/flow?${query.toString()}`
-}
-
 /** Everything a document send needs that does NOT depend on the tracking token. */
 export type PreparedDocument = {
   doc: EmailDocument
@@ -478,13 +438,16 @@ export async function renderStepDocument(props: {
       buttons.set(leaf.id, await track(url))
       continue
     }
+    // B2 phase 4 (s222b): an inbox with no chat to open (an SMTP or
+    // API-channel email line) gets the sealed /email-topic/flow link; its
+    // confirm POST counts the click, so it is not wrapped in the tracker.
     const emailFlowUrl = button
-      ? await startFlowUrl({
+      ? await sealedFlowButtonUrl({
           appUrl,
           button,
           workspaceId,
           contact: props.contact,
-          token,
+          ref: token,
         })
       : undefined
     if (emailFlowUrl) {

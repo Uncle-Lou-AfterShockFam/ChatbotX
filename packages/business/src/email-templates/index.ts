@@ -1,4 +1,8 @@
-export { type DocumentFlowButton, documentFlowButton } from "./buttons"
+export {
+  type DocumentFlowButton,
+  documentFlowButton,
+  sealedFlowButtonUrl,
+} from "./buttons"
 export {
   assertAssetsOwned,
   type DocumentIssue,

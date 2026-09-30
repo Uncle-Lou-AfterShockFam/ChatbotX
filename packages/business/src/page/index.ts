@@ -9,5 +9,6 @@ export {
   PageService,
   type PageView,
   type PageViewRefusal,
+  pageButtonLinkId,
   pageService,
 } from "./service"
