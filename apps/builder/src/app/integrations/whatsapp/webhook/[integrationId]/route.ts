@@ -1,5 +1,4 @@
 import type { WhatsappAuthValue } from "@chatbotx.io/integration-whatsapp"
-import { SdkException } from "@chatbotx.io/sdk"
 import { integrationQueue } from "@chatbotx.io/worker-config"
 import type { NextRequest } from "next/server"
 import {
@@ -8,6 +7,7 @@ import {
 } from "@/features/integration-whatsapp/queries"
 import { integrations } from "@/integration"
 import { logger } from "@/lib/log"
+import { publicWebhookErrorResponse } from "@/lib/webhook-error-response"
 import { logWebhookRequestBody } from "@/lib/webhook-log"
 
 const MAX_CHALLENGE_LENGTH = 256
@@ -126,8 +126,7 @@ const handlePost = async (req: NextRequest, integrationId: string) => {
     return new Response(handlerResult as BodyInit)
   } catch (e: unknown) {
     logger.warn({ integrationId, err: e }, "Whatsapp manual webhook rejected")
-    const status = e instanceof SdkException ? e.httpStatusCode : 400
-    return json({ message: (e as Error).message }, status)
+    return publicWebhookErrorResponse(e)
   }
 }
 

@@ -11,7 +11,6 @@ import type {
   TiktokAuthValue,
   TiktokConfig,
 } from "@chatbotx.io/integration-tiktok"
-import { SdkException } from "@chatbotx.io/sdk"
 import { integrationQueue } from "@chatbotx.io/worker-config"
 import type { NextRequest } from "next/server"
 import { isCloud } from "@/env"
@@ -20,6 +19,7 @@ import { findIntegrationTiktokByOpenId } from "@/features/integration-tiktok/que
 import { type IntegrationKey, integrations } from "@/integration"
 import { logger } from "@/lib/log"
 import { isBrokerHost } from "@/lib/oauth-broker"
+import { publicWebhookErrorResponse } from "@/lib/webhook-error-response"
 import { logWebhookRequestBody } from "@/lib/webhook-log"
 
 type CredentialType = Parameters<
@@ -38,36 +38,17 @@ const THREADS_BAD_REQUEST_MESSAGES = new Set([
   "Webhook app_id does not match configured clientId",
 ])
 
-/**
- * Webhook callers are unauthenticated, so an exception's text (config state
- * such as "OA Secret Key not configured", zod issues) never reaches them
- * (s231a): the status survives, the body is a fixed message per status, and
- * the detail goes to the log only.
- */
-const publicWebhookMessage = (status: number) => {
-  if (status === 401 || status === 403) {
-    return "Unauthorized"
-  }
-  if (status === 404) {
-    return "Not found"
-  }
-  return status < 500 ? "Invalid webhook request" : "Failed to process webhook"
-}
-
 const webhookErrorResponse = (
   error: unknown,
   integrationType: string,
   logMessage: string,
 ) => {
-  let status = error instanceof SdkException ? error.httpStatusCode : 400
-  if (!Number.isInteger(status) || status < 400 || status > 599) {
-    status = 500
-  }
-  logger.error({ err: error, integrationType, status }, logMessage)
-  return new Response(
-    JSON.stringify({ message: publicWebhookMessage(status) }),
-    { status, headers: WEBHOOK_PUBLIC_ERROR_HEADERS },
+  const response = publicWebhookErrorResponse(error)
+  logger.error(
+    { err: error, integrationType, status: response.status },
+    logMessage,
   )
+  return response
 }
 
 const createThreadsErrorResponse = (error: unknown) => {
