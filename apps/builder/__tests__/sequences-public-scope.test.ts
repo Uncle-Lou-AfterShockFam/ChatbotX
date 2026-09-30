@@ -110,9 +110,17 @@ describe("real router: sequences public API scope wiring", () => {
   // `workspaceTokenAuthAPIForScope("broadcasts")` (sequences share the
   // broadcasts scope) — iterating every key means a newly added procedure
   // is covered automatically without a matching test being written by hand.
+  // s228b: the Outreach pipeline routes create CRM structure, so they need
+  // the deals scope instead.
   const routeKeys = Object.keys(sequencesPublicRouter) as Array<
     keyof typeof sequencesPublicRouter
   >
+  const DEALS_SCOPED = new Set<string>([
+    "createOutreachPipeline",
+    "unlinkOutreachPipeline",
+  ])
+  const scopeOf = (key: string) =>
+    DEALS_SCOPED.has(key) ? "deals" : "broadcasts"
 
   test.each(
     routeKeys,
@@ -127,7 +135,21 @@ describe("real router: sequences public API scope wiring", () => {
       }),
     ).rejects.toMatchObject({
       code: "FORBIDDEN",
-      message: "Token is not authorized for the 'broadcasts' scope",
+      message: `Token is not authorized for the '${scopeOf(key)}' scope`,
+    })
+  })
+
+  test.each([
+    ...DEALS_SCOPED,
+  ])("s228b: a broadcasts-only token is denied %s (it needs the deals scope)", async (key) => {
+    findWorkspaceByTokenHash.mockResolvedValue(authResult(["broadcasts"]))
+    await expect(
+      invoke(sequencesPublicRouter[key as keyof typeof sequencesPublicRouter], {
+        id: "seq-1",
+      }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "Token is not authorized for the 'deals' scope",
     })
   })
 
