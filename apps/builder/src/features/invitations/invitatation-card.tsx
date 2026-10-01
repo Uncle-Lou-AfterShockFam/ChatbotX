@@ -1,11 +1,6 @@
 "use client"
 
 import { isWorkspaceScheduledForDeletion } from "@chatbotx.io/business/workspace-lifecycle/predicates"
-import type {
-  InvitationModel,
-  UserModel,
-  WorkspaceModel,
-} from "@chatbotx.io/database/types"
 import {
   Avatar,
   AvatarFallback,
@@ -19,18 +14,16 @@ import { useAction } from "next-safe-action/hooks"
 import { toast } from "sonner"
 import { useWorkspaceLogoUrl } from "../workspaces/helpers"
 import { acceptInvitationAction } from "./actions/accept-invitation"
+import type { InvitationView } from "./types"
 
 export function InvitationCard({
   invitation,
-  workspace,
-  user,
 }: {
-  invitation: InvitationModel
-  workspace: WorkspaceModel | null
-  user: UserModel
+  invitation: InvitationView | null
 }) {
   const router = useRouter()
   const t = useTranslations()
+  const workspace = invitation?.workspace ?? null
   const canJoin = workspace
     ? !isWorkspaceScheduledForDeletion(workspace)
     : false
@@ -49,8 +42,11 @@ export function InvitationCard({
   return (
     <Card className="max-w-lg">
       <CardContent className="flex flex-col gap-4">
-        {canJoin && workspace ? (
-          <WorkspaceInvitationCard user={user} workspace={workspace} />
+        {canJoin && invitation && workspace ? (
+          <WorkspaceInvitationCard
+            inviterName={invitation.inviterName}
+            workspace={workspace}
+          />
         ) : (
           <p className="text-muted-foreground">
             {workspace && isWorkspaceScheduledForDeletion(workspace)
@@ -68,8 +64,8 @@ export function InvitationCard({
             {t("actions.cancel")}
           </Button>
           <Button
-            disabled={isPending || !canJoin}
-            onClick={() => execute({ code: invitation.code })}
+            disabled={isPending || !(canJoin && invitation)}
+            onClick={() => invitation && execute({ code: invitation.code })}
             type="button"
             variant="default"
           >
@@ -83,10 +79,10 @@ export function InvitationCard({
 
 export function WorkspaceInvitationCard({
   workspace,
-  user,
+  inviterName,
 }: {
-  workspace: WorkspaceModel
-  user: UserModel
+  workspace: NonNullable<InvitationView["workspace"]>
+  inviterName: string | null
 }) {
   const t = useTranslations()
   const logoUrl = useWorkspaceLogoUrl(workspace)
@@ -113,7 +109,7 @@ export function WorkspaceInvitationCard({
 
       <p>
         {t("invitation.chatbotInvitationDescription2", {
-          userName: user.name ?? "",
+          userName: inviterName ?? "",
           chatbotName: workspace.name,
         })}
       </p>

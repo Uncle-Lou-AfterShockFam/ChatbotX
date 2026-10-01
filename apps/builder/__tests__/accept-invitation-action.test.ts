@@ -9,7 +9,7 @@ vi.mock("@/lib/safe-action", () => ({
   },
 }))
 
-const findByCodeOrFail = vi.fn()
+const findByCode = vi.fn()
 const workspaceMemberFindFirst = vi.fn()
 
 const hasReachedLimit = vi.fn()
@@ -17,7 +17,7 @@ const workspaceServiceFind = vi.fn()
 const workspaceMemberServiceCreate = vi.fn()
 vi.mock("@chatbotx.io/business", () => ({
   invitationService: {
-    findByCodeOrFail: (...args: unknown[]) => findByCodeOrFail(...args),
+    findByCode: (...args: unknown[]) => findByCode(...args),
   },
   isWorkspaceScheduledForDeletion: (
     workspace:
@@ -52,7 +52,11 @@ vi.mock("@chatbotx.io/business/errors", () => ({
 
 vi.mock("next-intl/server", () => ({
   getTranslations: vi.fn(() =>
-    Promise.resolve(() => "This workspace is no longer available"),
+    Promise.resolve((key: string) =>
+      key === "workspaceUnavailable"
+        ? "This workspace is no longer available"
+        : key,
+    ),
   ),
 }))
 
@@ -112,7 +116,7 @@ describe("acceptInvitationAction", () => {
     workspaceMemberFindFirst.mockResolvedValue(undefined)
     workspaceServiceFind.mockResolvedValue({ id: "ws-1", ownerId: "owner-1" })
     hasReachedLimit.mockResolvedValue(false)
-    findByCodeOrFail.mockResolvedValue({
+    findByCode.mockResolvedValue({
       code: "abc123",
       workspaceId: "ws-1",
       expiresAt: futureDate(),
@@ -166,16 +170,40 @@ describe("acceptInvitationAction", () => {
   })
 
   test("throws and does not insert or invalidate cache when invitation has expired", async () => {
-    findByCodeOrFail.mockResolvedValue({
+    findByCode.mockResolvedValue({
       code: "abc123",
       workspaceId: "ws-1",
       expiresAt: pastDate(),
       permissions: {},
     })
 
-    await expect(invoke()).rejects.toThrow("Invitation expired")
+    await expect(invoke()).rejects.toThrow("invalidInvitation")
     expect(workspaceMemberServiceCreate).not.toHaveBeenCalled()
     expect(invalidateCacheByTags).not.toHaveBeenCalled()
+  })
+
+  test("unknown, expired and workspace-less codes answer the same (no code oracle)", async () => {
+    const answers: unknown[] = []
+    for (const row of [
+      undefined,
+      {
+        code: "abc123",
+        workspaceId: "ws-1",
+        expiresAt: pastDate(),
+        permissions: {},
+      },
+      {
+        code: "abc123",
+        workspaceId: null,
+        expiresAt: new Date(Date.now() + 86_400_000),
+        permissions: {},
+      },
+    ]) {
+      findByCode.mockResolvedValue(row)
+      answers.push(await invoke().catch((error: Error) => error.message))
+    }
+    expect(new Set(answers)).toEqual(new Set(["invalidInvitation"]))
+    expect(workspaceMemberServiceCreate).not.toHaveBeenCalled()
   })
 
   test("throws and does not insert or invalidate cache when user is already a member", async () => {
