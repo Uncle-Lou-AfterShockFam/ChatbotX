@@ -786,10 +786,10 @@ describe.skipIf(!databaseUrl)(
           "checkout.session.async_payment_succeeded",
         ),
       })
-      // The redelivery may race its own dead run: 503. The other event type
-      // is fresh: a no-op (Stripe retries the dead run's event by itself).
+      // A claim a minute old is likely a dead run: the redelivery AND the
+      // fresh other event type both answer 503 (each retries on its own).
       expect(redelivered.outcome).toBe("retry")
-      expect(otherType).toEqual({ outcome: "noop", detail: "already-marked" })
+      expect(otherType).toEqual({ outcome: "retry", detail: "marks in flight" })
       expect(m.marks).not.toHaveBeenCalled()
       await db
         .update(invoicePaymentModel)
@@ -804,6 +804,24 @@ describe.skipIf(!databaseUrl)(
       expect((await paymentRows(invoice.id))[0]?.marksDoneAt).toBeInstanceOf(
         Date,
       )
+    })
+
+    test("a fresh event of a payment whose claim is seconds old no-ops (a live run): never a 503", async () => {
+      const { payment } = await crashedAfterCommit("evt_crash6", "pi_crash6")
+      await db
+        .update(invoicePaymentModel)
+        .set({ markedAt: new Date(Date.now() - 5000) })
+        .where(sql`id = ${payment.id}`)
+      const fresh = await handleStripeWebhook({
+        integrationId: m.integrations.values().next().value as string,
+        ...signedCompleted(
+          "evt_crash6_async",
+          "cs_x",
+          "checkout.session.async_payment_succeeded",
+        ),
+      })
+      expect(fresh).toEqual({ outcome: "noop", detail: "already-marked" })
+      expect(m.marks).not.toHaveBeenCalled()
     })
 
     test("a done payment is never re-claimed, even past the lease", async () => {

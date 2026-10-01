@@ -475,6 +475,9 @@ async function markAndEmit(props: {
   }
 }
 
+/** s235: a marks claim younger than this belongs to a run that is plausibly alive. */
+const LIVE_CLAIM_MS = 30_000
+
 /** InvoiceEvent outcome of the checkout payment whose marks + emit ran. */
 const MARKED_OUTCOME = "marked"
 
@@ -653,19 +656,26 @@ async function settleCheckoutPayment(props: {
     return { outcome: "retry", detail: "marks claim" }
   }
   if (!claimed) {
-    if (!props.redelivery) {
-      return { outcome: "noop", detail: "already-marked" }
-    }
-    // Done, or a live claim that may be this event's own run, dead after
-    // claiming (s235 probe a2): answer 503, keep the dedup row, and let Stripe
-    // come back until the marks are done or the lease lets this one take over.
     const current = await findCheckoutPayment(
       payment.invoiceId,
       payment.providerPaymentId,
     ).catch(() => null)
-    return current?.marksDoneAt
-      ? { outcome: "noop", detail: "already-marked" }
-      : { outcome: "retry", detail: "marks in flight" }
+    if (current?.marksDoneAt) {
+      return { outcome: "noop", detail: "already-marked" }
+    }
+    // A live claim. A REDELIVERY may be racing its own event's dead run
+    // (s235 probe a2): 503, keep the dedup row, come back until the marks
+    // are done or the lease lets it take over. A fresh event no-ops while
+    // the claim is young (a live run holds it for milliseconds: two event
+    // types of one payment never see a 503, H1); an older claim is likely a
+    // dead run, so the fresh event's own retries back up Stripe's retries
+    // of the dead one.
+    const heldMs = current?.markedAt
+      ? Date.now() - current.markedAt.getTime()
+      : 0
+    return props.redelivery || heldMs >= LIVE_CLAIM_MS
+      ? { outcome: "retry", detail: "marks in flight" }
+      : { outcome: "noop", detail: "already-marked" }
   }
   // The row as it is NOW, not as the payment left it: a deposit whose marks
   // run after the balance paid the invoice must not write `partiallyPaid`

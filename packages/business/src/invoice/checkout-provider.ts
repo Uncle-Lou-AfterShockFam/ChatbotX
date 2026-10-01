@@ -549,7 +549,9 @@ export async function visitCheckout(
           .update(invoiceModel)
           .set({
             lastError: appendLastError(
-              `${PAY_PAGE_NOTE_PREFIX}${error.message}`,
+              // "|" separates notes: a message carrying one (an echoed
+              // contact name) must not split off an unclearable fake note.
+              `${PAY_PAGE_NOTE_PREFIX}${error.message.replaceAll("|", "/")}`,
             ),
             updatedAt: new Date(),
           })
