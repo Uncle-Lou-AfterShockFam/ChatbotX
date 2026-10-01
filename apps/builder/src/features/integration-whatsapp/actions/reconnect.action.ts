@@ -21,7 +21,6 @@ import { zodBigintAsString } from "@chatbotx.io/utils"
 import { getTranslations } from "next-intl/server"
 import { z } from "zod"
 import { getWhatsappGrantedScopes } from "@/features/integration-whatsapp/libs/capi-scope"
-import { assertWorkspaceSuperAdmin } from "@/lib/auth/assert-workspace-super-admin"
 import { logger } from "@/lib/log"
 import { resolveProviderOriginForCredential } from "@/lib/provider-origin"
 import { settingsActionClient } from "@/lib/safe-action"
@@ -245,7 +244,6 @@ async function reconnectWhatsapp(input: {
   workspaceId: string
 }) {
   const t = await getTranslations()
-  await assertWorkspaceSuperAdmin(input.workspaceId)
 
   const existing = await findReconnectTarget({
     integrationWhatsappId: input.integrationWhatsappId,

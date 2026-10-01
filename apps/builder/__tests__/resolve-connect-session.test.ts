@@ -16,7 +16,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 const {
   checkWorkspaceOwnerAccessMock,
   findWorkspaceMock,
-  isMemberMock,
+  isSuperAdminMemberMock,
   platformCredentialResolveMock,
   readPendingAuthMock,
   resolvePlatformOwnerIdMock,
@@ -24,7 +24,7 @@ const {
 } = vi.hoisted(() => ({
   checkWorkspaceOwnerAccessMock: vi.fn(),
   findWorkspaceMock: vi.fn(),
-  isMemberMock: vi.fn(),
+  isSuperAdminMemberMock: vi.fn(),
   platformCredentialResolveMock: vi.fn(),
   readPendingAuthMock: vi.fn(),
   resolvePlatformOwnerIdMock: vi.fn(),
@@ -66,7 +66,7 @@ vi.mock("@/features/integration-webchat/lib", () => ({
 
 vi.mock("@chatbotx.io/business", () => ({
   workspaceService: { find: findWorkspaceMock },
-  workspaceMemberService: { isSuperAdminMember: isMemberMock },
+  workspaceMemberService: { isSuperAdminMember: isSuperAdminMemberMock },
   platformCredentialService: { resolveForOwner: platformCredentialResolveMock },
   resolveTenantSettings: resolveTenantSettingsMock,
 }))
@@ -89,7 +89,7 @@ describe("resolveConnectSession", () => {
 
     readPendingAuthMock.mockResolvedValue(pendingAuth)
     findWorkspaceMock.mockResolvedValue({ id: "ws-1", ownerId: "owner-1" })
-    isMemberMock.mockResolvedValue(true)
+    isSuperAdminMemberMock.mockResolvedValue(true)
     checkWorkspaceOwnerAccessMock.mockResolvedValue(null)
     resolvePlatformOwnerIdMock.mockResolvedValue("owner-1")
     platformCredentialResolveMock.mockResolvedValue({
@@ -123,11 +123,11 @@ describe("resolveConnectSession", () => {
         brandingChannel: "messenger",
       }),
     ).rejects.toMatchObject({ code: "notWorkspaceMember" })
-    expect(isMemberMock).not.toHaveBeenCalled()
+    expect(isSuperAdminMemberMock).not.toHaveBeenCalled()
   })
 
   test("throws notWorkspaceMember before the owner gate/credential lookup when the user isn't a member", async () => {
-    isMemberMock.mockResolvedValue(false)
+    isSuperAdminMemberMock.mockResolvedValue(false)
     checkWorkspaceOwnerAccessMock.mockRejectedValue(
       new Error("must not be called"),
     )

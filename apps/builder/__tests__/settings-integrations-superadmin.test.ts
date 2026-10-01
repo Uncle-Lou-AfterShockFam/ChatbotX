@@ -10,6 +10,8 @@ const FACTORY_ON_SETTINGS_CLIENT =
 const WORKSPACE_CLIENT = /\bworkspaceActionClient/
 const USES_SUPER_ADMIN_GATE = /\.use\(superAdminAuthorizedMiddleware/
 const MEMBERSHIP_ONLY = /workspaceAuthorizedMidddleware/
+const WRITE_METHOD = /method: "(POST|PUT|PATCH|DELETE)"/
+const ROUTE_PATH = /path: "([^"]+)"/
 const PERMISSION_SUPER_ADMIN =
   /hasWorkspaceAccess\(\{[^}]*permission: "superAdmin"/
 
@@ -270,6 +272,32 @@ describe("every Settings integration action is built on a superAdmin client", ()
       )
       expect(source, rel).not.toContain("workspaceMemberService.isMember(")
     }
+  })
+
+  test("no channel or integration oRPC write route is membership-only", () => {
+    const offenders: string[] = []
+    let writes = 0
+    for (const feature of [...SETTINGS_FEATURES, ...CHANNEL_FEATURES]) {
+      for (const path of collectSourceFiles(join(FEATURES, feature))) {
+        if (!path.includes("/api/")) {
+          continue
+        }
+        // One chunk per procedure: `authorizedAPI` starts each route chain.
+        for (const route of read(path).split("authorizedAPI").slice(1)) {
+          if (!WRITE_METHOD.test(route)) {
+            continue
+          }
+          writes += 1
+          if (MEMBERSHIP_ONLY.test(route)) {
+            offenders.push(
+              `${path.slice(FEATURES.length + 1)} ${route.match(ROUTE_PATH)?.[1]}`,
+            )
+          }
+        }
+      }
+    }
+    expect(writes).toBeGreaterThanOrEqual(3)
+    expect(offenders).toEqual([])
   })
 
   test("the disconnect factory is superAdmin-gated and stays open on an expired workspace", () => {

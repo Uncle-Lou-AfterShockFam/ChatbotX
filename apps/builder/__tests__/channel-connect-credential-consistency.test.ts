@@ -26,7 +26,7 @@ const {
   mockResolveForOwner,
   mockReadPendingAuth,
   mockWorkspaceFind,
-  mockIsMember,
+  mockIsSuperAdminMember,
 } = vi.hoisted(() => ({
   mockResolvePlatformOwnerId: vi.fn(async () => "resolved-owner-1"),
   mockResolveForOwner: vi.fn(async () => undefined),
@@ -49,7 +49,7 @@ const {
     id: "ws-1",
     ownerId: "owner-1",
   })),
-  mockIsMember: vi.fn(async () => true),
+  mockIsSuperAdminMember: vi.fn(async () => true),
 }))
 
 // A passthrough action-client chain: `.inputSchema()`/`.action()` just
@@ -76,7 +76,7 @@ vi.mock("@chatbotx.io/business", () => ({
     create: vi.fn(),
     find: mockWorkspaceFind,
   },
-  workspaceMemberService: { isSuperAdminMember: mockIsMember },
+  workspaceMemberService: { isSuperAdminMember: mockIsSuperAdminMember },
   resolveTenantSettings: vi.fn(async () => ({ appUrl: "https://app.test" })),
   updateInstagramIntegrationUserInfo: vi.fn(),
   updateMessengerIntegrationUserInfo: vi.fn(),
@@ -228,7 +228,7 @@ describe("channel connect completion legs never re-derive the credential owner f
       expiresAt: Date.now() + 600_000,
     })
     mockWorkspaceFind.mockResolvedValue({ id: "ws-1", ownerId: "owner-1" })
-    mockIsMember.mockResolvedValue(true)
+    mockIsSuperAdminMember.mockResolvedValue(true)
   })
 
   test("connectMessengerPage resolves the credential owner from the pending-auth cookie's workspaceId", async () => {

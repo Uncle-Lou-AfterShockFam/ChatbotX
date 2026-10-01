@@ -17,6 +17,7 @@ vi.mock("@chatbotx.io/business", () => ({
       workspace: { id: "ws-1" },
       workspaceId: "ws-1",
       userId: "user-1",
+      permissions: { superAdmin: true },
     })),
   },
   resolveWorkspaceAccess: vi.fn(({ realMember }) => {
@@ -50,6 +51,7 @@ vi.mock("@chatbotx.io/database/client", () => ({
           workspace: { id: "ws-1" },
           workspaceId: "ws-1",
           userId: "user-1",
+          permissions: { superAdmin: true },
         })),
       },
     },

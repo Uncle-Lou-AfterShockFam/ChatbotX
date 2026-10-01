@@ -235,7 +235,9 @@ export class WorkspaceMemberService extends BaseService {
 
   /**
    * s234a: a REAL member holding `superAdmin` - connecting a channel into an
-   * existing workspace is a Settings write. Uncached, like isMember.
+   * existing workspace is a Settings write. Uncached, and real rows only like
+   * isMember (which it replaces on the connect paths): a platform-support
+   * session could not connect a channel before and still cannot.
    */
   async isSuperAdminMember(props: {
     tx?: DatabaseClient
