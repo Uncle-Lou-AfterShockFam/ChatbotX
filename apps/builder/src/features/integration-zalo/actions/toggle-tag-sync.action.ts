@@ -3,9 +3,9 @@
 import { zaloIntegrationService } from "@chatbotx.io/business"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import { z } from "zod"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 
-export const toggleZaloTagSyncAction = workspaceActionClient
+export const toggleZaloTagSyncAction = settingsActionClient
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .inputSchema(z.object({ enabled: z.boolean() }))
   .action(async (props) => {

@@ -13,7 +13,7 @@ import { redirect } from "next/navigation"
 import { getOriginUrlFromHeader } from "@/lib/domain"
 import { resolveOwnerForWorkspace } from "@/lib/platform-credential-owner"
 import { buildProviderCallbackUrl } from "@/lib/provider-origin"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 
 /**
  * Start an OAuth reconnect for an existing Instagram integration. The row's
@@ -22,7 +22,7 @@ import { workspaceActionClient } from "@/lib/safe-action"
  * callback refresh this row's tokens instead of running the account-select
  * connect flow. Mirrors `connectFacebookAds`.
  */
-export const reconnectInstagramAction = workspaceActionClient
+export const reconnectInstagramAction = settingsActionClient
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .action(
     async ({

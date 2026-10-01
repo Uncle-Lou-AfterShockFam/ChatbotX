@@ -9,10 +9,10 @@ import {
   workspaceIdAndIdRequestParams,
 } from "@/features/common/schema"
 import { findIntegrationApiByWorkspaceAndId } from "@/features/integration-api/queries"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { assertEmailLineAdmin } from "../lib/email-line-guard"
 
-export const rotateApiTokenAction = workspaceActionClient
+export const rotateApiTokenAction = settingsActionClient
   .bindArgsSchemas(workspaceIdAndIdRequestParams)
   .action(
     async ({

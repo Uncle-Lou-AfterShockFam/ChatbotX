@@ -7,7 +7,7 @@ import type { MessengerAuthValue } from "@chatbotx.io/integration-messenger/sche
 import { invalidateCacheByTags } from "@chatbotx.io/redis"
 import { SdkException } from "@chatbotx.io/sdk"
 import { zodBigintAsString } from "@chatbotx.io/utils"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { buildMessengerMessageTemplateComponents } from "../lib/build-template-components"
 import { syncMessengerMessageTemplatesForIntegration } from "../lib/sync-message-templates"
 import { createMessengerMessageTemplateRequest } from "../schema/mutation"
@@ -25,7 +25,7 @@ function formatTemplateRejectionMessage({
     : "Meta rejected this template"
 }
 
-export const createMessengerMessageTemplateAction = workspaceActionClient
+export const createMessengerMessageTemplateAction = settingsActionClient
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .schema(createMessengerMessageTemplateRequest)
   .action(async (props) => {

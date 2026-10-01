@@ -11,11 +11,11 @@ import { SdkException } from "@chatbotx.io/sdk"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import { chunk } from "remeda"
 import { z } from "zod"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { prepareComponentsForClone } from "../lib/prepare-components-for-clone"
 import { syncMessengerMessageTemplatesForIntegration } from "../lib/sync-message-templates"
 
-export const cloneMessengerMessageTemplateAction = workspaceActionClient
+export const cloneMessengerMessageTemplateAction = settingsActionClient
   .bindArgsSchemas([
     zodBigintAsString(),
     zodBigintAsString(),

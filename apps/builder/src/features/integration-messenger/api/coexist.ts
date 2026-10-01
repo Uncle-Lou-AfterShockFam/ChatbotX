@@ -3,7 +3,7 @@ import {
   setCoexistRequestSchema,
   setCoexistResponseSchema,
 } from "@/features/channel-connect/schema/coexist"
-import { workspaceAuthorizedMidddleware } from "@/middlewares/auth"
+import { superAdminAuthorizedMiddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
 
 export const integrationMessengerCoexistAPIs = {
@@ -16,7 +16,7 @@ export const integrationMessengerCoexistAPIs = {
     })
     .input(setCoexistRequestSchema)
     .output(setCoexistResponseSchema)
-    .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+    .use(superAdminAuthorizedMiddleware, (input) => input.workspaceId)
     .handler(async ({ input }) => {
       const { workspaceId, integrationId, enabled, aiReadsSyncedHistory } =
         input

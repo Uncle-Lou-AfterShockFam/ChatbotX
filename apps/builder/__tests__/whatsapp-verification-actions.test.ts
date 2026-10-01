@@ -50,7 +50,7 @@ vi.mock("@/lib/safe-action", () => {
   chain.bindArgsSchemas = () => chain
   chain.inputSchema = () => chain
   chain.action = (handler: unknown) => handler
-  return { workspaceActionClient: chain }
+  return { settingsActionClient: chain }
 })
 
 vi.mock("@chatbotx.io/business", () => ({

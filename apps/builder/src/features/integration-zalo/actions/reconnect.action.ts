@@ -12,7 +12,7 @@ import { redirect } from "next/navigation"
 import { getOriginUrlFromHeader } from "@/lib/domain"
 import { resolveOwnerForWorkspace } from "@/lib/platform-credential-owner"
 import { buildProviderCallbackUrl } from "@/lib/provider-origin"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 
 /**
  * Start an OAuth reconnect for an existing Zalo OA integration: send the user
@@ -20,7 +20,7 @@ import { workspaceActionClient } from "@/lib/safe-action"
  * OAuth state so the callback refreshes this row's tokens instead of running
  * the connect flow. Mirrors `reconnectMessengerAction`.
  */
-export const reconnectZaloAction = workspaceActionClient
+export const reconnectZaloAction = settingsActionClient
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .action(
     async ({

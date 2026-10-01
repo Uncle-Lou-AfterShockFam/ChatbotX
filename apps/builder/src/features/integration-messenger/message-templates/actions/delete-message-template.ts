@@ -6,9 +6,9 @@ import {
 } from "@chatbotx.io/business"
 import { invalidateCacheByTags } from "@chatbotx.io/redis"
 import { zodBigintAsString } from "@chatbotx.io/utils"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 
-export const deleteMessengerMessageTemplateAction = workspaceActionClient
+export const deleteMessengerMessageTemplateAction = settingsActionClient
   .bindArgsSchemas([
     zodBigintAsString(),
     zodBigintAsString(),

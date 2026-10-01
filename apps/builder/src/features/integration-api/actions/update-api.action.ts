@@ -10,12 +10,12 @@ import {
   workspaceIdAndIdRequestParams,
 } from "@/features/common/schema"
 import { findIntegrationApiByWorkspaceAndId } from "@/features/integration-api/queries"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { assertEmailLineAdmin } from "../lib/email-line-guard"
 import type { UpdateApiRequest } from "../schema/mutation"
 import { updateApiRequest } from "../schema/mutation"
 
-export const updateApiAction = workspaceActionClient
+export const updateApiAction = settingsActionClient
   .bindArgsSchemas(workspaceIdAndIdRequestParams)
   .inputSchema(updateApiRequest)
   .action(

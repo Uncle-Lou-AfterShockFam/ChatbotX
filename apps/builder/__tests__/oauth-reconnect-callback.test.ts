@@ -43,7 +43,6 @@ const {
   mockRedirect,
   mockAuditRecord,
   mockWithAuditContext,
-  mockAssertSuperAdmin,
 } = vi.hoisted(() => ({
   mockFindMessengerIntegration: vi.fn(),
   mockUpdateMessengerIntegrationAuth: vi.fn(),
@@ -88,16 +87,11 @@ const {
   mockWithAuditContext: vi.fn(
     async (_ctx: unknown, fn: () => Promise<unknown>) => await fn(),
   ),
-  mockAssertSuperAdmin: vi.fn(async () => undefined),
 }))
 
 vi.mock("@chatbotx.io/business/audit", () => ({
   auditService: { record: mockAuditRecord },
   withAuditContext: mockWithAuditContext,
-}))
-
-vi.mock("@/lib/auth/assert-workspace-super-admin", () => ({
-  assertWorkspaceSuperAdmin: mockAssertSuperAdmin,
 }))
 
 vi.mock("@chatbotx.io/business", () => ({
@@ -226,6 +220,7 @@ vi.mock("@/integration", () => ({
     instagram: {},
     instagramFacebook: {},
     facebookAds: {},
+    threads: {},
     tiktok: {},
     zalo: {},
     googleCalendar: {},
@@ -273,7 +268,7 @@ vi.mock("@/lib/oauth-referer", () => ({
   sanitizeReferer: vi.fn(async (referer: string) => referer),
 }))
 
-const { handleCallback } = await import(
+const { callbackPermission, handleCallback } = await import(
   "../src/app/integrations/[...integration]/callback"
 )
 const { sanitizeReferer } = await import("@/lib/oauth-referer")
@@ -696,43 +691,38 @@ describe("handleCallback OAuth reconnect", () => {
     expect(mockExchangeFacebookAdsCode).not.toHaveBeenCalled()
   })
 
-  test("messagingAds flow blocks a non-super-admin before storing any token", async () => {
-    // Connecting an ads token is a super-admin action; a bare member who
-    // round-trips a crafted OAuth state must be rejected at the callback.
-    mockAssertSuperAdmin.mockRejectedValueOnce(
-      new Error("super admin required"),
+  // s234a: a callback into an existing workspace is a Settings write
+  // (superAdmin), except the features whose own connect action is
+  // membership-only. The `state` is forgeable, so this is the storage gate.
+  const memberButNotAdmin = () =>
+    mockHasWorkspaceAccess.mockImplementation(
+      async (props: { permission?: string }) =>
+        props.permission !== "superAdmin",
     )
-    mockFindWhatsappIntegration.mockResolvedValue({ id: "9", workspaceId: "1" })
 
-    await expect(
-      handleCallback(
-        "messenger",
-        buildCallbackRequest("messenger", {
-          workspaceId: "1",
-          referer: REFERER,
-          flow: "messagingAds",
-          messagingAdsChannel: "whatsapp",
-          messagingAdsIntegrationId: "9",
-        }),
-      ),
-    ).rejects.toThrow("not found")
-
-    // Blocked BEFORE ownership lookup + token exchange + storage.
-    expect(mockFindWhatsappIntegration).not.toHaveBeenCalled()
-    expect(mockExchangeFacebookAdsCode).not.toHaveBeenCalled()
-    expect(mockUpsertMessagingAdsConnection).not.toHaveBeenCalled()
-  })
-
-  // s234a: the Settings integrations' connect actions need superAdmin; the
-  // forgeable OAuth state must not let a bare member store a token instead.
   test.each([
+    ["messenger", "messenger", {}],
+    ["messenger", "messenger", { reconnectIntegrationId: "5" }],
     ["messenger", "messenger", { flow: "facebookAds" }],
+    [
+      "messenger",
+      "messenger",
+      {
+        flow: "messagingAds",
+        messagingAdsChannel: "whatsapp",
+        messagingAdsIntegrationId: "9",
+      },
+    ],
+    ["instagram", "instagram", {}],
+    ["instagram", "instagram", { flow: "metaCatalog" }],
+    ["instagramFacebook", "instagram-facebook", {}],
+    ["threads", "threads", {}],
+    ["tiktok", "tiktok", {}],
+    ["zalo", "zalo", { reconnectIntegrationId: "5" }],
     ["facebookAds", "facebook-ads", {}],
     ["googleSheets", "google-sheets", {}],
-  ] as const)("%s callback (%s) blocks a non-super-admin before any token exchange", async (integration, path, extra) => {
-    mockAssertSuperAdmin.mockRejectedValueOnce(
-      new Error("super admin required"),
-    )
+  ] as const)("%s callback (%s, %o) refuses a member without superAdmin before any provider work", async (integration, path, extra) => {
+    memberButNotAdmin()
 
     await expect(
       handleCallback(
@@ -745,31 +735,71 @@ describe("handleCallback OAuth reconnect", () => {
       ),
     ).rejects.toThrow("not found")
 
-    expect(mockAssertSuperAdmin).toHaveBeenCalledWith("1")
+    expect(mockHasWorkspaceAccess).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "1", permission: "superAdmin" }),
+    )
+    expect(mockResolveForOwner).not.toHaveBeenCalled()
     expect(mockExchangeFacebookAdsCode).not.toHaveBeenCalled()
+    expect(mockExchangeMessengerCode).not.toHaveBeenCalled()
+    expect(mockReconnectMessengerHandler).not.toHaveBeenCalled()
+    expect(mockReconnectZaloHandler).not.toHaveBeenCalled()
+    expect(mockConnectZaloHandler).not.toHaveBeenCalled()
     expect(mockUpsertFacebookAds).not.toHaveBeenCalled()
+    expect(mockUpsertMessagingAdsConnection).not.toHaveBeenCalled()
     expect(mockRedirect).not.toHaveBeenCalled()
   })
 
-  test("google sheets callback asks for super-admin before resolving the Google credential", async () => {
-    mockAssertSuperAdmin.mockRejectedValueOnce(
-      new Error("super admin required"),
-    )
-    mockResolveForOwner.mockClear()
+  test.each([
+    ["googleCalendar", "google-calendar", {}],
+    ["messenger", "messenger", { flow: "metaCatalog" }],
+    ["messenger", "messenger", { flow: "facebookLeadAds" }],
+    ["messenger", "messenger", { flow: "facebookMarketingMessages" }],
+  ] as const)("%s callback (%s, %o) stays membership-only, like its connect action", async (integration, path, extra) => {
+    memberButNotAdmin()
 
-    await expect(
-      handleCallback(
-        "googleSheets",
-        buildCallbackRequest("google-sheets", {
-          workspaceId: "1",
-          referer: REFERER,
-        }),
-      ),
-    ).rejects.toThrow("not found")
+    await handleCallback(
+      integration,
+      buildCallbackRequest(path, {
+        workspaceId: "1",
+        referer: REFERER,
+        ...extra,
+      }),
+    ).catch(() => undefined)
 
-    expect(mockResolveForOwner).not.toHaveBeenCalledWith(
-      expect.objectContaining({ type: "google" }),
+    expect(mockHasWorkspaceAccess).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "1", permission: undefined }),
     )
+    expect(mockResolveForOwner).toHaveBeenCalled()
+  })
+
+  test("callbackPermission: superAdmin unless a named membership-only feature", () => {
+    expect(callbackPermission("googleCalendar", undefined)).toBeUndefined()
+    for (const flow of [
+      "metaCatalog",
+      "facebookLeadAds",
+      "facebookMarketingMessages",
+    ]) {
+      expect(callbackPermission("messenger", flow)).toBeUndefined()
+      // The membership-only flows exist on the Messenger callback only.
+      expect(callbackPermission("instagram", flow)).toBe("superAdmin")
+    }
+    for (const [type, flow] of [
+      ["messenger", undefined],
+      ["messenger", "facebookAds"],
+      ["messenger", "messagingAds"],
+      ["instagram", undefined],
+      ["instagramFacebook", undefined],
+      ["threads", undefined],
+      ["tiktok", undefined],
+      ["zalo", undefined],
+      ["facebookAds", undefined],
+      ["googleSheets", undefined],
+      ["someFutureIntegration", undefined],
+    ] as const) {
+      expect(callbackPermission(type, flow), `${type} ${flow}`).toBe(
+        "superAdmin",
+      )
+    }
   })
 
   test("zalo reconnect dispatches to the handler and skips the connect flow", async () => {

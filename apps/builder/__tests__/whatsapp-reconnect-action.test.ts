@@ -44,7 +44,7 @@ vi.mock("@/lib/safe-action", () => {
   chain.bindArgsSchemas = () => chain
   chain.inputSchema = () => chain
   chain.action = (handler: ReconnectWhatsappActionHandler) => handler
-  return { workspaceActionClient: chain }
+  return { settingsActionClient: chain }
 })
 
 vi.mock("@/lib/auth/utils", () => ({
@@ -169,37 +169,6 @@ describe("reconnectWhatsappAction", () => {
       revision: 1,
     })
     subscribeWebhookMock.mockResolvedValue(undefined)
-  })
-
-  test("rejects non-super-admin members before reconnecting WhatsApp auth", async () => {
-    getCurrentUserAndTargetWorkspaceMock.mockResolvedValue({
-      targetWorkspaceMember: {
-        permissions: {
-          superAdmin: false,
-          analytics: true,
-          flows: true,
-          contacts: true,
-          onlyAssignedContacts: false,
-          emailAndPhone: true,
-          broadcast: true,
-          ecommerce: true,
-        },
-      },
-    })
-
-    await expect(
-      callReconnectWhatsappAction({
-        bindArgsParsedInputs: ["ws-1", "iw-1"],
-        ctx: { workspace: { id: "ws-1", ownerId: "owner-1" } },
-        parsedInput: { code: "oauth-code-1" },
-      }),
-    ).rejects.toThrow("errors.superAdminRequired")
-
-    expect(findWorkspaceIntegrationMock).not.toHaveBeenCalled()
-    expect(platformCredentialResolveMock).not.toHaveBeenCalled()
-    expect(exchangeAccessTokenMock).not.toHaveBeenCalled()
-    expect(replaceAuthMock).not.toHaveBeenCalled()
-    expect(subscribeWebhookMock).not.toHaveBeenCalled()
   })
 
   test("resubscribes with automatic_events during ads reconnect", async () => {

@@ -40,7 +40,7 @@ vi.mock("@/lib/safe-action", () => {
   chain.bindArgsSchemas = () => chain
   chain.inputSchema = () => chain
   chain.action = (handler: SetDatasetHandler | ProvisionHandler) => handler
-  return { workspaceActionClient: chain }
+  return { settingsActionClient: chain }
 })
 
 vi.mock("@/lib/auth/assert-workspace-super-admin", () => ({

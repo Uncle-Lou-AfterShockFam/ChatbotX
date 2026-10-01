@@ -1,10 +1,10 @@
 "use server"
 
 import { zodBigintAsString } from "@chatbotx.io/utils"
-import { workspaceActionClientAllowExpired } from "@/lib/safe-action"
+import { settingsActionClientAllowExpired } from "@/lib/safe-action"
 import { disconnectMessenger } from "./disconnect-messenger"
 
-export const disconnectMessengerAction = workspaceActionClientAllowExpired
+export const disconnectMessengerAction = settingsActionClientAllowExpired
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .action(async (props) => {
     const {

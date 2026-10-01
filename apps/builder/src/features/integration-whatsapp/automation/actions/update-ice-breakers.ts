@@ -9,13 +9,13 @@ import {
   workspaceIdrequestParams,
 } from "@/features/common/schema"
 import { integrations } from "@/integration"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import {
   type UpdateWhatsappIceBreakerSchema,
   updateWhatsappIceBreakerSchema,
 } from "../schema/update-ice-breaker-schema"
 
-export const updateWhatsappIceBreakerAction = workspaceActionClient
+export const updateWhatsappIceBreakerAction = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(updateWhatsappIceBreakerSchema)
   .action(

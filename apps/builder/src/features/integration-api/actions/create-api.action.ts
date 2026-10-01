@@ -26,7 +26,13 @@ export const createApiAction = authActionClient
     let ownerId = ctx.user.id
 
     if (workspaceId) {
-      if (!(await hasWorkspaceAccess({ workspaceId, user: ctx.user }))) {
+      if (
+        !(await hasWorkspaceAccess({
+          workspaceId,
+          user: ctx.user,
+          permission: "superAdmin",
+        }))
+      ) {
         throw new ChatbotXException("Workspace not found", "notFound", 404)
       }
       const workspace = await workspaceService.findOrFail({

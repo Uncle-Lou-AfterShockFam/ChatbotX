@@ -3,31 +3,19 @@
 import { integrationWebchatService } from "@chatbotx.io/business"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import { getTenantSettings } from "@/features/tenant/utils"
-import { hasWorkspacePermission } from "@/lib/auth/permission-routes"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { applyWebchatBranding } from "../lib"
 import { updateWebchatRequest } from "../schema/mutation"
 
-export const updateWebchatAction = workspaceActionClient
+export const updateWebchatAction = settingsActionClient
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .inputSchema(updateWebchatRequest)
   .action(async (props) => {
     const {
       bindArgsParsedInputs: [workspaceId, id],
       parsedInput,
-      ctx,
     } = props
     const { authorizedDomains, ...rest } = parsedInput
-
-    // The edit page gates entry with requireWorkspacePermission(workspaceId,
-    // "superAdmin"), but workspaceActionClient only verifies membership — a
-    // member could otherwise call this action directly, bypassing the page,
-    // and set fields like customCss that render inside the public widget.
-    // Permissions come from the middleware ctx (already loaded), so this gate
-    // adds no extra round-trip.
-    if (!hasWorkspacePermission(ctx.workspaceMemberPermissions, "superAdmin")) {
-      throw new Error("You need to be a super admin to update this webchat")
-    }
 
     const integration = await integrationWebchatService.findByIdForWorkspace({
       id,

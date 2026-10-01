@@ -13,7 +13,7 @@ import { FACEBOOK_SSO_SCOPES } from "@/lib/auth/upgrade-facebook-account"
 import { getOriginUrlFromHeader } from "@/lib/domain"
 import { resolveOwnerForWorkspace } from "@/lib/platform-credential-owner"
 import { buildProviderCallbackUrl } from "@/lib/provider-origin"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 
 /**
  * Start an OAuth reconnect for an existing Messenger integration: send the
@@ -21,7 +21,7 @@ import { workspaceActionClient } from "@/lib/safe-action"
  * OAuth state so the callback refreshes this row's tokens instead of running
  * the page-select connect flow. Mirrors `connectFacebookAds`.
  */
-export const reconnectMessengerAction = workspaceActionClient
+export const reconnectMessengerAction = settingsActionClient
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .action(
     async ({

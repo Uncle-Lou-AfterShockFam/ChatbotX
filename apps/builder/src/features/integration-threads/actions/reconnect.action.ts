@@ -12,9 +12,9 @@ import { getTranslations } from "next-intl/server"
 import { getOriginUrlFromHeader } from "@/lib/domain"
 import { resolveOwnerForWorkspace } from "@/lib/platform-credential-owner"
 import { buildProviderCallbackUrl } from "@/lib/provider-origin"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 
-export const reconnectThreadsAction = workspaceActionClient
+export const reconnectThreadsAction = settingsActionClient
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .action(
     async ({ bindArgsParsedInputs: [workspaceId, integrationId], ctx }) => {
