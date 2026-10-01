@@ -15,6 +15,16 @@ export const workspaceResource = createSelectSchema(workspaceModel, {
 }).omit({ token: true })
 export type WorkspaceResource = z.infer<typeof workspaceResource>
 
+/**
+ * A workspace row for a client component prop (s233a): the same `token`
+ * omission as `workspaceResource`, at runtime. A `WorkspaceResource` prop type
+ * alone does not stop the extra field from being serialized to the browser.
+ */
+export const toWorkspaceResource = <T extends { token?: unknown }>({
+  token: _token,
+  ...rest
+}: T): Omit<T, "token"> => rest
+
 export const withWorkspaceIdSchema = z.object({
   workspaceId: zodBigintAsString(),
 })

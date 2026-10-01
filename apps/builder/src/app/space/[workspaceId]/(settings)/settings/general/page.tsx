@@ -1,6 +1,7 @@
 import { getIdFromParams } from "@chatbotx.io/utils"
 import { notFound } from "next/navigation"
 import { FlowStoreProvider } from "@/features/flows/provider/flow-store-context"
+import { toWorkspaceResource } from "@/features/workspaces/schema/resource"
 import { UpdateWorkspaceForm } from "@/features/workspaces/update-workspace-form"
 import { hasWorkspacePermission } from "@/lib/auth/permission-routes"
 import { getCurrentUserAndTargetWorkspace } from "@/lib/auth/utils"
@@ -27,7 +28,7 @@ export default async function GeneralPage(props: {
             "superAdmin",
           ) && !userAndWorkspace.isSupportSession
         }
-        workspace={userAndWorkspace.targetWorkspace}
+        workspace={toWorkspaceResource(userAndWorkspace.targetWorkspace)}
       />
     </FlowStoreProvider>
   )

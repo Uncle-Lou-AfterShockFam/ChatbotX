@@ -33,7 +33,7 @@ type AIAgentsTableProps = {
     [
       Awaited<ReturnType<typeof listAIAgents>>,
       Awaited<ReturnType<typeof listIntegrationOpenaiCompatible>>,
-      WorkspaceModel,
+      Pick<WorkspaceModel, "smartResponseDelaySeconds">,
     ]
   >
 }
