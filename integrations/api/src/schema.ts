@@ -86,5 +86,11 @@ export type ApiActions<IAuth extends ApiAuthValue = ApiAuthValue> = {
     email: LineEmail
     /** The line's idempotency key for this send (<= 120 chars). */
     ref: string
+    /**
+     * s236: ISO instant; the line skips the queued mail at claim time
+     * ('replied') when the contact WROTE back at/after it (bulktext
+     * parseSendOptions + the runner's reply gate). Sent only when set.
+     */
+    skipIfRepliedSince?: string
   }) => Promise<{ messageIds: string[] }>
 }
