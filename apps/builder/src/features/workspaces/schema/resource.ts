@@ -13,7 +13,15 @@ import z from "zod"
 export const workspaceResource = createSelectSchema(workspaceModel, {
   id: zodBigintAsString(),
 }).omit({ token: true })
-export type WorkspaceResource = z.infer<typeof workspaceResource>
+/**
+ * `token?: never` makes the omission a COMPILE-TIME rule (s233a): a raw
+ * WorkspaceModel (token: string | null) no longer type-checks where a client
+ * prop expects a WorkspaceResource. Structural typing let one through before
+ * (sidebar, home page, settings/general all serialized the token).
+ */
+export type WorkspaceResource = z.infer<typeof workspaceResource> & {
+  token?: never
+}
 
 /**
  * A workspace row for a client component prop (s233a): the same `token`
@@ -23,7 +31,7 @@ export type WorkspaceResource = z.infer<typeof workspaceResource>
 export const toWorkspaceResource = <T extends { token?: unknown }>({
   token: _token,
   ...rest
-}: T): Omit<T, "token"> => rest
+}: T): Omit<T, "token"> & { token?: never } => rest
 
 export const withWorkspaceIdSchema = z.object({
   workspaceId: zodBigintAsString(),

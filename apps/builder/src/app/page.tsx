@@ -12,6 +12,7 @@ import { WorkspaceDeletionPendingToast } from "@/components/workspace-deletion-p
 import { isCloud } from "@/env"
 import { AccountRail } from "@/features/workspaces/components/account-rail"
 import WorkspacesList from "@/features/workspaces/components/workspaces-list"
+import { toWorkspaceResource } from "@/features/workspaces/schema/resource"
 import { hasWorkspacePermission } from "@/lib/auth/permission-routes"
 import { enforcePasswordCurrent } from "@/lib/auth/require-password-current"
 import { getCurrentUserAndAllLinkedWorkspaces } from "@/lib/auth/utils"
@@ -93,7 +94,7 @@ export default async function MainPage() {
           reason={blockReason}
           superAdminWorkspaceIds={superAdminWorkspaceIds}
           user={userInfo}
-          workspaces={allWorkspaces}
+          workspaces={allWorkspaces.map(toWorkspaceResource)}
         />
       </div>
     </div>

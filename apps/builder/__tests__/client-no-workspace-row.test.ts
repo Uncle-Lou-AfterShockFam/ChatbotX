@@ -1,8 +1,19 @@
 // @vitest-environment node
 import { readFileSync } from "node:fs"
 import { join, relative } from "node:path"
+import type { WorkspaceModel } from "@chatbotx.io/database/types"
 import { beforeEach, describe, expect, test, vi } from "vitest"
+import type { WorkspaceResource } from "@/features/workspaces/schema/resource"
 import { collectSourceFiles } from "./source-files.test-utils"
+
+/**
+ * Compile-time half of the gate (CI `Types`): a raw row must NOT be
+ * assignable to the client-facing type. If `token?: never` is ever dropped,
+ * the expect-error goes unused and tsc fails.
+ */
+const rawRowIsNotAResource = (row: WorkspaceModel): WorkspaceResource =>
+  // @ts-expect-error -- token: string | null is not assignable to never
+  row
 
 /**
  * s233a: the Workspace row carries the deprecated plaintext `token`. A client
@@ -74,6 +85,10 @@ describe("no raw Workspace row reaches a client component", () => {
 })
 
 describe("toWorkspaceResource", () => {
+  test("compile-time: a raw WorkspaceModel is not a WorkspaceResource (checked by CI Types)", () => {
+    expect(rawRowIsNotAResource).toBeTypeOf("function")
+  })
+
   test("drops token, keeps everything else, leaves the input alone", async () => {
     const { toWorkspaceResource } = await import(
       "@/features/workspaces/schema/resource"

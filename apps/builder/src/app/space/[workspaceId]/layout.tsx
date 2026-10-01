@@ -31,6 +31,7 @@ import { isCloud } from "@/env"
 import { AnalyticsApiProvider } from "@/features/analytics/components/analytics-api-provider"
 import { CouponTopicStoreProvider } from "@/features/coupons/provider/coupon-topic-store-context"
 import { getTenantSettings } from "@/features/tenant/utils"
+import { toWorkspaceResource } from "@/features/workspaces/schema/resource"
 import { hasWorkspacePermission } from "@/lib/auth/permission-routes"
 import { enforcePasswordCurrent } from "@/lib/auth/require-password-current"
 import { getCurrentUser } from "@/lib/auth/utils"
@@ -113,8 +114,10 @@ export default async function WorkspaceLayout({
   const resolveLogoUrl = (logo: string | null) =>
     logo ? new URL(logo, storageUrl).toString() : null
 
+  // toWorkspaceResource: the sidebar is a client component; the raw rows
+  // carry the deprecated plaintext `token` (s233a).
   const memberWorkspaces = allWorkspaceMembers.map((workspaceMember) => ({
-    ...workspaceMember.workspace,
+    ...toWorkspaceResource(workspaceMember.workspace),
     logo: resolveLogoUrl(workspaceMember.workspace.logo),
   }))
   // A support session's workspace has no real membership row, so it is never
@@ -123,7 +126,10 @@ export default async function WorkspaceLayout({
   const allWorkspaces = isSupportSession
     ? [
         ...memberWorkspaces,
-        { ...targetWorkspace, logo: resolveLogoUrl(targetWorkspace.logo) },
+        {
+          ...toWorkspaceResource(targetWorkspace),
+          logo: resolveLogoUrl(targetWorkspace.logo),
+        },
       ]
     : memberWorkspaces
 
