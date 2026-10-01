@@ -8,12 +8,6 @@ import {
   sql,
 } from "@chatbotx.io/database/client"
 import { contactsOnSequenceModel } from "@chatbotx.io/database/schema"
-import { sequenceConnections } from "@chatbotx.io/redis"
-import { SchedulerClient } from "@chatbotx.io/scheduler"
-import {
-  createDispatch,
-  getDispatchContactInboxes,
-} from "@chatbotx.io/sequence-scheduler"
 
 type SequenceStepForDelay = {
   id: string
@@ -23,52 +17,6 @@ type SequenceStepForDelay = {
   delayMinutes: number
   delayUnit: string | null
   specificDateTime: Date | null
-}
-
-type ContactForRecalculation = {
-  id: string
-  contactId: string
-  currentStep: number
-  enrolledAt: Date
-}
-
-// Chunk size for batch processing to prevent timeout
-const RECALCULATION_CHUNK_SIZE = 500
-
-/**
- * Helper function to create and schedule a dispatch for a contact
- */
-async function createAndScheduleDispatch(
-  params: {
-    workspaceId: string
-    sequenceId: string
-    contactId: string
-    stepId: string
-    enrollmentId: string
-    runAt: Date
-  },
-  client: DatabaseClient,
-) {
-  const contactInboxes = await getDispatchContactInboxes(
-    params.workspaceId,
-    params.contactId,
-  )
-
-  for (const contactInbox of contactInboxes) {
-    const dispatch = await createDispatch({
-      ...params,
-      contactInboxId: contactInbox.id,
-      client,
-    })
-
-    const redisClient = await sequenceConnections.useExisting()
-    const scheduler = new SchedulerClient(redisClient)
-    await scheduler.addToSchedule(
-      dispatch.bucket,
-      dispatch.id,
-      Number(dispatch.runAtMs),
-    )
-  }
 }
 
 function calculateDelayInMs(delayDays: number, delayMinutes: number): number {
@@ -252,6 +200,14 @@ async function recalculateNextRunAtForStep(
           eq(contactsOnSequenceModel.currentStep, stepOrder),
           eq(contactsOnSequenceModel.status, "active"),
           isNull(contactsOnSequenceModel.completedAt),
+          // s236 (probe): never complete an enrolment whose step at
+          // `currentStep` (the NEXT one to run) is still active, nor one with
+          // a live dispatch: editing the last step's delay, or disabling the
+          // step after it, completed a contact whose last mail was still
+          // pending (and a reopen then queued it a second time). The send or
+          // its advance completes it.
+          sql`NOT EXISTS (SELECT 1 FROM "SequenceStep" st WHERE st."sequenceId" = ${sequenceId} AND st."isActive" = true AND st."order" >= ${stepOrder})`,
+          sql`NOT EXISTS (SELECT 1 FROM "SequenceDispatch" sd WHERE sd."workspaceId" = ${contactsOnSequenceModel.workspaceId} AND sd."enrollmentId" = ${contactsOnSequenceModel.id} AND sd."status" IN ('pending', 'running', 'held'))`,
         ),
       )
     return
@@ -318,151 +274,6 @@ export async function recalculateAllContactsInSequence(
 }
 
 /**
- * Reactivate completed contacts when a new step is added after their completion point.
- *
- * IMPORTANT: currentStep represents the NEXT step order to process (0-based)
- * - When contact enrolls: currentStep=0 (will process step order=0)
- * - After processing step order=0: currentStep=1 (will process step order=1)
- * - After processing step order=2 (last step): currentStep=3 (completed, no step order=3)
- *
- * SCENARIO:
- * - Contact completed with currentStep=3 (processed steps 0,1,2)
- * - Admin creates new step order=3
- * - Contact should be reactivated to process the new step order=3
- *
- * LOGIC:
- * 1. Find completed contacts where currentStep <= newStepOrder
- * 2. Fetch all active steps once (optimization)
- * 3. For each contact, find next step with order >= currentStep
- * 4. Calculate nextStepId and nextRunAt
- * 5. Update status='active', completedAt=null
- * 6. Process in chunks to prevent timeout
- */
-async function reactivateCompletedContactsForNewStep(
-  sequenceId: string,
-  workspaceId: string,
-  newStepOrder: number,
-  client: DatabaseClient,
-) {
-  // Find completed contacts that can process the new step
-  // currentStep represents NEXT step to process, so:
-  // - If currentStep=3 and newStepOrder=3, contact should process it (3 <= 3) ✅
-  // - If currentStep=5 and newStepOrder=3, contact already passed it (5 > 3) ❌
-  const completedContacts = await client.query.contactsOnSequenceModel.findMany(
-    {
-      where: {
-        sequenceId,
-        workspaceId,
-        status: "completed",
-        currentStep: { lte: newStepOrder },
-      },
-      columns: {
-        id: true,
-        contactId: true,
-        currentStep: true,
-        enrolledAt: true,
-      },
-    },
-  )
-
-  if (completedContacts.length === 0) {
-    return
-  }
-
-  // OPTIMIZATION: Fetch active steps once instead of in loop
-  const activeSteps = await getActiveStepsForSequence(sequenceId, client)
-
-  if (activeSteps.length === 0) {
-    // No active steps, keep contacts completed
-    return
-  }
-
-  // Process in chunks to prevent timeout
-  for (let i = 0; i < completedContacts.length; i += RECALCULATION_CHUNK_SIZE) {
-    const chunk = completedContacts.slice(i, i + RECALCULATION_CHUNK_SIZE)
-
-    // Process chunk in parallel
-    await Promise.all(
-      chunk.map(async (contact: ContactForRecalculation) => {
-        // Find the next active step at or after currentStep
-        // currentStep represents the NEXT step order to process
-        // Use >= because if currentStep=3, we want to find step with order=3
-        const nextActiveStep = activeSteps.find(
-          (step) => step.order >= contact.currentStep,
-        )
-
-        if (!nextActiveStep) {
-          // No next step available, keep them completed
-          return
-        }
-
-        // Calculate cumulative delay to the next step
-        // Filter steps up to target order (0-based)
-        const stepsUpToTarget = activeSteps.filter(
-          (s) => s.order <= nextActiveStep.order,
-        )
-
-        // Check for specificDateTime
-        const targetStep = stepsUpToTarget.at(-1)
-        let nextRunAt: Date | null = null
-
-        if (
-          targetStep?.delayUnit === "specificTime" &&
-          targetStep.specificDateTime
-        ) {
-          nextRunAt = targetStep.specificDateTime
-        } else {
-          // Calculate cumulative delay
-          let totalDelayMs = 0
-          for (const step of stepsUpToTarget) {
-            totalDelayMs += calculateDelayInMs(
-              step.delayDays,
-              step.delayMinutes,
-            )
-          }
-
-          if (totalDelayMs > 0) {
-            nextRunAt = new Date(contact.enrolledAt.getTime() + totalDelayMs)
-          }
-        }
-
-        // Reactivate the contact
-        await client
-          .update(contactsOnSequenceModel)
-          .set({
-            status: "active",
-            completedAt: null,
-            nextStepId: nextActiveStep.id,
-            nextRunAt,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(contactsOnSequenceModel.id, contact.id),
-              eq(contactsOnSequenceModel.workspaceId, workspaceId),
-            ),
-          )
-
-        // Create and schedule dispatch for the reactivated contact
-        if (nextRunAt) {
-          await createAndScheduleDispatch(
-            {
-              workspaceId,
-              sequenceId,
-              contactId: contact.contactId,
-              stepId: nextActiveStep.id,
-              enrollmentId: contact.id,
-              runAt: nextRunAt,
-            },
-            client,
-          )
-        }
-      }),
-    )
-  }
-}
-
-/**
  * Handle step CREATION impact on contacts.
  *
  * SCENARIOS:
@@ -482,10 +293,11 @@ async function reactivateCompletedContactsForNewStep(
  *   - ✅ RECALCULATE: New step may change timeline
  *   - Need to recalculate nextRunAt for this contact
  *
- * Case 4: Contact status='completed', currentStep <= newStepOrder (0-based)
- *   - ✅ REACTIVATE: Contact finished at step 4, new step 5 added
- *   - Change status to 'active', set completedAt=null
- *   - Calculate nextRunAt for new step
+ * Case 4: Contact status='completed' (finished before the step was added)
+ *   - ❌ SKIP (owner s236): a finished contact stays finished. Upstream
+ *     reopened it and sent the new step AT ONCE (its run time was
+ *     enrolledAt + delays, in the past): editing an old sequence mailed
+ *     everyone who had finished it.
  *
  * Case 5: Contact status='paused' or 'cancelled'
  *   - ❌ SKIP: Only process active and completed contacts
@@ -523,17 +335,6 @@ export async function handleStepCreationImpact(
     affectedSteps.map(({ currentStep }) =>
       recalculateNextRunAtForStep(sequenceId, workspaceId, currentStep, client),
     ),
-  )
-
-  // PART 2: Handle COMPLETED contacts
-  // When a new step is added AFTER a contact's completion point,
-  // we need to REACTIVATE them so they can continue the sequence
-  // Example: Contact completed at step 4, admin adds step 5 → reactivate
-  await reactivateCompletedContactsForNewStep(
-    sequenceId,
-    workspaceId,
-    newStepOrder,
-    client,
   )
 }
 
@@ -574,9 +375,9 @@ export async function handleStepCreationImpact(
  *   - ❌ THIS FUNCTION IS NOT CALLED
  *   - shouldRecalculateOnUpdate() = false
  *
- * Case 8: Contact status='completed', currentStep < updatedStepOrder
- *   - ✅ REACTIVATE: If step is enabled or reordered after completion
- *   - Example: Contact completed at step 4, enable step 5 → reactivate
+ * Case 8: Contact status='completed'
+ *   - ❌ SKIP (owner s236): enabling or reordering a step never reopens a
+ *     finished contact (see handleStepCreationImpact case 4).
  */
 export async function handleStepUpdateImpact(
   sequenceId: string,
@@ -644,16 +445,5 @@ export async function handleStepUpdateImpact(
     allAffectedSteps.map(({ currentStep }) =>
       recalculateNextRunAtForStep(sequenceId, workspaceId, currentStep, client),
     ),
-  )
-
-  // PART 2: Handle COMPLETED contacts
-  // When a step is updated (enabled, reordered, etc.) AFTER a contact's completion point,
-  // we need to REACTIVATE them so they can continue the sequence
-  // Example: Contact completed at step 4, admin enables step 5 → reactivate
-  await reactivateCompletedContactsForNewStep(
-    sequenceId,
-    workspaceId,
-    updatedStepOrder,
-    client,
   )
 }
