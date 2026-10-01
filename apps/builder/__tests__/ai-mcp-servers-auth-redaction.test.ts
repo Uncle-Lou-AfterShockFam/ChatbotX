@@ -327,16 +327,23 @@ describe("updateAIMcpServerAction", () => {
     )
   })
 
-  test("a blank with nothing to keep is a validation error, not an empty secret", async () => {
+  test("a blank with nothing to keep is a field error, not an empty secret", async () => {
     mocks.findBy.mockResolvedValue(row({ type: "none" }))
 
-    const result = await update({
+    const error = (await update({
       bindArgsParsedInputs: ["ws-1", "21"],
       parsedInput: input,
-    }).catch((error: unknown) => error)
+    }).catch((caught: unknown) => caught)) as {
+      validationErrors?: unknown
+    }
 
     expect(mocks.update).not.toHaveBeenCalled()
-    expect(result).toBeDefined()
+    // On the field the form renders, not on a bare `auth`.
+    expect(error.validationErrors).toEqual({
+      auth: {
+        headers: { 0: { value: { _errors: ["forms.issues.required"] } } },
+      },
+    })
   })
 
   test("a new URL with a blank secret is refused, nothing saved", async () => {

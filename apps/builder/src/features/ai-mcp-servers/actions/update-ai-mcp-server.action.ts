@@ -37,8 +37,17 @@ export const updateAIMcpServerAction = workspaceActionClient
     // value keeps the stored one, for the stored URL only (s232a).
     const merged = mergeStoredAuth(parsedInput.auth, parsedInput.url, mcpServer)
     if (merged.status === "missing") {
+      // On the field itself: the form renders auth.token and
+      // auth.headers.N.value, never a bare `auth` error.
+      const required = { _errors: [t("forms.issues.required")] }
+      const headerIndex = merged.path.startsWith("headers.")
+        ? Number(merged.path.split(".")[1])
+        : null
       return returnValidationErrors(updatePrivateAIMcpServerRequest, {
-        auth: { _errors: [t("forms.issues.required")] },
+        auth:
+          headerIndex === null
+            ? { token: required }
+            : { headers: { [headerIndex]: { value: required } } },
       })
     }
 
