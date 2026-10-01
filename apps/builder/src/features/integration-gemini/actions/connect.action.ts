@@ -9,13 +9,13 @@ import {
   workspaceIdrequestParams,
 } from "@/features/common/schema"
 import { verifyAiProviderApiKey } from "@/features/integration-ai/lib/verify-api-key"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import {
   type ConnectGeminiRequest,
   connectGeminiRequest,
 } from "../schema/request"
 
-export const connectGeminiAction = workspaceActionClient
+export const connectGeminiAction = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(connectGeminiRequest)
   .action(

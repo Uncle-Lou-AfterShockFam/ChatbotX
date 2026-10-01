@@ -9,14 +9,14 @@ import {
   type WorkspaceIdRequestParams,
   workspaceIdrequestParams,
 } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { verifyDeepSeekApiKey } from "../lib"
 import {
   type ConnectDeepSeekSchema,
   connectDeepSeekSchema,
 } from "../schema/request"
 
-export const connectDeepSeekAction = workspaceActionClient
+export const connectDeepSeekAction = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(connectDeepSeekSchema)
   .action(

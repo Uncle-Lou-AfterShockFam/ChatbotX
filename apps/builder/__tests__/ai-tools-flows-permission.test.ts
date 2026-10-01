@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import ts from "typescript"
 import { beforeEach, describe, expect, test, vi } from "vitest"
+import { serverActionExports } from "./server-action-exports.test-utils"
 import { collectSourceFiles } from "./source-files.test-utils"
 
 const MEMBERSHIP_ONLY = /workspaceAuthorizedMidddleware/
@@ -201,48 +201,6 @@ describe("every AI tool action and private route uses the flows gate", () => {
   ]
   const read = (path: string) => readFileSync(path, "utf8")
 
-  /** Every value export of a "use server" file and the client it is built on. */
-  const serverActionExports = (fileName: string, source: string) => {
-    const file = ts.createSourceFile(
-      fileName,
-      source,
-      ts.ScriptTarget.Latest,
-      true,
-      fileName.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-    )
-    const first = file.statements[0]
-    const isUseServer =
-      first !== undefined &&
-      ts.isExpressionStatement(first) &&
-      ts.isStringLiteral(first.expression) &&
-      first.expression.text === "use server"
-    if (!isUseServer) {
-      return []
-    }
-    const found: { name: string; root: string | null }[] = []
-    for (const statement of file.statements) {
-      const exported = ts
-        .getModifiers(statement as ts.HasModifiers)
-        ?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
-      if (ts.isVariableStatement(statement) && exported) {
-        for (const decl of statement.declarationList.declarations) {
-          found.push({
-            name: decl.name.getText(),
-            root: chainRoot(decl.initializer),
-          })
-        }
-      } else if (ts.isFunctionDeclaration(statement) && exported) {
-        found.push({ name: statement.name?.text ?? "default", root: null })
-      } else if (
-        ts.isExportAssignment(statement) ||
-        (ts.isExportDeclaration(statement) && !statement.isTypeOnly)
-      ) {
-        found.push({ name: statement.getText(), root: null })
-      }
-    }
-    return found
-  }
-
   test("scanner self-check: multi-line, function, re-export and default exports are seen", () => {
     const roots = serverActionExports(
       "x.ts",
@@ -307,19 +265,3 @@ describe("every AI tool action and private route uses the flows gate", () => {
     )
   })
 })
-
-/** The identifier a call/property chain starts from: `a.b().c()` -> `a`. */
-function chainRoot(expression: ts.Expression | undefined): string | null {
-  let current = expression
-  while (
-    current &&
-    (ts.isCallExpression(current) ||
-      ts.isPropertyAccessExpression(current) ||
-      ts.isParenthesizedExpression(current) ||
-      ts.isAsExpression(current) ||
-      ts.isSatisfiesExpression(current))
-  ) {
-    current = current.expression
-  }
-  return current && ts.isIdentifier(current) ? current.text : null
-}

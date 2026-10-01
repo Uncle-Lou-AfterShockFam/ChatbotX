@@ -2,10 +2,10 @@
 
 import { templateService } from "@chatbotx.io/business"
 import { workspaceIdrequestParams } from "@/features/common/schema"
+import { settingsActionClient } from "@/lib/safe-action"
 import { saveTemplateRequest } from "../schema/mutation"
-import { templateActionClient } from "./template-action-client"
 
-export const saveTemplateAction = templateActionClient
+export const saveTemplateAction = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(saveTemplateRequest)
   .action(

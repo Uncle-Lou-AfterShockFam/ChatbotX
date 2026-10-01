@@ -4,7 +4,7 @@ import {
   workspaceIdrequestParams,
 } from "@/features/common/schema"
 import { logger } from "@/lib/log"
-import { workspaceActionClientAllowExpired } from "@/lib/safe-action"
+import { settingsActionClientAllowExpired } from "@/lib/safe-action"
 
 interface DisconnectService {
   disconnect(workspaceId: string): Promise<void>
@@ -25,7 +25,7 @@ export function createDisconnectAction(
 ) {
   const { name, log = true, afterDisconnect } = options
 
-  return workspaceActionClientAllowExpired
+  return settingsActionClientAllowExpired
     .bindArgsSchemas(workspaceIdrequestParams)
     .action(
       async ({

@@ -5,13 +5,13 @@ import {
   type WorkspaceIdRequestParams,
   workspaceIdrequestParams,
 } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import {
   type UpdateGeminiRequest,
   updateGeminiRequest,
 } from "../schema/request"
 
-export const updateGeminiAction = workspaceActionClient
+export const updateGeminiAction = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(updateGeminiRequest)
   .action(

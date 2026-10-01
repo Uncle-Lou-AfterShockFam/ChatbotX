@@ -7,13 +7,13 @@ import {
   type WorkspaceIdRequestParams,
   workspaceIdrequestParams,
 } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import {
   type UpdateClaudeRequest,
   updateClaudeRequest,
 } from "../schema/request"
 
-export const updateIntegrationClaudeAction = workspaceActionClient
+export const updateIntegrationClaudeAction = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(updateClaudeRequest)
   .action(

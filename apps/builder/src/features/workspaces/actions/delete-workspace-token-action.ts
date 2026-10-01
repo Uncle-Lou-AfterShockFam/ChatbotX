@@ -6,14 +6,14 @@ import {
   type WorkspaceIdRequestParams,
   workspaceIdrequestParams,
 } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { requireWorkspaceTokenSuperAdmin } from "../lib/require-workspace-token-super-admin"
 import {
   type DeleteWorkspaceTokenRequest,
   deleteWorkspaceTokenRequest,
 } from "../schema/action"
 
-export const deleteWorkspaceTokenAction = workspaceActionClient
+export const deleteWorkspaceTokenAction = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(deleteWorkspaceTokenRequest)
   .action(

@@ -10,13 +10,13 @@ import {
   workspaceIdrequestParams,
 } from "@/features/common/schema"
 import { verifyAiProviderApiKey } from "@/features/integration-ai/lib/verify-api-key"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import {
   type ConnectOpenAISchema,
   connectOpenAISchema,
 } from "../schema/request"
 
-export const connectOpenAIAction = workspaceActionClient
+export const connectOpenAIAction = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(connectOpenAISchema)
   .action(

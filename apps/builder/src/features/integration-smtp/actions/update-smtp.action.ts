@@ -2,11 +2,11 @@
 
 import { integrationSmtpService } from "@chatbotx.io/business"
 import { zodBigintAsString } from "@chatbotx.io/utils"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { prepareSmtpAuth } from "../lib/prepare-smtp-auth"
 import { updateSmtpRequest } from "../schema/mutation"
 
-export const updateSmtpAction = workspaceActionClient
+export const updateSmtpAction = settingsActionClient
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .inputSchema(updateSmtpRequest)
   .action(async (props) => {

@@ -723,6 +723,55 @@ describe("handleCallback OAuth reconnect", () => {
     expect(mockUpsertMessagingAdsConnection).not.toHaveBeenCalled()
   })
 
+  // s234a: the Settings integrations' connect actions need superAdmin; the
+  // forgeable OAuth state must not let a bare member store a token instead.
+  test.each([
+    ["messenger", "messenger", { flow: "facebookAds" }],
+    ["facebookAds", "facebook-ads", {}],
+    ["googleSheets", "google-sheets", {}],
+  ] as const)("%s callback (%s) blocks a non-super-admin before any token exchange", async (integration, path, extra) => {
+    mockAssertSuperAdmin.mockRejectedValueOnce(
+      new Error("super admin required"),
+    )
+
+    await expect(
+      handleCallback(
+        integration,
+        buildCallbackRequest(path, {
+          workspaceId: "1",
+          referer: REFERER,
+          ...extra,
+        }),
+      ),
+    ).rejects.toThrow("not found")
+
+    expect(mockAssertSuperAdmin).toHaveBeenCalledWith("1")
+    expect(mockExchangeFacebookAdsCode).not.toHaveBeenCalled()
+    expect(mockUpsertFacebookAds).not.toHaveBeenCalled()
+    expect(mockRedirect).not.toHaveBeenCalled()
+  })
+
+  test("google sheets callback asks for super-admin before resolving the Google credential", async () => {
+    mockAssertSuperAdmin.mockRejectedValueOnce(
+      new Error("super admin required"),
+    )
+    mockResolveForOwner.mockClear()
+
+    await expect(
+      handleCallback(
+        "googleSheets",
+        buildCallbackRequest("google-sheets", {
+          workspaceId: "1",
+          referer: REFERER,
+        }),
+      ),
+    ).rejects.toThrow("not found")
+
+    expect(mockResolveForOwner).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "google" }),
+    )
+  })
+
   test("zalo reconnect dispatches to the handler and skips the connect flow", async () => {
     mockReconnectZaloHandler.mockResolvedValue({ status: "success" })
 

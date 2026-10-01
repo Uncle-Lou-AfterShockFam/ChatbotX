@@ -5,9 +5,9 @@ import {
   type WorkspaceIdAndIdRequestParams,
   workspaceIdAndIdRequestParams,
 } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 
-export const disconnectOpenaiCompatibleAction = workspaceActionClient
+export const disconnectOpenaiCompatibleAction = settingsActionClient
   .bindArgsSchemas(workspaceIdAndIdRequestParams)
   .action(
     async ({

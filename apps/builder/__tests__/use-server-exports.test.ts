@@ -4,6 +4,11 @@ import { readFileSync } from "node:fs"
 import { dirname, join, relative, resolve } from "node:path"
 import ts from "typescript"
 import { describe, expect, test } from "vitest"
+import {
+  chainRoot,
+  hasUseServerDirective,
+  parseSource as parse,
+} from "./server-action-exports.test-utils"
 import { collectSourceFiles } from "./source-files.test-utils"
 
 const SRC_ROOT = join(import.meta.dirname, "..", "src")
@@ -24,8 +29,6 @@ const SRC_ROOT = join(import.meta.dirname, "..", "src")
 const SAFE_ACTION_MODULES = new Set([
   "lib/safe-action",
   "lib/integration-actions",
-  "features/templates/actions/template-action-client",
-  "features/integration-quickbooks/actions/action-client",
 ])
 
 // Plain Server Actions that are called from the browser on purpose. Each
@@ -33,45 +36,6 @@ const SAFE_ACTION_MODULES = new Set([
 const ALLOWED_PLAIN_EXPORTS: Record<string, string[]> = {
   "lib/locale.ts": ["getUserLocale", "setUserLocale"],
   "lib/timezone.action.ts": ["setUserTimezone"],
-}
-
-function parse(fileName: string, source: string) {
-  return ts.createSourceFile(
-    fileName,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    fileName.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  )
-}
-
-function hasUseServerDirective(sourceFile: ts.SourceFile) {
-  const first = sourceFile.statements[0]
-  return (
-    first !== undefined &&
-    ts.isExpressionStatement(first) &&
-    ts.isStringLiteral(first.expression) &&
-    first.expression.text === "use server"
-  )
-}
-
-/** The identifier a call/property chain starts from: `a.b().c()` -> `a`. */
-function chainRoot(expression: ts.Expression | undefined): string | null {
-  let current = expression
-  while (current) {
-    if (
-      ts.isCallExpression(current) ||
-      ts.isPropertyAccessExpression(current) ||
-      ts.isParenthesizedExpression(current) ||
-      ts.isAsExpression(current) ||
-      ts.isSatisfiesExpression(current)
-    ) {
-      current = current.expression
-    } else {
-      break
-    }
-  }
-  return current && ts.isIdentifier(current) ? current.text : null
 }
 
 function resolveSpecifier(fileName: string, specifier: string) {

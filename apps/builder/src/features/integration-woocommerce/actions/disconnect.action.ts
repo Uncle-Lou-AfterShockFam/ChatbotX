@@ -5,9 +5,9 @@ import {
   type WorkspaceIdAndIdRequestParams,
   workspaceIdAndIdRequestParams,
 } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 
-export const disconnectWooCommerceAction = workspaceActionClient
+export const disconnectWooCommerceAction = settingsActionClient
   .bindArgsSchemas(workspaceIdAndIdRequestParams)
   .action(
     async ({

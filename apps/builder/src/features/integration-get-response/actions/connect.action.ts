@@ -10,10 +10,10 @@ import { getTranslations } from "next-intl/server"
 import { normalizeError } from "universal-error-normalizer"
 import { workspaceIdrequestParams } from "@/features/common/schema"
 import { logger } from "@/lib/log"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { connectGetResponseSchema } from "../schema"
 
-export const connectGetResponseAction = workspaceActionClient
+export const connectGetResponseAction = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(connectGetResponseSchema)
   .action(async ({ bindArgsParsedInputs: [workspaceId], parsedInput }) => {

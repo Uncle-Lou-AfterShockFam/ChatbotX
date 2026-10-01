@@ -8,14 +8,14 @@ import {
   type WorkspaceIdRequestParams,
   workspaceIdrequestParams,
 } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { verifyClaudeApiKey } from "../lib"
 import {
   type ConnectClaudeSchema,
   connectClaudeSchema,
 } from "../schema/request"
 
-export const connectClaudeAction = workspaceActionClient
+export const connectClaudeAction = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(connectClaudeSchema)
   .action(

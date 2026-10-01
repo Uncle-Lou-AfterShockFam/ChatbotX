@@ -2,9 +2,9 @@
 
 import { templateService } from "@chatbotx.io/business"
 import { zodBigintAsString } from "@chatbotx.io/utils"
-import { templateActionClient } from "./template-action-client"
+import { settingsActionClient } from "@/lib/safe-action"
 
-export const deleteTemplateAction = templateActionClient
+export const deleteTemplateAction = settingsActionClient
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .action(async (props) => {
     const {
