@@ -204,6 +204,8 @@ export async function redispatchStalledEnrollment(params: {
             and(
               eq(contactsOnSequenceModel.workspaceId, workspaceId),
               eq(contactsOnSequenceModel.id, enrollmentId),
+              // Written once, not on every hourly pass.
+              sql`${contactsOnSequenceModel.lastError} IS DISTINCT FROM ${NO_INBOX_ERROR}`,
             ),
           )
         return { kind: "skipped", reason: "no-inbox" } as const

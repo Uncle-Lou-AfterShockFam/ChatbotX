@@ -150,10 +150,10 @@ describe("ReconcileJob", () => {
     findManySpy.mockResolvedValue([])
     listStalledSpy
       .mockResolvedValueOnce([
-        { id: "e1", workspaceId: "w1" },
-        { id: "e2", workspaceId: "w1" },
+        { id: "11", workspaceId: "w1" },
+        { id: "12", workspaceId: "w1" },
       ])
-      .mockResolvedValueOnce([{ id: "e3", workspaceId: "w2" }])
+      .mockResolvedValueOnce([{ id: "13", workspaceId: "w2" }])
       .mockResolvedValueOnce([])
     redispatchSpy
       .mockResolvedValueOnce({
@@ -169,13 +169,27 @@ describe("ReconcileJob", () => {
 
     expect(listStalledSpy).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ afterId: "e2" }),
+      expect.objectContaining({ afterId: "12" }),
     )
     expect(listStalledSpy).toHaveBeenCalledTimes(3)
     expect(redispatchSpy).toHaveBeenCalledTimes(3)
     expect(addToScheduleSpy).toHaveBeenCalledExactlyOnceWith(3, "d1", 100)
     // One enrolment failing never stops the pass; the health says how many.
     expect(job.getHealth()).toMatchObject({ lastStalledRedispatched: 1 })
+  })
+
+  test("a page that does not advance (a broken afterId) stops the pass instead of looping", async () => {
+    findManySpy.mockResolvedValue([])
+    listStalledSpy.mockResolvedValue([{ id: "5", workspaceId: "w1" }])
+    redispatchSpy.mockResolvedValue({ kind: "skipped", reason: "no-inbox" })
+    const job = new ReconcileJob({ intervalMs: 1000, cleanupIntervalMs: 1000 })
+    attachScheduler(job)
+
+    await job.redispatchStalled()
+
+    expect(listStalledSpy).toHaveBeenCalledTimes(2)
+    listStalledSpy.mockReset()
+    listStalledSpy.mockResolvedValue([])
   })
 
   test("a failing stalled pass never fails the ZSet reconcile", async () => {

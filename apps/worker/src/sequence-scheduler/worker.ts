@@ -15,6 +15,8 @@ const RETENTION_BATCH_SIZE_DEFAULT = 1000
 const RETENTION_INTERVAL_MS_DEFAULT = 86_400_000
 const RETENTION_TTL_DAYS_DEFAULT = 30
 const BATCH_SIZE = 1000
+/** s235: at most this many stalled-enrolment pages (of 200) per pass. */
+const STALLED_MAX_PAGES = 500
 const TOTAL_BUCKETS = 256
 
 interface ReconcileJobOptions {
@@ -152,9 +154,25 @@ export class ReconcileJob {
   async redispatchStalled(now = new Date()): Promise<number> {
     let afterId: string | undefined
     let redispatched = 0
-    for (;;) {
+    for (let pages = 0; ; pages++) {
+      if (pages >= STALLED_MAX_PAGES) {
+        logger.error(
+          { pages, afterId },
+          "stalled enrolments: page cap reached; the rest wait for the next pass",
+        )
+        break
+      }
       const page = await listStalledEnrollments({ now, afterId })
-      if (page.length === 0) {
+      const lastId = page.at(-1)?.id
+      if (!lastId) {
+        break
+      }
+      // Paging must move forward (ids ascend); never re-read a page forever.
+      if (afterId !== undefined && BigInt(lastId) <= BigInt(afterId)) {
+        logger.error(
+          { afterId, lastId },
+          "stalled enrolments: paging did not advance; pass stopped",
+        )
         break
       }
       for (const enrollment of page) {
@@ -189,7 +207,7 @@ export class ReconcileJob {
           )
         }
       }
-      afterId = page.at(-1)?.id
+      afterId = lastId
     }
     this.lastStalledRun = new Date()
     this.lastStalledRedispatched = redispatched
