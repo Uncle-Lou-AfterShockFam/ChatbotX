@@ -206,6 +206,21 @@ describe("acceptInvitationAction", () => {
     expect(workspaceMemberServiceCreate).not.toHaveBeenCalled()
   })
 
+  test("s231b: an invitation its own creator accepts is refused (a support session could launder itself into a real admin)", async () => {
+    findByCode.mockResolvedValue({
+      code: "abc123",
+      workspaceId: "ws-1",
+      expiresAt: futureDate(),
+      permissions: { superAdmin: true },
+      invitedBy: "user-1",
+    })
+    await expect(invoke()).rejects.toMatchObject({ code: "ownInvitation" })
+    expect(workspaceMemberServiceCreate).not.toHaveBeenCalled()
+    // Someone else may still accept it.
+    await invoke("abc123", "user-2")
+    expect(workspaceMemberServiceCreate).toHaveBeenCalledTimes(1)
+  })
+
   test("throws and does not insert or invalidate cache when user is already a member", async () => {
     workspaceMemberFindFirst.mockResolvedValue({ id: "existing-member" })
 

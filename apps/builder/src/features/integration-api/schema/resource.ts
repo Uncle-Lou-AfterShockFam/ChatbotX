@@ -23,5 +23,7 @@ export const apiResource = createSelectSchema(integrationApiModel, {
     deliveryMode: z.enum(["push", "pull"]),
     /** From `auth.shortenLinks`; absent means on. */
     shortenLinks: z.boolean(),
+    /** s231b: `lineKind = email` - the channel may hold mailbox senders. */
+    emailLine: z.boolean(),
   })
 export type ApiResource = z.infer<typeof apiResource>

@@ -201,6 +201,18 @@ export const emailSenderCredentialsRequiredException = (
 ) => new ChatbotXException(message, "emailSenderCredentialsRequired", 409)
 
 /**
+ * s231b (owner 2026-10-01): mailbox senders live only on an API channel
+ * marked as an email line; any other line's token never receives their
+ * credentials.
+ */
+export const notEmailLineException = () =>
+  new ChatbotXException(
+    "This API channel is not an email line: mark it as one before it can hold mailbox senders",
+    "notEmailLine",
+    403,
+  )
+
+/**
  * s230b: a Google RECONNECT consented as another account than the sender's
  * address (a sender never changes mailbox).
  */

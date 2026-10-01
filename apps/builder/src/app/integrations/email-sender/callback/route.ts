@@ -64,7 +64,8 @@ function refuse(): NextResponse {
  * Google's OAuth redirect for a mailbox-sender connect (s230b). Nothing is
  * exchanged unless the signed state verifies for THIS signed-in user, its
  * nonce equals the HttpOnly cookie the connect action set on this browser,
- * and the user is still a super admin of the state's workspace. The nonce
+ * and the user is still a REAL super admin of the state's workspace (never a
+ * platform-support session, s231b). The nonce
  * cookie is spent on the first use.
  */
 export async function GET(request: NextRequest) {
@@ -89,9 +90,11 @@ export async function GET(request: NextRequest) {
     return refuse()
   }
   const access = await getCurrentUserAndTargetWorkspace(state.workspaceId)
+  // s231b: never a platform-support session (synthetic super-admin membership).
   if (
     !(
       access &&
+      !access.isSupportSession &&
       hasWorkspacePermission(
         access.targetWorkspaceMember.permissions,
         "superAdmin",

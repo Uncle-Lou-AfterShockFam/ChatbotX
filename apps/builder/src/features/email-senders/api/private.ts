@@ -1,6 +1,9 @@
 import { emailSenderService } from "@chatbotx.io/business/email-sender"
 import z from "zod"
-import { superAdminAuthorizedMiddleware } from "@/middlewares/auth"
+import {
+  superAdminAuthorizedMiddleware,
+  superAdminRealMemberMiddleware,
+} from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
 import {
   createEmailSenderData,
@@ -52,7 +55,7 @@ const privateCreateEmailSenderAPI = authorizedAPI
     tags,
   })
   .input(createEmailSenderData)
-  .use(superAdminAuthorizedMiddleware, (input) => input.workspaceId)
+  .use(superAdminRealMemberMiddleware, (input) => input.workspaceId)
   .output(emailSenderResource)
   .handler(
     async ({ input, context }) =>
@@ -67,7 +70,7 @@ const privateUpdateEmailSenderAPI = authorizedAPI
     tags,
   })
   .input(updateEmailSenderData)
-  .use(superAdminAuthorizedMiddleware, (input) => input.workspaceId)
+  .use(superAdminRealMemberMiddleware, (input) => input.workspaceId)
   .output(emailSenderResource)
   .handler(async ({ input }) => await emailSenderService.update(input))
 

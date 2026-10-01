@@ -62,6 +62,7 @@ export function ApiSettingsForm({ api }: { api: ApiResource }) {
           callbackUrl: api.callbackUrl ?? "",
           deliveryMode: api.deliveryMode,
           shortenLinks: api.shortenLinks,
+          emailLine: api.emailLine,
         },
       },
     },
@@ -111,6 +112,11 @@ export function ApiSettingsForm({ api }: { api: ApiResource }) {
               description={t("fields.api.shortenLinks.description")}
               label={t("fields.api.shortenLinks.label")}
               name="shortenLinks"
+            />
+            <SwitchField
+              description={t("fields.api.emailLine.description")}
+              label={t("fields.api.emailLine.label")}
+              name="emailLine"
             />
             <DialogFooter>
               <DialogClose

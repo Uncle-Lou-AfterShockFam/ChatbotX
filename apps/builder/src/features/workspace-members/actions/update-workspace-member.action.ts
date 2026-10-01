@@ -32,6 +32,17 @@ export const updateWorkspaceMemberAction = workspaceActionClient
       )
     }
 
+    // s231b (blind probe): a platform-support session never mints or raises a
+    // REAL membership - it would launder its synthetic access into a lasting
+    // admin row that every support-session gate then trusts.
+    if (currentUserAndTargetChatbot.isSupportSession) {
+      throw new ChatbotXException(
+        "Platform support sessions cannot change workspace members",
+        "supportSessionBlocked",
+        403,
+      )
+    }
+
     const permissions =
       currentUserAndTargetChatbot.targetWorkspaceMember.permissions
     if (!hasWorkspacePermission(permissions, "superAdmin")) {

@@ -25,5 +25,11 @@ export const updateApiRequest = z.object({
    * `/go/<token>` short links (on by default; see `apiAuthSchema`).
    */
   shortenLinks: z.boolean().optional(),
+  /**
+   * s231b: mark the channel as an EMAIL line. Only an email line may hold
+   * mailbox senders, and its token receives their live credentials, so only
+   * a real super admin (never a platform-support session) may set it.
+   */
+  emailLine: z.boolean().optional(),
 })
 export type UpdateApiRequest = z.infer<typeof updateApiRequest>

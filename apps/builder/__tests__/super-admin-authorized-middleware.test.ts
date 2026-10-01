@@ -32,17 +32,13 @@ vi.mock("@/lib/rate-limit/guest-rate-limit", () => ({
   getGuestClientIp: vi.fn().mockReturnValue("127.0.0.1"),
 }))
 
-const { superAdminAuthorizedMiddleware } = await import("@/middlewares/auth")
+const { superAdminAuthorizedMiddleware, superAdminRealMemberMiddleware } =
+  await import("@/middlewares/auth")
 
 const next = vi.fn(async () => ({ output: "ok" }))
 
-const call = (method: string) =>
-  (
-    superAdminAuthorizedMiddleware as unknown as (
-      opts: unknown,
-      workspaceId: string,
-    ) => Promise<unknown>
-  )(
+const call = (method: string, mw: unknown = superAdminAuthorizedMiddleware) =>
+  (mw as unknown as (opts: unknown, workspaceId: string) => Promise<unknown>)(
     {
       context: { user: { id: "user-1" }, headers: new Headers() },
       next,
@@ -51,13 +47,16 @@ const call = (method: string) =>
     "ws-1",
   )
 
-const asMember = (permissions: Record<string, unknown>) => {
+const asMember = (
+  permissions: Record<string, unknown>,
+  isSupportSession = false,
+) => {
   const member = { workspace: { id: "ws-1", ownerId: "owner-1" }, permissions }
-  findMembership.mockResolvedValue(member)
+  findMembership.mockResolvedValue(isSupportSession ? undefined : member)
   resolveWorkspaceAccess.mockResolvedValue({
     workspace: member.workspace,
     member,
-    isSupportSession: false,
+    isSupportSession,
   })
 }
 
@@ -94,5 +93,29 @@ describe("superAdminAuthorizedMiddleware (s229b)", () => {
     findMembership.mockResolvedValue(undefined)
     resolveWorkspaceAccess.mockResolvedValue(undefined)
     await expect(call("GET")).rejects.toMatchObject({ code: "UNAUTHORIZED" })
+  })
+})
+
+describe("superAdminRealMemberMiddleware (s231b, owner 2026-10-01)", () => {
+  test("a platform-support session (synthetic superAdmin) is FORBIDDEN on every method; the plain gate still lets it through", async () => {
+    asMember({ superAdmin: true }, true)
+    for (const method of ["GET", "POST", "PATCH", "DELETE"]) {
+      await expect(
+        call(method, superAdminRealMemberMiddleware),
+      ).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 })
+    }
+    expect(next).not.toHaveBeenCalled()
+    await expect(call("POST")).resolves.toMatchObject({ output: "ok" })
+  })
+
+  test("a real admin passes; a real non-admin is still refused", async () => {
+    asMember({ superAdmin: true })
+    await expect(
+      call("POST", superAdminRealMemberMiddleware),
+    ).resolves.toMatchObject({ output: "ok" })
+    asMember({ contacts: true })
+    await expect(
+      call("POST", superAdminRealMemberMiddleware),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" })
   })
 })

@@ -1,6 +1,7 @@
 "use server"
 
 import { integrationApiService, workspaceService } from "@chatbotx.io/business"
+import type { WorkspaceMemberPermissions } from "@chatbotx.io/database/partials"
 import type { ApiAuthValue } from "@chatbotx.io/integration-api"
 import { integration as integrationApi } from "@chatbotx.io/integration-api"
 import {
@@ -10,19 +11,29 @@ import {
 import { findIntegrationApiByWorkspaceAndId } from "@/features/integration-api/queries"
 import { logger } from "@/lib/log"
 import { workspaceActionClientAllowExpired } from "@/lib/safe-action"
+import { assertEmailLineAdmin } from "../lib/email-line-guard"
 
 export const deleteApiAction = workspaceActionClientAllowExpired
   .bindArgsSchemas(workspaceIdAndIdRequestParams)
   .action(
     async ({
+      ctx,
       bindArgsParsedInputs: [workspaceId, id],
     }: {
+      ctx: {
+        workspaceMemberPermissions: WorkspaceMemberPermissions
+        isSupportSession: boolean
+      }
       bindArgsParsedInputs: WorkspaceIdAndIdRequestParams
     }) => {
       const [integrationApiRow, workspace] = await Promise.all([
         findIntegrationApiByWorkspaceAndId({ workspaceId, id }),
         workspaceService.findById({ id: workspaceId }),
       ])
+      // s231b: deleting an email line takes its senders' mail down with it.
+      if (integrationApiRow.lineKind === "email") {
+        assertEmailLineAdmin(ctx, "delete")
+      }
 
       try {
         await integrationApi.disconnect(integrationApiRow.auth as ApiAuthValue)

@@ -42,6 +42,16 @@ export const acceptInvitationAction = authActionClient
         404,
       )
     }
+    // s231b (blind probe): an invitation is for someone else - accepting your
+    // own would let a platform-support session turn its synthetic access into
+    // a real membership.
+    if (invitation.invitedBy === ctx.user.id) {
+      throw new ChatbotXException(
+        "You cannot accept an invitation you created",
+        "ownInvitation",
+        403,
+      )
+    }
 
     const existingMember =
       await workspaceMemberService.findByWorkspaceIdAndUserId({

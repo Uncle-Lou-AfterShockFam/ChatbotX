@@ -22,6 +22,8 @@ type UpdateIntegrationApiSettingsInput = WorkspaceIntegrationRef & {
   name?: string
   callbackUrl?: string | null
   auth: typeof integrationApiModel.$inferInsert.auth
+  /** s231b: undefined = unchanged. */
+  lineKind?: typeof integrationApiModel.$inferInsert.lineKind
 }
 
 type RotateIntegrationApiTokenInput = WorkspaceIntegrationRef & {
@@ -113,6 +115,7 @@ export const integrationApiRepository = {
           callbackUrl: input.callbackUrl,
         }),
         auth: input.auth,
+        ...(input.lineKind !== undefined && { lineKind: input.lineKind }),
       })
       .where(workspaceIntegrationFilter(input))
       .returning()

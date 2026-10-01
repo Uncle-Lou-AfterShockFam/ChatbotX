@@ -21,6 +21,7 @@ import {
   emailSenderModel,
   emailThreadMailModel,
   inboxModel,
+  integrationApiModel,
 } from "@chatbotx.io/database/schema"
 import type { EmailSenderModel } from "@chatbotx.io/database/types"
 import { distributedLock } from "@chatbotx.io/redis"
@@ -30,6 +31,7 @@ import {
   credentialMissingException,
   emailSenderCredentialsRequiredException,
   emailSenderGoogleMismatchException,
+  notEmailLineException,
   notFoundException,
   validationException,
 } from "../errors"
@@ -184,13 +186,22 @@ export class EmailSenderService extends BaseService {
   /** The workspace's API-channel inboxes (email lines), oldest first. */
   async listLines(input: unknown): Promise<{ id: string; name: string }[]> {
     const { workspaceId } = parseInput(listEmailSendersInput, input)
+    // s231b: only API channels marked as email lines (IntegrationApi.lineKind).
     return await db
       .select({ id: inboxModel.id, name: inboxModel.name })
       .from(inboxModel)
+      .innerJoin(
+        integrationApiModel,
+        and(
+          eq(integrationApiModel.inboxId, inboxModel.id),
+          eq(integrationApiModel.workspaceId, inboxModel.workspaceId),
+        ),
+      )
       .where(
         and(
           eq(inboxModel.workspaceId, workspaceId),
           eq(inboxModel.channel, "api"),
+          eq(integrationApiModel.lineKind, "email"),
         ),
       )
       .orderBy(asc(inboxModel.id))
@@ -305,6 +316,10 @@ export class EmailSenderService extends BaseService {
             "A Google mailbox has no password: reconnect it with Google",
           )
         }
+        // s231b (blind probe): a credential write only on an email line.
+        if (connection) {
+          await this.assertLine(workspaceId, current.lineInboxId)
+        }
         const reconnect = Boolean(
           connection?.smtp.password || connection?.imap.password,
         )
@@ -385,6 +400,10 @@ export class EmailSenderService extends BaseService {
    */
   async listForLine(input: unknown): Promise<EmailSenderFeedRow[]> {
     const { workspaceId, lineInboxId } = parseInput(emailSenderLineInput, input)
+    // s231b: a token of any other line never sees a sender's credentials.
+    if (!(await this.lineOf(workspaceId, lineInboxId))?.isEmailLine) {
+      throw notEmailLineException()
+    }
     const rows = await db
       .select()
       .from(emailSenderModel)
@@ -980,9 +999,36 @@ export class EmailSenderService extends BaseService {
   }
 
   private async assertLine(workspaceId: string, lineInboxId: string) {
+    const line = await this.lineOf(workspaceId, lineInboxId)
+    if (!line) {
+      throw notFoundException("Email line not found")
+    }
+    if (!line.isEmailLine) {
+      throw validationException(
+        "lineInboxId",
+        "Senders belong to an email line (an API channel marked as one)",
+      )
+    }
+  }
+
+  /**
+   * The workspace's inbox, or undefined; `isEmailLine` (s231b) = an API
+   * channel whose IntegrationApi is marked lineKind 'email'.
+   */
+  private async lineOf(workspaceId: string, lineInboxId: string) {
     const [inbox] = await db
-      .select({ channel: inboxModel.channel })
+      .select({
+        channel: inboxModel.channel,
+        lineKind: integrationApiModel.lineKind,
+      })
       .from(inboxModel)
+      .leftJoin(
+        integrationApiModel,
+        and(
+          eq(integrationApiModel.inboxId, inboxModel.id),
+          eq(integrationApiModel.workspaceId, inboxModel.workspaceId),
+        ),
+      )
       .where(
         and(
           eq(inboxModel.id, lineInboxId),
@@ -990,15 +1036,9 @@ export class EmailSenderService extends BaseService {
         ),
       )
       .limit(1)
-    if (!inbox) {
-      throw notFoundException("Email line not found")
-    }
-    if (inbox.channel !== "api") {
-      throw validationException(
-        "lineInboxId",
-        "Senders belong to an email line (an API-channel inbox)",
-      )
-    }
+    return inbox
+      ? { isEmailLine: inbox.channel === "api" && inbox.lineKind === "email" }
+      : undefined
   }
 
   private async lockLine(tx: DatabaseClient, lineInboxId: string) {

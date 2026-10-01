@@ -203,11 +203,15 @@ function getInsertedValues() {
   )[0][0]
 }
 
-function mockCurrentMember(permissions = fullPermissions) {
+function mockCurrentMember(
+  permissions = fullPermissions,
+  isSupportSession = false,
+) {
   mockGetCurrentUserAndTargetWorkspace.mockResolvedValue({
     user: { id: "user-1" },
     targetWorkspace: { id: WORKSPACE_ID, ownerId: "owner-1" },
     targetWorkspaceMember: { permissions },
+    isSupportSession,
   })
 }
 
@@ -250,6 +254,16 @@ describe("inviteWorkspaceMemberAction", () => {
     )
 
     expect(mockQuotaHasReachedLimit).not.toHaveBeenCalled()
+    expect(mockDbInsert).not.toHaveBeenCalled()
+  })
+
+  test("s231b: a platform-support session (synthetic super admin) cannot mint an invitation", async () => {
+    mockCurrentMember(fullPermissions, true)
+    await expect(
+      (inviteWorkspaceMemberAction as (props: unknown) => Promise<unknown>)(
+        actionCtx(),
+      ),
+    ).rejects.toMatchObject({ code: "supportSessionBlocked" })
     expect(mockDbInsert).not.toHaveBeenCalled()
   })
 
@@ -321,6 +335,16 @@ describe("updateWorkspaceMemberAction", () => {
       email: "target@example.com",
     })
     mockUpdateMember.mockResolvedValue({ id: MEMBER_ID })
+  })
+
+  test("s231b: a platform-support session cannot change a member's permissions", async () => {
+    mockCurrentMember(fullPermissions, true)
+    await expect(
+      (updateWorkspaceMemberAction as (props: unknown) => Promise<unknown>)(
+        updateActionCtx(),
+      ),
+    ).rejects.toMatchObject({ code: "supportSessionBlocked" })
+    expect(mockUpdateMember).not.toHaveBeenCalled()
   })
 
   test("records a role_change audit event with the target member's name", async () => {
