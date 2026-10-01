@@ -7,6 +7,7 @@ import {
 import { ChatbotXException } from "@chatbotx.io/business/errors"
 import { aiMcpServerAuthTypes } from "@chatbotx.io/database/partials"
 import { resolveBotFieldVariableText } from "@chatbotx.io/variables/bot-field-variable-resolver"
+import { isSsrfRefusal, pinnedMcpFetch } from "../lib/pinned-mcp-fetch"
 import type { ValidatePrivateAIMcpServerRequest } from "../schema/action"
 
 export const validateAIMcpServer = async ({
@@ -38,7 +39,12 @@ export const validateAIMcpServer = async ({
 
   try {
     httpClient = await experimental_createMCPClient({
-      transport: { type: "http", url: parsedInput.url, headers },
+      transport: {
+        type: "http",
+        url: parsedInput.url,
+        headers,
+        fetch: pinnedMcpFetch,
+      },
     })
 
     const tools = await httpClient.tools()
@@ -49,6 +55,17 @@ export const validateAIMcpServer = async ({
         Object.fromEntries(toolKeys.map((key) => [key, tools[key]])),
       ),
     )
+  } catch (error) {
+    // One generic answer for a refused address: never say which check
+    // (private range, metadata host, redirect) refused it.
+    if (isSsrfRefusal(error)) {
+      throw new ChatbotXException(
+        "Unable to validate MCP server.",
+        "mcpServerUrlRefused",
+        400,
+      )
+    }
+    throw error
   } finally {
     if (httpClient) {
       await httpClient.close()

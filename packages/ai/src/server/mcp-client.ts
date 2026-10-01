@@ -2,7 +2,7 @@ import {
   type AIMcpServerAuth,
   aiMcpServerAuthTypes,
 } from "@chatbotx.io/database/partials"
-import ky, { type Options } from "ky"
+import { outboundFetch } from "@chatbotx.io/sdk/outbound-fetch"
 import { normalizeError } from "universal-error-normalizer"
 import { aiTimeouts, helpTexts, mcpConstants } from "../constants"
 import { logger } from "../logger"
@@ -14,12 +14,6 @@ import {
   mcpJsonRpcErrorResponseSchema,
   mcpJsonRpcSuccessSchema,
 } from "../schemas/mcp"
-
-const mcpKy = ky.create({
-  throwHttpErrors: false,
-  timeout: aiTimeouts.httpDefault,
-  retry: { limit: 0 },
-})
 
 export interface McpClientOptions {
   auth: AIMcpServerAuth
@@ -105,19 +99,25 @@ export class McpClient {
     isNotification = false,
   ): Promise<T | null> {
     const requestId = isNotification ? undefined : this.getNextRequestId()
-    const options: Options = {
-      headers: this.getHeaders(),
-      json: {
-        jsonrpc: helpTexts.jsonRpcVersion,
-        ...(requestId === undefined ? {} : { id: requestId }),
-        method,
-        params,
-      },
-      timeout: timeout ?? aiTimeouts.httpDefault,
-    }
+    const body = JSON.stringify({
+      jsonrpc: helpTexts.jsonRpcVersion,
+      ...(requestId === undefined ? {} : { id: requestId }),
+      method,
+      params,
+    })
 
     try {
-      const responseText = await mcpKy.post(this.url, options).text()
+      // The URL is member-typed: the pinned fetch refuses private/internal
+      // addresses at connect (s233a). No redirects: validate (the MCP SDK
+      // transport) refuses them too, so a saved server never needed one.
+      // Any HTTP status is read as a body, as before (JSON-RPC errors ride
+      // on non-2xx answers).
+      const response = await outboundFetch(
+        this.url,
+        { method: "POST", headers: this.getHeaders(), body, redirect: "error" },
+        { timeoutMs: timeout ?? aiTimeouts.httpDefault },
+      )
+      const responseText = await response.text()
       if (isNotification) {
         return null
       }
