@@ -37,7 +37,7 @@ vi.mock("@/lib/log", () => ({
 }))
 
 const { submitAvailabilityRange } = await import(
-  "../src/app/booking/range-picker/actions/submit-availability-range.action"
+  "../src/app/booking/range-picker/lib/submit-availability-range"
 )
 const { submitAvailabilityRangeRequestSchema } = await import(
   "../src/features/booking-webview/schema/availability-range-action"

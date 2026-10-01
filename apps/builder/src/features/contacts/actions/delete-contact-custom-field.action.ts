@@ -37,7 +37,7 @@ export const deleteContactCustomFieldAction = workspaceActionClient
     },
   )
 
-export const deleteContactCustomFields = async ({
+const deleteContactCustomFields = async ({
   workspaceId,
   contactIds,
   customFieldId,

@@ -269,7 +269,7 @@ vi.mock("@chatbotx.io/worker-config", () => ({
 }))
 
 const { handleCreateWebchatMessage } = await import(
-  "../src/features/messages/actions/create-webchat-message.action"
+  "../src/features/messages/lib/create-webchat-message"
 )
 
 // s215: the credential is the secret minted with the id, under the test env's

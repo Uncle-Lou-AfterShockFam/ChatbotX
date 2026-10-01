@@ -46,10 +46,10 @@ vi.mock("../src/features/automated-response/schema/action", () => ({
 }))
 
 const { updateAutomatedResponse } = await import(
-  "../src/features/automated-response/actions/update-automated-response-action"
+  "../src/features/automated-response/lib/update-automated-response"
 )
 const { enableAutomatedResponse } = await import(
-  "../src/features/automated-response/actions/enable-automated-response-action"
+  "../src/features/automated-response/lib/enable-automated-response"
 )
 const { deleteAutomatedResponseAction: deleteAutomatedResponseActionUntyped } =
   await import(

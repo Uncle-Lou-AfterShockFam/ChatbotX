@@ -34,7 +34,7 @@ export const updateMagicLinkAction = workspaceActionClient
     )
   })
 
-export const updateMagicLink = async (
+const updateMagicLink = async (
   ctx: {
     workspaceId: string
     id: string

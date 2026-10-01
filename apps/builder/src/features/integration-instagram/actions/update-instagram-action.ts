@@ -187,7 +187,7 @@ const buildPersistentMenuParams = async (
     },
   ]
 }
-export const parseInstagramButtons = async (
+const parseInstagramButtons = async (
   persistentMenus: IntegrationInstagramModel["persistentMenus"],
 ): Promise<InstagramButton[]> => {
   const buttons: InstagramButton[] = []

@@ -28,7 +28,7 @@ vi.mock("@chatbotx.io/worker-config", () => ({
 }))
 
 const { submitDateTime } = await import(
-  "../src/app/extensions/datetime-picker/actions/submit-date-time.action"
+  "../src/app/extensions/datetime-picker/lib/submit-date-time"
 )
 const { submitDateTimeRequestSchema } = await import(
   "../src/features/get-user-data-webview/schema/action"

@@ -1,16 +1,19 @@
+import "server-only"
+
 import { integrationOpenAIService } from "@chatbotx.io/business"
-import type { IntegrationOpenAIResource } from "../schema/request"
+import {
+  type AiIntegrationSummary,
+  toAiIntegrationSummary,
+} from "@/lib/ai-integration-summary"
 
 export const findIntegrationOpenAI = async ({
   workspaceId,
 }: {
   workspaceId: string
 }): Promise<{
-  data: IntegrationOpenAIResource | null
-}> => {
-  const data = await integrationOpenAIService.findByWorkspaceId(workspaceId)
-
-  return {
-    data: data ?? null,
-  }
-}
+  data: AiIntegrationSummary | null
+}> => ({
+  data: toAiIntegrationSummary(
+    await integrationOpenAIService.findByWorkspaceId(workspaceId),
+  ),
+})

@@ -21,7 +21,7 @@ export const createProductAction = workspaceActionClient
     }) => await createProduct({ workspaceId, ...parsedInput }),
   )
 
-export const createProduct = async (
+const createProduct = async (
   input: ProductFormRequest & { workspaceId: string },
 ) => {
   const product = await productService.createFull(input)

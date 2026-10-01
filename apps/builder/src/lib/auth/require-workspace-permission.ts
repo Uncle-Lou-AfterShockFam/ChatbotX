@@ -1,4 +1,4 @@
-"use server"
+import "server-only"
 
 import { getIdFromParams } from "@chatbotx.io/utils"
 import { notFound } from "next/navigation"

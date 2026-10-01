@@ -16,7 +16,7 @@ export const deleteAIMcpServerAction = workspaceActionClient
     return deleteAIMcpServer({ workspaceId, aiMcpServerId })
   })
 
-export const deleteAIMcpServer = async (ctx: {
+const deleteAIMcpServer = async (ctx: {
   workspaceId: string
   aiMcpServerId: string
 }) => {

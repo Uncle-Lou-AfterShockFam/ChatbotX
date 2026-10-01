@@ -21,15 +21,24 @@ vi.mock("@/lib/safe-action", () => ({
   },
 }))
 
-import { resetBotFields } from "@/features/bot-fields/actions/reset-bot-field.action"
+import { resetBotFieldsAction } from "@/features/bot-fields/actions/reset-bot-field.action"
 
-describe("resetBotFields", () => {
+// The safe-action mock above reduces the action to its handler.
+const resetBotFields = resetBotFieldsAction as unknown as (props: {
+  bindArgsParsedInputs: [string]
+  parsedInput: { ids: string[] }
+}) => Promise<void>
+
+describe("resetBotFieldsAction", () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
   test("forwards the bound workspaceId and selected ids to bulkClearValues", async () => {
-    await resetBotFields("ws-1", ["11", "22"])
+    await resetBotFields({
+      bindArgsParsedInputs: ["ws-1"],
+      parsedInput: { ids: ["11", "22"] },
+    })
 
     expect(mocks.bulkClearValues).toHaveBeenCalledTimes(1)
     expect(mocks.bulkClearValues).toHaveBeenCalledWith({

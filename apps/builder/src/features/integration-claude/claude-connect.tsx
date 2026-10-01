@@ -30,7 +30,7 @@ export const ClaudeConnect = ({ promises }: ClaudeAIManageProps) => {
     },
   )
 
-  const isConnected = Boolean(integrationClaude?.auth)
+  const isConnected = Boolean(integrationClaude?.isConnected)
 
   return (
     <AiIntegrationConnect
