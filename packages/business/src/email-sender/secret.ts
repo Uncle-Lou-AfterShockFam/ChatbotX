@@ -125,6 +125,46 @@ export const decryptEmailSenderSecret = async (row: {
     emailSenderAad(row.id),
   )
 
+/**
+ * The credential blob of a `google_oauth` EmailSender (s230b): the Google
+ * refresh token plus the last access token minted from it. `clientId` and
+ * `ownerId` name the Google app that issued the grant (a refresh must use
+ * the same app; another one means a reconnect). Same AAD as smtp.
+ */
+export const emailSenderGoogleSecretSchema = z
+  .object({
+    refreshToken: z.string().min(1).max(2048),
+    accessToken: z.string().min(1).max(2048),
+    /** Epoch ms. */
+    expiresAt: z.number().int(),
+    scope: z.string().max(2048),
+    clientId: z.string().min(1).max(512),
+    ownerId: z.string().min(1).max(64),
+  })
+  .strict()
+export type EmailSenderGoogleSecret = z.infer<
+  typeof emailSenderGoogleSecretSchema
+>
+
+export const encryptEmailSenderGoogleSecret = async (
+  secret: EmailSenderGoogleSecret,
+  senderId: string,
+) =>
+  await encryptUtils.encryptObject(
+    emailSenderGoogleSecretSchema.parse(secret),
+    emailSenderAad(senderId),
+  )
+
+export const decryptEmailSenderGoogleSecret = async (row: {
+  id: string
+  secret: unknown
+}): Promise<EmailSenderGoogleSecret> =>
+  await encryptUtils.decryptObject(
+    encryptedDataSchema.parse(row.secret),
+    emailSenderGoogleSecretSchema,
+    emailSenderAad(row.id),
+  )
+
 /** The secret minus both passwords: what the UI may see. */
 export type EmailSenderConnection = {
   smtp: Omit<EmailSenderSmtpSecret["smtp"], "password">

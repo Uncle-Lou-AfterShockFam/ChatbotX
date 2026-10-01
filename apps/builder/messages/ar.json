@@ -7786,6 +7786,33 @@
       "paused": "متوقف مؤقتًا",
       "draining": "قيد التصريف",
       "disconnected": "غير متصل"
+    },
+    "connectGoogle": "ربط Google",
+    "googleBadge": "Google",
+    "googleTitle": "ربط صندوق بريد Google",
+    "googleReconnectTitle": "إعادة ربط {address}",
+    "googleDescription": "سجّل الدخول بحساب Gmail أو Google Workspace الذي يجب أن يرسل هذا الخط منه. تطلب Google صلاحية بريد كاملة (الإرسال وقراءة الردود). يحتفظ المركز بهذه الصلاحية مشفّرة؛ ولا يحصل الخط إلا على رموز قصيرة المدى.",
+    "googleClientId": "Client ID",
+    "copy": "نسخ",
+    "copied": "تم نسخ Client ID",
+    "copyFailed": "فشل النسخ: حدد Client ID وانسخه بنفسك",
+    "googleAdminSteps": "حسابات Google Workspace: يثق مسؤول النظام لديك بهذا التطبيق مرة واحدة",
+    "googleStep1": "افتح admin.google.com > Security > Access and data control > API controls > Manage third-party app access.",
+    "googleStep2": "اختر Add app > OAuth App Name Or Client ID، ثم ألصق Client ID أعلاه وابحث.",
+    "googleStep3": "حدد التطبيق، واختر Trusted، ثم احفظ.",
+    "googleGmailNote": "لا يحتاج حساب @gmail.com إلى مسؤول نظام: تعرض Google تنبيه \"تطبيق غير موثّق\"؛ اختر Advanced ثم استمر.",
+    "googleNotConfigured": "لم يتم إعداد تطبيق Google الخاص بالمركز بعد (Admin > Platform credentials > Google).",
+    "googleContinue": "الاستمرار مع Google",
+    "googleReconnect": "إعادة الربط مع Google",
+    "googleReconnectHint": "توقفت Google عن قبول صندوق البريد هذا ({reason}). استخدم إعادة الربط مع Google في صفّه.",
+    "outcome": {
+      "connected": "تم ربط صندوق البريد",
+      "cancelled": "تم إلغاء الربط مع Google",
+      "untrusted": "لم يثق مسؤول Google Workspace لديك بهذا التطبيق بعد. اطلب منه الوثوق بـ Client ID {clientId} (يعرض ربط Google الخطوات).",
+      "scope": "لم تمنح Google صلاحية البريد. أعد الربط واسمح بإذن Gmail.",
+      "mismatch": "سجّل الدخول إلى Google بعنوان المرسل نفسه لإعادة ربطه.",
+      "duplicate": "هذا العنوان مُستخدَم بالفعل كمرسل SMTP على هذا الخط. أرشفه أولًا.",
+      "failed": "فشل ربط صندوق بريد Google. حاول مرة أخرى."
     }
   },
   "emailFlowPage": {

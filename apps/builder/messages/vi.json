@@ -7786,6 +7786,33 @@
       "paused": "Tạm dừng",
       "draining": "Đang rút dần",
       "disconnected": "Mất kết nối"
+    },
+    "connectGoogle": "Kết nối Google",
+    "googleBadge": "Google",
+    "googleTitle": "Kết nối hộp thư Google",
+    "googleReconnectTitle": "Kết nối lại {address}",
+    "googleDescription": "Đăng nhập bằng tài khoản Gmail hoặc Google Workspace mà dòng này sẽ dùng để gửi. Google yêu cầu quyền truy cập thư đầy đủ (gửi và đọc phản hồi). Hub lưu quyền truy cập này dưới dạng mã hóa; dòng chỉ nhận token có thời hạn ngắn.",
+    "googleClientId": "Client ID",
+    "copy": "Sao chép",
+    "copied": "Đã sao chép Client ID",
+    "copyFailed": "Sao chép thất bại: hãy chọn Client ID và tự sao chép",
+    "googleAdminSteps": "Tài khoản Google Workspace: quản trị viên của bạn chỉ cần tin cậy ứng dụng này một lần",
+    "googleStep1": "Mở admin.google.com > Security > Access and data control > API controls > Manage third-party app access.",
+    "googleStep2": "Chọn Add app > OAuth App Name Or Client ID, dán Client ID ở trên và tìm kiếm.",
+    "googleStep3": "Chọn ứng dụng, chọn Trusted, rồi lưu.",
+    "googleGmailNote": "Tài khoản @gmail.com không cần quản trị viên: Google hiển thị thông báo \"ứng dụng chưa được xác minh\"; chọn Advanced rồi tiếp tục.",
+    "googleNotConfigured": "Ứng dụng Google của hub chưa được thiết lập (Admin > Platform credentials > Google).",
+    "googleContinue": "Tiếp tục với Google",
+    "googleReconnect": "Kết nối lại với Google",
+    "googleReconnectHint": "Google đã ngừng chấp nhận hộp thư này ({reason}). Dùng Kết nối lại với Google trên dòng của nó.",
+    "outcome": {
+      "connected": "Đã kết nối hộp thư",
+      "cancelled": "Đã hủy kết nối Google",
+      "untrusted": "Quản trị viên Google Workspace của bạn chưa tin cậy ứng dụng này. Hãy nhờ họ tin cậy Client ID {clientId} (Kết nối Google sẽ hiện các bước).",
+      "scope": "Google chưa cấp quyền truy cập thư. Hãy kết nối lại và cho phép quyền Gmail.",
+      "mismatch": "Hãy đăng nhập Google bằng đúng địa chỉ của người gửi để kết nối lại.",
+      "duplicate": "Địa chỉ này đã là người gửi SMTP trên dòng này. Hãy lưu trữ nó trước.",
+      "failed": "Kết nối hộp thư Google thất bại. Hãy thử lại."
     }
   },
   "emailFlowPage": {

@@ -7786,6 +7786,33 @@
       "paused": "Sat på pause",
       "draining": "Udfases",
       "disconnected": "Afbrudt"
+    },
+    "connectGoogle": "Forbind Google",
+    "googleBadge": "Google",
+    "googleTitle": "Forbind en Google-postkasse",
+    "googleReconnectTitle": "Genforbind {address}",
+    "googleDescription": "Log ind med den Gmail- eller Google Workspace-konto, denne linje skal sende fra. Google anmoder om fuld postadgang (afsendelse og læsning af svar). Hubben opbevarer denne adgang krypteret; linjen får kun kortlivede tokens.",
+    "googleClientId": "Client ID",
+    "copy": "Kopiér",
+    "copied": "Client ID kopieret",
+    "copyFailed": "Kopiering mislykkedes: vælg Client ID og kopiér det selv",
+    "googleAdminSteps": "Google Workspace-konti: din administrator skal godkende denne app én gang",
+    "googleStep1": "Åbn admin.google.com > Security > Access and data control > API controls > Manage third-party app access.",
+    "googleStep2": "Vælg Add app > OAuth App Name Or Client ID, indsæt Client ID ovenfor, og søg.",
+    "googleStep3": "Vælg appen, vælg Trusted, og gem.",
+    "googleGmailNote": "En @gmail.com-konto kræver ingen administrator: Google viser en advarsel om \"ubekræftet app\"; vælg Advanced, og fortsæt.",
+    "googleNotConfigured": "Hubbens Google-app er ikke konfigureret endnu (Admin > Platform credentials > Google).",
+    "googleContinue": "Fortsæt med Google",
+    "googleReconnect": "Genforbind med Google",
+    "googleReconnectHint": "Google er stoppet med at acceptere denne postkasse ({reason}). Brug Genforbind med Google på dens linje.",
+    "outcome": {
+      "connected": "Postkasse forbundet",
+      "cancelled": "Google-forbindelse annulleret",
+      "untrusted": "Din Google Workspace-administrator har endnu ikke godkendt denne app. Bed dem om at godkende Client ID {clientId} (Forbind Google viser trinene).",
+      "scope": "Google gav ikke postadgang. Genforbind, og tillad Gmail-tilladelsen.",
+      "mismatch": "Log ind på Google med afsenderens egen adresse for at genforbinde den.",
+      "duplicate": "Denne adresse er allerede en SMTP-afsender på denne linje. Arkivér den først.",
+      "failed": "Forbindelse til Google-postkassen mislykkedes. Prøv igen."
     }
   },
   "emailFlowPage": {

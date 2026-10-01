@@ -21,7 +21,14 @@ vi.mock("@chatbotx.io/database/client", async (importOriginal) => {
     db: { select: touch, insert: touch, update: touch, transaction: touch },
   }
 })
-vi.mock("@chatbotx.io/redis", () => ({ invalidateCacheByTags: vi.fn() }))
+// s230b: the service now reaches the Google app credential (and through it
+// the analytics/cache modules), so the mock keeps every real export and only
+// stubs cache invalidation and the refresh lock.
+vi.mock("@chatbotx.io/redis", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@chatbotx.io/redis")>()),
+  invalidateCacheByTags: vi.fn(),
+  distributedLock: { runExclusive: vi.fn() },
+}))
 vi.mock("../src/audit/dispatcher", () => ({ dispatchAuditRecord: vi.fn() }))
 
 const { EmailSenderUnavailableError, emailSenderService } = await import(

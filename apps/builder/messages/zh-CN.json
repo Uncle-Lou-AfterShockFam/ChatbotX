@@ -7786,6 +7786,33 @@
       "paused": "已暂停",
       "draining": "排空中",
       "disconnected": "已断开"
+    },
+    "connectGoogle": "连接 Google",
+    "googleBadge": "Google",
+    "googleTitle": "连接 Google 邮箱",
+    "googleReconnectTitle": "重新连接 {address}",
+    "googleDescription": "使用该线路应发送邮件所用的 Gmail 或 Google Workspace 账号登录。Google 会请求完整的邮件权限（发送和读取回复）。中心会将该权限加密保存；线路只会获得短期令牌。",
+    "googleClientId": "Client ID",
+    "copy": "复制",
+    "copied": "已复制 Client ID",
+    "copyFailed": "复制失败：请自行选中并复制 Client ID",
+    "googleAdminSteps": "Google Workspace 账号：管理员只需信任此应用一次",
+    "googleStep1": "打开 admin.google.com > Security > Access and data control > API controls > Manage third-party app access。",
+    "googleStep2": "选择 Add app > OAuth App Name Or Client ID，粘贴上方的 Client ID 并搜索。",
+    "googleStep3": "选择该应用，选择 Trusted，然后保存。",
+    "googleGmailNote": "@gmail.com 账号无需管理员操作：Google 会显示“未验证应用”提示，选择 Advanced 后继续即可。",
+    "googleNotConfigured": "中心的 Google 应用尚未配置（Admin > Platform credentials > Google）。",
+    "googleContinue": "继续使用 Google",
+    "googleReconnect": "使用 Google 重新连接",
+    "googleReconnectHint": "Google 已不再接受此邮箱（{reason}）。请在该行使用“使用 Google 重新连接”。",
+    "outcome": {
+      "connected": "邮箱已连接",
+      "cancelled": "已取消 Google 连接",
+      "untrusted": "你的 Google Workspace 管理员尚未信任此应用。请让他们信任 Client ID {clientId}（连接 Google 会显示相关步骤）。",
+      "scope": "Google 未授予邮件权限。请重新连接并允许 Gmail 权限。",
+      "mismatch": "请以发件人本人的地址登录 Google 以重新连接。",
+      "duplicate": "此地址已是该线路上的 SMTP 发件人。请先将其存档。",
+      "failed": "连接 Google 邮箱失败，请重试。"
     }
   },
   "emailFlowPage": {

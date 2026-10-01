@@ -7786,6 +7786,33 @@
       "paused": "Dijeda",
       "draining": "Menguras",
       "disconnected": "Terputus"
+    },
+    "connectGoogle": "Hubungkan Google",
+    "googleBadge": "Google",
+    "googleTitle": "Hubungkan kotak surat Google",
+    "googleReconnectTitle": "Hubungkan kembali {address}",
+    "googleDescription": "Masuk dengan akun Gmail atau Google Workspace yang akan digunakan jalur ini untuk mengirim. Google meminta akses email lengkap (mengirim dan membaca balasan). Hub menyimpan akses ini dalam bentuk terenkripsi; jalur hanya menerima token berumur pendek.",
+    "googleClientId": "Client ID",
+    "copy": "Salin",
+    "copied": "Client ID disalin",
+    "copyFailed": "Gagal menyalin: pilih Client ID dan salin sendiri",
+    "googleAdminSteps": "Akun Google Workspace: admin Anda hanya perlu mempercayai aplikasi ini sekali",
+    "googleStep1": "Buka admin.google.com > Security > Access and data control > API controls > Manage third-party app access.",
+    "googleStep2": "Pilih Add app > OAuth App Name Or Client ID, tempel Client ID di atas, lalu cari.",
+    "googleStep3": "Pilih aplikasinya, pilih Trusted, lalu simpan.",
+    "googleGmailNote": "Akun @gmail.com tidak memerlukan admin: Google menampilkan peringatan \"aplikasi belum diverifikasi\"; pilih Advanced, lalu lanjutkan.",
+    "googleNotConfigured": "Aplikasi Google milik hub belum disiapkan (Admin > Platform credentials > Google).",
+    "googleContinue": "Lanjutkan dengan Google",
+    "googleReconnect": "Hubungkan kembali dengan Google",
+    "googleReconnectHint": "Google berhenti menerima kotak surat ini ({reason}). Gunakan Hubungkan kembali dengan Google pada barisnya.",
+    "outcome": {
+      "connected": "Kotak surat terhubung",
+      "cancelled": "Koneksi Google dibatalkan",
+      "untrusted": "Admin Google Workspace Anda belum mempercayai aplikasi ini. Minta mereka mempercayai Client ID {clientId} (Hubungkan Google menampilkan langkah-langkahnya).",
+      "scope": "Google tidak memberikan akses email. Hubungkan kembali dan izinkan izin Gmail.",
+      "mismatch": "Masuk ke Google dengan alamat milik pengirim sendiri untuk menghubungkannya kembali.",
+      "duplicate": "Alamat ini sudah menjadi pengirim SMTP di jalur ini. Arsipkan dulu.",
+      "failed": "Gagal menghubungkan kotak surat Google. Coba lagi."
     }
   },
   "emailFlowPage": {

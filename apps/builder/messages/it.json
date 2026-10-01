@@ -7786,6 +7786,33 @@
       "paused": "In pausa",
       "draining": "In esaurimento",
       "disconnected": "Disconnesso"
+    },
+    "connectGoogle": "Collega Google",
+    "googleBadge": "Google",
+    "googleTitle": "Collega una casella Google",
+    "googleReconnectTitle": "Riconnetti {address}",
+    "googleDescription": "Accedi con l'account Gmail o Google Workspace da cui questa linea deve inviare. Google richiede l'accesso completo alla posta (invio e lettura delle risposte). L'hub conserva questo accesso in forma cifrata; la linea riceve solo token di breve durata.",
+    "googleClientId": "Client ID",
+    "copy": "Copia",
+    "copied": "Client ID copiato",
+    "copyFailed": "Copia non riuscita: seleziona il Client ID e copialo manualmente",
+    "googleAdminSteps": "Account Google Workspace: il tuo amministratore deve fidarsi di questa app una sola volta",
+    "googleStep1": "Apri admin.google.com > Security > Access and data control > API controls > Manage third-party app access.",
+    "googleStep2": "Scegli Add app > OAuth App Name Or Client ID, incolla il Client ID sopra e cerca.",
+    "googleStep3": "Seleziona l'app, scegli Trusted e salva.",
+    "googleGmailNote": "Un account @gmail.com non richiede un amministratore: Google mostra un avviso \"app non verificata\"; scegli Advanced e continua.",
+    "googleNotConfigured": "L'app Google dell'hub non è ancora configurata (Admin > Platform credentials > Google).",
+    "googleContinue": "Continua con Google",
+    "googleReconnect": "Riconnetti con Google",
+    "googleReconnectHint": "Google ha smesso di accettare questa casella ({reason}). Usa Riconnetti con Google sulla sua riga.",
+    "outcome": {
+      "connected": "Casella collegata",
+      "cancelled": "Connessione a Google annullata",
+      "untrusted": "Il tuo amministratore Google Workspace non si è ancora fidato di questa app. Chiedigli di fidarsi del Client ID {clientId} (Collega Google mostra i passaggi).",
+      "scope": "Google non ha concesso l'accesso alla posta. Riconnetti e consenti l'autorizzazione Gmail.",
+      "mismatch": "Accedi a Google con l'indirizzo del mittente per riconnetterlo.",
+      "duplicate": "Questo indirizzo è già un mittente SMTP su questa linea. Archivialo prima.",
+      "failed": "Connessione alla casella Google non riuscita. Riprova."
     }
   },
   "emailFlowPage": {

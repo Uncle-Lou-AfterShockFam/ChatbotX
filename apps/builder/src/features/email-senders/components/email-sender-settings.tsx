@@ -26,10 +26,12 @@ import {
 } from "@chatbotx.io/ui/components/ui/select"
 import { Switch } from "@chatbotx.io/ui/components/ui/switch"
 import { Textarea } from "@chatbotx.io/ui/components/ui/textarea"
+import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { ConfirmButton } from "@/components/confirm-button"
+import type { EmailSenderConnectOutcome } from "../lib"
 import {
   useArchiveEmailSender,
   useEmailSenders,
@@ -40,6 +42,7 @@ import {
   useEmailSenderForm,
 } from "../provider/use-email-sender-form"
 import type { EmailSenderResource } from "../schema/resource"
+import { GoogleConnectDialog } from "./google-connect-dialog"
 
 const errorMessage = (err: unknown) =>
   err instanceof Error && err.message ? err.message : String(err)
@@ -123,6 +126,7 @@ function SenderDialog(props: {
     error,
     pending,
     disconnected,
+    google,
     applyGmailPreset,
     onSubmit,
   } = useEmailSenderForm(props, {
@@ -145,7 +149,7 @@ function SenderDialog(props: {
               className="text-destructive text-sm"
               data-testid="email-sender-reconnect-hint"
             >
-              {t("reconnectHint", {
+              {t(google ? "googleReconnectHint" : "reconnectHint", {
                 reason: props.sender?.disconnectionReason ?? "-",
               })}
             </p>
@@ -197,39 +201,43 @@ function SenderDialog(props: {
               value={form.signature}
             />
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-medium text-sm">{t("smtp")}</h3>
-            <Button
-              data-testid="email-sender-gmail-preset"
-              onClick={applyGmailPreset}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              {t("gmailPreset")}
-            </Button>
-          </div>
-          <ServerFields
-            onChange={(smtp) => set({ smtp })}
-            prefix="smtp"
-            value={form.smtp}
-          />
-          <h3 className="font-medium text-sm">{t("imap")}</h3>
-          <ServerFields
-            onChange={(imap) => set({ imap: { ...form.imap, ...imap } })}
-            prefix="imap"
-            value={form.imap}
-          />
-          <Field
-            id="email-sender-password"
-            label={t("password")}
-            onChange={(password) => set({ password })}
-            placeholder={
-              props.sender && !disconnected ? t("passwordKeep") : undefined
-            }
-            type="password"
-            value={form.password}
-          />
+          {google ? null : (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-medium text-sm">{t("smtp")}</h3>
+                <Button
+                  data-testid="email-sender-gmail-preset"
+                  onClick={applyGmailPreset}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  {t("gmailPreset")}
+                </Button>
+              </div>
+              <ServerFields
+                onChange={(smtp) => set({ smtp })}
+                prefix="smtp"
+                value={form.smtp}
+              />
+              <h3 className="font-medium text-sm">{t("imap")}</h3>
+              <ServerFields
+                onChange={(imap) => set({ imap: { ...form.imap, ...imap } })}
+                prefix="imap"
+                value={form.imap}
+              />
+              <Field
+                id="email-sender-password"
+                label={t("password")}
+                onChange={(password) => set({ password })}
+                placeholder={
+                  props.sender && !disconnected ? t("passwordKeep") : undefined
+                }
+                type="password"
+                value={form.password}
+              />
+            </>
+          )}
           <h3 className="font-medium text-sm">{t("pacing")}</h3>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Field
@@ -276,7 +284,10 @@ function SenderDialog(props: {
           </Button>
           <Button
             data-testid="email-sender-save"
-            disabled={pending || (disconnected && form.password.trim() === "")}
+            disabled={
+              pending ||
+              (disconnected && !google && form.password.trim() === "")
+            }
             form="email-sender-form"
             type="submit"
           >
@@ -292,6 +303,7 @@ function SenderRow(props: {
   workspaceId: string
   sender: EmailSenderResource
   onEdit: () => void
+  onReconnectGoogle: () => void
 }) {
   const t = useTranslations("emailSenders")
   const setStatus = useSetEmailSenderStatus()
@@ -307,7 +319,14 @@ function SenderRow(props: {
       data-testid="email-sender-row"
     >
       <div className="min-w-0 flex-1">
-        <p className="truncate font-mono text-sm">{sender.address}</p>
+        <p className="flex min-w-0 items-center gap-2">
+          <span className="truncate font-mono text-sm">{sender.address}</span>
+          {sender.provider === "google_oauth" ? (
+            <Badge data-testid="email-sender-google-badge" variant="outline">
+              {t("googleBadge")}
+            </Badge>
+          ) : null}
+        </p>
         <p className="truncate text-muted-foreground text-xs">
           {sender.fromName} · {t("dailyLimitShort", { n: sender.dailyLimit })}
         </p>
@@ -324,13 +343,19 @@ function SenderRow(props: {
         {sender.status === "disconnected" ? (
           <>
             <Badge variant="destructive">{t("status.disconnected")}</Badge>
-            {/* Only a new password reconnects it (the server 409s a status change). */}
+            {/* Only a new password (or, for Google, a new grant) reconnects it: the server 409s a status change. */}
             <Button
               data-testid="email-sender-reconnect"
-              onClick={props.onEdit}
+              onClick={
+                sender.provider === "google_oauth"
+                  ? props.onReconnectGoogle
+                  : props.onEdit
+              }
               size="sm"
             >
-              {t("reconnect")}
+              {sender.provider === "google_oauth"
+                ? t("googleReconnect")
+                : t("reconnect")}
             </Button>
           </>
         ) : (
@@ -383,13 +408,44 @@ function SenderRow(props: {
 }
 
 /** Settings > Email senders: the mailboxes each email line sends from. */
-export function EmailSenderSettings({ workspaceId }: { workspaceId: string }) {
+export function EmailSenderSettings({
+  workspaceId,
+  googleClientId,
+  outcome,
+}: {
+  workspaceId: string
+  /** The hub's Google app Client ID (public), null when not configured. */
+  googleClientId: string | null
+  /** The Google callback's closed result code, shown once. */
+  outcome: EmailSenderConnectOutcome | null
+}) {
   const t = useTranslations("emailSenders")
+  const router = useRouter()
   const query = useEmailSenders(workspaceId)
   const [dialog, setDialog] = useState<{
     lineInboxId: string
     sender: EmailSenderResource | null
   } | null>(null)
+  const [googleDialog, setGoogleDialog] = useState<{
+    lineInboxId: string
+    sender: EmailSenderResource | null
+  } | null>(null)
+  const shown = useRef(false)
+  useEffect(() => {
+    if (!outcome || shown.current) {
+      return
+    }
+    shown.current = true
+    const message = t(`outcome.${outcome}`, {
+      clientId: googleClientId ?? "-",
+    })
+    if (outcome === "connected") {
+      toast.success(message)
+    } else {
+      toast.error(message, { duration: 15_000 })
+    }
+    router.replace(window.location.pathname)
+  }, [outcome, googleClientId, router, t])
   const byLine = useMemo(() => {
     const map = new Map<string, EmailSenderResource[]>()
     for (const sender of query.data?.senders ?? []) {
@@ -424,15 +480,27 @@ export function EmailSenderSettings({ workspaceId }: { workspaceId: string }) {
             <CardContent className="p-0">
               <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
                 <h3 className="min-w-0 truncate font-medium">{line.name}</h3>
-                <Button
-                  data-testid="email-sender-add"
-                  onClick={() =>
-                    setDialog({ lineInboxId: line.id, sender: null })
-                  }
-                  size="sm"
-                >
-                  {t("add")}
-                </Button>
+                <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                  <Button
+                    data-testid="email-sender-google-connect"
+                    onClick={() =>
+                      setGoogleDialog({ lineInboxId: line.id, sender: null })
+                    }
+                    size="sm"
+                    variant="outline"
+                  >
+                    {t("connectGoogle")}
+                  </Button>
+                  <Button
+                    data-testid="email-sender-add"
+                    onClick={() =>
+                      setDialog({ lineInboxId: line.id, sender: null })
+                    }
+                    size="sm"
+                  >
+                    {t("add")}
+                  </Button>
+                </div>
               </div>
               <div className="divide-y">
                 {senders.length === 0 ? (
@@ -444,6 +512,9 @@ export function EmailSenderSettings({ workspaceId }: { workspaceId: string }) {
                   <SenderRow
                     key={sender.id}
                     onEdit={() => setDialog({ lineInboxId: line.id, sender })}
+                    onReconnectGoogle={() =>
+                      setGoogleDialog({ lineInboxId: line.id, sender })
+                    }
                     sender={sender}
                     workspaceId={workspaceId}
                   />
@@ -459,6 +530,16 @@ export function EmailSenderSettings({ workspaceId }: { workspaceId: string }) {
           lineInboxId={dialog.lineInboxId}
           onClose={() => setDialog(null)}
           sender={dialog.sender}
+          workspaceId={workspaceId}
+        />
+      ) : null}
+      {googleDialog ? (
+        <GoogleConnectDialog
+          clientId={googleClientId}
+          key={googleDialog.sender?.id ?? `google-${googleDialog.lineInboxId}`}
+          lineInboxId={googleDialog.lineInboxId}
+          onClose={() => setGoogleDialog(null)}
+          sender={googleDialog.sender}
           workspaceId={workspaceId}
         />
       ) : null}

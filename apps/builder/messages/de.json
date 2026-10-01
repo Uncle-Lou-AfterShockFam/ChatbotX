@@ -7786,6 +7786,33 @@
       "paused": "Pausiert",
       "draining": "Auslaufend",
       "disconnected": "Getrennt"
+    },
+    "connectGoogle": "Google verbinden",
+    "googleBadge": "Google",
+    "googleTitle": "Google-Postfach verbinden",
+    "googleReconnectTitle": "{address} erneut verbinden",
+    "googleDescription": "Melden Sie sich mit dem Gmail- oder Google Workspace-Konto an, von dem diese Leitung senden soll. Google verlangt vollen Mailzugriff (Senden und Lesen von Antworten). Der Hub verschlüsselt diesen Zugriff; die Leitung erhält nur kurzlebige Tokens.",
+    "googleClientId": "Client ID",
+    "copy": "Kopieren",
+    "copied": "Client ID kopiert",
+    "copyFailed": "Kopieren fehlgeschlagen: Wählen Sie die Client ID aus und kopieren Sie sie selbst",
+    "googleAdminSteps": "Google Workspace-Konten: Ihr Administrator vertraut dieser App einmalig",
+    "googleStep1": "Öffnen Sie admin.google.com > Security > Access and data control > API controls > Manage third-party app access.",
+    "googleStep2": "Wählen Sie Add app > OAuth App Name Or Client ID, fügen Sie die obige Client ID ein und suchen Sie.",
+    "googleStep3": "Wählen Sie die App aus, setzen Sie Trusted und speichern Sie.",
+    "googleGmailNote": "Ein @gmail.com-Konto braucht keinen Administrator: Google zeigt einen Hinweis \"nicht verifizierte App\"; wählen Sie Advanced und fahren Sie fort.",
+    "googleNotConfigured": "Die Google-App des Hubs ist noch nicht eingerichtet (Admin > Platform credentials > Google).",
+    "googleContinue": "Mit Google fortfahren",
+    "googleReconnect": "Mit Google erneut verbinden",
+    "googleReconnectHint": "Google akzeptiert dieses Postfach nicht mehr ({reason}). Nutzen Sie Mit Google erneut verbinden in dieser Zeile.",
+    "outcome": {
+      "connected": "Postfach verbunden",
+      "cancelled": "Google-Verbindung abgebrochen",
+      "untrusted": "Ihr Google Workspace-Administrator hat dieser App noch nicht vertraut. Bitten Sie ihn, der Client ID {clientId} zu vertrauen (Google verbinden zeigt die Schritte).",
+      "scope": "Google hat keinen Mailzugriff gewährt. Verbinden Sie erneut und erlauben Sie die Gmail-Berechtigung.",
+      "mismatch": "Melden Sie sich bei Google mit der eigenen Adresse des Absenders an, um ihn erneut zu verbinden.",
+      "duplicate": "Diese Adresse ist auf dieser Leitung bereits ein SMTP-Absender. Archivieren Sie sie zuerst.",
+      "failed": "Die Verbindung zum Google-Postfach ist fehlgeschlagen. Versuchen Sie es erneut."
     }
   },
   "emailFlowPage": {

@@ -360,7 +360,19 @@ export const channelsPublicRouter = {
                 mailbox: z.string(),
               }),
               auth: z
-                .object({ type: z.literal("password"), password: z.string() })
+                .discriminatedUnion("type", [
+                  z.object({
+                    type: z.literal("password"),
+                    password: z.string(),
+                  }),
+                  // A Google mailbox (s230b): a short-lived access token for
+                  // XOAUTH2; `expiresAt` is ISO 8601.
+                  z.object({
+                    type: z.literal("oauth2"),
+                    accessToken: z.string(),
+                    expiresAt: z.string(),
+                  }),
+                ])
                 .nullable(),
             }),
           ),

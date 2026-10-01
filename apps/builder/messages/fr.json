@@ -7786,6 +7786,33 @@
       "paused": "En pause",
       "draining": "En vidange",
       "disconnected": "Déconnecté"
+    },
+    "connectGoogle": "Connecter Google",
+    "googleBadge": "Google",
+    "googleTitle": "Connecter une boîte Google",
+    "googleReconnectTitle": "Reconnecter {address}",
+    "googleDescription": "Connectez-vous avec le compte Gmail ou Google Workspace depuis lequel cette ligne doit envoyer. Google demande un accès complet à la messagerie (envoi et lecture des réponses). Le hub conserve cet accès chiffré ; la ligne ne reçoit que des jetons de courte durée.",
+    "googleClientId": "Client ID",
+    "copy": "Copier",
+    "copied": "Client ID copié",
+    "copyFailed": "Copie impossible : sélectionnez le Client ID et copiez-le vous-même",
+    "googleAdminSteps": "Comptes Google Workspace : votre administrateur doit approuver cette application une seule fois",
+    "googleStep1": "Ouvrez admin.google.com > Security > Access and data control > API controls > Manage third-party app access.",
+    "googleStep2": "Choisissez Add app > OAuth App Name Or Client ID, collez le Client ID ci-dessus et lancez la recherche.",
+    "googleStep3": "Sélectionnez l'application, choisissez Trusted, puis enregistrez.",
+    "googleGmailNote": "Un compte @gmail.com n'a besoin d'aucun administrateur : Google affiche un avis « application non vérifiée » ; choisissez Advanced, puis continuez.",
+    "googleNotConfigured": "L'application Google du hub n'est pas encore configurée (Admin > Platform credentials > Google).",
+    "googleContinue": "Continuer avec Google",
+    "googleReconnect": "Se reconnecter avec Google",
+    "googleReconnectHint": "Google a cessé d'accepter cette boîte ({reason}). Utilisez Se reconnecter avec Google sur sa ligne.",
+    "outcome": {
+      "connected": "Boîte connectée",
+      "cancelled": "Connexion Google annulée",
+      "untrusted": "Votre administrateur Google Workspace n'a pas encore approuvé cette application. Demandez-lui d'approuver le Client ID {clientId} (Connecter Google affiche les étapes).",
+      "scope": "Google n'a pas accordé l'accès à la messagerie. Reconnectez-vous et autorisez la permission Gmail.",
+      "mismatch": "Connectez-vous à Google avec l'adresse de l'expéditeur lui-même pour le reconnecter.",
+      "duplicate": "Cette adresse est déjà un expéditeur SMTP sur cette ligne. Archivez-la d'abord.",
+      "failed": "La connexion à la boîte Google a échoué. Réessayez."
     }
   },
   "emailFlowPage": {

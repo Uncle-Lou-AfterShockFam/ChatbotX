@@ -7786,6 +7786,33 @@
       "paused": "Pausad",
       "draining": "Avvecklas",
       "disconnected": "Frånkopplad"
+    },
+    "connectGoogle": "Anslut Google",
+    "googleBadge": "Google",
+    "googleTitle": "Anslut en Google-brevlåda",
+    "googleReconnectTitle": "Återanslut {address}",
+    "googleDescription": "Logga in med det Gmail- eller Google Workspace-konto som den här linjen ska skicka från. Google begär full postbehörighet (skicka och läsa svar). Huben förvarar denna åtkomst krypterad; linjen får bara kortlivade token.",
+    "googleClientId": "Client ID",
+    "copy": "Kopiera",
+    "copied": "Client ID kopierat",
+    "copyFailed": "Kopiering misslyckades: markera Client ID och kopiera det själv",
+    "googleAdminSteps": "Google Workspace-konton: din administratör litar på den här appen en gång",
+    "googleStep1": "Öppna admin.google.com > Security > Access and data control > API controls > Manage third-party app access.",
+    "googleStep2": "Välj Add app > OAuth App Name Or Client ID, klistra in Client ID ovan och sök.",
+    "googleStep3": "Välj appen, ange Trusted och spara.",
+    "googleGmailNote": "Ett @gmail.com-konto behöver ingen administratör: Google visar ett meddelande om \"overifierad app\"; välj Advanced och fortsätt.",
+    "googleNotConfigured": "Hubens Google-app är inte konfigurerad än (Admin > Platform credentials > Google).",
+    "googleContinue": "Fortsätt med Google",
+    "googleReconnect": "Återanslut med Google",
+    "googleReconnectHint": "Google har slutat acceptera den här brevlådan ({reason}). Använd Återanslut med Google på dess rad.",
+    "outcome": {
+      "connected": "Brevlåda ansluten",
+      "cancelled": "Google-anslutningen avbröts",
+      "untrusted": "Din Google Workspace-administratör litar ännu inte på den här appen. Be dem lita på Client ID {clientId} (Anslut Google visar stegen).",
+      "scope": "Google beviljade inte postbehörighet. Återanslut och tillåt Gmail-behörigheten.",
+      "mismatch": "Logga in på Google med avsändarens egen adress för att återansluta den.",
+      "duplicate": "Den här adressen är redan en SMTP-avsändare på den här linjen. Arkivera den först.",
+      "failed": "Det gick inte att ansluta Google-brevlådan. Försök igen."
     }
   },
   "emailFlowPage": {

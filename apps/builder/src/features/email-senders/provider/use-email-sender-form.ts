@@ -86,7 +86,6 @@ const optionalInt = (value: string) =>
 
 /** The request body: the server's closed parser is the authority. */
 function payloadOf(form: FormState) {
-  const password = form.password === "" ? undefined : form.password
   return {
     fromName: form.fromName,
     firstName: form.firstName,
@@ -97,10 +96,15 @@ function payloadOf(form: FormState) {
     rampStart: optionalInt(form.rampStart),
     rampPercent: optionalInt(form.rampPercent),
     minGapMinutes: Number(form.minGapMinutes),
-    connection: {
-      smtp: { ...form.smtp, port: Number(form.smtp.port), password },
-      imap: { ...form.imap, port: Number(form.imap.port), password },
-    },
+  }
+}
+
+/** The SMTP/IMAP logins (never sent for a Google sender, s230b). */
+function connectionOf(form: FormState) {
+  const password = form.password === "" ? undefined : form.password
+  return {
+    smtp: { ...form.smtp, port: Number(form.smtp.port), password },
+    imap: { ...form.imap, port: Number(form.imap.port), password },
   }
 }
 
@@ -121,8 +125,10 @@ export function useEmailSenderForm(
   const set = (patch: Partial<FormState>) =>
     setForm((f) => ({ ...f, ...patch }))
   const pending = create.isPending || update.isPending
-  // s229b: a disconnected sender comes back only with a new password.
+  // s229b: a disconnected sender comes back only with a new password
+  // (s230b: a Google one only through a reconnect with Google).
   const disconnected = props.sender?.status === "disconnected"
+  const google = props.sender?.provider === "google_oauth"
 
   const applyGmailPreset = () => {
     const { smtp, imap } = GMAIL_APP_PASSWORD_PRESET
@@ -155,6 +161,7 @@ export function useEmailSenderForm(
           workspaceId: props.workspaceId,
           id: props.sender.id,
           ...payloadOf(form),
+          ...(google ? {} : { connection: connectionOf(form) }),
         },
         done,
       )
@@ -167,6 +174,7 @@ export function useEmailSenderForm(
         provider: "smtp",
         address: form.address,
         ...payloadOf(form),
+        connection: connectionOf(form),
       },
       done,
     )
@@ -178,6 +186,7 @@ export function useEmailSenderForm(
     error,
     pending,
     disconnected,
+    google,
     applyGmailPreset,
     onSubmit,
   }

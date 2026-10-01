@@ -19,7 +19,7 @@ import {
 const bigintId = z.string().regex(/^\d{1,19}$/, "Invalid id")
 
 /** One single address, trimmed and lower-cased (the suppression parser). */
-const emailAddress = z.string().transform((value, ctx) => {
+export const emailSenderAddress = z.string().transform((value, ctx) => {
   const parsed = parseEmailSuppression(value)
   if (!(parsed.ok && parsed.kind === "address" && noControlChars(value))) {
     ctx.addIssue({ code: "custom", message: "Enter a valid email address" })
@@ -125,7 +125,7 @@ export const createEmailSenderInput = z
     lineInboxId: bigintId,
     /** `google_oauth` senders are connected by the OAuth flow (PR 3), never here. */
     provider: z.literal("smtp"),
-    address: emailAddress,
+    address: emailSenderAddress,
     fromName: name,
     firstName: name,
     lastName: name,
@@ -158,6 +158,38 @@ export const updateEmailSenderInput = z
   })
   .strict()
   .refine(rampBothOrNeither, RAMP_MESSAGE)
+
+/**
+ * A Google mailbox connect (s230b), called by the OAuth callback only: the
+ * code to exchange, the redirect URI it was issued for, the owner whose
+ * Google app ran the flow, and EITHER the sender it reconnects OR the
+ * identity of a new sender (never both).
+ */
+const connectName = name.pipe(z.string().max(100))
+export const connectGoogleEmailSenderInput = z
+  .object({
+    workspaceId: bigintId,
+    lineInboxId: bigintId,
+    ownerId: z.string().min(1).max(64),
+    code: z.string().min(1).max(2048).refine(noControlChars),
+    redirectUri: z.url({ protocol: /^https?$/ }).max(2048),
+    senderId: bigintId.optional(),
+    fromName: connectName.optional(),
+    firstName: connectName.optional(),
+    lastName: connectName.optional(),
+  })
+  .strict()
+  .refine(
+    (v) =>
+      v.senderId
+        ? v.fromName === undefined &&
+          v.firstName === undefined &&
+          v.lastName === undefined
+        : v.fromName !== undefined &&
+          v.firstName !== undefined &&
+          v.lastName !== undefined,
+    { message: "Reconnect a sender or name a new one", path: ["senderId"] },
+  )
 
 export const emailSenderRefInput = z
   .object({ workspaceId: bigintId, id: bigintId })

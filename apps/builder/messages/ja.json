@@ -7786,6 +7786,33 @@
       "paused": "一時停止",
       "draining": "終了処理中",
       "disconnected": "切断"
+    },
+    "connectGoogle": "Google に接続",
+    "googleBadge": "Google",
+    "googleTitle": "Google メールボックスを接続",
+    "googleReconnectTitle": "{address} を再接続",
+    "googleDescription": "このラインが送信に使う Gmail または Google Workspace アカウントでログインしてください。Google はメールへの完全なアクセス（送信と返信の読み取り）を要求します。ハブはそのアクセス権を暗号化して保管し、ラインには短命なトークンのみが渡されます。",
+    "googleClientId": "Client ID",
+    "copy": "コピー",
+    "copied": "Client ID をコピーしました",
+    "copyFailed": "コピーに失敗しました。Client ID を選択して自分でコピーしてください",
+    "googleAdminSteps": "Google Workspace アカウント: 管理者が一度だけこのアプリを信頼します",
+    "googleStep1": "admin.google.com > Security > Access and data control > API controls > Manage third-party app access を開きます。",
+    "googleStep2": "Add app > OAuth App Name Or Client ID を選び、上記の Client ID を貼り付けて検索します。",
+    "googleStep3": "アプリを選択し、Trusted を選んで保存します。",
+    "googleGmailNote": "@gmail.com アカウントに管理者操作は不要です。Google が「確認されていないアプリ」と表示したら Advanced を選んで続行してください。",
+    "googleNotConfigured": "ハブの Google アプリはまだ設定されていません（Admin > Platform credentials > Google）。",
+    "googleContinue": "Google で続行",
+    "googleReconnect": "Google で再接続",
+    "googleReconnectHint": "Google がこのメールボックスを受け付けなくなりました（{reason}）。その行の「Google で再接続」を使ってください。",
+    "outcome": {
+      "connected": "メールボックスを接続しました",
+      "cancelled": "Google の接続がキャンセルされました",
+      "untrusted": "Google Workspace の管理者がまだこのアプリを信頼していません。Client ID {clientId} を信頼するよう依頼してください（Google に接続の手順を参照）。",
+      "scope": "Google がメールアクセスを許可しませんでした。再接続して Gmail の権限を許可してください。",
+      "mismatch": "再接続するには、送信者本人のアドレスで Google にログインしてください。",
+      "duplicate": "このアドレスはすでにこのラインの SMTP 送信者です。先にアーカイブしてください。",
+      "failed": "Google メールボックスの接続に失敗しました。もう一度お試しください。"
     }
   },
   "emailFlowPage": {
