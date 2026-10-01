@@ -7786,6 +7786,33 @@
       "paused": "Keskeytetty",
       "draining": "Tyhjenemässä",
       "disconnected": "Yhteys katkennut"
+    },
+    "connectGoogle": "Yhdistä Google",
+    "googleBadge": "Google",
+    "googleTitle": "Yhdistä Google-postilaatikko",
+    "googleReconnectTitle": "Yhdistä {address} uudelleen",
+    "googleDescription": "Kirjaudu sisään Gmail- tai Google Workspace -tilillä, josta tämän linjan pitäisi lähettää. Google pyytää täyden postioikeuden (lähettäminen ja vastausten lukeminen). Hubi säilyttää tämän oikeuden salattuna; linja saa vain lyhytikäisiä tokeneita.",
+    "googleClientId": "Client ID",
+    "copy": "Kopioi",
+    "copied": "Client ID kopioitu",
+    "copyFailed": "Kopiointi epäonnistui: valitse Client ID ja kopioi se itse",
+    "googleAdminSteps": "Google Workspace -tilit: järjestelmänvalvojasi luottaa tähän sovellukseen kerran",
+    "googleStep1": "Avaa admin.google.com > Security > Access and data control > API controls > Manage third-party app access.",
+    "googleStep2": "Valitse Add app > OAuth App Name Or Client ID, liitä yllä oleva Client ID ja hae.",
+    "googleStep3": "Valitse sovellus, valitse Trusted ja tallenna.",
+    "googleGmailNote": "@gmail.com-tili ei tarvitse järjestelmänvalvojaa: Google näyttää \"vahvistamaton sovellus\" -ilmoituksen; valitse Advanced ja jatka.",
+    "googleNotConfigured": "Hubin Google-sovellusta ei ole vielä määritetty (Admin > Platform credentials > Google).",
+    "googleContinue": "Jatka Googlella",
+    "googleReconnect": "Yhdistä uudelleen Googlella",
+    "googleReconnectHint": "Google lakkasi hyväksymästä tätä postilaatikkoa ({reason}). Käytä sen rivillä olevaa Yhdistä uudelleen Googlella -painiketta.",
+    "outcome": {
+      "connected": "Postilaatikko yhdistetty",
+      "cancelled": "Google-yhdistäminen peruutettiin",
+      "untrusted": "Google Workspace -järjestelmänvalvojasi ei ole vielä luottanut tähän sovellukseen. Pyydä häntä luottamaan Client ID:hen {clientId} (Yhdistä Google näyttää ohjeet).",
+      "scope": "Google ei myöntänyt postioikeutta. Yhdistä uudelleen ja salli Gmail-lupa.",
+      "mismatch": "Kirjaudu Googleen lähettäjän omalla osoitteella yhdistääksesi sen uudelleen.",
+      "duplicate": "Tämä osoite on jo SMTP-lähettäjä tällä linjalla. Arkistoi se ensin.",
+      "failed": "Google-postilaatikon yhdistäminen epäonnistui. Yritä uudelleen."
     }
   },
   "emailFlowPage": {

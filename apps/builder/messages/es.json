@@ -7786,6 +7786,33 @@
       "paused": "En pausa",
       "draining": "Vaciando",
       "disconnected": "Desconectado"
+    },
+    "connectGoogle": "Conectar Google",
+    "googleBadge": "Google",
+    "googleTitle": "Conectar un buzón de Google",
+    "googleReconnectTitle": "Reconectar {address}",
+    "googleDescription": "Inicia sesión con la cuenta de Gmail o Google Workspace desde la que esta línea debe enviar. Google solicita acceso completo al correo (enviar y leer respuestas). El hub guarda este acceso cifrado; la línea solo recibe tokens de corta duración.",
+    "googleClientId": "Client ID",
+    "copy": "Copiar",
+    "copied": "Client ID copiado",
+    "copyFailed": "No se pudo copiar: selecciona el Client ID y cópialo tú mismo",
+    "googleAdminSteps": "Cuentas de Google Workspace: tu administrador confía en esta app una sola vez",
+    "googleStep1": "Abre admin.google.com > Security > Access and data control > API controls > Manage third-party app access.",
+    "googleStep2": "Elige Add app > OAuth App Name Or Client ID, pega el Client ID de arriba y busca.",
+    "googleStep3": "Selecciona la app, elige Trusted y guarda.",
+    "googleGmailNote": "Una cuenta @gmail.com no necesita administrador: Google muestra un aviso de \"app no verificada\"; elige Advanced y continúa.",
+    "googleNotConfigured": "La app de Google del hub aún no está configurada (Admin > Platform credentials > Google).",
+    "googleContinue": "Continuar con Google",
+    "googleReconnect": "Reconectar con Google",
+    "googleReconnectHint": "Google dejó de aceptar este buzón ({reason}). Usa Reconectar con Google en su fila.",
+    "outcome": {
+      "connected": "Buzón conectado",
+      "cancelled": "Conexión con Google cancelada",
+      "untrusted": "Tu administrador de Google Workspace aún no confía en esta app. Pídele que confíe en el Client ID {clientId} (Conectar Google muestra los pasos).",
+      "scope": "Google no concedió acceso al correo. Vuelve a conectar y permite el permiso de Gmail.",
+      "mismatch": "Inicia sesión en Google con la dirección propia del remitente para reconectarlo.",
+      "duplicate": "Esta dirección ya es un remitente SMTP en esta línea. Archívala primero.",
+      "failed": "No se pudo conectar el buzón de Google. Inténtalo de nuevo."
     }
   },
   "emailFlowPage": {

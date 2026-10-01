@@ -22,15 +22,26 @@ import {
   inboxModel,
 } from "@chatbotx.io/database/schema"
 import type { EmailSenderModel } from "@chatbotx.io/database/types"
+import { distributedLock } from "@chatbotx.io/redis"
 import { createId } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
 import {
+  credentialMissingException,
   emailSenderCredentialsRequiredException,
+  emailSenderGoogleMismatchException,
   notFoundException,
   validationException,
 } from "../errors"
 import { logger } from "../logger"
+import { platformCredentialService } from "../platform-credential/service"
 import {
+  exchangeGoogleSenderCode,
+  type GoogleOAuthClient,
+  GoogleReconnectRequiredError,
+  refreshGoogleAccessToken,
+} from "./google"
+import {
+  connectGoogleEmailSenderInput,
   createEmailSenderInput,
   emailSenderLineInput,
   emailSenderRefInput,
@@ -41,9 +52,12 @@ import {
 } from "./schema"
 import {
   connectionOf,
+  decryptEmailSenderGoogleSecret,
   decryptEmailSenderSecret,
   type EmailSenderConnection,
+  type EmailSenderGoogleSecret,
   type EmailSenderSmtpSecret,
+  encryptEmailSenderGoogleSecret,
   encryptEmailSenderSecret,
 } from "./secret"
 
@@ -73,8 +87,35 @@ export type EmailSenderFeedRow = {
   createdAt: string
   smtp: EmailSenderConnection["smtp"]
   imap: EmailSenderConnection["imap"]
-  auth: { type: "password"; password: string } | null
+  auth: EmailSenderFeedAuth | null
 }
+
+export type EmailSenderFeedAuth =
+  | { type: "password"; password: string }
+  /** `expiresAt` is ISO 8601; the line refreshes the feed before it. */
+  | { type: "oauth2"; accessToken: string; expiresAt: string }
+
+/**
+ * A Google access token is refreshed when it has less than this left. The
+ * line reads the feed every 5 min and forces a read 60 s before expiry, so
+ * every token it holds has minutes to spare (s230b).
+ */
+export const GOOGLE_REFRESH_MARGIN_MS = 10 * 60 * 1000
+/** Outlives the token call's 15 s timeout: one refresh per sender at a time. */
+const GOOGLE_REFRESH_LOCK_SECONDS = 45
+/** A Google sender's feed auth; `disconnected` when this read disconnected it. */
+type GoogleFeedAuth = {
+  auth: EmailSenderFeedAuth | null
+  disconnected: boolean
+}
+
+/** Google senders refreshed at once while one feed is built. */
+const FEED_REFRESH_CONCURRENCY = 4
+/** What a sender says when Google refused its saved grant. */
+export const GOOGLE_REVOKED_REASON =
+  "Google refused the saved access (revoked or expired): reconnect with Google"
+export const GOOGLE_APP_CHANGED_REASON =
+  "The hub's Google app changed since this mailbox connected: reconnect with Google"
 
 export type EmailSenderUnavailableReason = "no-active-sender" | "sender-removed"
 
@@ -240,6 +281,14 @@ export class EmailSenderService extends BaseService {
             "Set both the ramp start and the ramp percent, or neither",
           )
         }
+        if (connection && current.provider !== "smtp") {
+          // A Google mailbox's logins are fixed; its access comes from a
+          // reconnect with Google, never a password (s230b).
+          throw validationException(
+            "connection",
+            "A Google mailbox has no password: reconnect it with Google",
+          )
+        }
         const reconnect = Boolean(
           connection?.smtp.password || connection?.imap.password,
         )
@@ -332,6 +381,17 @@ export class EmailSenderService extends BaseService {
       )
       .orderBy(asc(emailSenderModel.id))
       .limit(EMAIL_SENDER_LIMITS.perLine)
+    const googleAuth = new Map<string, GoogleFeedAuth>()
+    const google = rows.filter((row) => row.provider === "google_oauth")
+    for (let i = 0; i < google.length; i += FEED_REFRESH_CONCURRENCY) {
+      const chunk = google.slice(i, i + FEED_REFRESH_CONCURRENCY)
+      const auths = await Promise.all(
+        chunk.map((row) => this.googleFeedAuth(row)),
+      )
+      for (const [j, row] of chunk.entries()) {
+        googleAuth.set(row.id, auths[j] ?? { auth: null, disconnected: false })
+      }
+    }
     const feed: EmailSenderFeedRow[] = []
     for (const row of rows) {
       const base = {
@@ -349,13 +409,18 @@ export class EmailSenderService extends BaseService {
         createdAt: row.createdAt.toISOString(),
       }
       if (row.provider === "google_oauth") {
-        // Gmail over OAuth: tokens arrive with PR 3; not usable now (null).
+        // Gmail over XOAUTH2 (s230b): a fresh access token, or null (the
+        // line HOLDS this sender's mail: disconnected, unreadable, or Google
+        // unreachable with no unexpired token left).
         const { smtp, imap } = GMAIL_APP_PASSWORD_PRESET
+        const google = googleAuth.get(row.id)
         feed.push({
           ...base,
+          // Disconnected by this very read: the line learns it now.
+          ...(google?.disconnected ? { status: "disconnected" as const } : {}),
           smtp: { ...smtp, user: row.address },
           imap: { ...imap, user: row.address },
-          auth: null,
+          auth: google?.auth ?? null,
         })
         continue
       }
@@ -387,6 +452,362 @@ export class EmailSenderService extends BaseService {
       })
     }
     return feed
+  }
+
+  /**
+   * Connects a Gmail / Workspace mailbox with Google (s230b), called by the
+   * OAuth callback after it verified the signed state. Exchanges the code
+   * with the owner's Google app, then either RECONNECTS the state's sender
+   * (the consenting account must be its address) or adds a new sender for
+   * the consenting account. A non-archived Google sender of that address on
+   * the line is reconnected, never duplicated; an SMTP sender of it is a 422.
+   */
+  async connectGoogle(
+    input: unknown,
+    userId?: string | null,
+  ): Promise<EmailSenderView> {
+    const data = parseInput(connectGoogleEmailSenderInput, input)
+    await this.assertLine(data.workspaceId, data.lineInboxId)
+    const client = await this.googleClient(data.ownerId)
+    if (!client) {
+      throw credentialMissingException(
+        "The Google app is not configured (Admin > Platform credentials)",
+      )
+    }
+    const grant = await exchangeGoogleSenderCode({
+      client,
+      code: data.code,
+      redirectUri: data.redirectUri,
+    })
+    const secretOf = (): EmailSenderGoogleSecret => ({
+      refreshToken: grant.refreshToken,
+      accessToken: grant.accessToken,
+      expiresAt: grant.expiresAt,
+      scope: grant.scope,
+      clientId: client.clientId,
+      ownerId: data.ownerId,
+    })
+    const reconnectRow = async (
+      tx: DatabaseClient,
+      current: EmailSenderModel,
+    ) => {
+      if (
+        current.provider !== "google_oauth" ||
+        current.lineInboxId !== data.lineInboxId
+      ) {
+        throw notFoundException(SENDER_NOT_FOUND)
+      }
+      if (current.address !== grant.email) {
+        throw emailSenderGoogleMismatchException(current.address)
+      }
+      const [updated] = await tx
+        .update(emailSenderModel)
+        .set({
+          secret: await encryptEmailSenderGoogleSecret(secretOf(), current.id),
+          tokenVersion: current.tokenVersion + 1,
+          tokenRefreshedAt: new Date(),
+          ...(current.status === "disconnected"
+            ? { status: "active" as const, disconnectionReason: null }
+            : {}),
+        })
+        .where(eq(emailSenderModel.id, current.id))
+        .returning()
+      return updated
+    }
+
+    let row: EmailSenderModel | undefined
+    if (data.senderId) {
+      row = await this.withLockedSender(
+        data.workspaceId,
+        data.senderId,
+        reconnectRow,
+      )
+    } else {
+      const id = createId()
+      const secret = await encryptEmailSenderGoogleSecret(secretOf(), id)
+      row = await db
+        .transaction(async (tx) => {
+          await this.lockLine(tx, data.lineInboxId)
+          const [existing] = await tx
+            .select()
+            .from(emailSenderModel)
+            .where(
+              and(
+                eq(emailSenderModel.lineInboxId, data.lineInboxId),
+                eq(emailSenderModel.address, grant.email),
+                ne(emailSenderModel.status, "archived"),
+              ),
+            )
+            .for("update")
+          if (existing) {
+            if (existing.provider !== "google_oauth") {
+              throw validationException(
+                "address",
+                "This address is already a sender on this email line",
+              )
+            }
+            return await reconnectRow(tx, existing)
+          }
+          const [{ count = 0 } = {}] = await tx
+            .select({ count: sql<number>`count(*)::int` })
+            .from(emailSenderModel)
+            .where(
+              and(
+                eq(emailSenderModel.lineInboxId, data.lineInboxId),
+                ne(emailSenderModel.status, "archived"),
+              ),
+            )
+          if (count >= EMAIL_SENDER_LIMITS.perLine) {
+            throw validationException(
+              "lineInboxId",
+              `An email line holds at most ${EMAIL_SENDER_LIMITS.perLine} senders`,
+            )
+          }
+          const [inserted] = await tx
+            .insert(emailSenderModel)
+            .values({
+              id,
+              workspaceId: data.workspaceId,
+              lineInboxId: data.lineInboxId,
+              provider: "google_oauth",
+              address: grant.email,
+              fromName: data.fromName as string,
+              firstName: data.firstName as string,
+              lastName: data.lastName as string,
+              secret,
+              status: "active",
+              tokenVersion: 1,
+              tokenRefreshedAt: new Date(),
+            })
+            .returning()
+          return inserted
+        })
+        .catch((err: unknown) => {
+          if (isUniqueViolationError(err)) {
+            throw validationException(
+              "address",
+              "This address is already a sender on this email line",
+            )
+          }
+          throw err
+        })
+    }
+    if (!row) {
+      throw new Error("email sender connect returned no row")
+    }
+    await this.audit(
+      data.senderId ? "update" : "create",
+      `connected Google mailbox sender #${row.id} on line #${row.lineInboxId}${userId ? ` by #${userId}` : ""}`,
+    )
+    return await this.toView(row)
+  }
+
+  /**
+   * A Google sender's feed auth: its stored access token while it has more
+   * than the margin left, else a refreshed one. Null when the sender is
+   * disconnected or its secret is unreadable, or when the refresh failed and
+   * the stored token has expired. Never throws (one sender never fails the
+   * line's feed).
+   */
+  private async googleFeedAuth(row: EmailSenderModel): Promise<GoogleFeedAuth> {
+    const none = { auth: null, disconnected: false }
+    if (row.status === "disconnected") {
+      return none
+    }
+    let secret: EmailSenderGoogleSecret
+    try {
+      secret = await decryptEmailSenderGoogleSecret(row)
+    } catch {
+      logger.error(
+        { senderId: row.id },
+        "email sender secret cannot be decrypted; fed with auth null",
+      )
+      return none
+    }
+    const feedAuth = (s: { accessToken: string; expiresAt: number }) => ({
+      auth:
+        s.expiresAt > Date.now()
+          ? {
+              type: "oauth2" as const,
+              accessToken: s.accessToken,
+              expiresAt: new Date(s.expiresAt).toISOString(),
+            }
+          : null,
+      disconnected: false,
+    })
+    if (secret.expiresAt - Date.now() > GOOGLE_REFRESH_MARGIN_MS) {
+      return feedAuth(secret)
+    }
+    try {
+      const fresh = await this.refreshGoogle(row.id)
+      return fresh ? feedAuth(fresh) : none
+    } catch (err) {
+      if (err instanceof GoogleReconnectRequiredError) {
+        return { auth: null, disconnected: true }
+      }
+      logger.warn(
+        { senderId: row.id, err: err instanceof Error ? err.message : err },
+        "google sender token refresh failed; feeding the stored token",
+      )
+      return feedAuth(secret)
+    }
+  }
+
+  /**
+   * Refreshes a Google sender's access token once, however many feeds ask
+   * at the same time: a per-sender Redis lock, then a re-read (another
+   * holder may have refreshed already), then a CAS on `tokenVersion` (a
+   * reconnect that landed meanwhile wins). Google refusing the grant marks
+   * the sender disconnected at the version it read. Returns null when the
+   * sender is gone, archived or disconnected.
+   */
+  private async refreshGoogle(
+    id: string,
+  ): Promise<EmailSenderGoogleSecret | null> {
+    return await distributedLock.runExclusive({
+      key: `email-sender:refresh:${id}`,
+      timeoutInSeconds: GOOGLE_REFRESH_LOCK_SECONDS,
+      fn: async () => {
+        const [row] = await db
+          .select()
+          .from(emailSenderModel)
+          .where(eq(emailSenderModel.id, id))
+          .limit(1)
+        if (
+          row?.provider !== "google_oauth" ||
+          row.status === "archived" ||
+          row.status === "disconnected"
+        ) {
+          return null
+        }
+        const secret = await decryptEmailSenderGoogleSecret(row)
+        if (secret.expiresAt - Date.now() > GOOGLE_REFRESH_MARGIN_MS) {
+          return secret
+        }
+        const client = await this.googleClient(secret.ownerId)
+        if (!client) {
+          throw new Error("the Google app is not configured")
+        }
+        if (client.clientId !== secret.clientId) {
+          await this.markDisconnected(
+            id,
+            row.tokenVersion,
+            GOOGLE_APP_CHANGED_REASON,
+          )
+          throw new GoogleReconnectRequiredError(GOOGLE_APP_CHANGED_REASON)
+        }
+        let fresh: Awaited<ReturnType<typeof refreshGoogleAccessToken>>
+        try {
+          fresh = await refreshGoogleAccessToken({
+            client,
+            refreshToken: secret.refreshToken,
+          })
+        } catch (err) {
+          if (err instanceof GoogleReconnectRequiredError) {
+            await this.markDisconnected(
+              id,
+              row.tokenVersion,
+              GOOGLE_REVOKED_REASON,
+            )
+          }
+          throw err
+        }
+        const next: EmailSenderGoogleSecret = {
+          ...secret,
+          accessToken: fresh.accessToken,
+          expiresAt: fresh.expiresAt,
+          refreshToken: fresh.refreshToken ?? secret.refreshToken,
+        }
+        const [saved] = await db
+          .update(emailSenderModel)
+          .set({
+            secret: await encryptEmailSenderGoogleSecret(next, id),
+            tokenVersion: row.tokenVersion + 1,
+            tokenRefreshedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(emailSenderModel.id, id),
+              eq(emailSenderModel.tokenVersion, row.tokenVersion),
+            ),
+          )
+          .returning({ id: emailSenderModel.id })
+        if (saved) {
+          return next
+        }
+        // A reconnect landed while Google answered: its grant wins.
+        const [current] = await db
+          .select()
+          .from(emailSenderModel)
+          .where(eq(emailSenderModel.id, id))
+          .limit(1)
+        return current && current.status !== "archived"
+          ? await decryptEmailSenderGoogleSecret(current)
+          : null
+      },
+    })
+  }
+
+  /**
+   * The system's disconnect (s230b): Google refused the grant the sender
+   * held at `seenVersion`. Lands only if no reconnect or refresh wrote a
+   * newer grant since, and never on an archived sender. Same lock order as
+   * every writer (line lock, then the row FOR UPDATE).
+   */
+  private async markDisconnected(
+    id: string,
+    seenVersion: number,
+    reason: string,
+  ): Promise<void> {
+    const landed = await db.transaction(async (tx) => {
+      const [line] = await tx
+        .select({ lineInboxId: emailSenderModel.lineInboxId })
+        .from(emailSenderModel)
+        .where(eq(emailSenderModel.id, id))
+        .limit(1)
+      if (!line) {
+        return false
+      }
+      await this.lockLine(tx, line.lineInboxId)
+      const [current] = await tx
+        .select({
+          status: emailSenderModel.status,
+          tokenVersion: emailSenderModel.tokenVersion,
+        })
+        .from(emailSenderModel)
+        .where(eq(emailSenderModel.id, id))
+        .for("update")
+      if (
+        !current ||
+        current.status === "archived" ||
+        current.tokenVersion !== seenVersion
+      ) {
+        return false
+      }
+      await tx
+        .update(emailSenderModel)
+        .set({ status: "disconnected", disconnectionReason: reason })
+        .where(eq(emailSenderModel.id, id))
+      return true
+    })
+    if (landed) {
+      logger.warn({ senderId: id }, "google email sender disconnected")
+      await this.audit("update", `disconnected email sender #${id}: ${reason}`)
+    }
+  }
+
+  /** The owner's Google app (the tenant's own, else the platform's). */
+  private async googleClient(
+    ownerId: string,
+  ): Promise<GoogleOAuthClient | null> {
+    const credential = await platformCredentialService.resolveForOwner({
+      ownerId,
+      type: "google",
+    })
+    const config = credential?.config
+    return config?.clientId && config.clientSecret
+      ? { clientId: config.clientId, clientSecret: config.clientSecret }
+      : null
   }
 
   /**

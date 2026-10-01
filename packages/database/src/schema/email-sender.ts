@@ -6,6 +6,7 @@ import {
   pgEnum,
   pgTable,
   text,
+  timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core"
 import {
@@ -14,7 +15,11 @@ import {
   emailSenderProviders,
   emailSenderStatuses,
 } from "../partials/email-sender"
-import { bigintAsString, sharedColumns } from "../partials/shared"
+import {
+  bigintAsString,
+  sharedColumns,
+  timestampConfig,
+} from "../partials/shared"
 import { inboxModel } from "./inbox"
 import { workspaceModel } from "./workspace"
 
@@ -69,6 +74,13 @@ export const emailSenderModel = pgTable(
     status: emailSenderStatus().notNull().default("active"),
     disconnectionReason: text(),
     secret: jsonb().notNull(),
+    /**
+     * Bumped by every credential write (a connect, a reconnect, a Google
+     * token refresh): the CAS a refresh saves by, and a disconnect only
+     * lands on the version it saw fail (s230b).
+     */
+    tokenVersion: integer().notNull().default(0),
+    tokenRefreshedAt: timestamp(timestampConfig),
   },
   (table) => [
     uniqueIndex("EmailSender_lineInboxId_address_live_key")

@@ -7786,6 +7786,33 @@
       "paused": "已暫停",
       "draining": "排空中",
       "disconnected": "已中斷"
+    },
+    "connectGoogle": "連接 Google",
+    "googleBadge": "Google",
+    "googleTitle": "連接 Google 信箱",
+    "googleReconnectTitle": "重新連接 {address}",
+    "googleDescription": "請使用此線路應用來寄送郵件的 Gmail 或 Google Workspace 帳戶登入。Google 會要求完整的郵件存取權（寄送與讀取回覆）。中樞會將此權限加密保存；線路僅會取得短效權杖。",
+    "googleClientId": "Client ID",
+    "copy": "複製",
+    "copied": "已複製 Client ID",
+    "copyFailed": "複製失敗：請自行選取並複製 Client ID",
+    "googleAdminSteps": "Google Workspace 帳戶：您的管理員只需信任此應用程式一次",
+    "googleStep1": "開啟 admin.google.com > Security > Access and data control > API controls > Manage third-party app access。",
+    "googleStep2": "選擇 Add app > OAuth App Name Or Client ID，貼上上方的 Client ID 並搜尋。",
+    "googleStep3": "選取該應用程式，選擇 Trusted，然後儲存。",
+    "googleGmailNote": "@gmail.com 帳戶不需要管理員：Google 會顯示「未驗證應用程式」提示，選擇 Advanced 後繼續即可。",
+    "googleNotConfigured": "中樞的 Google 應用程式尚未設定（Admin > Platform credentials > Google）。",
+    "googleContinue": "繼續使用 Google",
+    "googleReconnect": "使用 Google 重新連接",
+    "googleReconnectHint": "Google 已不再接受此信箱（{reason}）。請在該列使用「使用 Google 重新連接」。",
+    "outcome": {
+      "connected": "信箱已連接",
+      "cancelled": "已取消 Google 連接",
+      "untrusted": "您的 Google Workspace 管理員尚未信任此應用程式。請請他們信任 Client ID {clientId}（連接 Google 會顯示相關步驟）。",
+      "scope": "Google 未授予郵件存取權。請重新連接並允許 Gmail 權限。",
+      "mismatch": "請以寄件者本人的地址登入 Google 以重新連接。",
+      "duplicate": "此地址已是此線路上的 SMTP 寄件者。請先將其封存。",
+      "failed": "連接 Google 信箱失敗，請再試一次。"
     }
   },
   "emailFlowPage": {

@@ -159,6 +159,38 @@ export const updateEmailSenderInput = z
   .strict()
   .refine(rampBothOrNeither, RAMP_MESSAGE)
 
+/**
+ * A Google mailbox connect (s230b), called by the OAuth callback only: the
+ * code to exchange, the redirect URI it was issued for, the owner whose
+ * Google app ran the flow, and EITHER the sender it reconnects OR the
+ * identity of a new sender (never both).
+ */
+const connectName = name.pipe(z.string().max(100))
+export const connectGoogleEmailSenderInput = z
+  .object({
+    workspaceId: bigintId,
+    lineInboxId: bigintId,
+    ownerId: z.string().min(1).max(64),
+    code: z.string().min(1).max(2048).refine(noControlChars),
+    redirectUri: z.url({ protocol: /^https?$/ }).max(2048),
+    senderId: bigintId.optional(),
+    fromName: connectName.optional(),
+    firstName: connectName.optional(),
+    lastName: connectName.optional(),
+  })
+  .strict()
+  .refine(
+    (v) =>
+      v.senderId
+        ? v.fromName === undefined &&
+          v.firstName === undefined &&
+          v.lastName === undefined
+        : v.fromName !== undefined &&
+          v.firstName !== undefined &&
+          v.lastName !== undefined,
+    { message: "Reconnect a sender or name a new one", path: ["senderId"] },
+  )
+
 export const emailSenderRefInput = z
   .object({ workspaceId: bigintId, id: bigintId })
   .strict()

@@ -7786,6 +7786,33 @@
       "paused": "Gepauzeerd",
       "draining": "Aflopend",
       "disconnected": "Losgekoppeld"
+    },
+    "connectGoogle": "Google koppelen",
+    "googleBadge": "Google",
+    "googleTitle": "Google-mailbox koppelen",
+    "googleReconnectTitle": "{address} opnieuw koppelen",
+    "googleDescription": "Log in met het Gmail- of Google Workspace-account waarmee deze lijn moet versturen. Google vraagt volledige mailtoegang (verzenden en antwoorden lezen). De hub bewaart die toegang versleuteld; de lijn krijgt alleen kortlevende tokens.",
+    "googleClientId": "Client ID",
+    "copy": "Kopiëren",
+    "copied": "Client ID gekopieerd",
+    "copyFailed": "Kopiëren mislukt: selecteer de Client ID en kopieer deze zelf",
+    "googleAdminSteps": "Google Workspace-accounts: je beheerder vertrouwt deze app eenmalig",
+    "googleStep1": "Open admin.google.com > Security > Access and data control > API controls > Manage third-party app access.",
+    "googleStep2": "Kies Add app > OAuth App Name Or Client ID, plak de Client ID hierboven en zoek.",
+    "googleStep3": "Selecteer de app, kies Trusted en sla op.",
+    "googleGmailNote": "Een @gmail.com-account heeft geen beheerder nodig: Google toont een melding \"niet-geverifieerde app\"; kies Advanced en ga verder.",
+    "googleNotConfigured": "De Google-app van de hub is nog niet ingesteld (Admin > Platform credentials > Google).",
+    "googleContinue": "Doorgaan met Google",
+    "googleReconnect": "Opnieuw koppelen met Google",
+    "googleReconnectHint": "Google accepteert deze mailbox niet meer ({reason}). Gebruik Opnieuw koppelen met Google op die rij.",
+    "outcome": {
+      "connected": "Mailbox gekoppeld",
+      "cancelled": "Google-koppeling geannuleerd",
+      "untrusted": "Je Google Workspace-beheerder heeft deze app nog niet vertrouwd. Vraag hem/haar Client ID {clientId} te vertrouwen (Google koppelen toont de stappen).",
+      "scope": "Google heeft geen mailtoegang verleend. Koppel opnieuw en sta de Gmail-toestemming toe.",
+      "mismatch": "Log bij Google in met het eigen adres van de afzender om opnieuw te koppelen.",
+      "duplicate": "Dit adres is al een SMTP-afzender op deze lijn. Archiveer het eerst.",
+      "failed": "De Google-mailbox koppelen is mislukt. Probeer het opnieuw."
     }
   },
   "emailFlowPage": {

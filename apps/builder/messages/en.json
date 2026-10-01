@@ -7786,6 +7786,33 @@
       "paused": "Paused",
       "draining": "Draining",
       "disconnected": "Disconnected"
+    },
+    "connectGoogle": "Connect Google",
+    "googleBadge": "Google",
+    "googleTitle": "Connect a Google mailbox",
+    "googleReconnectTitle": "Reconnect {address}",
+    "googleDescription": "Sign in with the Gmail or Google Workspace account this line should send from. Google asks for full mail access (sending and reading replies). The hub keeps that access encrypted; the line only ever gets short-lived tokens.",
+    "googleClientId": "Client ID",
+    "copy": "Copy",
+    "copied": "Client ID copied",
+    "copyFailed": "Copy failed: select the Client ID and copy it yourself",
+    "googleAdminSteps": "Google Workspace accounts: your admin trusts this app once",
+    "googleStep1": "Open admin.google.com > Security > Access and data control > API controls > Manage third-party app access.",
+    "googleStep2": "Choose Add app > OAuth App Name Or Client ID, paste the Client ID above and search.",
+    "googleStep3": "Select the app, choose Trusted, and save.",
+    "googleGmailNote": "A @gmail.com account needs no admin: Google shows an \"unverified app\" notice; choose Advanced, then continue.",
+    "googleNotConfigured": "The hub's Google app is not set up yet (Admin > Platform credentials > Google).",
+    "googleContinue": "Continue with Google",
+    "googleReconnect": "Reconnect with Google",
+    "googleReconnectHint": "Google stopped accepting this mailbox ({reason}). Use Reconnect with Google on its row.",
+    "outcome": {
+      "connected": "Mailbox connected",
+      "cancelled": "Google connect was cancelled",
+      "untrusted": "Your Google Workspace admin has not trusted this app yet. Ask them to trust Client ID {clientId} (Connect Google shows the steps).",
+      "scope": "Google did not grant mail access. Connect again and allow the Gmail permission.",
+      "mismatch": "Sign in to Google as the sender's own address to reconnect it.",
+      "duplicate": "This address is already an SMTP sender on this line. Archive it first.",
+      "failed": "Connecting the Google mailbox failed. Try again."
     }
   },
   "emailFlowPage": {

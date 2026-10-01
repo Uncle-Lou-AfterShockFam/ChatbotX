@@ -201,6 +201,17 @@ export const emailSenderCredentialsRequiredException = (
 ) => new ChatbotXException(message, "emailSenderCredentialsRequired", 409)
 
 /**
+ * s230b: a Google RECONNECT consented as another account than the sender's
+ * address (a sender never changes mailbox).
+ */
+export const emailSenderGoogleMismatchException = (address: string) =>
+  new ChatbotXException(
+    `Sign in to Google as ${address} to reconnect this sender`,
+    "emailSenderGoogleMismatch",
+    422,
+  )
+
+/**
  * A field-scoped validation failure raised from inside a service. The
  * caller-facing action maps `error.field` back to a
  * `returnValidationErrors(schema, { [field]: { _errors: [message] } })`

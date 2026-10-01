@@ -30,6 +30,7 @@ import { useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { useState } from "react"
 import { toast } from "sonner"
+import { EMAIL_SENDER_CALLBACK_PATH } from "@/features/email-senders/lib"
 import { useClipboard } from "@/hooks/use-clipboard"
 import { CredentialFallbackNote } from "../credential-fallback-note"
 import { DeleteCredentialDialog } from "../delete-credential-dialog"
@@ -52,11 +53,12 @@ export function GoogleSettings({
 
   // Google Sheets and Google Calendar are separate registered redirect_uris
   // (each integration owns its own callback route), and Google sign-in (SSO)
-  // is a third. Resellers using their own Google app must whitelist all three
-  // exact URIs in their own Google console.
+  // is a third; Gmail mailbox senders (s230b) a fourth. Resellers using their
+  // own Google app must whitelist every exact URI in their own Google console.
   const sheetsCallbackUrl = `${callbackOrigin}/integrations/google-sheets/callback`
   const calendarCallbackUrl = `${callbackOrigin}/integrations/google-calendar/callback`
   const signInCallbackUrl = `${callbackOrigin}/api/auth/callback/google`
+  const emailSenderCallbackUrl = `${callbackOrigin}${EMAIL_SENDER_CALLBACK_PATH}`
 
   return (
     <Card>
@@ -115,6 +117,24 @@ export function GoogleSettings({
                 <Button
                   className="flex-none"
                   onClick={() => handleCopy(calendarCallbackUrl)}
+                  size="icon"
+                  type="button"
+                  variant="outline"
+                >
+                  <CopyIcon className="size-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="font-bold">
+                {t("fields.authCallbackUrl.label")} (Gmail senders):
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="truncate">{emailSenderCallbackUrl}</span>
+                <Button
+                  className="flex-none"
+                  onClick={() => handleCopy(emailSenderCallbackUrl)}
                   size="icon"
                   type="button"
                   variant="outline"

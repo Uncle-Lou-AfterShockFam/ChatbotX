@@ -27,6 +27,8 @@
     "./form-link-token": "./src/form-link-token.ts",
     "./keys": "./src/keys.ts",
     "./minigame-play-token": "./src/minigame-play-token.ts",
+    "./email-sender-oauth-state": "./src/email-sender-oauth-state.ts",
+    "./oauth-state": "./src/oauth-state.ts",
     "./quickbooks-oauth-state": "./src/quickbooks-oauth-state.ts",
     "./link-signature": "./src/link-signature.ts",
     "./user-data-webview-token": "./src/user-data-webview-token.ts",

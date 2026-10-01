@@ -7786,6 +7786,33 @@
       "paused": "Duraklatıldı",
       "draining": "Boşaltılıyor",
       "disconnected": "Bağlantı kesildi"
+    },
+    "connectGoogle": "Google'ı bağla",
+    "googleBadge": "Google",
+    "googleTitle": "Google posta kutusu bağla",
+    "googleReconnectTitle": "{address} adresini yeniden bağla",
+    "googleDescription": "Bu hattın göndereceği Gmail veya Google Workspace hesabıyla oturum açın. Google, tam posta erişimi (gönderme ve yanıtları okuma) ister. Hub bu erişimi şifreli tutar; hat yalnızca kısa ömürlü token'lar alır.",
+    "googleClientId": "Client ID",
+    "copy": "Kopyala",
+    "copied": "Client ID kopyalandı",
+    "copyFailed": "Kopyalama başarısız: Client ID'yi seçip kendiniz kopyalayın",
+    "googleAdminSteps": "Google Workspace hesapları: yöneticiniz bu uygulamaya bir kez güvenir",
+    "googleStep1": "admin.google.com > Security > Access and data control > API controls > Manage third-party app access sayfasını açın.",
+    "googleStep2": "Add app > OAuth App Name Or Client ID'yi seçin, yukarıdaki Client ID'yi yapıştırıp arayın.",
+    "googleStep3": "Uygulamayı seçin, Trusted'ı işaretleyin ve kaydedin.",
+    "googleGmailNote": "Bir @gmail.com hesabının yöneticiye gereği yoktur: Google \"doğrulanmamış uygulama\" uyarısı gösterir; Advanced'ı seçip devam edin.",
+    "googleNotConfigured": "Hub'ın Google uygulaması henüz ayarlanmadı (Admin > Platform credentials > Google).",
+    "googleContinue": "Google ile devam et",
+    "googleReconnect": "Google ile yeniden bağlan",
+    "googleReconnectHint": "Google bu posta kutusunu kabul etmeyi bıraktı ({reason}). Satırındaki Google ile yeniden bağlan'ı kullanın.",
+    "outcome": {
+      "connected": "Posta kutusu bağlandı",
+      "cancelled": "Google bağlantısı iptal edildi",
+      "untrusted": "Google Workspace yöneticiniz bu uygulamaya henüz güvenmedi. Client ID {clientId}'ye güvenmelerini isteyin (Google'ı bağla adımları gösterir).",
+      "scope": "Google posta erişimi vermedi. Yeniden bağlanıp Gmail iznini verin.",
+      "mismatch": "Yeniden bağlamak için Google'da gönderenin kendi adresiyle oturum açın.",
+      "duplicate": "Bu adres bu hatta zaten bir SMTP gönderici. Önce arşivleyin.",
+      "failed": "Google posta kutusu bağlanamadı. Yeniden deneyin."
     }
   },
   "emailFlowPage": {

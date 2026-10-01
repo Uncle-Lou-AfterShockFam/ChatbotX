@@ -7786,6 +7786,33 @@
       "paused": "Em pausa",
       "draining": "A esvaziar",
       "disconnected": "Desligado"
+    },
+    "connectGoogle": "Ligar o Google",
+    "googleBadge": "Google",
+    "googleTitle": "Ligar uma caixa de correio Google",
+    "googleReconnectTitle": "Voltar a ligar {address}",
+    "googleDescription": "Inicie sessão com a conta Gmail ou Google Workspace a partir da qual esta linha deve enviar. O Google pede acesso total ao correio (envio e leitura de respostas). O hub mantém esse acesso encriptado; a linha recebe apenas tokens de curta duração.",
+    "googleClientId": "Client ID",
+    "copy": "Copiar",
+    "copied": "Client ID copiado",
+    "copyFailed": "Falha ao copiar: selecione o Client ID e copie-o você mesmo",
+    "googleAdminSteps": "Contas Google Workspace: o seu administrador confia nesta aplicação uma única vez",
+    "googleStep1": "Abra admin.google.com > Security > Access and data control > API controls > Manage third-party app access.",
+    "googleStep2": "Escolha Add app > OAuth App Name Or Client ID, cole o Client ID acima e pesquise.",
+    "googleStep3": "Selecione a aplicação, escolha Trusted e guarde.",
+    "googleGmailNote": "Uma conta @gmail.com não precisa de administrador: o Google mostra um aviso \"aplicação não verificada\"; escolha Advanced e continue.",
+    "googleNotConfigured": "A aplicação Google do hub ainda não está configurada (Admin > Platform credentials > Google).",
+    "googleContinue": "Continuar com o Google",
+    "googleReconnect": "Voltar a ligar com o Google",
+    "googleReconnectHint": "O Google deixou de aceitar esta caixa de correio ({reason}). Utilize Voltar a ligar com o Google na respetiva linha.",
+    "outcome": {
+      "connected": "Caixa de correio ligada",
+      "cancelled": "Ligação ao Google cancelada",
+      "untrusted": "O seu administrador do Google Workspace ainda não confiou nesta aplicação. Peça-lhe para confiar no Client ID {clientId} (Ligar o Google mostra os passos).",
+      "scope": "O Google não concedeu acesso ao correio. Volte a ligar e permita a autorização do Gmail.",
+      "mismatch": "Inicie sessão no Google com o endereço do próprio remetente para o voltar a ligar.",
+      "duplicate": "Este endereço já é um remetente SMTP nesta linha. Arquive-o primeiro.",
+      "failed": "Falha ao ligar a caixa de correio Google. Tente novamente."
     }
   },
   "emailFlowPage": {

@@ -7786,6 +7786,33 @@
       "paused": "În pauză",
       "draining": "În golire",
       "disconnected": "Deconectat"
+    },
+    "connectGoogle": "Conectează Google",
+    "googleBadge": "Google",
+    "googleTitle": "Conectează o căsuță Google",
+    "googleReconnectTitle": "Reconectează {address}",
+    "googleDescription": "Autentifică-te cu contul Gmail sau Google Workspace de la care ar trebui să trimită această linie. Google solicită acces complet la poștă (trimitere și citirea răspunsurilor). Hubul păstrează acest acces criptat; linia primește doar token-uri de scurtă durată.",
+    "googleClientId": "Client ID",
+    "copy": "Copiază",
+    "copied": "Client ID copiat",
+    "copyFailed": "Copierea a eșuat: selectează Client ID și copiază-l manual",
+    "googleAdminSteps": "Conturi Google Workspace: administratorul tău trebuie să aibă încredere în această aplicație o singură dată",
+    "googleStep1": "Deschide admin.google.com > Security > Access and data control > API controls > Manage third-party app access.",
+    "googleStep2": "Alege Add app > OAuth App Name Or Client ID, lipește Client ID-ul de mai sus și caută.",
+    "googleStep3": "Selectează aplicația, alege Trusted și salvează.",
+    "googleGmailNote": "Un cont @gmail.com nu are nevoie de administrator: Google arată un mesaj \"aplicație neverificată\"; alege Advanced și continuă.",
+    "googleNotConfigured": "Aplicația Google a hubului nu este încă configurată (Admin > Platform credentials > Google).",
+    "googleContinue": "Continuă cu Google",
+    "googleReconnect": "Reconectează-te cu Google",
+    "googleReconnectHint": "Google a încetat să accepte această căsuță ({reason}). Folosește Reconectează-te cu Google de pe rândul ei.",
+    "outcome": {
+      "connected": "Căsuță conectată",
+      "cancelled": "Conectarea cu Google a fost anulată",
+      "untrusted": "Administratorul tău Google Workspace nu a avut încă încredere în această aplicație. Cere-i să aibă încredere în Client ID {clientId} (Conectează Google arată pașii).",
+      "scope": "Google nu a acordat acces la poștă. Reconectează-te și permite permisiunea Gmail.",
+      "mismatch": "Autentifică-te în Google cu adresa proprie a expeditorului pentru a-l reconecta.",
+      "duplicate": "Această adresă este deja un expeditor SMTP pe această linie. Arhiveaz-o mai întâi.",
+      "failed": "Conectarea căsuței Google a eșuat. Încearcă din nou."
     }
   },
   "emailFlowPage": {
