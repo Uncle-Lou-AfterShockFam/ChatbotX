@@ -78,6 +78,26 @@ export const sequenceDispatchUtils = {
   },
 
   /**
+   * s236: load a dispatch the send job may act on: `running` (send it), or
+   * `completed` (sent, but a crash or a failed advance may have left the
+   * enrolment where it was; a retry advances it).
+   */
+  findForSend: async (props: {
+    dbClient: DatabaseClient
+    dispatchId: string
+    workspaceId: string
+  }) => {
+    const { dbClient, dispatchId, workspaceId } = props
+    return await dbClient.query.sequenceDispatchModel.findFirst({
+      where: {
+        id: dispatchId,
+        workspaceId,
+        status: { in: ["running", "completed"] },
+      },
+    })
+  },
+
+  /**
    * Mark a dispatch completed — moved verbatim from `sequence-flow.ts`
    * `markDispatchCompleted`, keeping its `status = 'running'` guard
    * (idempotency guard for job retries).

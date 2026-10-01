@@ -58,7 +58,7 @@ export const CYCLE_CLOCK_TOLERANCE = "5 minutes"
  * Never `nextStepId` alone: deleting an EARLIER step can leave it pointing
  * one step ahead, and trusting it would skip a step (s235 probe e).
  */
-const targetStepId = () => sql`(
+export const targetStepId = () => sql`(
   SELECT st."id" FROM "SequenceStep" st
    WHERE st."sequenceId" = cos."sequenceId" AND st."isActive" = true
      AND st."order" >= cos."currentStep"

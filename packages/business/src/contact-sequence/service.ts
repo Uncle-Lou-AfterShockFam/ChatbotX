@@ -1594,6 +1594,11 @@ class ContactSequenceService extends BaseService {
     return sequenceDispatchUtils.findRunning({ dbClient: db, ...props })
   }
 
+  /** s236: a running dispatch, or a completed one a retry must still advance. */
+  findDispatchForSend(props: { dispatchId: string; workspaceId: string }) {
+    return sequenceDispatchUtils.findForSend({ dbClient: db, ...props })
+  }
+
   /** Mark a dispatch completed — keeps the `status = 'running'` idempotency guard. */
   markDispatchCompleted(props: {
     dispatchId: string

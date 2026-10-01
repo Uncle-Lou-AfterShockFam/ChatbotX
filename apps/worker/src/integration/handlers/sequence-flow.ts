@@ -76,7 +76,13 @@ async function runSendSequenceFlow(
   const { dispatchId, workspaceId, stepId, bucket, contactId, sequenceId } =
     data
 
-  const dispatch = await fetchDispatch(dispatchId, workspaceId)
+  // s236: a COMPLETED dispatch is a retry after the send: the worker died, or
+  // the advance threw, before the enrolment moved on. Advance it (below)
+  // without sending again; anything else (pending, held, ended) is not ours.
+  const dispatch = await contactSequenceService.findDispatchForSend({
+    dispatchId,
+    workspaceId,
+  })
   if (!dispatch) {
     return
   }
@@ -86,7 +92,10 @@ async function runSendSequenceFlow(
   const scheduler = await getSchedulerClient()
 
   if (!validation.valid) {
-    await markDispatchCanceled(dispatchId, workspaceId, validation.reason)
+    // A completed dispatch (a retry after the send) stays completed: it WAS sent.
+    if (dispatch.status !== "completed") {
+      await markDispatchCanceled(dispatchId, workspaceId, validation.reason)
+    }
 
     if (step) {
       await advanceEnrollment({
@@ -95,8 +104,15 @@ async function runSendSequenceFlow(
         sequenceId,
         contactId,
         currentStep: { id: step.id, order: step.order },
-        sentAt: new Date(),
+        sentAt:
+          dispatch.status === "completed" && dispatch.completedAt
+            ? dispatch.completedAt
+            : new Date(),
         scheduler,
+        // s236: on a retry of a sent step, never from a dispatch it passed.
+        ...(dispatch.status === "completed"
+          ? { afterDispatchId: dispatchId }
+          : {}),
       })
     }
 
@@ -105,7 +121,8 @@ async function runSendSequenceFlow(
   }
 
   const validStep = validation.step
-  const completedAt = dispatch.completedAt
+  const completedAt =
+    dispatch.status === "completed" ? dispatch.completedAt : null
 
   let sentAt: Date
   if (completedAt) {
@@ -201,6 +218,8 @@ async function runSendSequenceFlow(
       currentStep: { id: validStep.id, order: validStep.order },
       sentAt,
       scheduler,
+      // A retry must not move an enrolment that has gone past this dispatch.
+      ...(completedAt ? { afterDispatchId: dispatchId } : {}),
     })
   } catch (err) {
     // The enrolment row is gone (its contact or workspace was deleted) while

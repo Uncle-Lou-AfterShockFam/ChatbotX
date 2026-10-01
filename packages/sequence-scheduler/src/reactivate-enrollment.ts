@@ -258,6 +258,11 @@ export async function reactivateEnrollment(params: {
         lastError: null,
         lockedAt: null,
         lockOwner: null,
+        // s236 (probe): a revived row is THIS cycle's dispatch; keeping the old
+        // createdAt made every cycle check read it as the previous cycle's
+        // (the stalled pass re-sent its step, a crashed advance was never
+        // recovered).
+        createdAt: sql`now()`,
         updatedAt: new Date(),
       })
       .where(
