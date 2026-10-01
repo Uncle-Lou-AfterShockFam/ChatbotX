@@ -51,8 +51,3 @@ export const listFlowsResponse = z.object({
   pageCount: z.number(),
 })
 export type ListFlowsResponse = z.infer<typeof listFlowsResponse>
-
-export type FindFlowParams = {
-  id: string
-  workspaceId: string
-}

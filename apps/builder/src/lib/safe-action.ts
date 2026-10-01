@@ -18,6 +18,7 @@ import {
   DEFAULT_SERVER_ERROR_MESSAGE,
 } from "next-safe-action"
 import { getAllWorkspaceMembers } from "@/features/workspace-members/queries"
+import { flowsAccessRequired } from "@/lib/auth/flows-access"
 import {
   hasContactsAccess,
   hasWorkspacePermission,
@@ -337,14 +338,7 @@ export const callHistoryActionClient = workspaceActionClientAllowExpired.use(
  */
 export const requireFlowsAccess = createPermissionMiddleware(
   (permissions) => hasWorkspacePermission(permissions, "flows"),
-  () =>
-    Promise.resolve(
-      new ChatbotXException(
-        "Flows access required",
-        "flowsAccessRequired",
-        403,
-      ),
-    ),
+  () => Promise.resolve(flowsAccessRequired()),
 )
 
 export const flowsActionClient = workspaceActionClient.use(requireFlowsAccess)

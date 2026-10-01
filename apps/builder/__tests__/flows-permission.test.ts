@@ -42,7 +42,7 @@ const mocks = vi.hoisted(() => {
     routes,
     authorizedAPI: { route },
     listFlows: vi.fn(),
-    folderFindMany: vi.fn(),
+    subtreeFolderTypes: vi.fn(),
     workspaceAuthorizedMidddleware: Symbol("membership"),
     flowsAuthorizedMiddleware: Symbol("flows"),
   }
@@ -60,12 +60,12 @@ vi.mock("@chatbotx.io/analytics", () => ({
   flowNodeStatsResponse: {},
   flowStatsRequest: {},
 }))
-vi.mock("@chatbotx.io/business", () => ({ flowVersionService: {} }))
+vi.mock("@chatbotx.io/business", () => ({
+  flowVersionService: {},
+  folderService: { subtreeFolderTypes: mocks.subtreeFolderTypes },
+}))
 vi.mock("@chatbotx.io/integration-messenger/messenger-ads", () => ({
   convertStartNodeToMessengerAdsJson: vi.fn(),
-}))
-vi.mock("@chatbotx.io/database/client", () => ({
-  db: { query: { folderModel: { findMany: mocks.folderFindMany } } },
 }))
 
 const { privateFlowsAPI } = await import("@/features/flows/api/private")
@@ -204,6 +204,16 @@ describe("flow list: slim for a member without flows", () => {
     ).toEqual({ stepType: "sendWaTemplateMessage", templateId: "tpl-1" })
   })
 
+  test("the slim nodes and edges pass the route's real output schema", async () => {
+    const { flowVersionResource } = await import(
+      "@/features/flow-versions/schema/resource"
+    )
+    const [version] = (await listAs({})).data[0]?.flowVersions ?? []
+    const { nodes, edges } = flowVersionResource.shape
+    expect(nodes.safeParse(version?.nodes).success).toBe(true)
+    expect(edges.safeParse(version?.edges).success).toBe(true)
+  })
+
   test("flows or superAdmin gets the full rows", async () => {
     for (const permissions of [{ flows: true }, { superAdmin: true }]) {
       expect(await listAs(permissions)).toEqual({
@@ -283,10 +293,7 @@ describe("flow folders need flows; other folder types stay membership-only", () 
   })
 
   test("edit / delete by id: a flow folder among the ids is refused", async () => {
-    mocks.folderFindMany.mockResolvedValue([
-      { folderType: "tag" },
-      { folderType: "flow" },
-    ])
+    mocks.subtreeFolderTypes.mockResolvedValue(["tag", "flow"])
     await expect(
       assertFolderIdsAccess({
         workspaceId: "1",
@@ -294,14 +301,14 @@ describe("flow folders need flows; other folder types stay membership-only", () 
         ids: ["1", "2"],
       }),
     ).rejects.toThrow("Flows access required")
-    expect(mocks.folderFindMany).toHaveBeenCalledWith({
-      where: { workspaceId: "1", id: { in: ["1", "2"] } },
-      columns: { folderType: true },
+    expect(mocks.subtreeFolderTypes).toHaveBeenCalledWith({
+      workspaceId: "1",
+      ids: ["1", "2"],
     })
   })
 
   test("edit / delete by id: non-flow folders, empty ids, or flows pass", async () => {
-    mocks.folderFindMany.mockResolvedValue([{ folderType: "tag" }])
+    mocks.subtreeFolderTypes.mockResolvedValue(["tag"])
     await expect(
       assertFolderIdsAccess({ workspaceId: "1", permissions: {}, ids: ["1"] }),
     ).resolves.toBeUndefined()
@@ -315,7 +322,7 @@ describe("flow folders need flows; other folder types stay membership-only", () 
         ids: ["2"],
       }),
     ).resolves.toBeUndefined()
-    expect(mocks.folderFindMany).toHaveBeenCalledTimes(1)
+    expect(mocks.subtreeFolderTypes).toHaveBeenCalledTimes(1)
   })
 })
 

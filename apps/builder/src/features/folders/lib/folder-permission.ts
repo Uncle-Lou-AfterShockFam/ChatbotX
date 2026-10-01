@@ -1,8 +1,8 @@
 import "server-only"
 
-import { ChatbotXException } from "@chatbotx.io/business/errors"
-import { db } from "@chatbotx.io/database/client"
+import { folderService } from "@chatbotx.io/business"
 import type { FolderType } from "@chatbotx.io/database/partials"
+import { flowsAccessRequired } from "@/lib/auth/flows-access"
 import {
   hasWorkspacePermission,
   type PermissionsInput,
@@ -21,11 +21,7 @@ const assertAllowed = (
     folderTypes.includes("flow") &&
     !hasWorkspacePermission(permissions, "flows")
   ) {
-    throw new ChatbotXException(
-      "Flows access required",
-      "flowsAccessRequired",
-      403,
-    )
+    throw flowsAccessRequired()
   }
 }
 
@@ -35,7 +31,10 @@ export const assertFolderTypeAccess = (
   folderType: FolderType,
 ) => assertAllowed(permissions, [folderType])
 
-/** edit / delete by id: the types of the workspace's targeted folders. */
+/**
+ * edit / delete by id: the types of the targeted folders AND their
+ * descendants - a delete cascades to the whole subtree.
+ */
 export async function assertFolderIdsAccess(props: {
   workspaceId: string
   permissions: PermissionsInput
@@ -45,12 +44,8 @@ export async function assertFolderIdsAccess(props: {
   if (ids.length === 0 || hasWorkspacePermission(permissions, "flows")) {
     return
   }
-  const rows = await db.query.folderModel.findMany({
-    where: { workspaceId, id: { in: [...ids] } },
-    columns: { folderType: true },
-  })
   assertAllowed(
     permissions,
-    rows.map((row) => row.folderType as FolderType),
+    await folderService.subtreeFolderTypes({ workspaceId, ids }),
   )
 }
