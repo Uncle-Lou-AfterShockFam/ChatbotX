@@ -6,9 +6,9 @@ import {
   type WorkspaceIdRequestParams,
   workspaceIdrequestParams,
 } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { flowsActionClient } from "@/lib/safe-action"
 
-export const testExternalRequestAction = workspaceActionClient
+export const testExternalRequestAction = flowsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(externalRequestFieldsSchema)
   .action(

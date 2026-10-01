@@ -12,7 +12,7 @@ vi.mock("@/lib/safe-action", () => {
   chain.bindArgsSchemas = () => chain
   chain.inputSchema = () => chain
   chain.action = (fn: unknown) => fn
-  return { workspaceActionClient: chain }
+  return { flowsActionClient: chain }
 })
 
 vi.mock("@chatbotx.io/business", () => ({

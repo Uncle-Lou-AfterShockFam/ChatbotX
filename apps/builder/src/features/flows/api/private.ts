@@ -9,8 +9,13 @@ import { zodBigintAsString } from "@chatbotx.io/utils"
 import z from "zod"
 import { flowVersionResource } from "@/features/flow-versions/schema/resource"
 import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
-import { workspaceAuthorizedMidddleware } from "@/middlewares/auth"
+import { hasWorkspacePermission } from "@/lib/auth/permission-routes"
+import {
+  flowsAuthorizedMiddleware,
+  workspaceAuthorizedMidddleware,
+} from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
+import { toFlowPickerResource } from "../lib/flow-picker-resource"
 import { listFlows } from "../queries"
 import { listFlowsRequest, listFlowsResponse } from "../schema/query"
 
@@ -23,12 +28,17 @@ export const privateFlowsAPI = {
       tags: ["Flows"],
     })
     .input(listFlowsRequest.and(withWorkspaceIdSchema))
+    // Membership only: the flow pickers outside the flows pages use this
+    // list; without `flows` the step config is projected away (s234a).
     .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
     .output(listFlowsResponse)
-    .handler(async ({ input }) => {
+    .handler(async ({ input, context }) => {
       const { workspaceId, ...rest } = input
 
-      return await listFlows({ ...rest, workspaceId })
+      const result = await listFlows({ ...rest, workspaceId })
+      return hasWorkspacePermission(context.member.permissions, "flows")
+        ? result
+        : { ...result, data: result.data.map(toFlowPickerResource) }
     }),
 
   privateGetFlowStatsAPI: authorizedAPI
@@ -40,7 +50,7 @@ export const privateFlowsAPI = {
     })
     .input(flowStatsRequest)
     .output(flowNodeStatsResponse)
-    .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+    .use(flowsAuthorizedMiddleware, (input) => input.workspaceId)
     .handler(
       async ({ input }) =>
         await flowAnalyticsService.getFlowStats({
@@ -57,7 +67,7 @@ export const privateFlowsAPI = {
       tags: ["Flows"],
     })
     .input(withWorkspaceIdSchema.and(z.object({ flowId: zodBigintAsString() })))
-    .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+    .use(flowsAuthorizedMiddleware, (input) => input.workspaceId)
     .output(z.array(flowVersionResource))
     .handler(async ({ input }) =>
       flowVersionService.list({
@@ -74,7 +84,7 @@ export const privateFlowsAPI = {
       tags: ["Flows"],
     })
     .input(withWorkspaceIdSchema.and(z.object({ flowId: zodBigintAsString() })))
-    .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+    .use(flowsAuthorizedMiddleware, (input) => input.workspaceId)
     .output(
       z.discriminatedUnion("status", [
         z.object({ status: z.literal("ok"), json: z.string() }),
@@ -124,7 +134,7 @@ export const privateFlowsAPI = {
       tags: ["Flows"],
     })
     .input(flowStatsRequest)
-    .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+    .use(flowsAuthorizedMiddleware, (input) => input.workspaceId)
     .handler(async ({ input }) => {
       await flowAnalyticsService.resetStatsSession({
         workspaceId: input.workspaceId,
