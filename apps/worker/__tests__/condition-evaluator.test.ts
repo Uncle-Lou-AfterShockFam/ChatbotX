@@ -390,11 +390,37 @@ describe("ConditionEvaluator form events (s200, s220 A2-3)", () => {
   })
 })
 
+describe("ConditionEvaluator contactReplyClassified (s228b outreach, s235 coverage)", () => {
+  const evaluator = new ConditionEvaluator()
+  const type = triggerEventTypes.enum.contactReplyClassified
+
+  test.each([
+    ["interested", "interested", true],
+    ["interested", "notInterested", false],
+    ["maybeLater", "maybeLater", true],
+  ])("a condition on %s, a reply classified %s -> %s", async (pinned, actual, expected) => {
+    await expect(
+      evaluator.evaluate(
+        buildContext({ type, sourceId: pinned }, { sourceId: actual }),
+      ),
+    ).resolves.toBe(expected)
+  })
+
+  test("a condition with no class never matches (fail closed)", async () => {
+    await expect(
+      evaluator.evaluate(
+        buildContext({ type, sourceId: null }, { sourceId: "interested" }),
+      ),
+    ).resolves.toBe(false)
+  })
+})
+
 describe("ConditionEvaluator invoice events (s205b)", () => {
   const evaluator = new ConditionEvaluator()
   test.each([
     triggerEventTypes.enum.invoiceCreated,
     triggerEventTypes.enum.invoicePaid,
+    triggerEventTypes.enum.invoicePartiallyPaid,
     triggerEventTypes.enum.invoicePaymentFailed,
   ])("%s matches every invoice of the workspace (no sourceId)", async (type) => {
     await expect(
