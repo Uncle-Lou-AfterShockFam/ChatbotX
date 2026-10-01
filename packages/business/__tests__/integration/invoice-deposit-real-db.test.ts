@@ -579,7 +579,11 @@ describe.skipIf(!databaseUrl)("signed checkout webhook, end to end", () => {
           ),
         }),
       ])
-      expect(results.map((r) => r.outcome).sort()).toEqual(["applied", "noop"])
+      // The loser is a no-op, or (s235) a 503 while the winner's marks run.
+      expect(results.filter((r) => r.outcome === "applied")).toHaveLength(1)
+      expect(
+        results.every((r) => ["applied", "noop", "retry"].includes(r.outcome)),
+      ).toBe(true)
       expect((await invoiceRow(invoice.id))?.amountPaid).toBe("50.00")
     }
   })
@@ -722,7 +726,7 @@ describe.skipIf(!databaseUrl)(
         integrationId,
         ...signedCompleted("evt_crash2", "cs_x"),
       })
-      expect(live).toEqual({ outcome: "noop", detail: "already-marked" })
+      expect(live).toEqual({ outcome: "retry", detail: "marks in flight" })
       expect(m.marks).not.toHaveBeenCalled()
 
       await db
@@ -756,7 +760,50 @@ describe.skipIf(!databaseUrl)(
       )
       expect(m.marks).toHaveBeenCalledTimes(1)
       expect(m.emitPartiallyPaid).toHaveBeenCalledTimes(1)
-      expect(results.every((r) => r.outcome !== "retry")).toBe(true)
+      expect(
+        results.every((r) =>
+          ["noop", "retry", "duplicate"].includes(r.outcome),
+        ),
+      ).toBe(true)
+    })
+
+    test("probe a2/b2: died after the claim, before the marks: every event answers retry inside the lease, marks once past it", async () => {
+      const { invoice, integrationId, payment } = await crashedAfterCommit(
+        "evt_crash5",
+        "pi_crash5",
+      )
+      await db
+        .update(invoicePaymentModel)
+        .set({ markedAt: new Date(Date.now() - 60_000) })
+        .where(sql`id = ${payment.id}`)
+      const redelivered = await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted("evt_crash5", "cs_x"),
+      })
+      const otherType = await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted(
+          "evt_crash5_async",
+          "cs_x",
+          "checkout.session.async_payment_succeeded",
+        ),
+      })
+      expect(redelivered.outcome).toBe("retry")
+      expect(otherType.outcome).toBe("retry")
+      expect(m.marks).not.toHaveBeenCalled()
+      await db
+        .update(invoicePaymentModel)
+        .set({ markedAt: new Date(Date.now() - PAYMENT_MARKS_LEASE_MS - 1000) })
+        .where(sql`id = ${payment.id}`)
+      const late = await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted("evt_crash5", "cs_x"),
+      })
+      expect(late.outcome).toBe("noop")
+      expect(m.marks).toHaveBeenCalledTimes(1)
+      expect((await paymentRows(invoice.id))[0]?.marksDoneAt).toBeInstanceOf(
+        Date,
+      )
     })
 
     test("a done payment is never re-claimed, even past the lease", async () => {
@@ -964,7 +1011,7 @@ describe.skipIf(!databaseUrl)(
         15_000,
         "evt_r1",
       )
-      expect(dup).toEqual({ outcome: "duplicate", detail: "evt_r1" })
+      expect(dup.outcome).toBe("noop")
       const other = await refund(
         invoice,
         integrationId,
@@ -1013,7 +1060,7 @@ describe.skipIf(!databaseUrl)(
       }
     })
 
-    test("a refund that arrives before its balance payment was applied is retried, never dropped", async () => {
+    test("probe g: a refund that beats its payment event is recorded; the late payment is never applied", async () => {
       const { invoice } = await createDepositInvoice()
       const integrationId = m.integrations.get(invoice.workspaceId) as string
       await pay(invoice, integrationId, "deposit", 5000, `pi_d_${invoice.id}`)
@@ -1024,32 +1071,65 @@ describe.skipIf(!databaseUrl)(
         "balance",
         15_000,
       )
-      expect(early).toEqual({
-        outcome: "retry",
-        detail: "payment not recorded yet",
-      })
-      expect((await invoiceRow(invoice.id))?.status).toBe("partiallyPaid")
-    })
-
-    test("a refund of a payment the invoice never took is noted, nothing rolls back", async () => {
-      const { invoice } = await createDepositInvoice()
-      const integrationId = m.integrations.get(invoice.workspaceId) as string
-      await pay(invoice, integrationId, "deposit", 5000, `pi_d_${invoice.id}`)
-      // A second deposit (flagged, never applied) refunded by the operator.
-      const result = await refund(
-        invoice,
-        integrationId,
-        "pi_dup",
-        "deposit",
-        5000,
-      )
-      expect(result.outcome).toBe("noop")
-      const row = await invoiceRow(invoice.id)
+      expect(early.outcome).toBe("applied")
+      let row = await invoiceRow(invoice.id)
       expect(row).toMatchObject({
         status: "partiallyPaid",
         amountPaid: "50.00",
       })
-      expect(row?.lastError).toContain("never took it")
+      expect(row?.lastError).toContain("it is never applied")
+      // The delayed payment event of the refunded balance lands now.
+      m.sessionRetrieve.mockResolvedValueOnce(
+        paySession(invoice, "balance", 15_000, `pi_b_${invoice.id}`),
+      )
+      const late = await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted("evt_late_bal", "cs_late"),
+      })
+      expect(late.outcome).toBe("noop")
+      row = await invoiceRow(invoice.id)
+      expect(row).toMatchObject({
+        status: "partiallyPaid",
+        amountPaid: "50.00",
+      })
+      expect(m.emitPaid).not.toHaveBeenCalled()
+    })
+
+    test("probe f: a refund of a REJECTED payment is noted once, never retried", async () => {
+      const { invoice } = await createDepositInvoice()
+      const integrationId = m.integrations.get(invoice.workspaceId) as string
+      await pay(invoice, integrationId, "deposit", 5000, `pi_d_${invoice.id}`)
+      // A second deposit is rejected ("refund it in Stripe").
+      m.sessionRetrieve.mockResolvedValueOnce(
+        paySession(invoice, "deposit", 5000, "pi_dup2"),
+      )
+      await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted("evt_dup2", "cs_dup2"),
+      })
+      // The operator refunds the applied deposit FIRST: the invoice owes it again.
+      await refund(
+        invoice,
+        integrationId,
+        `pi_d_${invoice.id}`,
+        "deposit",
+        5000,
+      )
+      expect((await invoiceRow(invoice.id))?.status).toBe("open")
+      const dupRefund = await refund(
+        invoice,
+        integrationId,
+        "pi_dup2",
+        "deposit",
+        5000,
+      )
+      expect(dupRefund.outcome).not.toBe("retry")
+      const row = await invoiceRow(invoice.id)
+      expect(row).toMatchObject({ status: "open", amountPaid: "0.00" })
+      // Every note is kept: the rejection, the rollback, the late refund.
+      expect(row?.lastError).toContain("refund it in Stripe")
+      expect(row?.lastError).toContain("partiallyPaid -> open")
+      expect(row?.lastError).toContain("pi_dup2 was refunded")
     })
   },
 )

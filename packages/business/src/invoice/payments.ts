@@ -10,6 +10,7 @@ import type {
   InvoiceModel,
   InvoicePaymentModel,
 } from "@chatbotx.io/database/types"
+import { appendLastError } from "./last-error"
 
 /**
  * Deposits (s216b). A stripeCheckout invoice with a `depositAmount` can be
@@ -247,13 +248,17 @@ export async function claimPaymentMarks(
   return claimed ? at : null
 }
 
-/** THIS caller's marks ran: no later delivery may run them again. */
+/**
+ * THIS caller's marks ran: no later delivery may run them again. False when
+ * the claim was taken over meanwhile (this run outlived the lease, so the
+ * marks may have run twice): the caller logs it.
+ */
 export async function finishPaymentMarks(
   paymentId: string,
   claimedAt: Date,
-): Promise<void> {
+): Promise<boolean> {
   const at = new Date()
-  await db
+  const [done] = await db
     .update(invoicePaymentModel)
     .set({ marksDoneAt: at, updatedAt: at })
     .where(
@@ -262,10 +267,12 @@ export async function finishPaymentMarks(
         eq(invoicePaymentModel.markedAt, claimedAt),
       ),
     )
+    .returning({ id: invoicePaymentModel.id })
+  return !!done
 }
 
 export type AppliedRefund =
-  /** Recorded now: the invoice moved from `from` to `row.status`. */
+  /** Recorded now: the invoice moved from `from` to `row.status` (maybe the same). */
   | {
       kind: "applied"
       row: InvoiceModel
@@ -274,32 +281,41 @@ export type AppliedRefund =
     }
   /** This payment's refund was recorded before (a redelivery). */
   | { kind: "known"; row: InvoiceModel }
-  /** No ledger row for that PaymentIntent on this invoice. */
-  | { kind: "unknownPayment"; row: InvoiceModel | null }
+  /** The invoice is gone. */
+  | { kind: "unknownInvoice"; row: null }
 
-/** `lastError` keeps earlier operator notes (a "refund it" flag); bounded. */
-const LAST_ERROR_MAX = 2000
-const appendNote = (previous: string | null, note: string) => {
-  const joined = previous ? `${previous} | ${note}` : note
-  return joined.length > LAST_ERROR_MAX
-    ? joined.slice(joined.length - LAST_ERROR_MAX)
-    : joined
-}
+/** Statuses a refund may roll back; any other keeps its status (a note only). */
+const ROLLBACK_FROM: readonly InvoiceModel["status"][] = [
+  "paid",
+  "partiallyPaid",
+]
 
 /**
  * s235 (owner: "roll back what's owed"): Stripe refunded ONE payment of a
  * deposit invoice in full. Under the invoice's row lock, the payment is
  * marked refunded, `amountPaid` becomes the sum of the payments still held,
- * and the status follows it:
+ * and a paid / partly paid invoice's status follows it:
  * - nothing held: `refunded` when the invoice was once fully paid, else `open`
  *   (a refunded deposit: the pay link offers the deposit again);
  * - part held: `partiallyPaid` (the pay link collects the rest as a balance);
  * - the total held: `paid`.
  * The pay session is spent either way, and an operator note is appended.
+ *
+ * A PaymentIntent the ledger never recorded (a rejected duplicate, or one
+ * whose payment event is still in Stripe's retry queue) is recorded now as
+ * an already-refunded row: it holds nothing, and its late payment event
+ * reads "known" and is never applied (it is never retried here either: a
+ * rejected payment would never arrive and the refund would be lost).
  */
 export async function applyCheckoutRefund(
   tx: Tx,
-  props: { invoiceId: string; paymentIntentId: string; now: Date },
+  props: {
+    invoiceId: string
+    paymentIntentId: string
+    /** What the PaymentIntent was minted to collect (its hub metadata). */
+    minted: { kind: InvoiceCheckoutKind; amountMinor: bigint }
+    now: Date
+  },
 ): Promise<AppliedRefund> {
   const [row] = await tx
     .select()
@@ -307,48 +323,84 @@ export async function applyCheckoutRefund(
     .where(eq(invoiceModel.id, props.invoiceId))
     .for("update")
   if (!row) {
-    return { kind: "unknownPayment", row: null }
+    return { kind: "unknownInvoice", row: null }
   }
   const payments = await tx
     .select()
     .from(invoicePaymentModel)
     .where(eq(invoicePaymentModel.invoiceId, row.id))
-  const payment = payments.find(
+  const known = payments.find(
     (p) => p.providerPaymentId === props.paymentIntentId,
   )
-  if (!payment) {
-    return { kind: "unknownPayment", row }
-  }
-  if (payment.refundedAt) {
+  if (known?.refundedAt) {
     return { kind: "known", row }
   }
+  if (!known) {
+    const [marker] = await tx
+      .insert(invoicePaymentModel)
+      .values({
+        workspaceId: row.workspaceId,
+        invoiceId: row.id,
+        kind: props.minted.kind,
+        amount: minorToDecimalString(props.minted.amountMinor, row.currency),
+        providerPaymentId: props.paymentIntentId,
+        paidAt: props.now,
+        refundedAt: props.now,
+        // Nothing to mark: the invoice never took this payment.
+        markedAt: props.now,
+        marksDoneAt: props.now,
+      })
+      .returning()
+    const [noted] = await tx
+      .update(invoiceModel)
+      .set({
+        lastError: appendLastError(
+          `Payment ${props.paymentIntentId} was refunded in Stripe before this ${row.status} invoice recorded it: it is never applied`,
+        ),
+        updatedAt: props.now,
+      })
+      .where(eq(invoiceModel.id, row.id))
+      .returning()
+    if (!(marker && noted)) {
+      throw new Error("invoice refund: marker insert returned no row")
+    }
+    return { kind: "applied", row: noted, payment: marker, from: row.status }
+  }
   const heldMinor = payments
-    .filter((p) => p.id !== payment.id && !p.refundedAt)
+    .filter((p) => p.id !== known.id && !p.refundedAt)
     .reduce((sum, p) => sum + minor(row, p.amount), 0n)
-  const totalMinor = minor(row, row.total)
-  let status: InvoiceModel["status"] = "partiallyPaid"
-  if (heldMinor === 0n) {
-    status = row.paidAt ? "refunded" : "open"
-  } else if (heldMinor >= totalMinor) {
-    status = "paid"
+  const rollsBack = ROLLBACK_FROM.includes(row.status)
+  let status = row.status
+  if (rollsBack) {
+    status = "partiallyPaid"
+    if (heldMinor === 0n) {
+      status = row.paidAt ? "refunded" : "open"
+    } else if (heldMinor >= minor(row, row.total)) {
+      status = "paid"
+    }
   }
   const [refunded] = await tx
     .update(invoicePaymentModel)
     .set({ refundedAt: props.now, updatedAt: props.now })
-    .where(eq(invoicePaymentModel.id, payment.id))
+    .where(eq(invoicePaymentModel.id, known.id))
     .returning()
   const [updated] = await tx
     .update(invoiceModel)
     .set({
-      status,
-      amountPaid: minorToDecimalString(heldMinor, row.currency),
-      checkoutSessionId: null,
-      checkoutMintedAt: null,
-      checkoutKind: null,
-      checkoutGeneration: row.checkoutGeneration + 1,
-      lastError: appendNote(
-        row.lastError,
-        `Payment ${payment.providerPaymentId} (${payment.kind} ${payment.amount}) was refunded in Stripe: the invoice moved ${row.status} -> ${status}`,
+      ...(rollsBack
+        ? {
+            status,
+            amountPaid: minorToDecimalString(heldMinor, row.currency),
+            checkoutSessionId: null,
+            checkoutMintedAt: null,
+            checkoutKind: null,
+            checkoutGeneration: row.checkoutGeneration + 1,
+          }
+        : {}),
+      lastError: appendLastError(
+        rollsBack
+          ? `Payment ${known.providerPaymentId} (${known.kind} ${known.amount}) was refunded in Stripe: the invoice moved ${row.status} -> ${status}`
+          : `Payment ${known.providerPaymentId} (${known.kind} ${known.amount}) was refunded in Stripe; this ${row.status} invoice keeps its status: check it`,
       ),
       updatedAt: props.now,
     })
@@ -359,7 +411,6 @@ export async function applyCheckoutRefund(
   }
   return { kind: "applied", row: updated, payment: refunded, from: row.status }
 }
-
 /** Hand back THIS caller's claim after its marks failed, so a redelivery runs them. */
 export async function releasePaymentMarks(
   paymentId: string,

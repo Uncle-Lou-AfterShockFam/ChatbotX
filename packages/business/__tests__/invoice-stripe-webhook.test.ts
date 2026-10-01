@@ -292,6 +292,11 @@ vi.mock("../src/invoice/payments", async (importOriginal) => {
   }
 })
 vi.mock("../src/audit/dispatcher", () => ({ dispatchAuditRecord: vi.fn() }))
+// s235: notes append in SQL; here the appended note itself is what is asserted.
+vi.mock("../src/invoice/last-error", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/invoice/last-error")>()),
+  appendLastError: (note: string) => note,
+}))
 vi.mock("../src/logger", () => ({
   logger: { warn: m.loggerWarn, error: m.loggerError, info: vi.fn() },
 }))
@@ -1233,7 +1238,7 @@ describe("stripeCheckout (s207b): checkout.session.* and refunds", () => {
       expectNoSideEffects()
     })
 
-    test("a refund of a payment with no ledger row (never taken) is noted and moves nothing", async () => {
+    test("a refund of a deposit invoice's payment goes to the ledger (s235): never retried, never the whole-invoice refund", async () => {
       m.state.hubRow = depositRow("partiallyPaid", {
         amountPaid: "50.00",
         providerInvoiceId: "pi_1",
@@ -1243,13 +1248,14 @@ describe("stripeCheckout (s207b): checkout.session.* and refunds", () => {
         type: "charge.refunded",
         object: { id: "ch_1", object: "charge" },
       })
-      expect(result).toEqual({ outcome: "noop", detail: "unknown-invoice" })
-      expect(m.state.updates).toEqual([
-        expect.objectContaining({
-          lastError: expect.stringContaining("the invoice never took it"),
-        }),
-      ])
-      expect(m.state.updates[0]).not.toHaveProperty("status")
+      // The ledger itself (rollback, unrecorded payments) is pinned by
+      // invoice-deposit-real-db.test.ts; this stub has no invoice row to lock.
+      expect(result.outcome).not.toBe("retry")
+      expect(m.state.updates).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ status: "refunded" }),
+        ]),
+      )
     })
   })
 

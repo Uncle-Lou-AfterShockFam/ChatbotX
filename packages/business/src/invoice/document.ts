@@ -96,6 +96,9 @@ const INVOICE_BADGES: Record<InvoiceDocumentKind, string> = {
   receipt: '<div class="inv-badge">PAID</div><br>',
 }
 
+/** s235: a partly paid invoice holding something other than its deposit. */
+const PART_PAID_BADGE = '<div class="inv-badge">PARTLY PAID</div><br>'
+
 const text = (value: string | null | undefined): string =>
   escapeHtml(value ?? "").replace(/\r?\n/g, "<br>")
 
@@ -163,7 +166,13 @@ export function renderInvoiceHtml(props: {
     kind === "depositReceipt"
       ? [
           ["Invoice total", money(invoice.total)],
-          ["Deposit paid", money(paidSoFar)],
+          // s235: after a refunded deposit the amount held is not the deposit.
+          [
+            invoiceDocumentVariant(invoice, kind)
+              ? "Amount paid"
+              : "Deposit paid",
+            money(paidSoFar),
+          ],
           [
             "Balance due",
             money(
@@ -196,7 +205,7 @@ export function renderInvoiceHtml(props: {
         `<tr><td>${text(line.description)}</td><td class="inv-num">${line.quantity}</td><td class="inv-num">${escapeHtml(money(line.unitAmount))}</td><td class="inv-num">${escapeHtml(money(line.amount))}</td></tr>`,
     )
     .join("")
-  const body = `<div class="inv-head"><div><div class="inv-from">${text(workspace.name)}</div></div><div class="inv-meta">${INVOICE_BADGES[kind]}<h1>${escapeHtml(title)}</h1>${meta.map(text).join("<br>")}</div></div>
+  const body = `<div class="inv-head"><div><div class="inv-from">${text(workspace.name)}</div></div><div class="inv-meta">${kind === "depositReceipt" && invoiceDocumentVariant(invoice, kind) ? PART_PAID_BADGE : INVOICE_BADGES[kind]}<h1>${escapeHtml(title)}</h1>${meta.map(text).join("<br>")}</div></div>
 ${billTo ? `<div class="inv-to"><div class="inv-label">${kind === "invoice" ? "Bill to" : "Received from"}</div>${billTo}</div>` : ""}
 <table class="inv-lines"><thead><tr><th>Description</th><th class="inv-num">Qty</th><th class="inv-num">Unit price</th><th class="inv-num">Amount</th></tr></thead><tbody>${rows}</tbody>
 <tfoot>${footerRows}</tfoot></table>

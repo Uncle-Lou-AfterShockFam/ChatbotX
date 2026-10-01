@@ -32,13 +32,13 @@ import {
   markInvoiceStatusOnContact,
 } from "./contact-marks"
 import { prerenderInvoiceReceipt } from "./document"
+import { appendLastError } from "./last-error"
 import { enqueueInvoiceMirror } from "./mirror"
 import {
   type AppliedPayment,
   type AppliedRefund,
   applyCheckoutPayment,
   applyCheckoutRefund,
-  checkoutAmountMinor,
   claimPaymentMarks,
   findCheckoutPayment,
   finishPaymentMarks,
@@ -98,7 +98,7 @@ type Resolution = {
   /** Not decidable yet (a refund before its payment was recorded): 503. */
   retryLater?: boolean
   /** s235: a full refund of one payment of a deposit invoice (the ledger path). */
-  ledgerRefund?: boolean
+  ledgerRefund?: { kind: InvoiceCheckoutKind; amountMinor: bigint }
 }
 
 const UNRESOLVED: Resolution = {
@@ -213,7 +213,9 @@ async function resolveCheckoutSession(
     await db
       .update(invoiceModel)
       .set({
-        lastError: `Checkout session ${session.id} was paid (${session.amount_total} ${session.currency}) but not for what it was created to collect: check it in Stripe`,
+        lastError: appendLastError(
+          `Checkout session ${session.id} was paid (${session.amount_total} ${session.currency}) but not for what it was created to collect: check it in Stripe`,
+        ),
         updatedAt: new Date(),
       })
       .where(eq(invoiceModel.id, hubInvoice.id))
@@ -288,43 +290,39 @@ async function resolveCheckoutRefund(
     credentials,
     paymentIntent.metadata,
   )
+  if (
+    hubInvoice &&
+    (hubInvoice.depositAmount || (await isSplitPayment(hubInvoice)))
+  ) {
+    // s235: a payment of a deposit invoice (a deposit, a balance, a full
+    // payment, or one the invoice never took) was refunded: the ledger
+    // decides under the invoice's row lock (applyCheckoutRefund). Never
+    // retried: a refund that beats its payment event is recorded as a
+    // refunded payment, so that event is never applied.
+    const kind = invoiceCheckoutKinds.safeParse(
+      paymentIntent.metadata?.hub_payment_kind ?? "full",
+    )
+    return {
+      hubInvoice,
+      confirmed: true,
+      failedWhileOpen: false,
+      paymentIntentId,
+      ledgerRefund: {
+        kind: kind.success ? kind.data : "full",
+        amountMinor:
+          mintedAmountMinor(
+            paymentIntent.metadata?.hub_payment_minor,
+            hubInvoice,
+          ) ?? 0n,
+      },
+    }
+  }
   if (hubInvoice?.status === "open" && !hubInvoice.providerInvoiceId) {
     // Refunded before the payment event was applied (that one is still in
     // Stripe's retry queue): decide once the invoice is paid, never drop it.
     // Only while the invoice can still become paid: a refund of a payment a
     // void invoice never took (the flagged duplicate) is final, not retried.
     return { ...UNRESOLVED, hubInvoice, retryLater: true }
-  }
-  if (
-    hubInvoice &&
-    (hubInvoice.depositAmount || (await isSplitPayment(hubInvoice)))
-  ) {
-    // s235: a payment of a deposit invoice (a deposit, a balance, or a full
-    // payment of one) was refunded: roll back what is owed through the
-    // ledger, under the invoice's row lock (applyCheckoutRefund).
-    if (await findCheckoutPayment(hubInvoice.id, paymentIntentId)) {
-      return {
-        hubInvoice,
-        confirmed: true,
-        failedWhileOpen: false,
-        paymentIntentId,
-        ledgerRefund: true,
-      }
-    }
-    if (refundPredatesItsPayment(hubInvoice, paymentIntent.metadata)) {
-      // Its payment event is still in Stripe's retry queue: decide later.
-      return { ...UNRESOLVED, hubInvoice, retryLater: true }
-    }
-    // A payment the invoice never took (a flagged duplicate): nothing to
-    // roll back; the operator note says so.
-    await db
-      .update(invoiceModel)
-      .set({
-        lastError: `Payment ${paymentIntentId} of this ${hubInvoice.status} invoice was refunded in Stripe; the invoice never took it: check it`,
-        updatedAt: new Date(),
-      })
-      .where(eq(invoiceModel.id, hubInvoice.id))
-    return UNRESOLVED
   }
   if (!hubInvoice || hubInvoice.providerInvoiceId !== paymentIntentId) {
     return UNRESOLVED
@@ -335,26 +333,6 @@ async function resolveCheckoutRefund(
     failedWhileOpen: false,
     paymentIntentId,
   }
-}
-
-/**
- * A refunded PaymentIntent with no ledger row whose payment the invoice would
- * still take as it stands: its payment event has not been applied yet.
- */
-function refundPredatesItsPayment(
-  invoice: InvoiceModel,
-  metadata: Stripe.Metadata | null | undefined,
-): boolean {
-  // A full session carries neither key (see resolveCheckoutSession).
-  const kind = invoiceCheckoutKinds.safeParse(
-    metadata?.hub_payment_kind ?? "full",
-  )
-  const minted = mintedAmountMinor(metadata?.hub_payment_minor, invoice)
-  return (
-    kind.success &&
-    minted !== null &&
-    checkoutAmountMinor(invoice, kind.data) === minted
-  )
 }
 
 /** The refunded payment is one of an invoice's several (s216b deposits). */
@@ -620,7 +598,7 @@ async function flagUnappliedPayment(props: {
       )
     await tx
       .update(invoiceModel)
-      .set({ lastError: props.message, updatedAt: new Date() })
+      .set({ lastError: appendLastError(props.message), updatedAt: new Date() })
       .where(eq(invoiceModel.id, props.invoiceId))
   })
 }
@@ -669,7 +647,16 @@ async function settleCheckoutPayment(props: {
     return { outcome: "retry", detail: "marks claim" }
   }
   if (!claimed) {
-    return { outcome: "noop", detail: "already-marked" }
+    // Done, or another run holds a live claim. That run may have died after
+    // claiming (s235 probe): answer 503, keep the dedup row, and let Stripe
+    // come back until the marks are done or the lease lets this one take over.
+    const current = await findCheckoutPayment(
+      payment.invoiceId,
+      payment.providerPaymentId,
+    ).catch(() => null)
+    return current?.marksDoneAt
+      ? { outcome: "noop", detail: "already-marked" }
+      : { outcome: "retry", detail: "marks in flight" }
   }
   // The row as it is NOW, not as the payment left it: a deposit whose marks
   // run after the balance paid the invoice must not write `partiallyPaid`
@@ -679,8 +666,15 @@ async function settleCheckoutPayment(props: {
     .from(invoiceModel)
     .where(eq(invoiceModel.id, result.row.id))
     .limit(1)
+  // A payment refunded before its marks ran (a crash, then the refund)
+  // marks nothing: the refund already set the contact's status (s235).
+  const fresh = await findCheckoutPayment(
+    payment.invoiceId,
+    payment.providerPaymentId,
+  ).catch(() => payment)
   const status =
-    payment.kind === "deposit" && row.status !== "partiallyPaid"
+    fresh?.refundedAt ||
+    (payment.kind === "deposit" && row.status !== "partiallyPaid")
       ? null
       : row.status
   try {
@@ -705,12 +699,21 @@ async function settleCheckoutPayment(props: {
     )
     return { outcome: "retry", detail: "contact marks" }
   }
-  await finishPaymentMarks(payment.id, claimed).catch((error: unknown) =>
-    logger.error(
-      { err: error, paymentId: payment.id },
-      "stripe webhook: payment marks ran but were not recorded as done; a redelivery after the lease may run them again",
-    ),
+  const finished = await finishPaymentMarks(payment.id, claimed).catch(
+    (error: unknown) => {
+      logger.error(
+        { err: error, paymentId: payment.id },
+        "stripe webhook: payment marks ran but were not recorded as done; a redelivery after the lease may run them again",
+      )
+      return true
+    },
   )
+  if (!finished) {
+    logger.error(
+      { paymentId: payment.id, eventId: event.id },
+      "stripe webhook: this run outlived the marks lease and another took it over; the marks may have run twice",
+    )
+  }
   if (status) {
     // Not awaited: Gotenberg must not hold Stripe's delivery open.
     prerenderInvoiceReceipt(row.id).catch(() => undefined)
@@ -735,8 +738,8 @@ async function settleCheckoutRefund(props: {
   result: AppliedRefund
 }): Promise<StripeWebhookResult> {
   const { credentials, event, result } = props
-  if (!result.row || result.kind === "unknownPayment") {
-    return { outcome: "noop", detail: "refund of an unrecorded payment" }
+  if (!result.row) {
+    return { outcome: "noop", detail: "unknown-invoice" }
   }
   const { row } = result
   try {
@@ -805,22 +808,18 @@ async function recoverDuplicate(props: {
     })
   }
   if (resolution.ledgerRefund) {
+    // The status mark is idempotent: write it again (it may be what a crash lost).
     const [row] = await db
       .select()
       .from(invoiceModel)
       .where(eq(invoiceModel.id, hubInvoice.id))
       .limit(1)
-    if (!row) {
-      return duplicate
-    }
-    try {
-      await markInvoiceStatusOnContact({ invoice: row })
-    } catch (error) {
-      logger.warn(
-        { err: error, eventId: event.id, invoiceId: row.id },
-        "stripe webhook: refund status mark failed on a redelivery, asking Stripe to redeliver",
-      )
-      return { outcome: "retry", detail: "contact marks" }
+    if (row) {
+      return await settleCheckoutRefund({
+        credentials,
+        event,
+        result: { kind: "known", row },
+      })
     }
   }
   return duplicate
@@ -954,6 +953,7 @@ export async function handleStripeWebhook(props: {
         checkoutRefund = await applyCheckoutRefund(tx, {
           invoiceId: hubInvoice.id,
           paymentIntentId,
+          minted: resolution.ledgerRefund,
           now,
         })
         return
