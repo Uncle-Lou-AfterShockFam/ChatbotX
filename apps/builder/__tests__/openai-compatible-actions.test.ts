@@ -27,13 +27,21 @@ vi.mock("@/features/common/schema", () => ({
   workspaceIdrequestParams: [],
 }))
 
-vi.mock("@chatbotx.io/business", () => ({
+vi.mock("@chatbotx.io/business", async () => ({
   integrationOpenaiCompatibleService: {
     connect: mocks.connect,
     findByWorkspaceIdAndId: mocks.findByWorkspaceIdAndId,
     update: mocks.update,
   },
   isOpenaiCompatiblePresetAlreadyConnectedError: mocks.isDuplicatePreset,
+  // The real helper: the test must exercise the production comparison.
+  isSameOpenaiCompatibleBaseUrl: (
+    await vi.importActual<
+      typeof import("../../../packages/business/src/integration-openai-compatible/validate-base-url")
+    >(
+      "../../../packages/business/src/integration-openai-compatible/validate-base-url",
+    )
+  ).isSameOpenaiCompatibleBaseUrl,
   validateOpenaiCompatibleBaseUrlForEnvironment: mocks.validateBaseUrl,
 }))
 

@@ -3,6 +3,7 @@
 import {
   integrationOpenaiCompatibleService,
   isOpenaiCompatiblePresetAlreadyConnectedError,
+  isSameOpenaiCompatibleBaseUrl,
   validateOpenaiCompatibleBaseUrlForEnvironment,
 } from "@chatbotx.io/business"
 import { ChatbotXException } from "@chatbotx.io/business/errors"
@@ -15,7 +16,6 @@ import {
 } from "@/features/common/schema"
 import { workspaceActionClient } from "@/lib/safe-action"
 import { verifyOpenaiCompatibleProvider } from "../lib"
-import { isSameBaseUrl } from "../lib/same-base-url"
 import {
   resolveOpenaiCompatibleDefaultModel,
   type UpdateOpenaiCompatibleEnabledSchema,
@@ -81,7 +81,9 @@ export const updateOpenaiCompatibleAction = workspaceActionClient
         // The stored key is reused only for the stored base URL (s233a): a
         // new URL with "keep the key" would send the workspace's key to a
         // host the caller picked, at verify time and on every later call.
-        if (!(apiKey || isSameBaseUrl(baseURL, existing?.baseURL))) {
+        if (
+          !(apiKey || isSameOpenaiCompatibleBaseUrl(baseURL, existing?.baseURL))
+        ) {
           return returnValidationErrors(updateOpenaiCompatibleSchema, {
             apiKey: {
               _errors: [
@@ -136,6 +138,19 @@ export const updateOpenaiCompatibleAction = workspaceActionClient
           return returnValidationErrors(updateOpenaiCompatibleSchema, {
             baseURL: {
               _errors: [t("openaiCompatible.validation.invalidBaseURL")],
+            },
+          })
+        }
+        // The service enforces the same binding for every caller.
+        if (
+          error instanceof ChatbotXException &&
+          error.code === "apiKeyRequiredForNewBaseUrl"
+        ) {
+          return returnValidationErrors(updateOpenaiCompatibleSchema, {
+            apiKey: {
+              _errors: [
+                t("openaiCompatible.validation.apiKeyRequiredForNewBaseURL"),
+              ],
             },
           })
         }
