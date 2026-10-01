@@ -3633,7 +3633,8 @@
     "title": "OpenAI-compatibel",
     "validation": {
       "invalidBaseURL": "De basis-URL is ongeldig of niet toegestaan.",
-      "presetAlreadyConnected": "Deze voorinstelling is al gekoppeld voor deze workspace."
+      "presetAlreadyConnected": "Deze voorinstelling is al gekoppeld voor deze workspace.",
+      "apiKeyRequiredForNewBaseURL": "Enter the API key again to change the base URL."
     }
   },
   "settings": {

@@ -26,6 +26,30 @@ export const normalizeOpenaiCompatibleBaseUrl = (baseURL: string): string => {
   return parsed.toString()
 }
 
+const TRAILING_SLASHES = /\/+$/
+
+const comparable = (url: string) =>
+  new URL(url).href.replace(TRAILING_SLASHES, "")
+
+/**
+ * Same base URL after WHATWG normalisation, trailing slashes ignored; a
+ * missing or unparsable side never matches (s233a). The stored API key may be
+ * reused only when this holds, or it would be sent to a host the caller chose.
+ */
+export const isSameOpenaiCompatibleBaseUrl = (
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean => {
+  if (!(a && b)) {
+    return false
+  }
+  try {
+    return comparable(a) === comparable(b)
+  } catch {
+    return false
+  }
+}
+
 export const validateOpenaiCompatibleBaseUrlForEnvironment = async (
   baseURL: string,
 ): Promise<string> => {

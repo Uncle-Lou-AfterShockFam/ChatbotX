@@ -3821,7 +3821,8 @@
     "title": "OpenAI Compatible",
     "validation": {
       "invalidBaseURL": "Base URL is invalid or not allowed.",
-      "presetAlreadyConnected": "This preset is already connected for this workspace."
+      "presetAlreadyConnected": "This preset is already connected for this workspace.",
+      "apiKeyRequiredForNewBaseURL": "Enter the API key again to change the base URL."
     }
   },
   "settings": {

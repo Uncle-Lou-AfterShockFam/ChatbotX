@@ -3633,7 +3633,8 @@
     "title": "Compatibil cu OpenAI",
     "validation": {
       "invalidBaseURL": "URL-ul de bază este invalid sau nu este permis.",
-      "presetAlreadyConnected": "Acest preset este deja conectat pentru acest spațiu de lucru."
+      "presetAlreadyConnected": "Acest preset este deja conectat pentru acest spațiu de lucru.",
+      "apiKeyRequiredForNewBaseURL": "Enter the API key again to change the base URL."
     }
   },
   "settings": {

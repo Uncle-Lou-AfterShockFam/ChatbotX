@@ -4491,7 +4491,8 @@
     "title": "OpenAI兼容",
     "validation": {
       "invalidBaseURL": "基础URL 无效或不允许。",
-      "presetAlreadyConnected": "此缺省已为此工作区连接。"
+      "presetAlreadyConnected": "此缺省已为此工作区连接。",
+      "apiKeyRequiredForNewBaseURL": "Enter the API key again to change the base URL."
     }
   },
   "openrouter": {

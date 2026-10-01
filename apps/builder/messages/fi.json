@@ -3633,7 +3633,8 @@
     "title": "OpenAI-yhteensopiva",
     "validation": {
       "invalidBaseURL": "Perus-URL on virheellinen tai sitä ei sallita.",
-      "presetAlreadyConnected": "Tämä esiasetus on jo yhdistetty tähän työtilaan."
+      "presetAlreadyConnected": "Tämä esiasetus on jo yhdistetty tähän työtilaan.",
+      "apiKeyRequiredForNewBaseURL": "Enter the API key again to change the base URL."
     }
   },
   "settings": {

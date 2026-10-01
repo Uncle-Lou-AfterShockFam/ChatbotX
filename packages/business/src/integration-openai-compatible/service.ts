@@ -6,7 +6,9 @@ import {
 import { AuthType, type SecretTextAuthValue } from "@chatbotx.io/sdk"
 import { createId } from "@chatbotx.io/utils"
 import { BaseService } from "../base.service"
+import { ChatbotXException } from "../errors"
 import {
+  isSameOpenaiCompatibleBaseUrl,
   normalizeOpenaiCompatibleBaseUrl,
   validateOpenaiCompatibleBaseUrlForEnvironment,
 } from "./validate-base-url"
@@ -151,12 +153,22 @@ class IntegrationOpenaiCompatibleService extends BaseService {
     let baseURL: string | undefined
     if (rawBaseURL !== undefined) {
       const normalizedBaseUrl = normalizeOpenaiCompatibleBaseUrl(rawBaseURL)
-      baseURL =
-        normalizedBaseUrl === existing.baseURL
-          ? normalizedBaseUrl
-          : await validateOpenaiCompatibleBaseUrlForEnvironment(
-              normalizedBaseUrl,
-            )
+      const sameBaseUrl = isSameOpenaiCompatibleBaseUrl(
+        normalizedBaseUrl,
+        existing.baseURL,
+      )
+      // The stored key never follows a base URL change (s233a): every later
+      // inference call would carry it to the new host.
+      if (!(sameBaseUrl || apiKey)) {
+        throw new ChatbotXException(
+          "Enter the API key again to change the base URL.",
+          "apiKeyRequiredForNewBaseUrl",
+          400,
+        )
+      }
+      baseURL = sameBaseUrl
+        ? normalizedBaseUrl
+        : await validateOpenaiCompatibleBaseUrlForEnvironment(normalizedBaseUrl)
     }
 
     try {

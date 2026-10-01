@@ -11,10 +11,16 @@ const mocks = vi.hoisted(() => ({
   validateBaseUrl: vi.fn(async (baseURL: string) => baseURL.trim()),
 }))
 
-vi.mock("../src/integration-openai-compatible/validate-base-url", () => ({
-  normalizeOpenaiCompatibleBaseUrl: (baseURL: string) => baseURL.trim(),
-  validateOpenaiCompatibleBaseUrlForEnvironment: mocks.validateBaseUrl,
-}))
+vi.mock(
+  "../src/integration-openai-compatible/validate-base-url",
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import("../src/integration-openai-compatible/validate-base-url")
+    >()),
+    normalizeOpenaiCompatibleBaseUrl: (baseURL: string) => baseURL.trim(),
+    validateOpenaiCompatibleBaseUrlForEnvironment: mocks.validateBaseUrl,
+  }),
+)
 
 vi.mock("../src/audit/dispatcher", () => ({ dispatchAuditRecord: vi.fn() }))
 
@@ -106,7 +112,7 @@ describe("IntegrationOpenaiCompatibleService", () => {
     await integrationOpenaiCompatibleService.update(
       "workspace-1",
       "openai-compatible-1",
-      { baseURL: " https://new.example.com/v1 " },
+      { baseURL: " https://new.example.com/v1 ", apiKey: "new-key" },
     )
 
     expect(mocks.validateBaseUrl).toHaveBeenCalledWith(
@@ -137,5 +143,68 @@ describe("IntegrationOpenaiCompatibleService", () => {
         baseURL: "https://example.com/v1",
       }),
     )
+  })
+
+  test("a base URL change without a new API key is refused for every caller (s233a)", async () => {
+    mocks.findFirst.mockResolvedValue({
+      id: "openai-compatible-1",
+      baseURL: "https://example.com/v1",
+      auth: { authType: "secretText", secretText: "stored-key" },
+    })
+
+    for (const baseURL of [
+      "https://attacker.example/v1",
+      "https://example.com/v2",
+      "http://example.com/v1",
+    ]) {
+      await expect(
+        integrationOpenaiCompatibleService.update(
+          "workspace-1",
+          "openai-compatible-1",
+          { baseURL },
+        ),
+      ).rejects.toMatchObject({ code: "apiKeyRequiredForNewBaseUrl" })
+    }
+    expect(mocks.validateBaseUrl).not.toHaveBeenCalled()
+    expect(mocks.updateSet).not.toHaveBeenCalled()
+  })
+
+  test("the same base URL with a trailing slash keeps the stored key", async () => {
+    mocks.findFirst.mockResolvedValue({
+      id: "openai-compatible-1",
+      baseURL: "https://example.com/v1",
+    })
+    await integrationOpenaiCompatibleService.update(
+      "workspace-1",
+      "openai-compatible-1",
+      { baseURL: "https://example.com/v1/", name: "Renamed" },
+    )
+    expect(mocks.updateSet).toHaveBeenCalledWith(
+      expect.not.objectContaining({ auth: expect.anything() }),
+    )
+  })
+})
+
+describe("isSameOpenaiCompatibleBaseUrl", () => {
+  test("normalised equality, trailing slashes ignored, missing / unparsable never match", async () => {
+    const { isSameOpenaiCompatibleBaseUrl } = await vi.importActual<
+      typeof import("../src/integration-openai-compatible/validate-base-url")
+    >("../src/integration-openai-compatible/validate-base-url")
+    expect(
+      isSameOpenaiCompatibleBaseUrl(
+        "HTTPS://Example.com:443/v1/",
+        "https://example.com/v1",
+      ),
+    ).toBe(true)
+    for (const [a, b] of [
+      ["https://example.com/v1", "https://example.com/V1"],
+      ["https://example.com/v1", "https://example.com.evil.example/v1"],
+      ["https://example.com@evil.example/v1", "https://example.com/v1"],
+      ["https://example.com/v1", undefined],
+      [null, null],
+      ["not a url", "not a url"],
+    ] as const) {
+      expect(isSameOpenaiCompatibleBaseUrl(a, b), `${a} vs ${b}`).toBe(false)
+    }
   })
 })

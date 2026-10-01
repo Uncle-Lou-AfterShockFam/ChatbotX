@@ -3633,7 +3633,8 @@
     "title": "Compatible avec OpenAI",
     "validation": {
       "invalidBaseURL": "L’URL de base n’est pas valide ou n’est pas autorisée.",
-      "presetAlreadyConnected": "Ce préréglage est déjà connecté à cet espace de travail."
+      "presetAlreadyConnected": "Ce préréglage est déjà connecté à cet espace de travail.",
+      "apiKeyRequiredForNewBaseURL": "Enter the API key again to change the base URL."
     }
   },
   "settings": {
