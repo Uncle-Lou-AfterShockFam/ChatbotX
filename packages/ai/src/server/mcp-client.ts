@@ -15,6 +15,9 @@ import {
   mcpJsonRpcSuccessSchema,
 } from "../schemas/mcp"
 
+/** Cap on one MCP answer, headers to the end of the (SSE) body. */
+export const MCP_RESPONSE_DEADLINE_MS = 10 * 60_000
+
 export interface McpClientOptions {
   auth: AIMcpServerAuth
   name?: string
@@ -92,6 +95,41 @@ export class McpClient {
     return headers
   }
 
+  /**
+   * The URL is member-typed: the pinned fetch refuses private / internal
+   * addresses at connect and re-checks every redirect hop, dropping
+   * credentials across origins (s233a). `headersTimeoutMs` bounds the wait for
+   * the response headers only, as ky's timeout did: a Streamable-HTTP server
+   * may open its SSE answer at once and stream a long tool call into it. The
+   * body read is capped by MCP_RESPONSE_DEADLINE_MS. Any HTTP status is read
+   * as a body (JSON-RPC errors ride on non-2xx answers).
+   */
+  private async post(body: string, headersTimeoutMs: number) {
+    const headersDeadline = new AbortController()
+    const timer = setTimeout(
+      () =>
+        headersDeadline.abort(
+          new DOMException("MCP response headers timed out", "TimeoutError"),
+        ),
+      headersTimeoutMs,
+    )
+    try {
+      return await outboundFetch(
+        this.url,
+        {
+          method: "POST",
+          headers: this.getHeaders(),
+          body,
+          signal: headersDeadline.signal,
+          redirect: "follow",
+        },
+        { timeoutMs: MCP_RESPONSE_DEADLINE_MS },
+      )
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
   private async request<T>(
     method: string,
     params: Record<string, unknown> = {},
@@ -107,16 +145,7 @@ export class McpClient {
     })
 
     try {
-      // The URL is member-typed: the pinned fetch refuses private/internal
-      // addresses at connect (s233a). No redirects: validate (the MCP SDK
-      // transport) refuses them too, so a saved server never needed one.
-      // Any HTTP status is read as a body, as before (JSON-RPC errors ride
-      // on non-2xx answers).
-      const response = await outboundFetch(
-        this.url,
-        { method: "POST", headers: this.getHeaders(), body, redirect: "error" },
-        { timeoutMs: timeout ?? aiTimeouts.httpDefault },
-      )
+      const response = await this.post(body, timeout ?? aiTimeouts.httpDefault)
       const responseText = await response.text()
       if (isNotification) {
         return null

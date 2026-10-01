@@ -32,7 +32,7 @@ const { installPinnedOutboundFetch } = await import(
 const { validateAIMcpServer } = await import(
   "@/features/ai-mcp-servers/actions/validate-ai-mcp-server.action"
 )
-const { isSsrfRefusal, pinnedMcpFetch } = await import(
+const { causedBySsrfFetchError, pinnedMcpFetch } = await import(
   "@/features/ai-mcp-servers/lib/pinned-mcp-fetch"
 )
 
@@ -138,14 +138,14 @@ describe("pinnedMcpFetch", () => {
   })
 })
 
-describe("isSsrfRefusal", () => {
+describe("causedBySsrfFetchError", () => {
   const refusal = new SsrfFetchError("unsafeAddress", "http://10.0.0.1/")
 
   test("finds the refusal directly or a few causes down", () => {
-    expect(isSsrfRefusal(refusal)).toBe(true)
-    expect(isSsrfRefusal(new Error("wrapped", { cause: refusal }))).toBe(true)
+    expect(causedBySsrfFetchError(refusal)).toBe(true)
+    expect(causedBySsrfFetchError(new Error("wrapped", { cause: refusal }))).toBe(true)
     expect(
-      isSsrfRefusal(
+      causedBySsrfFetchError(
         new Error("a", { cause: new Error("b", { cause: refusal }) }),
       ),
     ).toBe(true)
@@ -155,7 +155,7 @@ describe("isSsrfRefusal", () => {
     const cyclic = new Error("cycle") as Error & { cause?: unknown }
     cyclic.cause = cyclic
     for (const value of [new Error("x"), null, undefined, "x", 1, cyclic]) {
-      expect(isSsrfRefusal(value)).toBe(false)
+      expect(causedBySsrfFetchError(value)).toBe(false)
     }
   })
 })

@@ -8,8 +8,7 @@ import {
   uninstallOutboundFetch,
 } from "@chatbotx.io/sdk/outbound-fetch"
 import { afterEach, describe, expect, test } from "vitest"
-import { aiTimeouts } from "../src/constants"
-import { McpClient } from "../src/server/mcp-client"
+import { MCP_RESPONSE_DEADLINE_MS, McpClient } from "../src/server/mcp-client"
 
 /**
  * s233a: the runtime MCP client fetches a member-typed URL from the worker,
@@ -46,7 +45,7 @@ const client = () =>
 afterEach(() => uninstallOutboundFetch())
 
 describe("McpClient over the pinned outbound fetch", () => {
-  test("every request is a pinned POST with redirects refused and the method's deadline", async () => {
+  test("every request is a pinned POST, redirects re-checked by the pinned fetch, one overall cap", async () => {
     const results: Record<string, unknown> = {
       "tools/list": { tools: [{ name: "a", inputSchema: {} }] },
       "tools/call": { content: [{ type: "text", text: "hi" }] },
@@ -59,20 +58,19 @@ describe("McpClient over the pinned outbound fetch", () => {
     const byMethod = new Map(
       calls.map((c) => [JSON.parse(String(c.init.body)).method, c]),
     )
+    expect([...byMethod.keys()].sort()).toEqual([
+      "initialize",
+      "notifications/initialized",
+      "tools/call",
+      "tools/list",
+    ])
     for (const call of calls) {
       expect(call.url).toBe("https://mcp.example.com/rpc")
-      expect(call.init).toMatchObject({ method: "POST", redirect: "error" })
+      expect(call.init).toMatchObject({ method: "POST", redirect: "follow" })
+      expect(call.init.signal).toBeInstanceOf(AbortSignal)
       expect(call.init.headers).toMatchObject({ Authorization: "Bearer t0k" })
+      expect(call.options).toEqual({ timeoutMs: MCP_RESPONSE_DEADLINE_MS })
     }
-    expect(byMethod.get("initialize")?.options).toEqual({
-      timeoutMs: aiTimeouts.mcpList,
-    })
-    expect(byMethod.get("tools/list")?.options).toEqual({
-      timeoutMs: aiTimeouts.mcpList,
-    })
-    expect(byMethod.get("tools/call")?.options).toEqual({
-      timeoutMs: aiTimeouts.mcpCall,
-    })
   })
 
   test("a refused address surfaces as a rejected tool call, not a crash", async () => {

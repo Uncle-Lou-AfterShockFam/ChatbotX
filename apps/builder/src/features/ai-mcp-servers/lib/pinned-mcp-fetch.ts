@@ -33,7 +33,7 @@ export const pinnedMcpFetch: typeof fetch = (input, init) => {
 const MAX_CAUSE_DEPTH = 5
 
 /** The SDK wraps transport failures; look a few `cause` links down. */
-export const isSsrfRefusal = (error: unknown): boolean => {
+export const causedBySsrfFetchError = (error: unknown): boolean => {
   let current: unknown = error
   for (let depth = 0; depth < MAX_CAUSE_DEPTH && current; depth += 1) {
     if (isSsrfFetchError(current)) {
