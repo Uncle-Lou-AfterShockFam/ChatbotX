@@ -35,7 +35,7 @@ vi.mock("@/lib/safe-action", () => {
     inputSchema: () => chain,
     action: (handler: unknown) => handler,
   }
-  return { workspaceActionClient: chain }
+  return { workspaceActionClient: chain, settingsActionClient: chain }
 })
 
 const { toAiIntegrationSummary } = await import(

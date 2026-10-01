@@ -14,7 +14,7 @@ import {
   type WorkspaceIdAndIdRequestParams,
   workspaceIdAndIdRequestParams,
 } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { verifyOpenaiCompatibleProvider } from "../lib"
 import {
   resolveOpenaiCompatibleDefaultModel,
@@ -24,7 +24,7 @@ import {
   updateOpenaiCompatibleSchema,
 } from "../schema/request"
 
-export const updateOpenaiCompatibleEnabledAction = workspaceActionClient
+export const updateOpenaiCompatibleEnabledAction = settingsActionClient
   .bindArgsSchemas(workspaceIdAndIdRequestParams)
   .inputSchema(updateOpenaiCompatibleEnabledSchema)
   .action(
@@ -43,7 +43,7 @@ export const updateOpenaiCompatibleEnabledAction = workspaceActionClient
     },
   )
 
-export const updateOpenaiCompatibleAction = workspaceActionClient
+export const updateOpenaiCompatibleAction = settingsActionClient
   .bindArgsSchemas(workspaceIdAndIdRequestParams)
   .inputSchema(updateOpenaiCompatibleSchema)
   .action(

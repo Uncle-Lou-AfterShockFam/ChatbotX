@@ -7,13 +7,13 @@ import {
   type WorkspaceIdRequestParams,
   workspaceIdrequestParams,
 } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import {
   type UpdateOpenRouterRequest,
   updateOpenRouterRequest,
 } from "../schema/request"
 
-export const updateIntegrationOpenRouterAction = workspaceActionClient
+export const updateIntegrationOpenRouterAction = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(updateOpenRouterRequest)
   .action(
