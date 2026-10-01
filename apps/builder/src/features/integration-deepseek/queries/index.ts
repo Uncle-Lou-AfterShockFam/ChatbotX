@@ -1,9 +1,16 @@
+import "server-only"
+
 import { integrationDeepSeekService } from "@chatbotx.io/business"
-import type { IntegrationDeepseekResource } from "../schema/resource"
+import {
+  type AiIntegrationSummary,
+  toAiIntegrationSummary,
+} from "@/lib/ai-integration-summary"
 
 export const findIntegrationDeepSeek = async ({
   workspaceId,
 }: {
   workspaceId: string
-}): Promise<IntegrationDeepseekResource | null> =>
-  (await integrationDeepSeekService.findByWorkspaceId(workspaceId)) ?? null
+}): Promise<AiIntegrationSummary | null> =>
+  toAiIntegrationSummary(
+    await integrationDeepSeekService.findByWorkspaceId(workspaceId),
+  )

@@ -1,9 +1,16 @@
+import "server-only"
+
 import { integrationGeminiService } from "@chatbotx.io/business"
-import type { IntegrationGeminiResource } from "../schema/resource"
+import {
+  type AiIntegrationSummary,
+  toAiIntegrationSummary,
+} from "@/lib/ai-integration-summary"
 
 export const findIntegrationGemini = async ({
   workspaceId,
 }: {
   workspaceId: string
-}): Promise<IntegrationGeminiResource | null> =>
-  (await integrationGeminiService.findByWorkspaceId(workspaceId)) ?? null
+}): Promise<AiIntegrationSummary | null> =>
+  toAiIntegrationSummary(
+    await integrationGeminiService.findByWorkspaceId(workspaceId),
+  )

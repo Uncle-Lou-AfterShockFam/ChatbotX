@@ -1,8 +1,5 @@
 import { openaiModels } from "@chatbotx.io/ai"
-import type { IntegrationOpenAIModel } from "@chatbotx.io/database/types"
 import { z } from "zod"
-
-export type IntegrationOpenAIResource = IntegrationOpenAIModel
 
 export const connectOpenAISchema = z.object({
   apiKey: z.string(),
