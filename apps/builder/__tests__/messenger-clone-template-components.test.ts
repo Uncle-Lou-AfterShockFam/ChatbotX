@@ -46,7 +46,7 @@ vi.mock(
 )
 
 vi.mock("@/lib/safe-action", () => ({
-  workspaceActionClient: {
+  settingsActionClient: {
     bindArgsSchemas: () => ({
       schema: () => ({
         action: (handler: (props: unknown) => Promise<unknown>) => {

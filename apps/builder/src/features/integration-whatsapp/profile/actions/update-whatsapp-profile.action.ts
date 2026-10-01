@@ -1,10 +1,10 @@
 "use server"
 
 import { workspaceIdrequestParams } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { updateWhatsappProfileRequest } from "../schema/update-whatsapp-profile.request"
 
-export const updateWhatsappProfileAction = workspaceActionClient
+export const updateWhatsappProfileAction = settingsActionClient
   .inputSchema(updateWhatsappProfileRequest)
   .bindArgsSchemas(workspaceIdrequestParams)
   .action(

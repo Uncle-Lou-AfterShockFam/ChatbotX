@@ -12,9 +12,9 @@ import {
   workspaceIdAndIdRequestParams,
 } from "@/features/common/schema"
 import { logger } from "@/lib/log"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 
-export const refreshTiktokTokenAction = workspaceActionClient
+export const refreshTiktokTokenAction = settingsActionClient
   .bindArgsSchemas(workspaceIdAndIdRequestParams)
   .action(
     async ({

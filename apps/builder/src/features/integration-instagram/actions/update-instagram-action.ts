@@ -32,14 +32,14 @@ import {
 } from "@/features/common/schema"
 import { getBrandingUrl } from "@/features/integration-webchat/lib"
 import { logger } from "@/lib/log"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { findIntegrationInstagram } from "../queries"
 import {
   type UpdateInstagramRequest,
   updateInstagramRequest,
 } from "../schema/action"
 
-export const updateInstagramAction = workspaceActionClient
+export const updateInstagramAction = settingsActionClient
   .bindArgsSchemas(workspaceIdAndIdRequestParams)
   .inputSchema(updateInstagramRequest)
   .action(

@@ -8,9 +8,9 @@ import {
 import type { WhatsappAuthValue } from "@chatbotx.io/integration-whatsapp"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import { integrations } from "@/integration"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 
-export const syncMessageTemplateAction = workspaceActionClient
+export const syncMessageTemplateAction = settingsActionClient
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .action(async (props) => {
     const {

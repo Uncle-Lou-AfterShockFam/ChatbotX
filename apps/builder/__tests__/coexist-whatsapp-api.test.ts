@@ -181,12 +181,12 @@ describe("setCoexistWhatsappAPI — delegates to the service with the injected t
 })
 
 // ---- H11: workspace membership enforcement --------------------------------
-// workspaceActionClientAllowExpired still validates workspace membership, but
-// keeps disconnect available for expired workspaces. This guard is source-level
-// on purpose: importing the server action pulls in integration side effects that
-// are unrelated to the coexist API assertions above.
+// settingsActionClientAllowExpired validates workspace membership and (s234a)
+// superAdmin, but keeps disconnect available for expired workspaces. This
+// guard is source-level on purpose: importing the server action pulls in
+// integration side effects that are unrelated to the coexist API assertions.
 describe("disconnectWhatsappAction — workspace membership guard (H11)", () => {
-  test("action uses workspaceActionClientAllowExpired, not authActionClient", () => {
+  test("action uses settingsActionClientAllowExpired, not authActionClient", () => {
     const actionSource = readFileSync(
       resolve(
         import.meta.dirname,
@@ -196,10 +196,10 @@ describe("disconnectWhatsappAction — workspace membership guard (H11)", () => 
     )
 
     expect(actionSource).toContain(
-      'import { workspaceActionClientAllowExpired } from "@/lib/safe-action"',
+      'import { settingsActionClientAllowExpired } from "@/lib/safe-action"',
     )
     expect(actionSource).toContain(
-      "export const disconnectWhatsappAction = workspaceActionClientAllowExpired",
+      "export const disconnectWhatsappAction = settingsActionClientAllowExpired",
     )
     expect(actionSource).not.toContain("authActionClient")
   })

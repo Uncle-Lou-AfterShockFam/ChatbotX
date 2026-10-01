@@ -27,7 +27,9 @@ vi.mock("@/lib/safe-action", () => {
   chain.action = (fn: unknown) => fn
   return {
     workspaceActionClient: chain,
+    settingsActionClient: chain,
     workspaceActionClientAllowExpired: chain,
+    settingsActionClientAllowExpired: chain,
   }
 })
 vi.mock("@/features/common/schema", () => ({

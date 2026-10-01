@@ -50,7 +50,7 @@ const {
 }))
 
 vi.mock("@/lib/safe-action", () => ({
-  workspaceActionClient: mockActionChain,
+  settingsActionClient: mockActionChain,
 }))
 
 vi.mock("@chatbotx.io/business", () => ({

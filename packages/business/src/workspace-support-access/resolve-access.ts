@@ -5,6 +5,10 @@ import type {
   WorkspaceModel,
 } from "@chatbotx.io/database/types"
 import { workspaceService } from "../workspace/service"
+import {
+  hasWorkspacePermission,
+  type WorkspacePermissionKey,
+} from "../workspace-member/permissions"
 import { workspaceMemberService } from "../workspace-member/service"
 import { resolveWorkspaceMembership } from "../workspace-member/synthetic"
 
@@ -52,13 +56,16 @@ export async function resolveWorkspaceAccess<
  * Boolean convenience for gates that only need a yes/no answer (e.g. the
  * OAuth channel-connect callback), not the resolved workspace/member.
  * Composes `workspaceMemberService.findMembership` +
- * `resolveWorkspaceAccess` — no new query shapes.
+ * `resolveWorkspaceAccess` — no new query shapes. With `permission`, the
+ * resolved member must also hold it (s234a: connecting a channel into an
+ * existing workspace is a Settings write, `superAdmin`).
  */
 export async function hasWorkspaceAccess(props: {
   workspaceId: string
   user: Pick<UserModel, "id" | "email">
+  permission?: WorkspacePermissionKey
 }): Promise<boolean> {
-  const { workspaceId, user } = props
+  const { workspaceId, user, permission } = props
 
   const realMember = await workspaceMemberService.findMembership({
     workspaceId,
@@ -66,5 +73,11 @@ export async function hasWorkspaceAccess(props: {
   })
 
   const access = await resolveWorkspaceAccess({ realMember, workspaceId, user })
-  return !!access
+  if (!access) {
+    return false
+  }
+  return (
+    permission === undefined ||
+    hasWorkspacePermission(access.member.permissions, permission)
+  )
 }

@@ -10,6 +10,8 @@ const FACTORY_ON_SETTINGS_CLIENT =
 const WORKSPACE_CLIENT = /\bworkspaceActionClient/
 const USES_SUPER_ADMIN_GATE = /\.use\(superAdminAuthorizedMiddleware/
 const MEMBERSHIP_ONLY = /workspaceAuthorizedMidddleware/
+const PERMISSION_SUPER_ADMIN =
+  /hasWorkspaceAccess\(\{[^}]*permission: "superAdmin"/
 
 /**
  * s234a (owner decision 2026-10-01): the Settings integrations sit behind the
@@ -198,6 +200,76 @@ describe("every Settings integration action is built on a superAdmin client", ()
     }
     expect(seen).toBeGreaterThanOrEqual(50)
     expect(offenders).toEqual([])
+  })
+
+  // Settings > Channels (and each channel's own pages, all layout-gated on
+  // superAdmin). The named exceptions are not Settings writes or gate
+  // themselves: calls (contacts / call permission), and the create-or-connect
+  // actions that may target a NEW workspace (no workspaceId) and require
+  // superAdmin via hasWorkspaceAccess / isSuperAdminMember when one is given.
+  const CHANNEL_FEATURES = [
+    "integration-api",
+    "integration-instagram",
+    "integration-messenger",
+    "integration-telegram",
+    "integration-threads",
+    "integration-tiktok",
+    "integration-webchat",
+    "integration-whatsapp",
+    "integration-zalo",
+  ]
+  const CHANNEL_EXCEPTIONS: Record<string, string> = {
+    "integration-api/actions/create-api.action.ts createApiAction":
+      "authActionClient",
+    "integration-telegram/actions/connect.action.ts connectTelegramAction":
+      "authActionClient",
+    "integration-webchat/actions/create-webchat.action.ts createWebchatAction":
+      "authActionClient",
+    "integration-whatsapp/actions/connect.action.ts connectWhatsappAction":
+      "authActionClient",
+  }
+  const CALLING_DIR = "integration-whatsapp/calling/"
+
+  test("the channel action files", () => {
+    const offenders: string[] = []
+    let seen = 0
+    for (const feature of CHANNEL_FEATURES) {
+      for (const path of collectSourceFiles(join(FEATURES, feature))) {
+        const rel = path.slice(FEATURES.length + 1)
+        if (rel.startsWith(CALLING_DIR)) {
+          continue
+        }
+        for (const { name, root } of serverActionExports(path, read(path))) {
+          seen += 1
+          const allowed = CHANNEL_EXCEPTIONS[`${rel} ${name}`]
+          if (!(root && (SUPER_ADMIN_ROOTS.has(root) || root === allowed))) {
+            offenders.push(`${rel} ${name}: ${root}`)
+          }
+        }
+      }
+    }
+    expect(seen).toBeGreaterThanOrEqual(45)
+    expect(offenders).toEqual([])
+  })
+
+  test("the create-or-connect exceptions require superAdmin for an existing workspace", () => {
+    for (const rel of [
+      "integration-api/actions/create-api.action.ts",
+      "integration-telegram/actions/connect.action.ts",
+      "integration-webchat/actions/create-webchat.action.ts",
+    ]) {
+      expect(read(join(FEATURES, rel)), rel).toMatch(PERMISSION_SUPER_ADMIN)
+    }
+    for (const rel of [
+      "integration-whatsapp/actions/connect-number.ts",
+      "channel-connect/lib/resolve-connect-session.ts",
+    ]) {
+      const source = read(join(FEATURES, rel))
+      expect(source, rel).toContain(
+        "workspaceMemberService.isSuperAdminMember(",
+      )
+      expect(source, rel).not.toContain("workspaceMemberService.isMember(")
+    }
   })
 
   test("the disconnect factory is superAdmin-gated and stays open on an expired workspace", () => {

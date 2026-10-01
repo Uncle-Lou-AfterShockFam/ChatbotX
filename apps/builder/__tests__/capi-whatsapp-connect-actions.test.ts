@@ -14,7 +14,6 @@ type DisconnectHandler = (args: {
 }) => Promise<unknown>
 
 const {
-  mockAssertWorkspaceSuperAdmin,
   mockWhatsappFindByIdForWorkspace,
   mockConnectCustomCapi,
   mockDisconnectCapi,
@@ -23,7 +22,6 @@ const {
 } = vi.hoisted(() => {
   class HoistedMetaConversionsException extends Error {}
   return {
-    mockAssertWorkspaceSuperAdmin: vi.fn(),
     mockWhatsappFindByIdForWorkspace: vi.fn(),
     mockConnectCustomCapi: vi.fn(),
     mockDisconnectCapi: vi.fn(),
@@ -38,14 +36,10 @@ vi.mock("@/lib/safe-action", () => {
   chain.inputSchema = () => chain
   chain.action = (handler: ConnectCustomHandler | DisconnectHandler) => handler
   return {
-    workspaceActionClient: chain,
-    workspaceActionClientAllowExpired: chain,
+    settingsActionClient: chain,
+    settingsActionClientAllowExpired: chain,
   }
 })
-
-vi.mock("@/lib/auth/assert-workspace-super-admin", () => ({
-  assertWorkspaceSuperAdmin: mockAssertWorkspaceSuperAdmin,
-}))
 
 vi.mock("@chatbotx.io/business", () => ({
   integrationWhatsappService: {
@@ -94,13 +88,12 @@ describe("whatsapp CAPI connect/disconnect actions", () => {
     })
   })
 
-  test("connect-custom is superadmin-gated and connects via connectCustomCapi with channel whatsapp", async () => {
+  test("connect-custom connects via connectCustomCapi with channel whatsapp", async () => {
     await call<ConnectCustomHandler>(connectWhatsappCustomCapiAction)({
       parsedInput: { datasetId: "123456789", accessToken: "manual-token" },
       bindArgsParsedInputs: ["ws-1", "wa-1"],
     })
 
-    expect(mockAssertWorkspaceSuperAdmin).toHaveBeenCalledWith("ws-1")
     expect(mockConnectCustomCapi).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: "whatsapp",
@@ -157,7 +150,6 @@ describe("whatsapp CAPI connect/disconnect actions", () => {
       bindArgsParsedInputs: ["ws-1", "wa-1"],
     })
 
-    expect(mockAssertWorkspaceSuperAdmin).toHaveBeenCalledWith("ws-1")
     expect(mockDisconnectCapi).toHaveBeenCalledWith({
       channel: "whatsapp",
       integration: whatsappIntegration,

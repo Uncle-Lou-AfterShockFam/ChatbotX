@@ -14,9 +14,9 @@ import {
   workspaceIdAndIdRequestParams,
 } from "@/features/common/schema"
 import { integrations } from "@/integration"
-import { workspaceActionClientAllowExpired } from "@/lib/safe-action"
+import { settingsActionClientAllowExpired } from "@/lib/safe-action"
 
-export const disconnectWhatsappAction = workspaceActionClientAllowExpired
+export const disconnectWhatsappAction = settingsActionClientAllowExpired
   .bindArgsSchemas(workspaceIdAndIdRequestParams)
   .action(
     async ({

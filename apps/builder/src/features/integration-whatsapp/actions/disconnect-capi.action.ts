@@ -7,10 +7,9 @@ import {
 import { ChatbotXException } from "@chatbotx.io/business/errors"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import { getTranslations } from "next-intl/server"
-import { assertWorkspaceSuperAdmin } from "@/lib/auth/assert-workspace-super-admin"
-import { workspaceActionClientAllowExpired } from "@/lib/safe-action"
+import { settingsActionClientAllowExpired } from "@/lib/safe-action"
 
-export const disconnectWhatsappCapiAction = workspaceActionClientAllowExpired
+export const disconnectWhatsappCapiAction = settingsActionClientAllowExpired
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .action(
     async ({
@@ -19,7 +18,6 @@ export const disconnectWhatsappCapiAction = workspaceActionClientAllowExpired
       bindArgsParsedInputs: readonly [string, string]
     }) => {
       const t = await getTranslations("metaConversions.errors")
-      await assertWorkspaceSuperAdmin(workspaceId)
 
       const integration = await integrationWhatsappService.findByIdForWorkspace(
         {

@@ -14,7 +14,6 @@ type ProvisionHandler = (args: {
 }) => Promise<unknown>
 
 const {
-  mockAssertWorkspaceSuperAdmin,
   mockWhatsappFindByIdForWorkspace,
   mockSaveDatasetId,
   mockProvisionDatasetNow,
@@ -22,7 +21,6 @@ const {
   mockGetDataset,
   mockEnsureDataset,
 } = vi.hoisted(() => ({
-  mockAssertWorkspaceSuperAdmin: vi.fn(),
   mockWhatsappFindByIdForWorkspace: vi.fn(),
   mockSaveDatasetId: vi.fn(),
   mockProvisionDatasetNow: vi.fn(),
@@ -36,12 +34,8 @@ vi.mock("@/lib/safe-action", () => {
   chain.bindArgsSchemas = () => chain
   chain.inputSchema = () => chain
   chain.action = (handler: SetDatasetHandler | ProvisionHandler) => handler
-  return { workspaceActionClient: chain }
+  return { settingsActionClient: chain }
 })
-
-vi.mock("@/lib/auth/assert-workspace-super-admin", () => ({
-  assertWorkspaceSuperAdmin: mockAssertWorkspaceSuperAdmin,
-}))
 
 vi.mock("@chatbotx.io/business", () => ({
   integrationWhatsappService: {
@@ -90,13 +84,12 @@ describe("whatsapp CAPI dataset actions", () => {
     mockReconnectCapi.mockResolvedValue(undefined)
   })
 
-  test("set-dataset is superadmin-gated and saves via saveDatasetId with channel whatsapp", async () => {
+  test("set-dataset saves via saveDatasetId with channel whatsapp", async () => {
     await call<SetDatasetHandler>(setWhatsappCapiDatasetAction)({
       parsedInput: { datasetId: "123456789" },
       bindArgsParsedInputs: ["ws-1", "wa-1"],
     })
 
-    expect(mockAssertWorkspaceSuperAdmin).toHaveBeenCalledWith("ws-1")
     expect(mockSaveDatasetId).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: "whatsapp",
@@ -125,7 +118,6 @@ describe("whatsapp CAPI dataset actions", () => {
       bindArgsParsedInputs: ["ws-1", "wa-1"],
     })
 
-    expect(mockAssertWorkspaceSuperAdmin).toHaveBeenCalledWith("ws-1")
     expect(mockProvisionDatasetNow).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: "whatsapp",

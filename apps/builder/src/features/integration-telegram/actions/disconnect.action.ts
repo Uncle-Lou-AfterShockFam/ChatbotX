@@ -12,9 +12,9 @@ import {
 } from "@/features/common/schema"
 import { integrations } from "@/integration"
 import { logger } from "@/lib/log"
-import { workspaceActionClientAllowExpired } from "@/lib/safe-action"
+import { settingsActionClientAllowExpired } from "@/lib/safe-action"
 
-export const disconnectTelegramAction = workspaceActionClientAllowExpired
+export const disconnectTelegramAction = settingsActionClientAllowExpired
   .bindArgsSchemas(workspaceIdAndIdRequestParams)
   .action(
     async ({

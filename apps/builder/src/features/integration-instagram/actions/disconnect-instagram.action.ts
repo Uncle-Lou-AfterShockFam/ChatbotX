@@ -4,10 +4,10 @@ import {
   type WorkspaceIdAndIdRequestParams,
   workspaceIdAndIdRequestParams,
 } from "@/features/common/schema"
-import { workspaceActionClientAllowExpired } from "@/lib/safe-action"
+import { settingsActionClientAllowExpired } from "@/lib/safe-action"
 import { disconnectInstagram } from "./disconnect-instagram"
 
-export const disconnectInstagramAction = workspaceActionClientAllowExpired
+export const disconnectInstagramAction = settingsActionClientAllowExpired
   .bindArgsSchemas(workspaceIdAndIdRequestParams)
   .action(
     async ({

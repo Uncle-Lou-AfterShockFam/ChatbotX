@@ -76,7 +76,7 @@ vi.mock("@chatbotx.io/business", () => ({
     create: vi.fn(),
     find: mockWorkspaceFind,
   },
-  workspaceMemberService: { isMember: mockIsMember },
+  workspaceMemberService: { isSuperAdminMember: mockIsMember },
   resolveTenantSettings: vi.fn(async () => ({ appUrl: "https://app.test" })),
   updateInstagramIntegrationUserInfo: vi.fn(),
   updateMessengerIntegrationUserInfo: vi.fn(),

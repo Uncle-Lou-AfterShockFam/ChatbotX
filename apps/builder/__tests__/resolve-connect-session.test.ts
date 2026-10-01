@@ -66,7 +66,7 @@ vi.mock("@/features/integration-webchat/lib", () => ({
 
 vi.mock("@chatbotx.io/business", () => ({
   workspaceService: { find: findWorkspaceMock },
-  workspaceMemberService: { isMember: isMemberMock },
+  workspaceMemberService: { isSuperAdminMember: isMemberMock },
   platformCredentialService: { resolveForOwner: platformCredentialResolveMock },
   resolveTenantSettings: resolveTenantSettingsMock,
 }))

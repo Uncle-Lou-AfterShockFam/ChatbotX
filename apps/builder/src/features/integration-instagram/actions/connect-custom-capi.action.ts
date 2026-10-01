@@ -9,10 +9,9 @@ import { getDataset } from "@chatbotx.io/integration-meta-conversions"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import { getTranslations } from "next-intl/server"
 import { z } from "zod"
-import { assertWorkspaceSuperAdmin } from "@/lib/auth/assert-workspace-super-admin"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 
-export const connectInstagramCustomCapiAction = workspaceActionClient
+export const connectInstagramCustomCapiAction = settingsActionClient
   .inputSchema(
     z.object({
       datasetId: z.string().trim().min(1),
@@ -29,7 +28,6 @@ export const connectInstagramCustomCapiAction = workspaceActionClient
       bindArgsParsedInputs: readonly [string, string]
     }) => {
       const t = await getTranslations("metaConversions.errors")
-      await assertWorkspaceSuperAdmin(workspaceId)
 
       const integration =
         await instagramIntegrationService.findByIdForWorkspace({

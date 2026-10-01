@@ -10,10 +10,10 @@ import {
 } from "@/features/common/schema"
 import { findIntegrationApiByWorkspaceAndId } from "@/features/integration-api/queries"
 import { logger } from "@/lib/log"
-import { workspaceActionClientAllowExpired } from "@/lib/safe-action"
+import { settingsActionClientAllowExpired } from "@/lib/safe-action"
 import { assertEmailLineAdmin } from "../lib/email-line-guard"
 
-export const deleteApiAction = workspaceActionClientAllowExpired
+export const deleteApiAction = settingsActionClientAllowExpired
   .bindArgsSchemas(workspaceIdAndIdRequestParams)
   .action(
     async ({

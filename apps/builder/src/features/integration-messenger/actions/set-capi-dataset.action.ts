@@ -10,10 +10,9 @@ import { zodBigintAsString } from "@chatbotx.io/utils"
 import { getTranslations } from "next-intl/server"
 import { z } from "zod"
 import { surfaceCapiError } from "@/features/meta-conversions/lib/surface-capi-error"
-import { assertWorkspaceSuperAdmin } from "@/lib/auth/assert-workspace-super-admin"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 
-export const setMessengerCapiDatasetAction = workspaceActionClient
+export const setMessengerCapiDatasetAction = settingsActionClient
   .inputSchema(
     z.object({
       datasetId: z.string().trim().min(1),
@@ -29,7 +28,6 @@ export const setMessengerCapiDatasetAction = workspaceActionClient
       bindArgsParsedInputs: readonly [string, string]
     }) => {
       const t = await getTranslations("metaConversions.errors")
-      await assertWorkspaceSuperAdmin(workspaceId)
 
       const integration =
         await messengerIntegrationService.findByIdForWorkspace({

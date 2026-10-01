@@ -9,9 +9,9 @@ import {
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import { integrations } from "@/integration"
 import { logger } from "@/lib/log"
-import { workspaceActionClientAllowExpired } from "@/lib/safe-action"
+import { settingsActionClientAllowExpired } from "@/lib/safe-action"
 
-export const disconnectZaloAction = workspaceActionClientAllowExpired
+export const disconnectZaloAction = settingsActionClientAllowExpired
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .action(async (props) => {
     const {

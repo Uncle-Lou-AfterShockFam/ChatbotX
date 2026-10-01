@@ -21,6 +21,7 @@ export const createWebchatAction = authActionClient
       !(await hasWorkspaceAccess({
         workspaceId: parsedInput.workspaceId,
         user: ctx.user,
+        permission: "superAdmin",
       }))
     ) {
       throw new ChatbotXException("Workspace not found", "notFound", 404)

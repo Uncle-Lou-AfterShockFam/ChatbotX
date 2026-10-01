@@ -17,7 +17,7 @@ import { zodBigintAsString } from "@chatbotx.io/utils"
 import { revalidatePath } from "next/cache"
 import { getTranslations } from "next-intl/server"
 import { logger } from "@/lib/log"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { toRegistrationOutcome } from "../libs/registration-outcome"
 import { throwWhatsappApiActionError } from "../libs/whatsapp-api-action-error"
 import {
@@ -109,7 +109,7 @@ async function retryRegistration(input: {
   }
 }
 
-export const requestWhatsappVerificationCodeAction = workspaceActionClient
+export const requestWhatsappVerificationCodeAction = settingsActionClient
   .bindArgsSchemas([zodBigintAsString()])
   .inputSchema(requestWhatsappVerificationCodeSchema)
   .action(
@@ -177,7 +177,7 @@ export const requestWhatsappVerificationCodeAction = workspaceActionClient
     },
   )
 
-export const verifyWhatsappPhoneCodeAction = workspaceActionClient
+export const verifyWhatsappPhoneCodeAction = settingsActionClient
   .bindArgsSchemas([zodBigintAsString()])
   .inputSchema(verifyWhatsappPhoneCodeSchema)
   .action(

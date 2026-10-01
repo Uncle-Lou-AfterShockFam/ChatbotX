@@ -84,7 +84,7 @@ vi.mock("@chatbotx.io/business", () => ({
     upsertCurrentCredential: mocks.upsertWabaCredentialMock,
   },
   workspaceMemberService: {
-    isMember: mocks.isMemberMock,
+    isSuperAdminMember: mocks.isMemberMock,
   },
   workspaceService: {
     find: mocks.workspaceFindMock,

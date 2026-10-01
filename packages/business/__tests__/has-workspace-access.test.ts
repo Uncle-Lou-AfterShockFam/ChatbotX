@@ -76,4 +76,55 @@ describe("hasWorkspaceAccess", () => {
 
     expect(result).toBe(false)
   })
+
+  describe("with a permission (s234a)", () => {
+    const asMember = (permissions: Record<string, unknown>) =>
+      mocks.findMembership.mockResolvedValue({
+        userId: "user-1",
+        permissions,
+        workspace: { id: "workspace-1", supportAccessUntil: null },
+      })
+    const check = () =>
+      hasWorkspaceAccess({
+        workspaceId: "workspace-1",
+        user,
+        permission: "superAdmin",
+      })
+
+    test("a member without it is refused", async () => {
+      for (const permissions of [
+        {},
+        { superAdmin: false, flows: true },
+        { superAdmin: "true" },
+      ]) {
+        asMember(permissions)
+        expect(await check()).toBe(false)
+      }
+    })
+
+    test("a member holding it passes", async () => {
+      asMember({ superAdmin: true })
+      expect(await check()).toBe(true)
+    })
+
+    test("a non-member is still refused", async () => {
+      mocks.findMembership.mockResolvedValue(undefined)
+      mocks.isSuperAdmin.mockReturnValue(false)
+      mocks.findForAuth.mockResolvedValue({
+        id: "workspace-1",
+        supportAccessUntil: null,
+      })
+      expect(await check()).toBe(false)
+    })
+
+    test("a support session (synthetic superAdmin) passes, as on the page", async () => {
+      mocks.findMembership.mockResolvedValue(undefined)
+      mocks.isSuperAdmin.mockReturnValue(true)
+      mocks.findForAuth.mockResolvedValue({
+        id: "workspace-1",
+        supportAccessUntil: new Date(Date.now() + 60_000),
+      })
+      expect(await check()).toBe(true)
+    })
+  })
 })

@@ -1,12 +1,12 @@
 // @vitest-environment node
 
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { beforeEach, expect, test, vi } from "vitest"
 
-const mockHasWorkspacePermission = vi.fn()
 const mockFindByIdForWorkspace = vi.fn()
 const mockUpdate = vi.fn()
 const mockIsCommunity = vi.fn(() => false)
-const SUPER_ADMIN_ERROR_RE = /super admin/i
 
 vi.mock("@/env", () => ({ isCommunity: mockIsCommunity }))
 
@@ -22,13 +22,9 @@ vi.mock("@/lib/safe-action", () => {
   chain.inputSchema = () => chain
   chain.action = (fn: unknown) => fn
   return {
-    workspaceActionClient: chain,
+    settingsActionClient: chain,
   }
 })
-
-vi.mock("@/lib/auth/permission-routes", () => ({
-  hasWorkspacePermission: mockHasWorkspacePermission,
-}))
 
 vi.mock("@chatbotx.io/business", () => ({
   integrationWebchatService: {
@@ -45,9 +41,6 @@ const { updateWebchatAction } = await import(
   "../src/features/integration-webchat/actions/update-webchat.action"
 )
 
-// The action reads the caller's permissions from the middleware ctx
-// (workspaceActionClient already loads the member row), so no user/member
-// fetch happens inside the action itself.
 const makeInput = (permissions: Record<string, unknown>) => ({
   bindArgsParsedInputs: ["workspace-1", "webchat-1"],
   parsedInput: {
@@ -66,41 +59,20 @@ beforeEach(() => {
   mockUpdate.mockResolvedValue(undefined)
 })
 
-test("rejects a workspace member without superAdmin permission", async () => {
-  mockHasWorkspacePermission.mockReturnValue(false)
-
-  await expect(
-    (updateWebchatAction as (props: unknown) => Promise<unknown>)(
-      makeInput({}),
+test("the superAdmin gate is the action client (s234a), not an inline check", () => {
+  const source = readFileSync(
+    join(
+      import.meta.dirname,
+      "../src/features/integration-webchat/actions/update-webchat.action.ts",
     ),
-  ).rejects.toThrow(SUPER_ADMIN_ERROR_RE)
-
-  // The permission check must short-circuit before any write is attempted —
-  // this is the guard that closes the bypass of the edit page's
-  // requireWorkspacePermission(workspaceId, "superAdmin") gate.
-  expect(mockFindByIdForWorkspace).not.toHaveBeenCalled()
-  expect(mockUpdate).not.toHaveBeenCalled()
-})
-
-test("gates on the permissions supplied by the middleware ctx", async () => {
-  mockHasWorkspacePermission.mockReturnValue(false)
-
-  await expect(
-    (updateWebchatAction as (props: unknown) => Promise<unknown>)(
-      makeInput({ superAdmin: false }),
-    ),
-  ).rejects.toThrow(SUPER_ADMIN_ERROR_RE)
-
-  expect(mockHasWorkspacePermission).toHaveBeenCalledWith(
-    { superAdmin: false },
-    "superAdmin",
+    "utf8",
   )
-  expect(mockUpdate).not.toHaveBeenCalled()
+  expect(source).toContain(
+    "export const updateWebchatAction = settingsActionClient",
+  )
 })
 
 test("proceeds to update when the caller is a superAdmin", async () => {
-  mockHasWorkspacePermission.mockReturnValue(true)
-
   await (updateWebchatAction as (props: unknown) => Promise<unknown>)(
     makeInput({ superAdmin: true }),
   )

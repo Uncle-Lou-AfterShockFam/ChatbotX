@@ -75,11 +75,12 @@ async function assertWorkspaceConnectAccess(params: {
     throw notWorkspaceMemberException()
   }
 
-  const isMember = await workspaceMemberService.isMember({
+  // s234a: connecting a channel into a workspace is a Settings write.
+  const isAdmin = await workspaceMemberService.isSuperAdminMember({
     workspaceId: workspace.id,
     userId: params.userId,
   })
-  if (!isMember) {
+  if (!isAdmin) {
     throw notWorkspaceMemberException()
   }
 

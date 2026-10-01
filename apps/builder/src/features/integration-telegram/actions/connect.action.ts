@@ -41,7 +41,13 @@ export const connectTelegramAction = authActionClient
         // Resolve ownerId before the transaction to avoid an extra read inside it
         let ownerId = ctx.user.id
         if (workspaceId) {
-          if (!(await hasWorkspaceAccess({ workspaceId, user: ctx.user }))) {
+          if (
+            !(await hasWorkspaceAccess({
+              workspaceId,
+              user: ctx.user,
+              permission: "superAdmin",
+            }))
+          ) {
             throw new ChatbotXException("Workspace not found", "notFound", 404)
           }
           const workspace = await workspaceService.findOrFail({

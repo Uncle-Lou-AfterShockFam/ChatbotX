@@ -36,6 +36,7 @@ import {
   ownNotificationPrefs,
   parseOwnNotificationPrefsPatch,
 } from "./notification-prefs"
+import { hasWorkspacePermission } from "./permissions"
 
 type ListWorkspaceMembersInput = {
   workspaceId: string
@@ -230,6 +231,29 @@ export class WorkspaceMemberService extends BaseService {
       )
       .limit(1)
     return !!row
+  }
+
+  /**
+   * s234a: a REAL member holding `superAdmin` - connecting a channel into an
+   * existing workspace is a Settings write. Uncached, like isMember.
+   */
+  async isSuperAdminMember(props: {
+    tx?: DatabaseClient
+    workspaceId: string
+    userId: string
+  }): Promise<boolean> {
+    const { tx = db, workspaceId, userId } = props
+    const [row] = await tx
+      .select({ permissions: workspaceMemberModel.permissions })
+      .from(workspaceMemberModel)
+      .where(
+        and(
+          eq(workspaceMemberModel.workspaceId, workspaceId),
+          eq(workspaceMemberModel.userId, userId),
+        ),
+      )
+      .limit(1)
+    return !!row && hasWorkspacePermission(row.permissions, "superAdmin")
   }
 
   async listUserIdsByWorkspaceId(props: {

@@ -24,7 +24,7 @@ import { getWhatsappGrantedScopes } from "@/features/integration-whatsapp/libs/c
 import { assertWorkspaceSuperAdmin } from "@/lib/auth/assert-workspace-super-admin"
 import { logger } from "@/lib/log"
 import { resolveProviderOriginForCredential } from "@/lib/provider-origin"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { WHATSAPP_OAUTH_CALLBACK_PATH } from "../libs/embedded-signup"
 import { buildAuthValue, buildWebhookConfig } from "./webhook-url"
 
@@ -299,7 +299,7 @@ async function reconnectWhatsapp(input: {
   }
 }
 
-export const reconnectWhatsappAction = workspaceActionClient
+export const reconnectWhatsappAction = settingsActionClient
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .inputSchema(reconnectWhatsappSchema)
   .action(
