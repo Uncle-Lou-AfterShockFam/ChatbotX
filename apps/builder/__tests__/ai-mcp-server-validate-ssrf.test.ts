@@ -143,7 +143,9 @@ describe("causedBySsrfFetchError", () => {
 
   test("finds the refusal directly or a few causes down", () => {
     expect(causedBySsrfFetchError(refusal)).toBe(true)
-    expect(causedBySsrfFetchError(new Error("wrapped", { cause: refusal }))).toBe(true)
+    expect(
+      causedBySsrfFetchError(new Error("wrapped", { cause: refusal })),
+    ).toBe(true)
     expect(
       causedBySsrfFetchError(
         new Error("a", { cause: new Error("b", { cause: refusal }) }),
