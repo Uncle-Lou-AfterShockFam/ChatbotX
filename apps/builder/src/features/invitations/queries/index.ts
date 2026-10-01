@@ -1,4 +1,4 @@
-"use server"
+import "server-only"
 
 import { workspaceService } from "@chatbotx.io/business"
 import { ChatbotXException } from "@chatbotx.io/business/errors"
