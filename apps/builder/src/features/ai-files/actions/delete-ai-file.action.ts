@@ -2,9 +2,9 @@
 
 import { aiFileService } from "@chatbotx.io/business"
 import { zodBigintAsString } from "@chatbotx.io/utils"
-import { flowsActionClient } from "@/lib/safe-action"
+import { flowsActionClientAllowExpired } from "@/lib/safe-action"
 
-export const deleteAIFileAction = flowsActionClient
+export const deleteAIFileAction = flowsActionClientAllowExpired
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .action(async (props) => {
     const {

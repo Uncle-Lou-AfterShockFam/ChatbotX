@@ -228,22 +228,28 @@ export const rejectSupportSession = createMiddleware<{
 })
 
 /**
- * Refuses a member with neither contacts nor onlyAssignedContacts. Reuses
- * hasContactsAccess, which already lets superAdmin through, rather than a
- * parallel permission check; `deny` builds the 403 so each surface keeps its
- * own message (the calling one is translated).
+ * Refuses a member whose permissions fail `allows` (every permission helper
+ * already lets superAdmin through, so no parallel check here); `deny` builds
+ * the 403 so each surface keeps its own message (the calling one is
+ * translated).
  */
-const createContactsAccessMiddleware = (
+const createPermissionMiddleware = (
+  allows: (permissions: PermissionsInput) => boolean,
   deny: () => Promise<ChatbotXException>,
 ) =>
   createMiddleware<{
     ctx: { workspaceMemberPermissions: PermissionsInput }
   }>().define(async ({ ctx, next }) => {
-    if (!hasContactsAccess(ctx.workspaceMemberPermissions)) {
+    if (!allows(ctx.workspaceMemberPermissions)) {
       throw await deny()
     }
     return await next({ ctx })
   })
+
+/** Contacts or onlyAssignedContacts (`hasContactsAccess`). */
+const createContactsAccessMiddleware = (
+  deny: () => Promise<ChatbotXException>,
+) => createPermissionMiddleware(hasContactsAccess, deny)
 
 /** Every calling action that starts or joins a call. */
 export const requireContactsAccess = createContactsAccessMiddleware(
@@ -329,21 +335,23 @@ export const callHistoryActionClient = workspaceActionClientAllowExpired.use(
  * write AI tools by calling the action directly (s233a). superAdmin passes via
  * hasWorkspacePermission.
  */
-export const requireFlowsAccess = createMiddleware<{
-  ctx: { workspaceMemberPermissions: PermissionsInput }
-}>().define(async ({ ctx, next }) => {
-  if (!hasWorkspacePermission(ctx.workspaceMemberPermissions, "flows")) {
-    throw new ChatbotXException(
-      "Flows access required",
-      "flowsAccessRequired",
-      403,
-    )
-  }
-  return await next({ ctx })
-})
+export const requireFlowsAccess = createPermissionMiddleware(
+  (permissions) => hasWorkspacePermission(permissions, "flows"),
+  () =>
+    Promise.resolve(
+      new ChatbotXException(
+        "Flows access required",
+        "flowsAccessRequired",
+        403,
+      ),
+    ),
+)
 
 export const flowsActionClient = workspaceActionClient.use(requireFlowsAccess)
 
-/** Deletes stay open on an expired workspace (invariant #14), still `flows`-gated. */
+/**
+ * AI tool deletes: open on an expired / owner-blocked workspace (invariant
+ * #14, deletes stay open), still `flows`-gated.
+ */
 export const flowsActionClientAllowExpired =
   workspaceActionClientAllowExpired.use(requireFlowsAccess)

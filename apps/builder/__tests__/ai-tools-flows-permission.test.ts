@@ -1,9 +1,10 @@
 // @vitest-environment node
-import { readdirSync, readFileSync } from "node:fs"
+import { readFileSync } from "node:fs"
 import { join } from "node:path"
+import ts from "typescript"
 import { beforeEach, describe, expect, test, vi } from "vitest"
+import { collectSourceFiles } from "./source-files.test-utils"
 
-const EXPORTED_CLIENT = /export const \w+ = (\w+)/g
 const MEMBERSHIP_ONLY = /workspaceAuthorizedMidddleware/
 const USES_FLOWS_GATE = /\.use\(flowsAuthorizedMiddleware/
 const USES_MEMBERSHIP_GATE = /\.use\(workspaceAuthorizedMidddleware/
@@ -200,28 +201,98 @@ describe("every AI tool action and private route uses the flows gate", () => {
   ]
   const read = (path: string) => readFileSync(path, "utf8")
 
-  test("every exported action is built on a flows client", () => {
+  /** Every value export of a "use server" file and the client it is built on. */
+  const serverActionExports = (fileName: string, source: string) => {
+    const file = ts.createSourceFile(
+      fileName,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      fileName.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    )
+    const first = file.statements[0]
+    const isUseServer =
+      first !== undefined &&
+      ts.isExpressionStatement(first) &&
+      ts.isStringLiteral(first.expression) &&
+      first.expression.text === "use server"
+    if (!isUseServer) {
+      return []
+    }
+    const found: { name: string; root: string | null }[] = []
+    for (const statement of file.statements) {
+      const exported = ts
+        .getModifiers(statement as ts.HasModifiers)
+        ?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
+      if (ts.isVariableStatement(statement) && exported) {
+        for (const decl of statement.declarationList.declarations) {
+          found.push({
+            name: decl.name.getText(),
+            root: chainRoot(decl.initializer),
+          })
+        }
+      } else if (ts.isFunctionDeclaration(statement) && exported) {
+        found.push({ name: statement.name?.text ?? "default", root: null })
+      } else if (
+        ts.isExportAssignment(statement) ||
+        (ts.isExportDeclaration(statement) && !statement.isTypeOnly)
+      ) {
+        found.push({ name: statement.getText(), root: null })
+      }
+    }
+    return found
+  }
+
+  test("scanner self-check: multi-line, function, re-export and default exports are seen", () => {
+    const roots = serverActionExports(
+      "x.ts",
+      [
+        "// leading comment",
+        '"use server"',
+        "export const a = flowsActionClient.inputSchema(s).action(h)",
+        "export const b =",
+        "  workspaceActionClient",
+        "    .action(h)",
+        "export async function c() {}",
+        'export { d } from "./d"',
+        "export type T = string",
+      ].join("\n"),
+    )
+    expect(roots).toEqual([
+      { name: "a", root: "flowsActionClient" },
+      { name: "b", root: "workspaceActionClient" },
+      { name: "c", root: null },
+      { name: 'export { d } from "./d"', root: null },
+    ])
+  })
+
+  test("every server-action export under the AI features is built on a flows client", () => {
     const offenders: string[] = []
     let seen = 0
     for (const feature of AI_FEATURES) {
-      const dir = join(FEATURES, feature, "actions")
-      for (const file of readdirSync(dir).filter((f) =>
-        f.endsWith(".action.ts"),
-      )) {
-        const source = read(join(dir, file))
-        if (!source.startsWith('"use server"')) {
-          continue
-        }
-        for (const match of source.matchAll(EXPORTED_CLIENT)) {
+      for (const path of collectSourceFiles(join(FEATURES, feature))) {
+        for (const { name, root } of serverActionExports(path, read(path))) {
           seen += 1
-          if (!match[1]?.startsWith("flowsActionClient")) {
-            offenders.push(`${feature}/${file}: ${match[1]}`)
+          if (!root?.startsWith("flowsActionClient")) {
+            offenders.push(`${feature}/${name}: ${root}`)
           }
         }
       }
     }
     expect(seen).toBeGreaterThanOrEqual(11)
     expect(offenders).toEqual([])
+  })
+
+  test("deletes stay open on an expired workspace (invariant #14)", () => {
+    for (const path of [
+      "ai-agents/actions/delete.action.ts",
+      "ai-files/actions/delete-ai-file.action.ts",
+      "ai-functions/actions/delete-ai-function.action.ts",
+      "ai-mcp-servers/actions/delete-ai-mcp-server.action.ts",
+    ]) {
+      const [only] = serverActionExports(path, read(join(FEATURES, path)))
+      expect(only?.root, path).toBe("flowsActionClientAllowExpired")
+    }
   })
 
   test("private routes use flowsAuthorizedMiddleware (agents list excepted)", () => {
@@ -236,3 +307,19 @@ describe("every AI tool action and private route uses the flows gate", () => {
     )
   })
 })
+
+/** The identifier a call/property chain starts from: `a.b().c()` -> `a`. */
+function chainRoot(expression: ts.Expression | undefined): string | null {
+  let current = expression
+  while (
+    current &&
+    (ts.isCallExpression(current) ||
+      ts.isPropertyAccessExpression(current) ||
+      ts.isParenthesizedExpression(current) ||
+      ts.isAsExpression(current) ||
+      ts.isSatisfiesExpression(current))
+  ) {
+    current = current.expression
+  }
+  return current && ts.isIdentifier(current) ? current.text : null
+}
