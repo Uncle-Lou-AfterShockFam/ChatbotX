@@ -7,6 +7,7 @@ import { withAuditContext } from "@chatbotx.io/business/audit"
 import {
   hasContactsAccess,
   hasWorkspacePermission,
+  type WorkspacePermissionKey,
 } from "@chatbotx.io/business/workspace-member/permissions"
 import { ORPCError } from "@orpc/server"
 import { auth } from "@/lib/auth/auth"
@@ -57,6 +58,7 @@ export const authMiddleware = base.middleware(async ({ context, next }) => {
 const createWorkspaceAuthorizedMiddleware = (options: {
   requireContactsAccess: boolean
   requireSuperAdmin?: boolean
+  requirePermission?: WorkspacePermissionKey
 }) =>
   base.middleware(async ({ context, next, procedure }, workspaceId: string) => {
     if (!context.user) {
@@ -93,6 +95,15 @@ const createWorkspaceAuthorizedMiddleware = (options: {
     ) {
       throw new ORPCError("FORBIDDEN", {
         message: "Workspace admin access required",
+      })
+    }
+
+    if (
+      options.requirePermission &&
+      !hasWorkspacePermission(member.permissions, options.requirePermission)
+    ) {
+      throw new ORPCError("FORBIDDEN", {
+        message: `Workspace ${options.requirePermission} access required`,
       })
     }
 
@@ -149,3 +160,14 @@ export const superAdminAuthorizedMiddleware =
     requireContactsAccess: false,
     requireSuperAdmin: true,
   })
+
+/**
+ * AI tools (files, functions, MCP servers): the `flows` permission the `(ai)`
+ * layout already applies (s233a). The AI agents list stays on
+ * `workspaceAuthorizedMidddleware`: the comment-automation forms (membership
+ * only) pick an agent from it.
+ */
+export const flowsAuthorizedMiddleware = createWorkspaceAuthorizedMiddleware({
+  requireContactsAccess: false,
+  requirePermission: "flows",
+})

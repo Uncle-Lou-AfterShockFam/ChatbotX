@@ -4,9 +4,9 @@ import { aiMcpServerService } from "@chatbotx.io/business"
 import { notFoundException } from "@chatbotx.io/business/errors"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import { getTranslations } from "next-intl/server"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { flowsActionClientAllowExpired } from "@/lib/safe-action"
 
-export const deleteAIMcpServerAction = workspaceActionClient
+export const deleteAIMcpServerAction = flowsActionClientAllowExpired
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .action((props) => {
     const {

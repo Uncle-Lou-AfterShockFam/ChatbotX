@@ -5,10 +5,10 @@ import { zodBigintAsString } from "@chatbotx.io/utils"
 import { getTranslations } from "next-intl/server"
 import { returnValidationErrors } from "next-safe-action"
 import { isValidationException } from "@/lib/errors/validation-exception"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { flowsActionClient } from "@/lib/safe-action"
 import { updateAIFunctionRequest } from "../schema/action"
 
-export const updateAIFunctionAction = workspaceActionClient
+export const updateAIFunctionAction = flowsActionClient
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .inputSchema(updateAIFunctionRequest)
   .action(async (props) => {

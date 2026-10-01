@@ -1,4 +1,4 @@
-import { workspaceAuthorizedMidddleware } from "@/middlewares/auth"
+import { flowsAuthorizedMiddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
 import { listAIFunctions } from "../queries"
 import {
@@ -15,7 +15,7 @@ export const aiFunctionsAuthenticatedAPI = {
       tags: ["AI Functions"],
     })
     .input(listAIFunctionsRequest)
-    .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+    .use(flowsAuthorizedMiddleware, (input) => input.workspaceId)
     .output(listAIFunctionsResponse)
     .handler(async ({ input }) => await listAIFunctions(input)),
 }

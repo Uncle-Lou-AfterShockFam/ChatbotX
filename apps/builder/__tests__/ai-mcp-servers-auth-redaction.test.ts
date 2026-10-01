@@ -57,7 +57,7 @@ vi.mock("@/lib/safe-action", () => {
     inputSchema: () => chain,
     action: (handler: unknown) => handler,
   }
-  return { workspaceActionClient: chain }
+  return { flowsActionClient: chain }
 })
 
 const { toClientAuth, withClientAuth } = await import(

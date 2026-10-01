@@ -1,4 +1,4 @@
-import { workspaceAuthorizedMidddleware } from "@/middlewares/auth"
+import { flowsAuthorizedMiddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
 import { listAIFiles } from "../queries"
 import { listAIFilesRequest, listAIFilesResponse } from "../schema"
@@ -12,7 +12,7 @@ export const aiFileAuthenticatedAPI = {
       tags: ["AI Files"],
     })
     .input(listAIFilesRequest)
-    .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+    .use(flowsAuthorizedMiddleware, (input) => input.workspaceId)
     .output(listAIFilesResponse)
     .handler(async ({ input }) => await listAIFiles(input)),
 }
