@@ -399,8 +399,13 @@ describe("handleSendSequenceFlow", () => {
       await handleSendSequenceFlow(makeData(), makeJob({ attemptsMade: 1 }))
 
       expect(sendFlowDirectSpy).not.toHaveBeenCalled()
+      // It was sent: never re-labelled canceled, and the delay counts from the send.
+      expect(markCanceledSpy).not.toHaveBeenCalled()
       expect(advanceEnrollmentSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ afterDispatchId: "dispatch-1" }),
+        expect.objectContaining({
+          afterDispatchId: "dispatch-1",
+          sentAt: completedAt,
+        }),
       )
     })
   })

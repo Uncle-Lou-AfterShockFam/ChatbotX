@@ -8,6 +8,7 @@ import {
   STALLED_ENROLLMENT_GRACE_MS,
   STALLED_ENROLLMENT_MAX_AGE_MS,
   type StalledEnrollment,
+  targetStepId,
 } from "./redispatch-stalled-enrollment"
 
 /**
@@ -27,13 +28,14 @@ const liveStatuses = () =>
   )
 
 /**
- * The enrolment's newest dispatch (`cos` in scope); siblings for one step
- * share a createdAt, so the id breaks the tie.
+ * The enrolment's newest dispatch (`cos` in scope). Siblings for one step (one
+ * per inbox) share a createdAt: a completed one wins the tie, so a failed
+ * sibling never hides the send that must be advanced (probe s236).
  */
 const newestDispatch = () => sql`(
   SELECT sd."id" FROM "SequenceDispatch" sd
    WHERE sd."workspaceId" = cos."workspaceId" AND sd."enrollmentId" = cos."id"
-   ORDER BY sd."createdAt" DESC, sd."id" DESC
+   ORDER BY sd."createdAt" DESC, (sd."status" = 'completed') DESC, sd."id" DESC
    LIMIT 1)`
 
 /**
@@ -41,7 +43,8 @@ const newestDispatch = () => sql`(
  * - active and not completed;
  * - no LIVE dispatch (a sibling still sending will advance it itself);
  * - the newest dispatch is COMPLETED, this cycle, past the grace (an advance
- *   may still be on its way) and not too old;
+ *   may still be on its way) and not too old, and its step is the one the
+ *   enrolment stands at (its target step);
  * - the enrolment was not advanced from that step (`lastStepId`).
  */
 const unadvancedPredicate = (now: Date) => {
@@ -55,6 +58,7 @@ const unadvancedPredicate = (now: Date) => {
     AND nd."completedAt" <= ${completedBefore}
     AND nd."completedAt" > ${notOlderThan}
     AND nd."createdAt" >= cos."enrolledAt" - ${CYCLE_CLOCK_TOLERANCE}::interval
+    AND nd."stepId" = ${targetStepId()}
     AND cos."lastStepId" IS DISTINCT FROM nd."stepId"
     AND NOT EXISTS (
       SELECT 1 FROM "SequenceDispatch" sd
@@ -93,8 +97,9 @@ export type RecoverResult =
  * Advance ONE unadvanced enrolment from its newest (completed) dispatch, with
  * `sentAt` = that dispatch's `completedAt`, so the next step keeps its delay.
  * `advanceEnrollment` locks the enrolment and re-checks under the lock (still
- * active, not already advanced from this step, no later dispatch), so a
- * concurrent job retry or another pass is a no-op. It schedules the next
+ * active, not already advanced from this step, the dispatch's step is still
+ * its target, nothing live), so a concurrent job retry or another pass is a
+ * no-op. It schedules the next
  * dispatch itself.
  */
 export async function recoverUnadvancedEnrollment(params: {

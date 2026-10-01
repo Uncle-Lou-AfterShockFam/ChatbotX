@@ -18,6 +18,7 @@ import { calculateNextRunAtFromStep } from "./calculate-next-run-at"
 import { getDispatchContactInboxes } from "./contacts-on-sequences"
 import { createDispatch } from "./dispatch-manager"
 import { LIVE_DISPATCH_STATUSES } from "./enrollment-constants"
+import { targetStepId } from "./redispatch-stalled-enrollment"
 import { calculateNextValidSendTime } from "./send-time-validator"
 
 type NextStepForSchedule = {
@@ -70,10 +71,12 @@ export class EnrollmentNotFoundError extends Error {
 
 export interface AdvanceEnrollmentParams {
   /**
-   * s236 recovery: the COMPLETED dispatch this advance is for, when it is
-   * re-run after the fact (a job retry, the reconcile pass). The advance is a
-   * no-op when the enrolment already has a later dispatch (it moved past this
-   * one) or the dispatch row is gone.
+   * s236 recovery: the finished dispatch this advance is for, when it is re-run
+   * after the fact (a job retry, the reconcile pass). The advance is a no-op
+   * unless that dispatch is still where the enrolment stands: its step is the
+   * enrolment's target step (the first active one at or after `currentStep`)
+   * and the enrolment has no live dispatch. An old job redelivered, or one of
+   * a previous cycle, never moves it; a vanished anchor fails closed.
    */
   afterDispatchId?: string
   contactId: string
@@ -159,27 +162,28 @@ export async function advanceEnrollment(
       if (locked.lastStepId === currentStep.id) {
         return []
       }
-      // s236: re-run for a dispatch after the fact. The enrolment moved past
-      // it if any later dispatch exists (an old job redelivered must never
-      // move the pointer back); a vanished anchor fails closed.
+      // s236: re-run for a dispatch after the fact. Never trust createdAt for
+      // the cycle (a restart within minutes, a revived row): the anchor must
+      // be the step the enrolment stands at, with nothing live (probe s236).
       if (afterDispatchId !== undefined) {
-        const passed = await tx.execute(sql`
-          SELECT 1 FROM "SequenceDispatch" anchor
-           WHERE anchor."id" = ${afterDispatchId}
-             AND anchor."workspaceId" = ${workspaceId}
-             AND anchor."enrollmentId" = ${enrollmentId}
+        const current = await tx.execute(sql`
+          SELECT 1 FROM "ContactOnSequence" cos
+            JOIN "SequenceDispatch" anchor
+              ON anchor."id" = ${afterDispatchId}
+             AND anchor."workspaceId" = cos."workspaceId"
+             AND anchor."enrollmentId" = cos."id"
+           WHERE cos."id" = ${enrollmentId} AND cos."workspaceId" = ${workspaceId}
+             AND anchor."stepId" = ${currentStep.id}
+             AND anchor."stepId" = ${targetStepId()}
              AND NOT EXISTS (
-               SELECT 1 FROM "SequenceDispatch" later
-                WHERE later."workspaceId" = anchor."workspaceId"
-                  AND later."enrollmentId" = anchor."enrollmentId"
-                  AND later."id" <> anchor."id"
-                  -- A sibling for the same step (one per inbox) shares the
-                  -- anchor's transaction, so its createdAt; a new cycle's
-                  -- re-send of the same step is strictly later.
-                  AND (later."createdAt" > anchor."createdAt"
-                       OR (later."createdAt" = anchor."createdAt"
-                           AND later."stepId" IS DISTINCT FROM anchor."stepId")))`)
-        if (passed.rows.length === 0) {
+               SELECT 1 FROM "SequenceDispatch" sd
+                WHERE sd."workspaceId" = cos."workspaceId"
+                  AND sd."enrollmentId" = cos."id"
+                  AND sd."status" IN (${sql.join(
+                    LIVE_DISPATCH_STATUSES.map((status) => sql`${status}`),
+                    sql`, `,
+                  )}))`)
+        if (current.rows.length === 0) {
           return []
         }
       }

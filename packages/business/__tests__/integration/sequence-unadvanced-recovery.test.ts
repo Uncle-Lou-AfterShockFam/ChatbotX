@@ -394,6 +394,81 @@ describe.skipIf(!databaseUrl)(
       })
     })
 
+    test("probe s236 A2: a failed sibling (same createdAt, higher id) never hides the completed send", async () => {
+      const s = await seed({ atStep: 0 })
+      const inboxId = mintId()
+      const contactInboxId = mintId()
+      await asReplica(sql`
+        INSERT INTO "Inbox" (id, "workspaceId", name, channel, "sourceId")
+        VALUES (${inboxId}, ${s.workspaceId}, 's236', 'api', ${`s236-${inboxId}`})`)
+      seeded.Inbox?.push(inboxId)
+      await asReplica(sql`
+        INSERT INTO "ContactInbox"
+          (id, "contactId", "inboxId", "originalContactId", channel, source, "sourceId")
+        VALUES (${contactInboxId}, ${s.contactId}, ${inboxId}, ${s.contactId},
+                'api', 'api', ${`s236-${contactInboxId}`})`)
+      seeded.ContactInbox?.push(contactInboxId)
+      const sibling = mintId()
+      await asReplica(sql`
+        INSERT INTO "SequenceDispatch"
+          (id, "runAtMs", "idempotencyKey", "workspaceId", "sequenceId",
+           "contactId", "contactInboxId", "stepId", "enrollmentId", status,
+           "createdAt")
+        SELECT ${sibling}, "runAtMs", ${`s236-${sibling}`}, "workspaceId",
+               "sequenceId", "contactId", ${contactInboxId}, "stepId",
+               "enrollmentId", 'failed', "createdAt"
+          FROM "SequenceDispatch" WHERE id = ${s.dispatchId}`)
+      seeded.SequenceDispatch?.push(sibling)
+      expect(await isListed(s)).toBe(true)
+      expect(await recover(s)).toEqual({ kind: "advanced" })
+    })
+
+    test("probe s236 H: a previous cycle's crashed dispatch never completes a restarted enrolment", async () => {
+      // Cycle 1 crashed after its LAST step (step 1); the enrolment was then
+      // restarted at step 0 (enrolledAt = now, nothing live: no inbox), 3 min
+      // after that dispatch - inside the 5-min clock tolerance.
+      const s = await seed({
+        stepCount: 2,
+        atStep: 1,
+        completedAt: new Date(Date.now() - 2 * MINUTE),
+      })
+      await db.execute(sql`
+        UPDATE "SequenceDispatch" SET "createdAt" = now() - interval '3 minutes'
+         WHERE id = ${s.dispatchId}`)
+      await db.execute(sql`
+        UPDATE "ContactOnSequence"
+           SET "enrolledAt" = now(), "currentStep" = 0, "lastStepId" = NULL,
+               "nextStepId" = ${s.steps[0] ?? null}
+         WHERE id = ${s.enrollmentId}`)
+      const retry = await advanceEnrollment({
+        enrollmentId: s.enrollmentId,
+        workspaceId: s.workspaceId,
+        sequenceId: s.sequenceId,
+        contactId: s.contactId,
+        currentStep: { id: s.steps[1] ?? "", order: 1 },
+        sentAt: new Date(Date.now() - 2 * MINUTE),
+        scheduler: fakeScheduler(),
+        afterDispatchId: s.dispatchId,
+      })
+      expect(retry).toBe(false)
+      expect(
+        (await recover(s, fakeScheduler())).kind,
+        "reconcile, 15 min later",
+      ).toBe("skipped")
+      expect(
+        (
+          await listUnadvancedEnrollments({
+            limit: 1000,
+            now: new Date(Date.now() + 15 * MINUTE),
+          })
+        ).some((row) => row.id === s.enrollmentId),
+      ).toBe(false)
+      expect(await enrollmentOf(s.enrollmentId)).toMatchObject({
+        status: "active",
+        currentStep: 0,
+      })
+    })
+
     test("listing pages by id and caps the page size", async () => {
       const a = await seed()
       const b = await seed()

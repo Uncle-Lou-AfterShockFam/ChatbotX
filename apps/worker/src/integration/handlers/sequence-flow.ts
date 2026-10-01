@@ -92,7 +92,10 @@ async function runSendSequenceFlow(
   const scheduler = await getSchedulerClient()
 
   if (!validation.valid) {
-    await markDispatchCanceled(dispatchId, workspaceId, validation.reason)
+    // A completed dispatch (a retry after the send) stays completed: it WAS sent.
+    if (dispatch.status !== "completed") {
+      await markDispatchCanceled(dispatchId, workspaceId, validation.reason)
+    }
 
     if (step) {
       await advanceEnrollment({
@@ -101,7 +104,10 @@ async function runSendSequenceFlow(
         sequenceId,
         contactId,
         currentStep: { id: step.id, order: step.order },
-        sentAt: new Date(),
+        sentAt:
+          dispatch.status === "completed" && dispatch.completedAt
+            ? dispatch.completedAt
+            : new Date(),
         scheduler,
         // s236: on a retry of a sent step, never from a dispatch it passed.
         ...(dispatch.status === "completed"
