@@ -1,5 +1,6 @@
 import { aiMcpServerService } from "@chatbotx.io/business"
 import { assertCurrentUserCanAccessChatbot } from "@/lib/auth/utils"
+import { withClientAuth } from "../lib/client-auth"
 import type {
   ListAIMcpServersRequest,
   ListAIMcpServersResponse,
@@ -10,5 +11,8 @@ export async function listAIMcpServers(
 ): Promise<ListAIMcpServersResponse & { pageCount: number }> {
   await assertCurrentUserCanAccessChatbot(input.workspaceId)
 
-  return await aiMcpServerService.listAIMcpServers(input)
+  const result = await aiMcpServerService.listAIMcpServers(input)
+  // Rows go to the MCP table (RSC) and the oRPC list: never the stored
+  // token or header values (s232a).
+  return { ...result, data: result.data.map(withClientAuth) }
 }

@@ -26,7 +26,10 @@ import { PlainTextEditorField } from "@/components/tiptap/plain-text-editor-fiel
 import { client } from "@/lib/orpc/orpc"
 import { createAIMcpServerAction } from "./actions/create-ai-mcp-server.action"
 import { updateAIMcpServerAction } from "./actions/update-ai-mcp-server.action"
-import { createPrivateAIMcpServerRequest } from "./schema/action"
+import {
+  createPrivateAIMcpServerRequest,
+  updatePrivateAIMcpServerRequest,
+} from "./schema/action"
 import type { AIMcpServerResource } from "./schema/resource"
 
 type ToolInfo = { name: string; description?: string }
@@ -83,43 +86,51 @@ export function AIMcpServersCreate({
       : createAIMcpServerAction.bind(null, workspaceId)
 
   const { form, handleSubmitWithAction, resetFormAndAction } =
-    useHookFormAction(action, zodResolver(createPrivateAIMcpServerRequest), {
-      formProps: {
-        mode: "onChange",
-        defaultValues: {
-          url: "",
-          name: "",
-          auth: {
-            type: aiMcpServerAuthTypes.enum.none,
+    useHookFormAction(
+      action,
+      zodResolver(
+        mode === "edit"
+          ? updatePrivateAIMcpServerRequest
+          : createPrivateAIMcpServerRequest,
+      ),
+      {
+        formProps: {
+          mode: "onChange",
+          defaultValues: {
+            url: "",
+            name: "",
+            auth: {
+              type: aiMcpServerAuthTypes.enum.none,
+            },
+            availableTools: {},
+            selectedTools: [],
           },
-          availableTools: {},
-          selectedTools: [],
         },
+        actionProps: {
+          onSuccess: () => {
+            toast.success(
+              t(
+                `messages.${mode === "edit" ? "updatedSuccess" : "createdSuccess"}`,
+                {
+                  feature: t("fields.mcpServer.label"),
+                },
+              ),
+            )
+            resetFormAndAction()
+            setAllTools([])
+            setIsMcpServerValidated(false)
+            setIsOpen(false)
+            onSuccess?.()
+          },
+          onError: ({ error }) => {
+            if (error.serverError) {
+              toast.error(error.serverError)
+            }
+          },
+        },
+        errorMapProps: {},
       },
-      actionProps: {
-        onSuccess: () => {
-          toast.success(
-            t(
-              `messages.${mode === "edit" ? "updatedSuccess" : "createdSuccess"}`,
-              {
-                feature: t("fields.mcpServer.label"),
-              },
-            ),
-          )
-          resetFormAndAction()
-          setAllTools([])
-          setIsMcpServerValidated(false)
-          setIsOpen(false)
-          onSuccess?.()
-        },
-        onError: ({ error }) => {
-          if (error.serverError) {
-            toast.error(error.serverError)
-          }
-        },
-      },
-      errorMapProps: {},
-    })
+    )
 
   useEffect(() => {
     if (!isOpen) {
@@ -172,7 +183,7 @@ export function AIMcpServersCreate({
       setIsMcpServerValidating(true)
       const data =
         (await client.aiMcpServerAPIs.validateAIMcpServerAuthenticatedAPI(
-          { ...form.getValues(), workspaceId },
+          { ...form.getValues(), id: initialData?.id, workspaceId },
           { signal: AbortSignal.timeout(15_000) },
         )) as Record<string, { description?: string }>
 
@@ -269,7 +280,11 @@ export function AIMcpServersCreate({
                     <MoveRightIcon className="size-10" />
                     <InputField
                       name={`auth.headers.${index}.value`}
-                      placeholder="Value"
+                      placeholder={
+                        mode === "edit"
+                          ? t("messages.leaveEmptyToKeepSecret")
+                          : "Value"
+                      }
                     />
                     <Button
                       onClick={() => remove(index)}
