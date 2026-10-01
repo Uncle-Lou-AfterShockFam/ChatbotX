@@ -26,7 +26,7 @@ type DrizzleClient = typeof db | Transaction
 type DispatchToSchedule = { id: string; bucket: number; runAtMs: string }
 
 /** A step's id, order, delay and send window: what scheduling it needs. */
-const stepScheduleColumns = () => ({
+export const stepScheduleColumns = () => ({
   id: sequenceStepModel.id,
   order: sequenceStepModel.order,
   anytime: sequenceStepModel.anytime,

@@ -1,11 +1,19 @@
 import {
+  and,
   db,
+  eq,
   isForeignKeyViolationError,
   isUniqueViolationError,
   sql,
 } from "@chatbotx.io/database/client"
+import {
+  contactsOnSequenceModel,
+  sequenceStepModel,
+} from "@chatbotx.io/database/schema"
 import { getDispatchContactInboxes } from "./contacts-on-sequences"
 import { createDispatch } from "./dispatch-manager"
+import { LIVE_DISPATCH_STATUSES } from "./enrollment-constants"
+import { stepScheduleColumns } from "./reactivate-enrollment"
 import { calculateNextValidSendTime } from "./send-time-validator"
 
 /**
@@ -36,11 +44,40 @@ export const STALLED_ENROLLMENT_MAX_AGE_MS = 25 * 24 * 60 * 60 * 1000
 export const STALLED_ENROLLMENT_BATCH = 200
 
 /**
+ * Two clocks stamp a cycle: `enrolledAt` is often the APP clock (a JS Date)
+ * while a dispatch's `createdAt` is the DB clock at its transaction START, so
+ * an enrolment's own first dispatch can read a few ms "before" the cycle
+ * (s235 probe g). A dispatch this close before `enrolledAt` still counts as
+ * this cycle; a real restart is far later than this.
+ */
+export const CYCLE_CLOCK_TOLERANCE = "5 minutes"
+
+/**
+ * The step the enrolment must run next: the first ACTIVE step at or after
+ * `currentStep` (the order of the next step to run), like a reactivation.
+ * Never `nextStepId` alone: deleting an EARLIER step can leave it pointing
+ * one step ahead, and trusting it would skip a step (s235 probe e).
+ */
+const targetStepId = sql`(
+  SELECT st."id" FROM "SequenceStep" st
+   WHERE st."sequenceId" = cos."sequenceId" AND st."isActive" = true
+     AND st."order" >= cos."currentStep"
+   ORDER BY st."order", st."id"
+   LIMIT 1)`
+
+const liveStatuses = sql.join(
+  LIVE_DISPATCH_STATUSES.map((status) => sql`${status}`),
+  sql`, `,
+)
+
+/**
  * The stall predicate, on the enrolment row `cos` (SQL fragment):
- * - active, not paused, and its next step still exists and is active;
+ * - active, not completed, not paused, due past the grace, not too old;
+ * - it has a target step (an active step at or after `currentStep`);
  * - no LIVE dispatch;
- * - no dispatch of ANY status for that step in this cycle (a failed or
- *   canceled step is never re-sent; only a vanished or never-made one is).
+ * - no dispatch of ANY status for the target step in this cycle (a failed,
+ *   canceled or completed step is never re-sent; only a vanished or
+ *   never-made one is).
  */
 const stalledPredicate = (now: Date) => {
   const dueBefore = new Date(now.getTime() - STALLED_ENROLLMENT_GRACE_MS)
@@ -48,28 +85,37 @@ const stalledPredicate = (now: Date) => {
   return sql`
     cos."status" = 'active'
     AND cos."completedAt" IS NULL
-    AND cos."nextStepId" IS NOT NULL
     AND cos."nextRunAt" IS NOT NULL
     AND cos."nextRunAt" <= ${dueBefore}
     AND cos."nextRunAt" > ${notOlderThan}
     AND (cos."pausedUntil" IS NULL OR cos."pausedUntil" <= ${now})
-    AND EXISTS (
-      SELECT 1 FROM "SequenceStep" st
-       WHERE st."id" = cos."nextStepId" AND st."sequenceId" = cos."sequenceId"
-         AND st."isActive" = true
+    AND ${targetStepId} IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM "SequenceDispatch" sd
+       WHERE sd."workspaceId" = cos."workspaceId" AND sd."enrollmentId" = cos."id"
+         AND sd."status" IN (${liveStatuses})
     )
     AND NOT EXISTS (
       SELECT 1 FROM "SequenceDispatch" sd
        WHERE sd."workspaceId" = cos."workspaceId" AND sd."enrollmentId" = cos."id"
-         AND sd."status" IN ('pending', 'running', 'held')
-    )
-    AND NOT EXISTS (
-      SELECT 1 FROM "SequenceDispatch" sd
-       WHERE sd."workspaceId" = cos."workspaceId" AND sd."enrollmentId" = cos."id"
-         AND sd."stepId" = cos."nextStepId"
-         AND sd."createdAt" >= cos."enrolledAt"
+         AND sd."stepId" = ${targetStepId}
+         AND sd."createdAt" >= cos."enrolledAt" - ${CYCLE_CLOCK_TOLERANCE}::interval
     )`
 }
+
+/** The enrolment's `lastError` while no inbox can carry its next step. */
+export const NO_INBOX_ERROR =
+  "Stalled: the contact has no inbox to send the next sequence step on"
+
+/** Inserting the dispatch lost to a delete or a twin: a race, not a fault. */
+const RACE_CONSTRAINTS = {
+  unique: ["SequenceDispatch_idempotencyKey_key"],
+  foreignKey: [
+    "SequenceDispatch_enrollment_workspace_fkey",
+    "SequenceDispatch_stepId_SequenceStep_id_fkey",
+    "SequenceDispatch_contactInboxId_ContactInbox_id_fkey",
+  ],
+} as const
 
 export type StalledEnrollment = { id: string; workspaceId: string }
 
@@ -118,52 +164,80 @@ export async function redispatchStalledEnrollment(params: {
   const { workspaceId, enrollmentId } = params
   try {
     return await db.transaction(async (tx) => {
-      const locked = await tx.execute(sql`
-        SELECT cos."id"::text AS id, cos."contactId"::text AS "contactId",
-               cos."sequenceId"::text AS "sequenceId",
-               cos."nextStepId"::text AS "nextStepId"
+      // The enrolment first: every enrolment writer's lock order.
+      const [row] = await tx
+        .select({
+          contactId: contactsOnSequenceModel.contactId,
+          sequenceId: contactsOnSequenceModel.sequenceId,
+        })
+        .from(contactsOnSequenceModel)
+        .where(
+          and(
+            eq(contactsOnSequenceModel.workspaceId, workspaceId),
+            eq(contactsOnSequenceModel.id, enrollmentId),
+          ),
+        )
+        .for("update")
+      if (!row) {
+        return { kind: "skipped", reason: "not-stalled" } as const
+      }
+      const still = await tx.execute<{ targetStepId: string }>(sql`
+        SELECT ${targetStepId}::text AS "targetStepId"
           FROM "ContactOnSequence" cos
          WHERE cos."id" = ${enrollmentId} AND cos."workspaceId" = ${workspaceId}
-           FOR UPDATE`)
-      if (locked.rows.length === 0) {
-        return { kind: "skipped", reason: "not-stalled" } as const
-      }
-      const still = await tx.execute(sql`
-        SELECT 1 FROM "ContactOnSequence" cos
-         WHERE cos."id" = ${enrollmentId} AND cos."workspaceId" = ${workspaceId}
            AND ${stalledPredicate(now)}`)
-      if (still.rows.length === 0) {
+      const stepId = still.rows[0]?.targetStepId
+      if (!stepId) {
         return { kind: "skipped", reason: "not-stalled" } as const
-      }
-      const row = locked.rows[0] as {
-        contactId: string
-        sequenceId: string
-        nextStepId: string
       }
       const [inbox] = await getDispatchContactInboxes(
         workspaceId,
         row.contactId,
       )
       if (!inbox) {
+        // Say so on the enrolment: it stays listed, but past the max age it
+        // is never looked at again, and the operator must see why (s235).
+        await tx
+          .update(contactsOnSequenceModel)
+          .set({ lastError: NO_INBOX_ERROR, updatedAt: new Date() })
+          .where(
+            and(
+              eq(contactsOnSequenceModel.workspaceId, workspaceId),
+              eq(contactsOnSequenceModel.id, enrollmentId),
+            ),
+          )
         return { kind: "skipped", reason: "no-inbox" } as const
       }
-      const step = await tx.query.sequenceStepModel.findFirst({
-        where: { id: row.nextStepId },
-      })
+      const [step] = await tx
+        .select(stepScheduleColumns())
+        .from(sequenceStepModel)
+        .where(eq(sequenceStepModel.id, stepId))
+        .limit(1)
       if (!step) {
         return { kind: "skipped", reason: "not-stalled" } as const
       }
       const runAt = calculateNextValidSendTime(now, step)
-      await tx.execute(sql`
-        UPDATE "ContactOnSequence" SET "nextRunAt" = ${runAt}, "updatedAt" = now()
-         WHERE "id" = ${enrollmentId} AND "workspaceId" = ${workspaceId}`)
+      await tx
+        .update(contactsOnSequenceModel)
+        .set({
+          currentStep: step.order,
+          nextStepId: step.id,
+          nextRunAt: runAt,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(contactsOnSequenceModel.workspaceId, workspaceId),
+            eq(contactsOnSequenceModel.id, enrollmentId),
+          ),
+        )
       const dispatch = await createDispatch({
         client: tx,
         workspaceId,
         sequenceId: row.sequenceId,
         contactId: row.contactId,
         contactInboxId: inbox.id,
-        stepId: row.nextStepId,
+        stepId: step.id,
         enrollmentId,
         runAt,
       })
@@ -172,10 +246,11 @@ export async function redispatchStalledEnrollment(params: {
   } catch (error) {
     // Another writer made this exact dispatch, or the enrolment went away.
     if (
-      isUniqueViolationError(error, "SequenceDispatch_idempotencyKey_key") ||
-      isForeignKeyViolationError(
-        error,
-        "SequenceDispatch_enrollment_workspace_fkey",
+      RACE_CONSTRAINTS.unique.some((name) =>
+        isUniqueViolationError(error, name),
+      ) ||
+      RACE_CONSTRAINTS.foreignKey.some((name) =>
+        isForeignKeyViolationError(error, name),
       )
     ) {
       return { kind: "skipped", reason: "raced" }

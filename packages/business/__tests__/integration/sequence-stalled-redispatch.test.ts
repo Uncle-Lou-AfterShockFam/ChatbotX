@@ -17,6 +17,7 @@
 import { db, sql } from "@chatbotx.io/database/client"
 import {
   listStalledEnrollments,
+  NO_INBOX_ERROR,
   redispatchStalledEnrollment,
   STALLED_ENROLLMENT_GRACE_MS,
 } from "@chatbotx.io/sequence-scheduler"
@@ -217,7 +218,7 @@ const liveDispatches = async (enrollmentId: string) =>
         FROM "SequenceDispatch"
        WHERE "enrollmentId" = ${enrollmentId}
          AND status IN ('pending', 'running', 'held')`)
-  ).rows
+  ).rows // LIVE_DISPATCH_STATUSES
 
 const isListed = async (s: Seed) =>
   (await listStalledEnrollments({ limit: 1000 })).some(
@@ -334,6 +335,45 @@ describe.skipIf(!databaseUrl)(
       expect(await liveDispatches(s.enrollmentId)).toHaveLength(before)
     })
 
+    test("probe g: a FAILED step whose dispatch row is a few ms OLDER than enrolledAt (app vs DB clock) is never re-sent", async () => {
+      const s = await seed({ dispatch: "failed" })
+      await db.execute(sql`
+      UPDATE "SequenceDispatch"
+         SET "createdAt" = (SELECT "enrolledAt" FROM "ContactOnSequence" WHERE id = ${s.enrollmentId}) - interval '5 milliseconds'
+       WHERE id = ${s.dispatchId ?? ""}`)
+      expect(await isListed(s)).toBe(false)
+      expect(
+        await redispatchStalledEnrollment({
+          workspaceId: s.workspaceId,
+          enrollmentId: s.enrollmentId,
+        }),
+      ).toEqual({ kind: "skipped", reason: "not-stalled" })
+    })
+
+    test("probe e: after an EARLIER step is deleted, a vanished current dispatch re-dispatches the CURRENT step, never the one after it", async () => {
+      const s = await seed({ stepCount: 4, atStep: 2, inboxCount: 2 })
+      await sequenceService.deleteStep({
+        workspaceId: s.workspaceId,
+        sequenceId: s.sequenceId,
+        stepId: s.steps[0] ?? "",
+      })
+      // The current step's dispatch vanishes (its inbox is deleted).
+      await db.execute(
+        sql`DELETE FROM "ContactInbox" WHERE id = ${s.inboxes[0]?.contactInboxId ?? ""}`,
+      )
+      await db.execute(sql`
+      UPDATE "ContactOnSequence" SET "nextRunAt" = now() - interval '30 minutes'
+       WHERE id = ${s.enrollmentId}`)
+      const result = await redispatchStalledEnrollment({
+        workspaceId: s.workspaceId,
+        enrollmentId: s.enrollmentId,
+      })
+      expect(result.kind).toBe("redispatched")
+      const live = await liveDispatches(s.enrollmentId)
+      expect(live).toHaveLength(1)
+      expect(live[0]?.stepId).toBe(s.steps[2])
+    })
+
     test("an ended or completed enrolment is never re-dispatched", async () => {
       const ended = await seed({ dispatch: false })
       await db.execute(sql`
@@ -347,7 +387,7 @@ describe.skipIf(!databaseUrl)(
       expect(await isListed(completed)).toBe(false)
     })
 
-    test("no inbox left: skipped (no-inbox), nothing written, still listed for a later pass", async () => {
+    test("no inbox left: skipped (no-inbox), no dispatch, still listed for a later pass, lastError says why", async () => {
       const s = await seed({ inboxCount: 1, dispatch: false })
       await db.execute(
         sql`DELETE FROM "ContactInbox" WHERE id = ${s.inboxes[0]?.contactInboxId ?? ""}`,
@@ -360,6 +400,12 @@ describe.skipIf(!databaseUrl)(
       ).toEqual({ kind: "skipped", reason: "no-inbox" })
       expect(await liveDispatches(s.enrollmentId)).toEqual([])
       expect(await isListed(s)).toBe(true)
+      // The operator sees why it is stuck.
+      const [row] = (
+        await db.execute<{ lastError: string | null }>(sql`
+          SELECT "lastError" FROM "ContactOnSequence" WHERE id = ${s.enrollmentId}`)
+      ).rows
+      expect(row?.lastError).toBe(NO_INBOX_ERROR)
     })
 
     test("8 concurrent re-dispatches (two reconcile replicas) make exactly ONE dispatch", async () => {
