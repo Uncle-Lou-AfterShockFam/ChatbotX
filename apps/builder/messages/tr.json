@@ -3633,7 +3633,8 @@
     "title": "OpenAI Uyumlu",
     "validation": {
       "invalidBaseURL": "Temel URL geçersiz veya izin verilmiyor.",
-      "presetAlreadyConnected": "Bu ön ayar bu çalışma alanı için zaten bağlı."
+      "presetAlreadyConnected": "Bu ön ayar bu çalışma alanı için zaten bağlı.",
+      "apiKeyRequiredForNewBaseURL": "Enter the API key again to change the base URL."
     }
   },
   "settings": {

@@ -3633,7 +3633,8 @@
     "title": "Kompatibel dengan OpenAI",
     "validation": {
       "invalidBaseURL": "URL Dasar tidak valid atau tidak diizinkan.",
-      "presetAlreadyConnected": "Preset ini sudah terhubung untuk ruang kerja ini."
+      "presetAlreadyConnected": "Preset ini sudah terhubung untuk ruang kerja ini.",
+      "apiKeyRequiredForNewBaseURL": "Enter the API key again to change the base URL."
     }
   },
   "settings": {

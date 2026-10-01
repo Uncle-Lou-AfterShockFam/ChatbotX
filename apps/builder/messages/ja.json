@@ -3612,7 +3612,8 @@
     "title": "OpenAI互換",
     "validation": {
       "invalidBaseURL": "ベースURLが無効か、許可されていません。",
-      "presetAlreadyConnected": "このプリセットはすでにこのワークスペースに接続されています。"
+      "presetAlreadyConnected": "このプリセットはすでにこのワークスペースに接続されています。",
+      "apiKeyRequiredForNewBaseURL": "Enter the API key again to change the base URL."
     }
   },
   "settings": {

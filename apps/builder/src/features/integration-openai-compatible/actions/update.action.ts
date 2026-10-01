@@ -15,6 +15,7 @@ import {
 } from "@/features/common/schema"
 import { workspaceActionClient } from "@/lib/safe-action"
 import { verifyOpenaiCompatibleProvider } from "../lib"
+import { isSameBaseUrl } from "../lib/same-base-url"
 import {
   resolveOpenaiCompatibleDefaultModel,
   type UpdateOpenaiCompatibleEnabledSchema,
@@ -76,6 +77,18 @@ export const updateOpenaiCompatibleAction = workspaceActionClient
             })
           }
           throw error
+        }
+        // The stored key is reused only for the stored base URL (s233a): a
+        // new URL with "keep the key" would send the workspace's key to a
+        // host the caller picked, at verify time and on every later call.
+        if (!(apiKey || isSameBaseUrl(baseURL, existing?.baseURL))) {
+          return returnValidationErrors(updateOpenaiCompatibleSchema, {
+            apiKey: {
+              _errors: [
+                t("openaiCompatible.validation.apiKeyRequiredForNewBaseURL"),
+              ],
+            },
+          })
         }
         const existingAuth = secretTextAuthSchema.safeParse(existing?.auth)
         const verifyResult = await verifyOpenaiCompatibleProvider({

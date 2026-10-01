@@ -3633,7 +3633,8 @@
     "title": "متوافق مع OpenAI",
     "validation": {
       "invalidBaseURL": "عنوان URL الأساسي غير صالح أو غير مسموح به.",
-      "presetAlreadyConnected": "هذا الإعداد المسبق مرتبط بالفعل بمساحة العمل هذه."
+      "presetAlreadyConnected": "هذا الإعداد المسبق مرتبط بالفعل بمساحة العمل هذه.",
+      "apiKeyRequiredForNewBaseURL": "Enter the API key again to change the base URL."
     }
   },
   "settings": {

@@ -3666,7 +3666,8 @@
     "title": "OpenAI相容",
     "validation": {
       "invalidBaseURL": "基礎URL 無效或不允許。",
-      "presetAlreadyConnected": "此預設已為此工作區連線。"
+      "presetAlreadyConnected": "此預設已為此工作區連線。",
+      "apiKeyRequiredForNewBaseURL": "Enter the API key again to change the base URL."
     }
   },
   "settings": {

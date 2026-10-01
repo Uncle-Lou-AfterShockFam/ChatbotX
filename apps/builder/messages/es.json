@@ -3633,7 +3633,8 @@
     "title": "AbrirAI Compatible",
     "validation": {
       "invalidBaseURL": "Base URL es no válido o not todosowed.",
-      "presetAlreadyConnected": "This preEstablecer es already connected para este espacio de trabajo."
+      "presetAlreadyConnected": "This preEstablecer es already connected para este espacio de trabajo.",
+      "apiKeyRequiredForNewBaseURL": "Enter the API key again to change the base URL."
     }
   },
   "settings": {

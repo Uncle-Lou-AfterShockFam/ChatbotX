@@ -157,4 +157,64 @@ describe("OpenAI-compatible actions", () => {
     expect(mocks.verifyProvider).not.toHaveBeenCalled()
     expect(mocks.update).not.toHaveBeenCalled()
   })
+
+  describe("the stored key is bound to the stored base URL (s233a)", () => {
+    const update = (parsedInput: Record<string, unknown>) =>
+      (
+        updateOpenaiCompatibleAction as unknown as ActionHandler<
+          Record<string, unknown>,
+          [string, string]
+        >
+      )({ parsedInput, bindArgsParsedInputs: ["workspace-1", "integration-1"] })
+
+    test("a new base URL without a new key is refused before any request carries the stored key", async () => {
+      for (const baseURL of [
+        "https://attacker.example/v1",
+        "https://example.com/v2",
+        "https://example.com.attacker.example/v1",
+        "http://example.com/v1",
+      ]) {
+        const result = await update({ baseURL })
+        expect(result, baseURL).toEqual({
+          validationErrors: {
+            apiKey: {
+              _errors: [
+                "openaiCompatible.validation.apiKeyRequiredForNewBaseURL",
+              ],
+            },
+          },
+        })
+      }
+      expect(mocks.verifyProvider).not.toHaveBeenCalled()
+      expect(mocks.update).not.toHaveBeenCalled()
+    })
+
+    test("the same base URL (trailing slash ignored) keeps the stored key", async () => {
+      for (const baseURL of [
+        "https://example.com/v1",
+        "https://example.com/v1/",
+      ]) {
+        await update({ baseURL, name: "Renamed" })
+      }
+      expect(mocks.verifyProvider).toHaveBeenCalledTimes(2)
+      for (const [args] of mocks.verifyProvider.mock.calls) {
+        expect(args).toMatchObject({ apiKey: "existing-key" })
+      }
+    })
+
+    test("a new base URL with a new key verifies the NEW key, never the stored one", async () => {
+      await update({ baseURL: "https://other.example/v1", apiKey: "new-key" })
+      expect(mocks.verifyProvider).toHaveBeenCalledWith({
+        apiKey: "new-key",
+        baseURL: "https://other.example/v1",
+      })
+    })
+
+    test("a missing stored row never matches (fails closed)", async () => {
+      mocks.findByWorkspaceIdAndId.mockResolvedValue(undefined)
+      const result = await update({ baseURL: "https://example.com/v1" })
+      expect(result).toMatchObject({ validationErrors: { apiKey: {} } })
+      expect(mocks.verifyProvider).not.toHaveBeenCalled()
+    })
+  })
 })

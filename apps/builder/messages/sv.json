@@ -4491,7 +4491,8 @@
     "title": "OpenAI-kompatibel",
     "validation": {
       "invalidBaseURL": "Bas-URL:en är ogiltig eller inte tillåten.",
-      "presetAlreadyConnected": "Den här förinställningen är redan ansluten för den här arbetsytan."
+      "presetAlreadyConnected": "Den här förinställningen är redan ansluten för den här arbetsytan.",
+      "apiKeyRequiredForNewBaseURL": "Enter the API key again to change the base URL."
     }
   },
   "openrouter": {
