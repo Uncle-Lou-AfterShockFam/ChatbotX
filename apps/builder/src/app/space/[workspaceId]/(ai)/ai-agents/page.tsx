@@ -28,7 +28,11 @@ export default async function AIAgentsPage(props: AIAgentsPageProps) {
       ...listAIAgentsRequest.parse(searchParams),
     }),
     listIntegrationOpenaiCompatible({ workspaceId }),
-    workspaceService.findById({ id: workspaceId }),
+    // Only what the client table reads: the row carries the deprecated
+    // plaintext `token` (s233a).
+    workspaceService
+      .findById({ id: workspaceId })
+      .then(({ smartResponseDelaySeconds }) => ({ smartResponseDelaySeconds })),
   ])
 
   return (
