@@ -133,7 +133,7 @@ describe("InvitationsPage", () => {
   }
 
   const joinButton = () =>
-    [...container.querySelectorAll("button")].find(
+    Array.from(container.querySelectorAll("button")).find(
       (b) => b.textContent === "actions.joinTheTeam",
     )
 
