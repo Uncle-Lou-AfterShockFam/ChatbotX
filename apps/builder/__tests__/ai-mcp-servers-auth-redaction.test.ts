@@ -78,6 +78,20 @@ const { updateAIMcpServerAction } = await import(
 const { updatePrivateAIMcpServerRequest, validatePrivateAIMcpServerRequest } =
   await import("../src/features/ai-mcp-servers/schema/action")
 
+const MCP_URL = "https://mcp.example.com"
+const ATTACKER_URL = "https://attacker.example/mcp"
+
+/** Merge against a row stored for MCP_URL. */
+const merge = (
+  input: Parameters<typeof mergeStoredAuth>[0],
+  storedAuth: unknown,
+) =>
+  mergeStoredAuth(
+    input,
+    MCP_URL,
+    storedAuth === undefined ? undefined : { auth: storedAuth, url: MCP_URL },
+  )
+
 const update = updateAIMcpServerAction as unknown as (props: {
   bindArgsParsedInputs: [string, string]
   parsedInput: unknown
@@ -151,7 +165,7 @@ describe("MCP server auth never reaches the client", () => {
 
 describe("an empty value keeps the stored secret", () => {
   test("blank header values are filled by header name", () => {
-    const merged = mergeStoredAuth(
+    const merged = merge(
       {
         type: "header",
         headers: [
@@ -175,7 +189,7 @@ describe("an empty value keeps the stored secret", () => {
 
   test("a blank for a header that was never stored is missing", () => {
     expect(
-      mergeStoredAuth(
+      merge(
         {
           type: "header",
           headers: [
@@ -190,17 +204,14 @@ describe("an empty value keeps the stored secret", () => {
 
   test("a blank token keeps the stored token, never another type's secret", () => {
     expect(
-      mergeStoredAuth(
-        { type: "token", token: "" },
-        { type: "token", token: RAW_TOKEN },
-      ),
+      merge({ type: "token", token: "" }, { type: "token", token: RAW_TOKEN }),
     ).toEqual({ status: "ok", auth: { type: "token", token: RAW_TOKEN } })
-    expect(mergeStoredAuth({ type: "token", token: "" }, headerAuth)).toEqual({
+    expect(merge({ type: "token", token: "" }, headerAuth)).toEqual({
       status: "missing",
       path: "token",
     })
     expect(
-      mergeStoredAuth(
+      merge(
         { type: "header", headers: [{ header: "X-Api-Key", value: "" }] },
         { type: "token", token: RAW_TOKEN },
       ),
@@ -209,10 +220,48 @@ describe("an empty value keeps the stored secret", () => {
 
   test("nothing stored (or malformed) never yields an empty secret", () => {
     for (const stored of [undefined, null, { type: "header" }]) {
-      expect(mergeStoredAuth({ type: "token", token: "" }, stored).status).toBe(
-        "missing",
-      )
+      expect(merge({ type: "token", token: "" }, stored).status).toBe("missing")
     }
+  })
+
+  test("a changed URL never keeps a stored secret", () => {
+    const blankHeader = {
+      type: "header" as const,
+      headers: [{ header: "X-Api-Key", value: "" }],
+    }
+    const stored = { auth: headerAuth, url: MCP_URL }
+    expect(mergeStoredAuth(blankHeader, ATTACKER_URL, stored)).toEqual({
+      status: "missing",
+      path: "headers.0.value",
+    })
+    expect(
+      mergeStoredAuth({ type: "token", token: "" }, ATTACKER_URL, {
+        auth: { type: "token", token: RAW_TOKEN },
+        url: MCP_URL,
+      }).status,
+    ).toBe("missing")
+    expect(mergeStoredAuth(blankHeader, "not a url", stored).status).toBe(
+      "missing",
+    )
+    // The same endpoint spelled with a default port is the same URL.
+    expect(
+      mergeStoredAuth(blankHeader, "https://mcp.example.com:443", stored)
+        .status,
+    ).toBe("ok")
+    // Typed values with a new URL are fine: nothing stored is reused.
+    expect(
+      mergeStoredAuth(
+        { type: "header", headers: [{ header: "X-Api-Key", value: "typed" }] },
+        ATTACKER_URL,
+        stored,
+      ),
+    ).toEqual({
+      status: "ok",
+      auth: {
+        type: "header",
+        headers: [{ header: "X-Api-Key", value: "typed" }],
+      },
+    })
   })
 
   test("keepsStoredSecret only for a blank token or header value", () => {
@@ -290,6 +339,17 @@ describe("updateAIMcpServerAction", () => {
     expect(result).toBeDefined()
   })
 
+  test("a new URL with a blank secret is refused, nothing saved", async () => {
+    mocks.findBy.mockResolvedValue(row(headerAuth))
+
+    await update({
+      bindArgsParsedInputs: ["ws-1", "21"],
+      parsedInput: { ...input, url: ATTACKER_URL },
+    }).catch(() => undefined)
+
+    expect(mocks.update).not.toHaveBeenCalled()
+  })
+
   test("another workspace's server is not found", async () => {
     mocks.findBy.mockResolvedValue(undefined)
 
@@ -328,6 +388,19 @@ describe("resolveValidateAuth", () => {
       type: "header",
       headers: [{ header: "X-Api-Key", value: SECRET }],
     })
+  })
+
+  test("a blank with another URL is refused before any request", async () => {
+    mocks.findBy.mockResolvedValue(row(headerAuth))
+
+    await expect(
+      resolveValidateAuth({
+        ...base,
+        url: ATTACKER_URL,
+        id: "21",
+        auth: { type: "header", headers: [{ header: "X-Api-Key", value: "" }] },
+      }),
+    ).rejects.toThrow()
   })
 
   test("a blank without an id, or for a foreign server, is refused", async () => {

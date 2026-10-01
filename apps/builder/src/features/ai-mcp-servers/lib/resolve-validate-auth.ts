@@ -8,7 +8,7 @@ import { keepsStoredSecret, mergeStoredAuth } from "./merge-stored-auth"
 /**
  * The edit form never holds the stored secret, so an empty token or header
  * value validates against the stored one: only for a server of this
- * workspace (s232a). A blank with no stored server to keep it from fails.
+ * workspace and its stored URL (s232a). A blank with no stored server to keep it from fails.
  */
 export const resolveValidateAuth = async (
   input: ValidatePrivateAIMcpServerRequest & { workspaceId: string },
@@ -21,7 +21,7 @@ export const resolveValidateAuth = async (
         where: { id: input.id, workspaceId: input.workspaceId },
       })
     : undefined
-  const merged = mergeStoredAuth(input.auth, stored?.auth)
+  const merged = mergeStoredAuth(input.auth, input.url, stored)
   if (merged.status === "missing") {
     throw new ChatbotXException(
       "Unable to validate MCP server.",

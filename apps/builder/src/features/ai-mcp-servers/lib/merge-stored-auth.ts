@@ -15,18 +15,32 @@ export const keepsStoredSecret = (
   (auth.type === "token" && auth.token === "") ||
   (auth.type === "header" && auth.headers.some(({ value }) => value === ""))
 
+/** Same endpoint: both parse and their normalised hrefs match. */
+const isSameUrl = (a: string, b: string | undefined): boolean => {
+  if (b === undefined || !URL.canParse(a) || !URL.canParse(b)) {
+    return false
+  }
+  return new URL(a).href === new URL(b).href
+}
+
 /**
  * Fills each empty token / header value from the stored row (s232a). The
- * client never receives the stored secret, so "" means "keep it". A blank
- * with nothing stored to keep (other auth type, unknown header name, no
- * stored row) is `missing`, never an empty secret.
+ * client never receives the stored secret, so "" means "keep it". A stored
+ * secret is kept only for the URL it was configured for: with a changed URL
+ * every value must be typed again, or a member could point the server (or a
+ * validate call) at their own host and receive the secret. A blank with
+ * nothing to keep (other auth type, unknown header name, no stored row,
+ * changed URL) is `missing`, never an empty secret.
  */
 export const mergeStoredAuth = (
   input: PrivateAIMcpServerAuthKeepingSecrets,
-  stored: unknown,
+  url: string,
+  stored: { auth: unknown; url: string } | null | undefined,
 ): MergeStoredAuthResult => {
-  const parsedStored = aiMcpServerAuth.safeParse(stored)
-  const storedAuth = parsedStored.success ? parsedStored.data : null
+  const keepAllowed = isSameUrl(url, stored?.url)
+  const parsedStored = aiMcpServerAuth.safeParse(stored?.auth)
+  const storedAuth =
+    keepAllowed && parsedStored.success ? parsedStored.data : null
 
   if (input.type === "none") {
     return { status: "ok", auth: { type: "none" } }

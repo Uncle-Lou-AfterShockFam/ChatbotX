@@ -34,8 +34,8 @@ export const updateAIMcpServerAction = workspaceActionClient
     }
 
     // The form never receives the stored secret; an empty token or header
-    // value keeps the stored one (s232a).
-    const merged = mergeStoredAuth(parsedInput.auth, mcpServer.auth)
+    // value keeps the stored one, for the stored URL only (s232a).
+    const merged = mergeStoredAuth(parsedInput.auth, parsedInput.url, mcpServer)
     if (merged.status === "missing") {
       return returnValidationErrors(updatePrivateAIMcpServerRequest, {
         auth: { _errors: [t("forms.issues.required")] },
