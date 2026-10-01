@@ -1,33 +1,12 @@
 "use server"
 
-import { ChatbotXException } from "@chatbotx.io/business/errors"
-import { systemFieldService } from "@chatbotx.io/business/system-field"
 import { actionClient } from "@/lib/safe-action"
-import { loadServableWorkspace } from "@/lib/workspace/load-servable-workspace"
-import {
-  type MeLinkInput,
-  meLinkInputSchema,
-  toMePrivacyParams,
-} from "../lib/me-link-params"
+import { handleDeleteMeData } from "../lib/delete-me-data"
+import { meLinkInputSchema } from "../lib/me-link-params"
 
+// Only the safe-action wrapper lives here: every export of a "use server"
+// file is a Server Action, and the helper behind it skips this wrapper's
+// input parse and auth, so it stays in a server-only lib module (s232a).
 export const deleteMeDataAction = actionClient
   .inputSchema(meLinkInputSchema)
   .action(handleDeleteMeData)
-
-export async function handleDeleteMeData({
-  parsedInput,
-}: {
-  parsedInput: MeLinkInput
-}) {
-  const { servable } = await loadServableWorkspace(parsedInput.w)
-  if (!servable) {
-    throw new ChatbotXException(
-      "workspaceScheduledDeletion",
-      "workspaceScheduledDeletion",
-      403,
-    )
-  }
-
-  await systemFieldService.deleteMeData(toMePrivacyParams(parsedInput))
-  return null
-}

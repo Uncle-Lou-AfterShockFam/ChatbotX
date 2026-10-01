@@ -95,7 +95,7 @@ vi.mock("../src/features/integration-messenger/queries", () => ({
 }))
 
 const { updateMessenger } = await import(
-  "../src/features/integration-messenger/actions/update-messenger-action"
+  "../src/features/integration-messenger/lib/update-messenger"
 )
 
 describe("updateMessenger", () => {

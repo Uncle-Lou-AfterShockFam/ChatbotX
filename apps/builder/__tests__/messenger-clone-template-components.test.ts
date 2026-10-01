@@ -38,7 +38,7 @@ vi.mock("@chatbotx.io/redis", () => ({
 }))
 
 vi.mock(
-  "@/features/integration-messenger/message-templates/actions/sync-message-templates",
+  "@/features/integration-messenger/message-templates/lib/sync-message-templates",
   () => ({
     syncMessengerMessageTemplatesForIntegration: (...args: unknown[]) =>
       syncTemplates(...args),
@@ -59,6 +59,10 @@ vi.mock("@/lib/safe-action", () => ({
 }))
 
 const { prepareComponentsForClone } = await import(
+  "@/features/integration-messenger/message-templates/lib/prepare-components-for-clone"
+)
+// Loading the action module registers its handler with the safe-action mock.
+await import(
   "@/features/integration-messenger/message-templates/actions/clone-message-templates"
 )
 

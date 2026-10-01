@@ -8,9 +8,9 @@ import z from "zod"
 import { assertWorkspaceNotBlocked } from "@/lib/workspace-quota"
 import { workspaceAuthorizedMidddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
-import { changeMessageAttributes } from "../actions/change-message-attributes.action"
-import { deleteMessage } from "../actions/delete-message.action"
-import { editMessage } from "../actions/edit-message.action"
+import { changeMessageAttributes } from "../lib/change-message-attributes"
+import { deleteMessage } from "../lib/delete-message"
+import { editMessage } from "../lib/edit-message"
 import { findMessage, listMessages } from "../queries"
 import {
   changeMessageAttributesRequest,

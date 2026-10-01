@@ -34,7 +34,7 @@ vi.mock("@/features/integration-webchat/lib/webchat-access-token", () => ({
 vi.mock("@/features/integration-webchat/queries", () => ({
   findIntegrationWebchat: mocks.findWebchat,
 }))
-vi.mock("@/features/messages/actions/create-webchat-message.action", () => ({
+vi.mock("@/features/messages/lib/create-webchat-message", () => ({
   handleCreateWebchatMessage: mocks.handleCreate,
 }))
 vi.mock("@/features/messages/queries", () => ({ listMessages: vi.fn() }))

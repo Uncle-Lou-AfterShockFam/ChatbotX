@@ -1,9 +1,9 @@
 import { conversationService, messageService } from "@chatbotx.io/business"
 import { notFoundException } from "@chatbotx.io/business/errors"
 import type { z } from "zod"
-import { changeMessageAttributes } from "@/features/messages/actions/change-message-attributes.action"
-import { deleteMessage } from "@/features/messages/actions/delete-message.action"
-import { editMessage } from "@/features/messages/actions/edit-message.action"
+import { changeMessageAttributes } from "@/features/messages/lib/change-message-attributes"
+import { deleteMessage } from "@/features/messages/lib/delete-message"
+import { editMessage } from "@/features/messages/lib/edit-message"
 import { listMessages } from "@/features/messages/queries"
 import {
   changeMessageAttributesRequest,

@@ -1,13 +1,13 @@
 // @vitest-environment node
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
+import { existsSync, readFileSync, statSync } from "node:fs"
 import { dirname, join, sep } from "node:path"
 import ts from "typescript"
 import { describe, expect, test } from "vitest"
+import { collectSourceFiles } from "./source-files.test-utils"
 
 const APP_ROOT = join(import.meta.dirname, "..")
 const SRC_ROOT = join(APP_ROOT, "src")
-const TS_LIKE_EXTENSION_PATTERN = /\.(ts|tsx)$/
 const USE_CLIENT_DIRECTIVE_PATTERN = /^["']use client["']\s*;?\s*$/
 const USE_SERVER_DIRECTIVE_PATTERN = /^["']use server["']\s*;?\s*$/
 const SERVER_ONLY_IMPORT_PATTERN = /^import ["']server-only["']\s*;?\s*$/m
@@ -37,25 +37,6 @@ const QUERIES_MODULE_SPECIFIER_PATTERN =
 // files that need the guard. `import type { ... }` (and `import { type Foo
 // }` where every named specifier is type-only) is fine regardless; only a
 // value import into a "use server" file is a boundary violation.
-function collectSourceFiles(dir: string, results: string[] = []) {
-  for (const entry of readdirSync(dir)) {
-    if (entry === "node_modules" || entry === "__tests__") {
-      continue
-    }
-
-    const fullPath = join(dir, entry)
-    const stat = statSync(fullPath)
-
-    if (stat.isDirectory()) {
-      collectSourceFiles(fullPath, results)
-    } else if (TS_LIKE_EXTENSION_PATTERN.test(entry)) {
-      results.push(fullPath)
-    }
-  }
-
-  return results
-}
-
 // Blank lines, `//` lines and `/* ... */` blocks ahead of the first statement.
 const LEADING_COMMENTS_PATTERN = /^(?:\s+|\/\/[^\n]*|\/\*[\s\S]*?\*\/)*/
 
