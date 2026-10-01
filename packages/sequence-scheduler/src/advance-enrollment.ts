@@ -69,6 +69,13 @@ export class EnrollmentNotFoundError extends Error {
 }
 
 export interface AdvanceEnrollmentParams {
+  /**
+   * s236 recovery: the COMPLETED dispatch this advance is for, when it is
+   * re-run after the fact (a job retry, the reconcile pass). The advance is a
+   * no-op when the enrolment already has a later dispatch (it moved past this
+   * one) or the dispatch row is gone.
+   */
+  afterDispatchId?: string
   contactId: string
   currentStep: { id: string; order: number }
   enrollmentId: string
@@ -78,9 +85,10 @@ export interface AdvanceEnrollmentParams {
   workspaceId: string
 }
 
+/** Whether the enrolment was moved: a next dispatch queued, or completed. */
 export async function advanceEnrollment(
   params: AdvanceEnrollmentParams,
-): Promise<void> {
+): Promise<boolean> {
   const {
     enrollmentId,
     workspaceId,
@@ -89,6 +97,7 @@ export async function advanceEnrollment(
     currentStep,
     sentAt,
     scheduler,
+    afterDispatchId,
   } = params
 
   const enrollment = await db.query.contactsOnSequenceModel.findFirst({
@@ -100,11 +109,11 @@ export async function advanceEnrollment(
   }
 
   if (enrollment.status !== "active") {
-    return
+    return false
   }
 
   if (enrollment.lastStepId === currentStep.id) {
-    return
+    return false
   }
 
   const [nextStep] = await db
@@ -120,6 +129,7 @@ export async function advanceEnrollment(
     .orderBy(asc(sequenceStepModel.order))
     .limit(1)
 
+  let moved = false
   const dispatches = await db
     .transaction(async (tx) => {
       // s226b: an out-of-office pause holds the next step. Read under the
@@ -129,6 +139,7 @@ export async function advanceEnrollment(
         .select({
           status: contactsOnSequenceModel.status,
           pausedUntil: contactsOnSequenceModel.pausedUntil,
+          lastStepId: contactsOnSequenceModel.lastStepId,
         })
         .from(contactsOnSequenceModel)
         .where(
@@ -142,6 +153,35 @@ export async function advanceEnrollment(
       // was held) after the unlocked read above is never advanced.
       if (locked?.status !== "active") {
         return []
+      }
+      // s236: a concurrent advance (a job retry racing the reconcile pass)
+      // already moved it on from this step while we waited for the lock.
+      if (locked.lastStepId === currentStep.id) {
+        return []
+      }
+      // s236: re-run for a dispatch after the fact. The enrolment moved past
+      // it if any later dispatch exists (an old job redelivered must never
+      // move the pointer back); a vanished anchor fails closed.
+      if (afterDispatchId !== undefined) {
+        const passed = await tx.execute(sql`
+          SELECT 1 FROM "SequenceDispatch" anchor
+           WHERE anchor."id" = ${afterDispatchId}
+             AND anchor."workspaceId" = ${workspaceId}
+             AND anchor."enrollmentId" = ${enrollmentId}
+             AND NOT EXISTS (
+               SELECT 1 FROM "SequenceDispatch" later
+                WHERE later."workspaceId" = anchor."workspaceId"
+                  AND later."enrollmentId" = anchor."enrollmentId"
+                  AND later."id" <> anchor."id"
+                  -- A sibling for the same step (one per inbox) shares the
+                  -- anchor's transaction, so its createdAt; a new cycle's
+                  -- re-send of the same step is strictly later.
+                  AND (later."createdAt" > anchor."createdAt"
+                       OR (later."createdAt" = anchor."createdAt"
+                           AND later."stepId" IS DISTINCT FROM anchor."stepId")))`)
+        if (passed.rows.length === 0) {
+          return []
+        }
       }
       // s228b (probe): a reactivation already moved it on (it resumed past
       // this step and queued another): never a second live dispatch.
@@ -178,6 +218,7 @@ export async function advanceEnrollment(
               eq(contactsOnSequenceModel.workspaceId, workspaceId),
             ),
           )
+        moved = true
         return []
       }
       const scheduled = calculateNextRunAt(nextStep, sentAt)
@@ -208,6 +249,7 @@ export async function advanceEnrollment(
           ),
         )
 
+      moved = true
       const contactInboxes = await getDispatchContactInboxes(
         workspaceId,
         contactId,
@@ -251,4 +293,5 @@ export async function advanceEnrollment(
       Number(dispatch.runAtMs),
     )
   }
+  return moved
 }
