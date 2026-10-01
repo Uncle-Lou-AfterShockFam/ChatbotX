@@ -8,6 +8,8 @@
  * Step config (messages, requests, conditions) stays behind `flows`.
  */
 
+import type { FlowVersionResource } from "@/features/flow-versions/schema/resource"
+
 type JsonRecord = Record<string, unknown>
 
 const isRecord = (value: unknown): value is JsonRecord =>
@@ -36,15 +38,16 @@ const templateSteps = (data: JsonRecord): JsonRecord[] => {
   })
 }
 
-export const toFlowPickerNode = (node: {
-  id: string
-  [x: string]: unknown
-}): { id: string; [x: string]: unknown } => {
-  const data = isRecord(node.data) ? node.data : {}
+type FlowVersion = FlowVersionResource
+type FlowNodeRow = FlowVersion["nodes"][number]
+
+export const toFlowPickerNode = (node: FlowNodeRow): FlowNodeRow => {
+  const row: JsonRecord = isRecord(node) ? node : {}
+  const data = isRecord(row.data) ? row.data : {}
   const name = asString(data.name)
-  const type = asString(node.type)
+  const type = asString(row.type)
   return {
-    id: node.id,
+    id: row.id,
     ...(type === undefined ? {} : { type }),
     data: {
       ...(name === undefined ? {} : { name }),
@@ -52,18 +55,11 @@ export const toFlowPickerNode = (node: {
         ? { isStartNode: true, details: { steps: templateSteps(data) } }
         : {}),
     },
-  }
+  } as FlowNodeRow
 }
 
 /** A listed flow as a member without `flows` may see it. */
-export const toFlowPickerResource = <
-  T extends {
-    flowVersions: {
-      nodes: { id: string; [x: string]: unknown }[]
-      edges: { id: string; [x: string]: unknown }[]
-    }[]
-  },
->(
+export const toFlowPickerResource = <T extends { flowVersions: FlowVersion[] }>(
   flow: T,
 ): T => ({
   ...flow,

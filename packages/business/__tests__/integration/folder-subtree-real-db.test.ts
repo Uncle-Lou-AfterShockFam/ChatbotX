@@ -52,7 +52,7 @@ async function seedFolder(props: {
   await db.execute(sql`
     INSERT INTO "Folder" (id, name, "folderType", "parentId", "workspaceId", paths)
     VALUES (${id}, ${`f ${id}`}, ${props.folderType}::"folderType", ${parentId},
-            ${props.workspaceId}, ${props.paths}::bigint[])`)
+            ${props.workspaceId}, ${`{${props.paths.join(",")}}`}::bigint[])`)
   return id
 }
 
