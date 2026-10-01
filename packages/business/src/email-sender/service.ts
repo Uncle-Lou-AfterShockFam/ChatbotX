@@ -662,12 +662,24 @@ export class EmailSenderService extends BaseService {
     if (secret.expiresAt - Date.now() > GOOGLE_REFRESH_MARGIN_MS) {
       return feedAuth(secret)
     }
+    let outlived = false
     const refresh = this.refreshGoogle(row.id)
-    // A refresh that outlives the wait still settles (and stores) later.
-    refresh.catch(() => undefined)
+    // A refresh that outlives the wait still settles (and stores) later; its
+    // failure is logged here, since no caller waits for it any more.
+    refresh.catch((err: unknown) => {
+      if (outlived && !(err instanceof GoogleReconnectRequiredError)) {
+        logger.warn(
+          { senderId: row.id, err: err instanceof Error ? err.message : err },
+          "google sender background token refresh failed",
+        )
+      }
+    })
     let timer: ReturnType<typeof setTimeout> | undefined
     const late = new Promise<"late">((resolve) => {
-      timer = setTimeout(() => resolve("late"), GOOGLE_FEED_REFRESH_WAIT_MS)
+      timer = setTimeout(() => {
+        outlived = true
+        resolve("late")
+      }, GOOGLE_FEED_REFRESH_WAIT_MS)
     })
     try {
       const fresh = await Promise.race([refresh, late])
