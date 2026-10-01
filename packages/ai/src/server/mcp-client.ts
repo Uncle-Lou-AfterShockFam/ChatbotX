@@ -2,7 +2,7 @@ import {
   type AIMcpServerAuth,
   aiMcpServerAuthTypes,
 } from "@chatbotx.io/database/partials"
-import ky, { type Options } from "ky"
+import { outboundFetch } from "@chatbotx.io/sdk/outbound-fetch"
 import { normalizeError } from "universal-error-normalizer"
 import { aiTimeouts, helpTexts, mcpConstants } from "../constants"
 import { logger } from "../logger"
@@ -15,11 +15,42 @@ import {
   mcpJsonRpcSuccessSchema,
 } from "../schemas/mcp"
 
-const mcpKy = ky.create({
-  throwHttpErrors: false,
-  timeout: aiTimeouts.httpDefault,
-  retry: { limit: 0 },
-})
+/**
+ * Cap on one MCP answer, headers to the end of the (SSE) body. Kept well
+ * below the integration worker's 10 min job-lock floor
+ * (apps/worker/src/integration/worker.ts), so a slow server can never stall
+ * a job into a duplicate run.
+ */
+export const MCP_RESPONSE_DEADLINE_MS = 3 * 60_000
+
+/** Largest MCP answer read into memory; a longer body is refused. */
+export const MCP_MAX_RESPONSE_BYTES = 10 * 1024 * 1024
+
+/** Reads the body as text, refusing past `maxBytes` (a hostile server could stream for minutes). */
+const readTextCapped = async (
+  response: Response,
+  maxBytes: number,
+): Promise<string> => {
+  if (!response.body) {
+    return ""
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let received = 0
+  let text = ""
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) {
+      return text + decoder.decode()
+    }
+    received += value.byteLength
+    if (received > maxBytes) {
+      await reader.cancel()
+      throw new Error(`MCP response larger than ${maxBytes} bytes`)
+    }
+    text += decoder.decode(value, { stream: true })
+  }
+}
 
 export interface McpClientOptions {
   auth: AIMcpServerAuth
@@ -98,6 +129,47 @@ export class McpClient {
     return headers
   }
 
+  /**
+   * The URL is member-typed: the pinned fetch refuses private / internal
+   * addresses at connect and re-checks every redirect hop, dropping
+   * credentials across origins (s233a; header-auth servers never follow).
+   * `headersTimeoutMs` bounds the wait for
+   * the response headers only, as ky's timeout did: a Streamable-HTTP server
+   * may open its SSE answer at once and stream a long tool call into it. The
+   * body read is capped by MCP_RESPONSE_DEADLINE_MS. Any HTTP status is read
+   * as a body (JSON-RPC errors ride on non-2xx answers).
+   */
+  private async post(body: string, headersTimeoutMs: number) {
+    const headersDeadline = new AbortController()
+    const timer = setTimeout(
+      () =>
+        headersDeadline.abort(
+          new DOMException("MCP response headers timed out", "TimeoutError"),
+        ),
+      headersTimeoutMs,
+    )
+    try {
+      return await outboundFetch(
+        this.url,
+        {
+          method: "POST",
+          headers: this.getHeaders(),
+          body,
+          signal: headersDeadline.signal,
+          // The pinned fetch drops Authorization across origins, but not a
+          // header-auth server's custom secret header: those never follow.
+          redirect:
+            this.auth.type === aiMcpServerAuthTypes.enum.header
+              ? "error"
+              : "follow",
+        },
+        { timeoutMs: MCP_RESPONSE_DEADLINE_MS },
+      )
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
   private async request<T>(
     method: string,
     params: Record<string, unknown> = {},
@@ -105,19 +177,19 @@ export class McpClient {
     isNotification = false,
   ): Promise<T | null> {
     const requestId = isNotification ? undefined : this.getNextRequestId()
-    const options: Options = {
-      headers: this.getHeaders(),
-      json: {
-        jsonrpc: helpTexts.jsonRpcVersion,
-        ...(requestId === undefined ? {} : { id: requestId }),
-        method,
-        params,
-      },
-      timeout: timeout ?? aiTimeouts.httpDefault,
-    }
+    const body = JSON.stringify({
+      jsonrpc: helpTexts.jsonRpcVersion,
+      ...(requestId === undefined ? {} : { id: requestId }),
+      method,
+      params,
+    })
 
     try {
-      const responseText = await mcpKy.post(this.url, options).text()
+      const response = await this.post(body, timeout ?? aiTimeouts.httpDefault)
+      const responseText = await readTextCapped(
+        response,
+        MCP_MAX_RESPONSE_BYTES,
+      )
       if (isNotification) {
         return null
       }
