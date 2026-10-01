@@ -211,6 +211,11 @@ vi.mock("../src/invoice/contact-marks", () => ({
 vi.mock("../src/audit/dispatcher", () => ({
   dispatchAuditRecord: (...a: unknown[]) => m.audit(...a),
 }))
+// s235: lastError appends in SQL; this stub reads the note as a string.
+vi.mock("../src/invoice/last-error", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/invoice/last-error")>()),
+  appendLastError: (note: string) => note,
+}))
 vi.mock("../src/logger", () => ({
   logger: { warn: m.loggerWarn, error: vi.fn(), info: vi.fn() },
 }))

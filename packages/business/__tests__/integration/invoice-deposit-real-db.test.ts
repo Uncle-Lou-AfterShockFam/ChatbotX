@@ -152,7 +152,9 @@ const { invoiceService } = await import("../../src/invoice/service")
 const { handleStripeWebhook } = await import("../../src/invoice/stripe-webhook")
 const { applyCheckoutPayment, claimPaymentMarks, PAYMENT_MARKS_LEASE_MS } =
   await import("../../src/invoice/payments")
-const { invoiceEventModel, invoicePaymentModel } = await import(
+const { appendLastError, clearPayPageNotes, PAY_PAGE_NOTE_PREFIX } =
+  await import("../../src/invoice/last-error")
+const { invoiceEventModel, invoiceModel, invoicePaymentModel } = await import(
   "@chatbotx.io/database/schema"
 )
 const signer = new Stripe(SECRET_KEY).webhooks
@@ -579,11 +581,7 @@ describe.skipIf(!databaseUrl)("signed checkout webhook, end to end", () => {
           ),
         }),
       ])
-      // The loser is a no-op, or (s235) a 503 while the winner's marks run.
-      expect(results.filter((r) => r.outcome === "applied")).toHaveLength(1)
-      expect(
-        results.every((r) => ["applied", "noop", "retry"].includes(r.outcome)),
-      ).toBe(true)
+      expect(results.map((r) => r.outcome).sort()).toEqual(["applied", "noop"])
       expect((await invoiceRow(invoice.id))?.amountPaid).toBe("50.00")
     }
   })
@@ -788,8 +786,10 @@ describe.skipIf(!databaseUrl)(
           "checkout.session.async_payment_succeeded",
         ),
       })
+      // The redelivery may race its own dead run: 503. The other event type
+      // is fresh: a no-op (Stripe retries the dead run's event by itself).
       expect(redelivered.outcome).toBe("retry")
-      expect(otherType.outcome).toBe("retry")
+      expect(otherType).toEqual({ outcome: "noop", detail: "already-marked" })
       expect(m.marks).not.toHaveBeenCalled()
       await db
         .update(invoicePaymentModel)
@@ -1133,3 +1133,46 @@ describe.skipIf(!databaseUrl)(
     })
   },
 )
+
+describe.skipIf(!databaseUrl)("s235 lastError notes (real SQL)", () => {
+  const setNote = async (id: string, value: unknown) => {
+    await db
+      .update(invoiceModel)
+      .set({ lastError: value as string })
+      .where(sql`id = ${id}`)
+    return (await invoiceRow(id))?.lastError
+  }
+
+  test("append keeps earlier notes, never adds one twice, stays bounded", async () => {
+    const { invoice } = await createDepositInvoice()
+    expect(await setNote(invoice.id, appendLastError("A refund it"))).toBe(
+      "A refund it",
+    )
+    expect(await setNote(invoice.id, appendLastError("B rollback"))).toBe(
+      "A refund it | B rollback",
+    )
+    expect(await setNote(invoice.id, appendLastError("B rollback"))).toBe(
+      "A refund it | B rollback",
+    )
+    const long = "x".repeat(3000)
+    const bounded = await setNote(invoice.id, appendLastError(long))
+    expect(bounded?.length).toBe(2000)
+    expect(bounded?.endsWith("x")).toBe(true)
+  })
+
+  test.each([
+    [`${PAY_PAGE_NOTE_PREFIX}No such customer`, null],
+    [`A refund it | ${PAY_PAGE_NOTE_PREFIX}No such customer`, "A refund it"],
+    [`${PAY_PAGE_NOTE_PREFIX}No such customer | B rollback`, "B rollback"],
+    [
+      `A refund it | ${PAY_PAGE_NOTE_PREFIX}x | B rollback | ${PAY_PAGE_NOTE_PREFIX}y`,
+      "A refund it | B rollback",
+    ],
+    ["A refund it", "A refund it"],
+    [null, null],
+  ])("a good visit clears only pay-page notes: %j -> %j", async (before, after) => {
+    const { invoice } = await createDepositInvoice()
+    await setNote(invoice.id, before)
+    expect(await setNote(invoice.id, clearPayPageNotes())).toBe(after)
+  })
+})

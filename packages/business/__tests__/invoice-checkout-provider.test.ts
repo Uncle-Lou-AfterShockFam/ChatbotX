@@ -218,6 +218,12 @@ vi.mock("../src/invoice/stripe-provider", async (importOriginal) => ({
 vi.mock("../src/platform/settings", () => ({
   resolveWorkspaceAppUrl: (...a: unknown[]) => m.appUrl(...a),
 }))
+// s235: lastError is written in SQL; this in-memory row takes plain values.
+vi.mock("../src/invoice/last-error", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/invoice/last-error")>()),
+  appendLastError: (note: string) => note,
+  clearPayPageNotes: () => null,
+}))
 vi.mock("../src/logger", () => ({
   logger: { warn: vi.fn(), error: m.loggerError, info: vi.fn() },
 }))

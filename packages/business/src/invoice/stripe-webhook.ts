@@ -614,6 +614,12 @@ async function settleCheckoutPayment(props: {
   hubInvoice: InvoiceModel
   paymentIntentId: string
   result: Exclude<AppliedPayment, { kind: "legacyKnown" }>
+  /**
+   * A REDELIVERY may be racing the dead claimant of its own event, so a live
+   * claim answers 503 there. A fresh event's live claim belongs to another
+   * event's delivery, which Stripe retries itself if it died: no-op.
+   */
+  redelivery?: boolean
 }): Promise<StripeWebhookResult> {
   const { credentials, event, result } = props
   if (result.kind === "rejected") {
@@ -647,8 +653,11 @@ async function settleCheckoutPayment(props: {
     return { outcome: "retry", detail: "marks claim" }
   }
   if (!claimed) {
-    // Done, or another run holds a live claim. That run may have died after
-    // claiming (s235 probe): answer 503, keep the dedup row, and let Stripe
+    if (!props.redelivery) {
+      return { outcome: "noop", detail: "already-marked" }
+    }
+    // Done, or a live claim that may be this event's own run, dead after
+    // claiming (s235 probe a2): answer 503, keep the dedup row, and let Stripe
     // come back until the marks are done or the lease lets this one take over.
     const current = await findCheckoutPayment(
       payment.invoiceId,
@@ -699,15 +708,17 @@ async function settleCheckoutPayment(props: {
     )
     return { outcome: "retry", detail: "contact marks" }
   }
-  const finished = await finishPaymentMarks(payment.id, claimed).catch(
-    (error: unknown) => {
+  // The marks ran: a 503 now would only run them again after the lease, so
+  // a failed finish is retried once and then logged (never a retry answer).
+  const finished = await finishPaymentMarks(payment.id, claimed)
+    .catch(() => finishPaymentMarks(payment.id, claimed))
+    .catch((error: unknown) => {
       logger.error(
         { err: error, paymentId: payment.id },
-        "stripe webhook: payment marks ran but were not recorded as done; a redelivery after the lease may run them again",
+        "stripe webhook: payment marks ran but were not recorded as done; a later event of this payment may run them again after the lease",
       )
       return true
-    },
-  )
+    })
   if (!finished) {
     logger.error(
       { paymentId: payment.id, eventId: event.id },
@@ -805,6 +816,7 @@ async function recoverDuplicate(props: {
       hubInvoice,
       paymentIntentId,
       result: { kind: "known", row: hubInvoice, payment },
+      redelivery: true,
     })
   }
   if (resolution.ledgerRefund) {
