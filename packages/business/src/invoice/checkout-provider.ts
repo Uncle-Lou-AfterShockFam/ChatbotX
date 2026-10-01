@@ -18,6 +18,11 @@ import {
 } from "../integration-stripe/service"
 import { logger } from "../logger"
 import { resolveWorkspaceAppUrl } from "../platform/settings"
+import {
+  appendLastError,
+  clearPayPageNotes,
+  PAY_PAGE_NOTE_PREFIX,
+} from "./last-error"
 import { checkoutAmountMinor, nextCheckout } from "./payments"
 import {
   ensureCustomer,
@@ -351,7 +356,9 @@ async function mintSession(props: {
     .update(invoiceModel)
     .set({
       checkoutSessionId: session.id,
-      lastError: null,
+      // s235: only the pay-page notes clear; an operator note (a refund
+      // rollback, a "refund it" flag) is kept.
+      lastError: clearPayPageNotes(),
       updatedAt: new Date(),
     })
     .where(
@@ -540,7 +547,14 @@ export async function visitCheckout(
       try {
         await db
           .update(invoiceModel)
-          .set({ lastError: error.message, updatedAt: new Date() })
+          .set({
+            lastError: appendLastError(
+              // "|" separates notes: a message carrying one (an echoed
+              // contact name) must not split off an unclearable fake note.
+              `${PAY_PAGE_NOTE_PREFIX}${error.message.replaceAll("|", "/")}`,
+            ),
+            updatedAt: new Date(),
+          })
           .where(
             and(
               eq(invoiceModel.id, row.id),

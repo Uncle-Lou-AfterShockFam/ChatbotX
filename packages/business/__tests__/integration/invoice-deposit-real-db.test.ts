@@ -29,7 +29,10 @@ const SECRET_KEY = ["sk", "test", "depositSuiteKey0123456789"].join("_")
 const m = vi.hoisted(() => ({
   integrations: new Map<string, string>(),
   sessionRetrieve: vi.fn(),
+  chargeRetrieve: vi.fn(),
+  piRetrieve: vi.fn(),
   marks: vi.fn(async () => undefined),
+  statusMarks: vi.fn(async () => undefined),
   emitPaid: vi.fn(async () => undefined),
   emitPartiallyPaid: vi.fn(async () => undefined),
   token: 0,
@@ -113,11 +116,16 @@ vi.mock("../../src/integration-stripe/client", async (importOriginal) => {
       checkout: {
         sessions: { retrieve: (...a: unknown[]) => m.sessionRetrieve(...a) },
       },
+      charges: { retrieve: (...a: unknown[]) => m.chargeRetrieve(...a) },
+      paymentIntents: { retrieve: (...a: unknown[]) => m.piRetrieve(...a) },
+      // A checkout payment has no Stripe Invoice behind it.
+      invoicePayments: { list: async () => ({ data: [] }) },
     }),
   }
 })
 vi.mock("../../src/invoice/contact-marks", () => ({
   markInvoiceOnContact: (...a: unknown[]) => m.marks(...(a as [])),
+  markInvoiceStatusOnContact: (...a: unknown[]) => m.statusMarks(...(a as [])),
   markInvoiceCreated: vi.fn(async () => undefined),
 }))
 vi.mock("../../src/invoice/document", async (importOriginal) => ({
@@ -142,8 +150,12 @@ const databaseUrl = requireRealDatabaseUrl()
 
 const { invoiceService } = await import("../../src/invoice/service")
 const { handleStripeWebhook } = await import("../../src/invoice/stripe-webhook")
-const { applyCheckoutPayment, claimPaymentMarks } = await import(
-  "../../src/invoice/payments"
+const { applyCheckoutPayment, claimPaymentMarks, PAYMENT_MARKS_LEASE_MS } =
+  await import("../../src/invoice/payments")
+const { appendLastError, clearPayPageNotes, PAY_PAGE_NOTE_PREFIX } =
+  await import("../../src/invoice/last-error")
+const { invoiceEventModel, invoiceModel, invoicePaymentModel } = await import(
+  "@chatbotx.io/database/schema"
 )
 const signer = new Stripe(SECRET_KEY).webhooks
 
@@ -626,5 +638,559 @@ describe.skipIf(!databaseUrl)("signed checkout webhook, end to end", () => {
     const row = await invoiceRow(invoice.id)
     expect(row).toMatchObject({ status: "paid", amountPaid: "200.00" })
     expect(row?.lastError).toContain("pi_h3f")
+  })
+})
+
+describe.skipIf(!databaseUrl)(
+  "s235 B-3: a crash between the payment commit and its marks",
+  () => {
+    const depositSession = (
+      invoice: { id: string; workspaceId: string },
+      pi: string,
+    ) => ({
+      id: `cs_${pi}`,
+      object: "checkout.session",
+      mode: "payment",
+      status: "complete",
+      payment_status: "paid",
+      amount_total: 5000,
+      currency: "usd",
+      payment_intent: pi,
+      metadata: {
+        hub_invoice_id: invoice.id,
+        hub_workspace_id: invoice.workspaceId,
+        hub_payment_kind: "deposit",
+        hub_payment_minor: "5000",
+      },
+    })
+
+    /** What a process killed right after the webhook's transaction leaves behind. */
+    async function crashedAfterCommit(eventId: string, pi: string) {
+      const { invoice } = await createDepositInvoice()
+      const integrationId = m.integrations.get(invoice.workspaceId) as string
+      const applied = await apply(invoice.id, "deposit", 5000n, pi)
+      if (applied.kind !== "applied") {
+        throw new Error("deposit not applied")
+      }
+      await db.insert(invoiceEventModel).values({
+        workspaceId: invoice.workspaceId,
+        integrationId,
+        invoiceId: invoice.id,
+        providerEventId: eventId,
+        type: "checkout.session.completed",
+        outcome: "received",
+      })
+      m.sessionRetrieve.mockResolvedValue(depositSession(invoice, pi))
+      return { invoice, integrationId, payment: applied.payment }
+    }
+
+    test("before the claim: Stripe's redelivery of the SAME event runs the marks once", async () => {
+      const { invoice, integrationId, payment } = await crashedAfterCommit(
+        "evt_crash1",
+        "pi_crash1",
+      )
+      const first = await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted("evt_crash1", "cs_x"),
+      })
+      expect(first.outcome).toBe("noop")
+      expect(m.marks).toHaveBeenCalledTimes(1)
+      expect(m.marks).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "partiallyPaid" }),
+      )
+      expect(m.emitPartiallyPaid).toHaveBeenCalledTimes(1)
+      const [row] = await paymentRows(invoice.id)
+      expect(row?.id).toBe(payment.id)
+      expect(row?.marksDoneAt).toBeInstanceOf(Date)
+      // A later redelivery is a plain duplicate: the marks are done.
+      const again = await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted("evt_crash1", "cs_x"),
+      })
+      expect(again).toEqual({ outcome: "duplicate", detail: "evt_crash1" })
+      expect(m.marks).toHaveBeenCalledTimes(1)
+    })
+
+    test("after the claim: a claim older than the lease is taken over; a fresh one is not", async () => {
+      const { invoice, integrationId, payment } = await crashedAfterCommit(
+        "evt_crash2",
+        "pi_crash2",
+      )
+      await db
+        .update(invoicePaymentModel)
+        .set({ markedAt: new Date(Date.now() - 5000) })
+        .where(sql`id = ${payment.id}`)
+      const live = await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted("evt_crash2", "cs_x"),
+      })
+      expect(live).toEqual({ outcome: "retry", detail: "marks in flight" })
+      expect(m.marks).not.toHaveBeenCalled()
+
+      await db
+        .update(invoicePaymentModel)
+        .set({ markedAt: new Date(Date.now() - PAYMENT_MARKS_LEASE_MS - 1000) })
+        .where(sql`id = ${payment.id}`)
+      const stale = await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted("evt_crash2", "cs_x"),
+      })
+      expect(stale.outcome).toBe("noop")
+      expect(m.marks).toHaveBeenCalledTimes(1)
+      expect(m.emitPartiallyPaid).toHaveBeenCalledTimes(1)
+      expect((await paymentRows(invoice.id))[0]?.marksDoneAt).toBeInstanceOf(
+        Date,
+      )
+    })
+
+    test("8 concurrent redeliveries after a crash mark exactly once", async () => {
+      const { integrationId } = await crashedAfterCommit(
+        "evt_crash3",
+        "pi_crash3",
+      )
+      const results = await Promise.all(
+        Array.from({ length: 8 }, () =>
+          handleStripeWebhook({
+            integrationId,
+            ...signedCompleted("evt_crash3", "cs_x"),
+          }),
+        ),
+      )
+      expect(m.marks).toHaveBeenCalledTimes(1)
+      expect(m.emitPartiallyPaid).toHaveBeenCalledTimes(1)
+      expect(
+        results.every((r) =>
+          ["noop", "retry", "duplicate"].includes(r.outcome),
+        ),
+      ).toBe(true)
+    })
+
+    test("probe a2/b2: died after the claim, before the marks: every event answers retry inside the lease, marks once past it", async () => {
+      const { invoice, integrationId, payment } = await crashedAfterCommit(
+        "evt_crash5",
+        "pi_crash5",
+      )
+      await db
+        .update(invoicePaymentModel)
+        .set({ markedAt: new Date(Date.now() - 60_000) })
+        .where(sql`id = ${payment.id}`)
+      const redelivered = await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted("evt_crash5", "cs_x"),
+      })
+      const otherType = await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted(
+          "evt_crash5_async",
+          "cs_x",
+          "checkout.session.async_payment_succeeded",
+        ),
+      })
+      // A claim a minute old is likely a dead run: the redelivery AND the
+      // fresh other event type both answer 503 (each retries on its own).
+      expect(redelivered.outcome).toBe("retry")
+      expect(otherType).toEqual({ outcome: "retry", detail: "marks in flight" })
+      expect(m.marks).not.toHaveBeenCalled()
+      await db
+        .update(invoicePaymentModel)
+        .set({ markedAt: new Date(Date.now() - PAYMENT_MARKS_LEASE_MS - 1000) })
+        .where(sql`id = ${payment.id}`)
+      const late = await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted("evt_crash5", "cs_x"),
+      })
+      expect(late.outcome).toBe("noop")
+      expect(m.marks).toHaveBeenCalledTimes(1)
+      expect((await paymentRows(invoice.id))[0]?.marksDoneAt).toBeInstanceOf(
+        Date,
+      )
+    })
+
+    test("a fresh event of a payment whose claim is seconds old no-ops (a live run): never a 503", async () => {
+      const { payment } = await crashedAfterCommit("evt_crash6", "pi_crash6")
+      await db
+        .update(invoicePaymentModel)
+        .set({ markedAt: new Date(Date.now() - 5000) })
+        .where(sql`id = ${payment.id}`)
+      const fresh = await handleStripeWebhook({
+        integrationId: m.integrations.values().next().value as string,
+        ...signedCompleted(
+          "evt_crash6_async",
+          "cs_x",
+          "checkout.session.async_payment_succeeded",
+        ),
+      })
+      expect(fresh).toEqual({ outcome: "noop", detail: "already-marked" })
+      expect(m.marks).not.toHaveBeenCalled()
+    })
+
+    test("a done payment is never re-claimed, even past the lease", async () => {
+      const { payment } = await crashedAfterCommit("evt_crash4", "pi_crash4")
+      const at = new Date(Date.now() - PAYMENT_MARKS_LEASE_MS - 60_000)
+      await db
+        .update(invoicePaymentModel)
+        .set({ markedAt: at, marksDoneAt: at })
+        .where(sql`id = ${payment.id}`)
+      expect(await claimPaymentMarks(payment.id)).toBeNull()
+    })
+  },
+)
+
+describe.skipIf(!databaseUrl)(
+  "s235 B-3: refunding ONE payment rolls back what is owed",
+  () => {
+    const paySession = (
+      invoice: { id: string; workspaceId: string },
+      kind: "deposit" | "balance",
+      minor: number,
+      pi: string,
+    ) => ({
+      id: `cs_${pi}`,
+      object: "checkout.session",
+      mode: "payment",
+      status: "complete",
+      payment_status: "paid",
+      amount_total: minor,
+      currency: "usd",
+      payment_intent: pi,
+      metadata: {
+        hub_invoice_id: invoice.id,
+        hub_workspace_id: invoice.workspaceId,
+        hub_payment_kind: kind,
+        hub_payment_minor: String(minor),
+      },
+    })
+
+    async function pay(
+      invoice: { id: string; workspaceId: string },
+      integrationId: string,
+      kind: "deposit" | "balance",
+      minor: number,
+      pi: string,
+    ) {
+      m.sessionRetrieve.mockResolvedValueOnce(
+        paySession(invoice, kind, minor, pi),
+      )
+      const result = await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted(`evt_${pi}`, `cs_${pi}`),
+      })
+      expect(result.outcome).toBe("applied")
+    }
+
+    const piMetadata = new Map<string, Record<string, string>>()
+
+    function refund(
+      invoice: { id: string; workspaceId: string },
+      integrationId: string,
+      pi: string,
+      kind: "deposit" | "balance",
+      minor: number,
+      eventId = `evt_ref_${pi}`,
+    ) {
+      // Keyed by id: concurrent refunds of different payments must not share
+      // one mocked answer.
+      m.chargeRetrieve.mockImplementation(async (id: string) => ({
+        id,
+        refunded: true,
+        payment_intent: id.slice("ch_".length),
+      }))
+      piMetadata.set(pi, paySession(invoice, kind, minor, pi).metadata)
+      m.piRetrieve.mockImplementation(async (id: string) => ({
+        id,
+        metadata: piMetadata.get(id),
+      }))
+      const payload = JSON.stringify({
+        id: eventId,
+        object: "event",
+        api_version: "2026-05-27.dahlia",
+        created: Math.floor(Date.now() / 1000),
+        livemode: false,
+        type: "charge.refunded",
+        data: { object: { id: `ch_${pi}`, object: "charge" } },
+      })
+      return handleStripeWebhook({
+        integrationId,
+        rawBody: Buffer.from(payload),
+        signature: signer.generateTestHeaderString({
+          payload,
+          secret: WEBHOOK_SECRET,
+        }),
+      })
+    }
+
+    async function paidInFull() {
+      const { invoice } = await createDepositInvoice()
+      const integrationId = m.integrations.get(invoice.workspaceId) as string
+      await pay(invoice, integrationId, "deposit", 5000, `pi_d_${invoice.id}`)
+      await pay(invoice, integrationId, "balance", 15_000, `pi_b_${invoice.id}`)
+      expect((await invoiceRow(invoice.id))?.status).toBe("paid")
+      vi.clearAllMocks()
+      return { invoice, integrationId }
+    }
+
+    test("the balance refunded on a paid invoice: partiallyPaid holding the deposit; the link collects the balance again", async () => {
+      const { invoice, integrationId } = await paidInFull()
+      const result = await refund(
+        invoice,
+        integrationId,
+        `pi_b_${invoice.id}`,
+        "balance",
+        15_000,
+      )
+      expect(result.outcome).toBe("applied")
+      const row = await invoiceRow(invoice.id)
+      expect(row).toMatchObject({
+        status: "partiallyPaid",
+        amountPaid: "50.00",
+        checkoutSessionId: null,
+      })
+      expect(row?.lastError).toContain("paid -> partiallyPaid")
+      expect(m.statusMarks).toHaveBeenCalledWith({
+        invoice: expect.objectContaining({ status: "partiallyPaid" }),
+      })
+      // No paid / deposit marks or events re-fire on a rollback.
+      expect(m.marks).not.toHaveBeenCalled()
+      expect(m.emitPaid).not.toHaveBeenCalled()
+      expect(m.emitPartiallyPaid).not.toHaveBeenCalled()
+      const refunded = (await paymentRows(invoice.id)).find(
+        (p) => p.kind === "balance",
+      )
+      expect(refunded?.refundedAt).toBeInstanceOf(Date)
+      // A NEW balance payment pays it again.
+      await pay(
+        invoice,
+        integrationId,
+        "balance",
+        15_000,
+        `pi_b2_${invoice.id}`,
+      )
+      expect(await invoiceRow(invoice.id)).toMatchObject({
+        status: "paid",
+        amountPaid: "200.00",
+      })
+    })
+
+    test("the deposit refunded while partly paid: open again, the deposit is payable again", async () => {
+      const { invoice } = await createDepositInvoice()
+      const integrationId = m.integrations.get(invoice.workspaceId) as string
+      await pay(invoice, integrationId, "deposit", 5000, `pi_d_${invoice.id}`)
+      const result = await refund(
+        invoice,
+        integrationId,
+        `pi_d_${invoice.id}`,
+        "deposit",
+        5000,
+      )
+      expect(result.outcome).toBe("applied")
+      expect(await invoiceRow(invoice.id)).toMatchObject({
+        status: "open",
+        amountPaid: "0.00",
+        paidAt: null,
+      })
+      await pay(invoice, integrationId, "deposit", 5000, `pi_d2_${invoice.id}`)
+      expect((await invoiceRow(invoice.id))?.status).toBe("partiallyPaid")
+    })
+
+    test("both refunded on a paid invoice: deposit first -> partiallyPaid (balance held), then refunded", async () => {
+      const { invoice, integrationId } = await paidInFull()
+      await refund(
+        invoice,
+        integrationId,
+        `pi_d_${invoice.id}`,
+        "deposit",
+        5000,
+      )
+      expect(await invoiceRow(invoice.id)).toMatchObject({
+        status: "partiallyPaid",
+        amountPaid: "150.00",
+      })
+      await refund(
+        invoice,
+        integrationId,
+        `pi_b_${invoice.id}`,
+        "balance",
+        15_000,
+      )
+      const row = await invoiceRow(invoice.id)
+      expect(row).toMatchObject({ status: "refunded", amountPaid: "0.00" })
+      expect(row?.lastError).toContain("partiallyPaid -> refunded")
+    })
+
+    test("a redelivered refund and a second event for the same refund change nothing", async () => {
+      const { invoice, integrationId } = await paidInFull()
+      const pi = `pi_b_${invoice.id}`
+      await refund(invoice, integrationId, pi, "balance", 15_000, "evt_r1")
+      const dup = await refund(
+        invoice,
+        integrationId,
+        pi,
+        "balance",
+        15_000,
+        "evt_r1",
+      )
+      expect(dup.outcome).toBe("noop")
+      const other = await refund(
+        invoice,
+        integrationId,
+        pi,
+        "balance",
+        15_000,
+        "evt_r2",
+      )
+      expect(other.outcome).toBe("noop")
+      expect(await invoiceRow(invoice.id)).toMatchObject({
+        status: "partiallyPaid",
+        amountPaid: "50.00",
+      })
+    })
+
+    test("6 concurrent refund events of both payments: the ledger and the row agree", async () => {
+      for (let round = 0; round < 3; round += 1) {
+        const { invoice, integrationId } = await paidInFull()
+        await Promise.all(
+          Array.from({ length: 6 }, (_, i) =>
+            i % 2 === 0
+              ? refund(
+                  invoice,
+                  integrationId,
+                  `pi_d_${invoice.id}`,
+                  "deposit",
+                  5000,
+                  `evt_cd${i}_${round}`,
+                )
+              : refund(
+                  invoice,
+                  integrationId,
+                  `pi_b_${invoice.id}`,
+                  "balance",
+                  15_000,
+                  `evt_cb${i}_${round}`,
+                ),
+          ),
+        )
+        const payments = await paymentRows(invoice.id)
+        expect(payments.every((p) => p.refundedAt instanceof Date)).toBe(true)
+        expect(await invoiceRow(invoice.id)).toMatchObject({
+          status: "refunded",
+          amountPaid: "0.00",
+        })
+      }
+    })
+
+    test("probe g: a refund that beats its payment event is recorded; the late payment is never applied", async () => {
+      const { invoice } = await createDepositInvoice()
+      const integrationId = m.integrations.get(invoice.workspaceId) as string
+      await pay(invoice, integrationId, "deposit", 5000, `pi_d_${invoice.id}`)
+      const early = await refund(
+        invoice,
+        integrationId,
+        `pi_b_${invoice.id}`,
+        "balance",
+        15_000,
+      )
+      expect(early.outcome).toBe("applied")
+      let row = await invoiceRow(invoice.id)
+      expect(row).toMatchObject({
+        status: "partiallyPaid",
+        amountPaid: "50.00",
+      })
+      expect(row?.lastError).toContain("it is never applied")
+      // The delayed payment event of the refunded balance lands now.
+      m.sessionRetrieve.mockResolvedValueOnce(
+        paySession(invoice, "balance", 15_000, `pi_b_${invoice.id}`),
+      )
+      const late = await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted("evt_late_bal", "cs_late"),
+      })
+      expect(late.outcome).toBe("noop")
+      row = await invoiceRow(invoice.id)
+      expect(row).toMatchObject({
+        status: "partiallyPaid",
+        amountPaid: "50.00",
+      })
+      expect(m.emitPaid).not.toHaveBeenCalled()
+    })
+
+    test("probe f: a refund of a REJECTED payment is noted once, never retried", async () => {
+      const { invoice } = await createDepositInvoice()
+      const integrationId = m.integrations.get(invoice.workspaceId) as string
+      await pay(invoice, integrationId, "deposit", 5000, `pi_d_${invoice.id}`)
+      // A second deposit is rejected ("refund it in Stripe").
+      m.sessionRetrieve.mockResolvedValueOnce(
+        paySession(invoice, "deposit", 5000, "pi_dup2"),
+      )
+      await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted("evt_dup2", "cs_dup2"),
+      })
+      // The operator refunds the applied deposit FIRST: the invoice owes it again.
+      await refund(
+        invoice,
+        integrationId,
+        `pi_d_${invoice.id}`,
+        "deposit",
+        5000,
+      )
+      expect((await invoiceRow(invoice.id))?.status).toBe("open")
+      const dupRefund = await refund(
+        invoice,
+        integrationId,
+        "pi_dup2",
+        "deposit",
+        5000,
+      )
+      expect(dupRefund.outcome).not.toBe("retry")
+      const row = await invoiceRow(invoice.id)
+      expect(row).toMatchObject({ status: "open", amountPaid: "0.00" })
+      // Every note is kept: the rejection, the rollback, the late refund.
+      expect(row?.lastError).toContain("refund it in Stripe")
+      expect(row?.lastError).toContain("partiallyPaid -> open")
+      expect(row?.lastError).toContain("pi_dup2 was refunded")
+    })
+  },
+)
+
+describe.skipIf(!databaseUrl)("s235 lastError notes (real SQL)", () => {
+  const setNote = async (id: string, value: unknown) => {
+    await db
+      .update(invoiceModel)
+      .set({ lastError: value as string })
+      .where(sql`id = ${id}`)
+    return (await invoiceRow(id))?.lastError
+  }
+
+  test("append keeps earlier notes, never adds one twice, stays bounded", async () => {
+    const { invoice } = await createDepositInvoice()
+    expect(await setNote(invoice.id, appendLastError("A refund it"))).toBe(
+      "A refund it",
+    )
+    expect(await setNote(invoice.id, appendLastError("B rollback"))).toBe(
+      "A refund it | B rollback",
+    )
+    expect(await setNote(invoice.id, appendLastError("B rollback"))).toBe(
+      "A refund it | B rollback",
+    )
+    const long = "x".repeat(3000)
+    const bounded = await setNote(invoice.id, appendLastError(long))
+    expect(bounded?.length).toBe(2000)
+    expect(bounded?.endsWith("x")).toBe(true)
+  })
+
+  test.each([
+    [`${PAY_PAGE_NOTE_PREFIX}No such customer`, null],
+    [`A refund it | ${PAY_PAGE_NOTE_PREFIX}No such customer`, "A refund it"],
+    [`${PAY_PAGE_NOTE_PREFIX}No such customer | B rollback`, "B rollback"],
+    [
+      `A refund it | ${PAY_PAGE_NOTE_PREFIX}x | B rollback | ${PAY_PAGE_NOTE_PREFIX}y`,
+      "A refund it | B rollback",
+    ],
+    ["A refund it", "A refund it"],
+    [null, null],
+  ])("a good visit clears only pay-page notes: %j -> %j", async (before, after) => {
+    const { invoice } = await createDepositInvoice()
+    await setNote(invoice.id, before)
+    expect(await setNote(invoice.id, clearPayPageNotes())).toBe(after)
   })
 })

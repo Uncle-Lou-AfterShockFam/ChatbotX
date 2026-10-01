@@ -27,7 +27,7 @@ import {
   mintInvoicePayToken,
   prepareCheckoutInvoice,
 } from "./checkout-provider"
-import { recordLastErrorIfClear } from "./last-error"
+import { appendLastError, recordLastErrorIfClear } from "./last-error"
 import { quickbooksInvoiceProvider } from "./quickbooks-provider"
 import { finalizeWithStripe, voidWithStripe } from "./stripe-provider"
 import {
@@ -109,7 +109,7 @@ const FINALIZED_STATUS: Partial<Record<string, InvoiceStatus>> = {
 async function recordLastError(invoiceId: string, message: string) {
   await db
     .update(invoiceModel)
-    .set({ lastError: message, updatedAt: new Date() })
+    .set({ lastError: appendLastError(message), updatedAt: new Date() })
     .where(eq(invoiceModel.id, invoiceId))
 }
 

@@ -273,9 +273,30 @@ vi.mock("../src/invoice/payments", async (importOriginal) => {
       m.state.paymentMarks.delete(id)
       return Promise.resolve()
     },
+    finishPaymentMarks: () => Promise.resolve(),
+    // s235: a redelivered event's payment, for the crash recovery. A payment
+    // whose marks were claimed counts as done here (the lease is real-DB).
+    findCheckoutPayment: (_invoiceId: string, paymentIntentId: string) => {
+      const payment = m.state.payments.get(paymentIntentId)
+      return Promise.resolve(
+        payment
+          ? {
+              ...payment,
+              marksDoneAt: m.state.paymentMarks.has(String(payment.id))
+                ? new Date()
+                : null,
+            }
+          : null,
+      )
+    },
   }
 })
 vi.mock("../src/audit/dispatcher", () => ({ dispatchAuditRecord: vi.fn() }))
+// s235: notes append in SQL; here the appended note itself is what is asserted.
+vi.mock("../src/invoice/last-error", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/invoice/last-error")>()),
+  appendLastError: (note: string) => note,
+}))
 vi.mock("../src/logger", () => ({
   logger: { warn: m.loggerWarn, error: m.loggerError, info: vi.fn() },
 }))
@@ -1217,7 +1238,7 @@ describe("stripeCheckout (s207b): checkout.session.* and refunds", () => {
       expectNoSideEffects()
     })
 
-    test("a refund of a deposit flags the invoice and moves nothing", async () => {
+    test("a refund of a deposit invoice's payment goes to the ledger (s235): never retried, never the whole-invoice refund", async () => {
       m.state.hubRow = depositRow("partiallyPaid", {
         amountPaid: "50.00",
         providerInvoiceId: "pi_1",
@@ -1227,13 +1248,14 @@ describe("stripeCheckout (s207b): checkout.session.* and refunds", () => {
         type: "charge.refunded",
         object: { id: "ch_1", object: "charge" },
       })
-      expect(result).toEqual({ outcome: "noop", detail: "unknown-invoice" })
-      expect(m.state.updates).toEqual([
-        expect.objectContaining({
-          lastError: expect.stringContaining("was refunded in Stripe"),
-        }),
-      ])
-      expect(m.state.updates[0]).not.toHaveProperty("status")
+      // The ledger itself (rollback, unrecorded payments) is pinned by
+      // invoice-deposit-real-db.test.ts; this stub has no invoice row to lock.
+      expect(result.outcome).not.toBe("retry")
+      expect(m.state.updates).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ status: "refunded" }),
+        ]),
+      )
     })
   })
 

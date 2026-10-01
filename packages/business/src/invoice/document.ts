@@ -1,5 +1,6 @@
 import { and, db, eq } from "@chatbotx.io/database/client"
 import {
+  decimalStringToMinor,
   hubDocumentMethods,
   INVOICE_DOCUMENT_REF_PREFIX,
   type InvoiceDocumentKind,
@@ -31,7 +32,28 @@ import { amountDueMinor } from "./payments"
 export const invoiceDocumentRef = (
   invoiceId: string,
   kind: InvoiceDocumentKind,
-): string => `${INVOICE_DOCUMENT_REF_PREFIX}${invoiceId}:${kind}`
+  variant?: string,
+): string =>
+  `${INVOICE_DOCUMENT_REF_PREFIX}${invoiceId}:${kind}${variant ? `:${variant}` : ""}`
+
+/**
+ * s235: a refund can leave a partly paid invoice holding something other than
+ * its deposit (the deposit refunded, the balance kept). Its deposit receipt
+ * then states a different amount, so it is a different document: keyed by the
+ * amount held. The usual case (the deposit held) keeps the plain ref.
+ */
+const invoiceDocumentVariant = (
+  invoice: Pick<InvoiceModel, "amountPaid" | "depositAmount" | "currency">,
+  kind: InvoiceDocumentKind,
+): string | undefined => {
+  if (kind !== "depositReceipt" || !invoice.depositAmount) {
+    return
+  }
+  const held = decimalStringToMinor(invoice.amountPaid, invoice.currency)
+  return held === decimalStringToMinor(invoice.depositAmount, invoice.currency)
+    ? undefined
+    : `held-${held}`
+}
 
 const invoiceDocumentTitle = (
   number: number,
@@ -73,6 +95,9 @@ const INVOICE_BADGES: Record<InvoiceDocumentKind, string> = {
   depositReceipt: '<div class="inv-badge">DEPOSIT PAID</div><br>',
   receipt: '<div class="inv-badge">PAID</div><br>',
 }
+
+/** s235: a partly paid invoice holding something other than its deposit. */
+const PART_PAID_BADGE = '<div class="inv-badge">PARTLY PAID</div><br>'
 
 const text = (value: string | null | undefined): string =>
   escapeHtml(value ?? "").replace(/\r?\n/g, "<br>")
@@ -141,7 +166,13 @@ export function renderInvoiceHtml(props: {
     kind === "depositReceipt"
       ? [
           ["Invoice total", money(invoice.total)],
-          ["Deposit paid", money(paidSoFar)],
+          // s235: after a refunded deposit the amount held is not the deposit.
+          [
+            invoiceDocumentVariant(invoice, kind)
+              ? "Amount paid"
+              : "Deposit paid",
+            money(paidSoFar),
+          ],
           [
             "Balance due",
             money(
@@ -174,7 +205,7 @@ export function renderInvoiceHtml(props: {
         `<tr><td>${text(line.description)}</td><td class="inv-num">${line.quantity}</td><td class="inv-num">${escapeHtml(money(line.unitAmount))}</td><td class="inv-num">${escapeHtml(money(line.amount))}</td></tr>`,
     )
     .join("")
-  const body = `<div class="inv-head"><div><div class="inv-from">${text(workspace.name)}</div></div><div class="inv-meta">${INVOICE_BADGES[kind]}<h1>${escapeHtml(title)}</h1>${meta.map(text).join("<br>")}</div></div>
+  const body = `<div class="inv-head"><div><div class="inv-from">${text(workspace.name)}</div></div><div class="inv-meta">${kind === "depositReceipt" && invoiceDocumentVariant(invoice, kind) ? PART_PAID_BADGE : INVOICE_BADGES[kind]}<h1>${escapeHtml(title)}</h1>${meta.map(text).join("<br>")}</div></div>
 ${billTo ? `<div class="inv-to"><div class="inv-label">${kind === "invoice" ? "Bill to" : "Received from"}</div>${billTo}</div>` : ""}
 <table class="inv-lines"><thead><tr><th>Description</th><th class="inv-num">Qty</th><th class="inv-num">Unit price</th><th class="inv-num">Amount</th></tr></thead><tbody>${rows}</tbody>
 <tfoot>${footerRows}</tfoot></table>
@@ -199,7 +230,11 @@ export async function ensureInvoiceDocument(props: {
 }): Promise<ContactDocumentModel> {
   const { invoice, kind } = props
   const now = props.now ?? new Date()
-  const ref = invoiceDocumentRef(invoice.id, kind)
+  const ref = invoiceDocumentRef(
+    invoice.id,
+    kind,
+    invoiceDocumentVariant(invoice, kind),
+  )
   const existing = await documentService.findByRef({
     contactId: invoice.contactId,
     ref,

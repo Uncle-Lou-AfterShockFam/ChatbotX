@@ -249,9 +249,14 @@ export const invoicePaymentModel = pgTable(
     /**
      * Claimed (CAS from null) before this payment's contact marks + event
      * run, so the two webhook events of one payment mark once; reset to null
-     * when the marks fail, so the redelivery marks again.
+     * when the marks fail, so the redelivery marks again. A claim older than
+     * the marks lease with no `marksDoneAt` is a crashed run: re-claimable.
      */
     markedAt: timestamp(timestampConfig),
+    /** s235: the marks + event of this payment ran to completion. */
+    marksDoneAt: timestamp(timestampConfig),
+    /** s235: Stripe refunded this payment in full (it no longer counts as paid). */
+    refundedAt: timestamp(timestampConfig),
   },
   (table) => [
     uniqueIndex("InvoicePayment_invoiceId_providerPaymentId_key").on(
