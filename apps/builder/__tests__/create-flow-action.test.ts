@@ -14,7 +14,7 @@ vi.mock("@/features/common/schema", () => ({
 }))
 
 vi.mock("@/lib/safe-action", () => ({
-  workspaceActionClient: {
+  flowsActionClient: {
     bindArgsSchemas: () => ({
       inputSchema: () => ({ action: (fn: unknown) => fn }),
     }),

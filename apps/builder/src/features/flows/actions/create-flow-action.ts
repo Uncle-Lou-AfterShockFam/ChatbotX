@@ -5,10 +5,10 @@ import {
   type WorkspaceIdRequestParams,
   workspaceIdrequestParams,
 } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { flowsActionClient } from "@/lib/safe-action"
 import { type CreateFlowSchema, createFlowSchema } from "../schema/action"
 
-export const createFlowAction = workspaceActionClient
+export const createFlowAction = flowsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(createFlowSchema)
   .action(

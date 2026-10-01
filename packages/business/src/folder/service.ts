@@ -1,6 +1,7 @@
 import {
   and,
   arrayContains,
+  arrayOverlaps,
   type DatabaseClient,
   db,
   eq,
@@ -132,10 +133,13 @@ class FolderService extends BaseService {
     let paths: string[] = []
 
     if (data.parentId) {
+      // s234a: the parent is this workspace's folder of the SAME type - a
+      // flow folder nested under another type would escape the flows gate
+      // on a delete of that parent (subtreeFolderTypes).
       const parentFolder = await tx.query.folderModel.findFirst({
-        where: { id: data.parentId },
+        where: { id: data.parentId, workspaceId },
       })
-      if (!parentFolder) {
+      if (!parentFolder || parentFolder.folderType !== data.folderType) {
         throw new ChatbotXException("Parent folder does not exist!")
       }
       paths = [...parentFolder.paths, parentFolder.id]
@@ -165,6 +169,34 @@ class FolderService extends BaseService {
       .returning()
 
     return updated
+  }
+
+  /**
+   * s234a: the types of the folders a by-id write reaches - the folders
+   * themselves and every descendant, since bulkDelete cascades through
+   * `paths` (the ancestor ids).
+   */
+  async subtreeFolderTypes(props: {
+    workspaceId: string
+    ids: readonly string[]
+  }): Promise<FolderType[]> {
+    const { workspaceId, ids } = props
+    if (ids.length === 0) {
+      return []
+    }
+    const rows = await db
+      .select({ folderType: folderModel.folderType })
+      .from(folderModel)
+      .where(
+        and(
+          eq(folderModel.workspaceId, workspaceId),
+          or(
+            inArray(folderModel.id, [...ids]),
+            arrayOverlaps(folderModel.paths, [...ids]),
+          ),
+        ),
+      )
+    return rows.map((row) => row.folderType as FolderType)
   }
 
   async bulkDelete(props: {

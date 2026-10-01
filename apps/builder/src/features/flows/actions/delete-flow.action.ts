@@ -7,9 +7,9 @@ import {
   type WorkspaceIdRequestParams,
   workspaceIdrequestParams,
 } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { flowsActionClientAllowExpired } from "@/lib/safe-action"
 
-export const deleteFlowAction = workspaceActionClient
+export const deleteFlowAction = flowsActionClientAllowExpired
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(bulkUpdateIdsRequest)
   .action(

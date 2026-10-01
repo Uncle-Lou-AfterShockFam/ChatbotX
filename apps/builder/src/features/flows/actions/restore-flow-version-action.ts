@@ -3,9 +3,9 @@
 import { flowVersionService } from "@chatbotx.io/business"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import z from "zod"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { flowsActionClient } from "@/lib/safe-action"
 
-export const restoreFlowVersionAction = workspaceActionClient
+export const restoreFlowVersionAction = flowsActionClient
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .inputSchema(z.object({ versionId: zodBigintAsString() }))
   .action(async (props) => {
