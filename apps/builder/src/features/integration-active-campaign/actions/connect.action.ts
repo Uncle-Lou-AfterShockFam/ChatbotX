@@ -11,10 +11,10 @@ import { getTranslations } from "next-intl/server"
 import { normalizeError } from "universal-error-normalizer"
 import { workspaceIdrequestParams } from "@/features/common/schema"
 import { logger } from "@/lib/log"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { connectActiveCampaignSchema } from "../schema"
 
-export const connectActiveCampaignAction = workspaceActionClient
+export const connectActiveCampaignAction = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(connectActiveCampaignSchema)
   .action(async ({ bindArgsParsedInputs: [workspaceId], parsedInput }) => {

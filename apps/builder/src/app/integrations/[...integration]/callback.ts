@@ -203,6 +203,30 @@ const storeMarketingMessagesConnection = async (args: {
 }
 
 /**
+ * Connecting a Settings integration (an ads token, a Google Sheets grant) is
+ * a super-admin action, and the connect actions assert it. The OAuth `state`
+ * is attacker-forgeable, so a bare workspace member could otherwise
+ * round-trip a crafted state and bind their own token to the workspace -
+ * re-assert super-admin here at the storage boundary (s234a).
+ */
+const isSuperAdminAtCallback = async (args: {
+  workspaceId: string
+  userId: string
+  flow: string
+}): Promise<boolean> => {
+  try {
+    await assertWorkspaceSuperAdmin(args.workspaceId)
+    return true
+  } catch {
+    logger.info(
+      { workspaceId: args.workspaceId, userId: args.userId },
+      `${args.flow} OAuth callback: non-super-admin blocked`,
+    )
+    return false
+  }
+}
+
+/**
  * Verifies `messagingAdsIntegrationId` is a REAL channel integration that
  * belongs to `workspaceId` and matches `channel` before any token is stored
  * — the OAuth callback is an API boundary, so a forged/stale integration id
@@ -444,6 +468,15 @@ export const handleCallback = async (
       // the referer (the integrations settings page) instead of the Messenger
       // page picker.
       if (stateParams.flow === "facebookAds") {
+        if (
+          !(await isSuperAdminAtCallback({
+            workspaceId: workspace.id,
+            userId,
+            flow: "facebookAds",
+          }))
+        ) {
+          return notFound()
+        }
         // storeFacebookAdsConnection -> integrationFacebookAdsService.upsert()
         // calls this.audit(), which resolves userId/workspaceId from the ALS
         // actor context. This raw OAuth route never populates it (unlike
@@ -485,18 +518,13 @@ export const handleCallback = async (
           )
           return notFound()
         }
-        // Connecting an ads token is a super-admin action (the connect action
-        // asserts it too). The OAuth `state` is attacker-forgeable, so a bare
-        // workspace member could otherwise round-trip a crafted state and bind
-        // their own Facebook token to a workspace integration — re-assert
-        // super-admin here at the storage boundary.
-        try {
-          await assertWorkspaceSuperAdmin(workspace.id)
-        } catch {
-          logger.info(
-            { workspaceId: workspace.id, userId },
-            "messagingAds OAuth callback: non-super-admin blocked",
-          )
+        if (
+          !(await isSuperAdminAtCallback({
+            workspaceId: workspace.id,
+            userId,
+            flow: "messagingAds",
+          }))
+        ) {
           return notFound()
         }
         const belongsToWorkspace =
@@ -953,6 +981,15 @@ export const handleCallback = async (
     }
 
     case "facebookAds": {
+      if (
+        !(await isSuperAdminAtCallback({
+          workspaceId: workspace.id,
+          userId,
+          flow: "facebookAds",
+        }))
+      ) {
+        return notFound()
+      }
       // Facebook Ads reuses the Messenger Facebook app credential; only the
       // requested scopes differ (see `connect.action.ts`).
       const facebookAdsCredential =
@@ -1035,6 +1072,15 @@ export const handleCallback = async (
     }
 
     case "googleSheets": {
+      if (
+        !(await isSuperAdminAtCallback({
+          workspaceId: workspace.id,
+          userId,
+          flow: "googleSheets",
+        }))
+      ) {
+        return notFound()
+      }
       const googleCredential = await platformCredentialService.resolveForOwner({
         ownerId: platformOwnerId,
         type: "google",

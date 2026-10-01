@@ -2,9 +2,9 @@
 
 import { integrationSmtpService, workspaceService } from "@chatbotx.io/business"
 import { zodBigintAsString } from "@chatbotx.io/utils"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 
-export const deleteSmtpAction = workspaceActionClient
+export const deleteSmtpAction = settingsActionClient
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .action(async (props) => {
     const {

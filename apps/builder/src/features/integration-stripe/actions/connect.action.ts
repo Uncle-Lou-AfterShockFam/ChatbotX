@@ -5,7 +5,7 @@ import { normalizeError } from "universal-error-normalizer"
 import { env } from "@/env"
 import { workspaceIdrequestParams } from "@/features/common/schema"
 import { logger } from "@/lib/log"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { connectStripeSchema } from "../schema"
 
 /** The endpoint the hub registers on the workspace's Stripe account. */
@@ -15,7 +15,7 @@ const stripeWebhookUrl = (integrationId: string) =>
     env.NEXT_PUBLIC_BUILDER_URL,
   ).toString()
 
-export const connectStripeAction = workspaceActionClient
+export const connectStripeAction = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(connectStripeSchema)
   .action(async ({ bindArgsParsedInputs: [workspaceId], parsedInput }) => {

@@ -349,3 +349,31 @@ export const flowsActionClient = workspaceActionClient.use(requireFlowsAccess)
  */
 export const flowsActionClientAllowExpired =
   workspaceActionClientAllowExpired.use(requireFlowsAccess)
+
+/**
+ * The workspace Settings integrations (AI keys, Stripe, SMTP, marketing,
+ * Google Sheets, WooCommerce, Facebook Ads, workspace tokens): the
+ * `superAdmin` permission the Settings layout already applies, so a member
+ * without it cannot connect, replace or disconnect an integration by calling
+ * the action directly (s234a). A support session carries a synthetic
+ * superAdmin membership and passes, as it does on the page.
+ */
+export const requireSuperAdminAccess = createPermissionMiddleware(
+  (permissions) => hasWorkspacePermission(permissions, "superAdmin"),
+  async () => {
+    const t = await getTranslations()
+    return new ChatbotXException(
+      t("errors.superAdminRequired"),
+      "superAdminRequired",
+      403,
+    )
+  },
+)
+
+export const settingsActionClient = workspaceActionClient.use(
+  requireSuperAdminAccess,
+)
+
+/** Integration disconnects: open on an expired workspace (invariant #14). */
+export const settingsActionClientAllowExpired =
+  workspaceActionClientAllowExpired.use(requireSuperAdminAccess)

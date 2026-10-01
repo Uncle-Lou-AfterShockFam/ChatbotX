@@ -9,14 +9,14 @@ import {
   type WorkspaceIdRequestParams,
   workspaceIdrequestParams,
 } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { verifyOpenRouterApiKey } from "../lib"
 import {
   type ConnectOpenRouterSchema,
   connectOpenRouterSchema,
 } from "../schema/request"
 
-export const connectOpenRouterAction = workspaceActionClient
+export const connectOpenRouterAction = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(connectOpenRouterSchema)
   .action(

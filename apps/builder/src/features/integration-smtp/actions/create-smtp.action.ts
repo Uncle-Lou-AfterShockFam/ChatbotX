@@ -3,11 +3,11 @@
 import { integrationSmtpService, workspaceService } from "@chatbotx.io/business"
 import { ChatbotXException } from "@chatbotx.io/business/errors"
 import { workspaceIdrequestParams } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { prepareSmtpAuth } from "../lib/prepare-smtp-auth"
 import { createSmtpRequest } from "../schema/mutation"
 
-export const createSmtpAction = workspaceActionClient
+export const createSmtpAction = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(createSmtpRequest)
   .action(async (props) => {

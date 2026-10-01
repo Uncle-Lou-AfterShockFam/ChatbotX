@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { workspaceAuthorizedMidddleware } from "@/middlewares/auth"
+import { superAdminAuthorizedMiddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
 import { listIntegrationSmtps } from "../queries"
 import { listIntegrationSmtpsResponse } from "../schema/resource"
@@ -17,7 +17,7 @@ export const integrationSmtpAuthenticatedAPI = {
       tags: ["Integrations"],
     })
     .input(listIntegrationSmtpsRequest)
-    .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+    .use(superAdminAuthorizedMiddleware, (input) => input.workspaceId)
     .output(listIntegrationSmtpsResponse)
     .handler(async ({ input }) => listIntegrationSmtps(input)),
 }

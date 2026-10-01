@@ -10,13 +10,13 @@ import { integrations } from "@/integration"
 import { getOriginUrlFromHeader } from "@/lib/domain"
 import { resolveOwnerForWorkspace } from "@/lib/platform-credential-owner"
 import { buildProviderCallbackUrl } from "@/lib/provider-origin"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import {
   type ConnectGoogleSheetsSchema,
   connectGoogleSheetsSchema,
 } from "../schema"
 
-export const connectGoogleSheets = workspaceActionClient
+export const connectGoogleSheets = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(connectGoogleSheetsSchema)
   .action(

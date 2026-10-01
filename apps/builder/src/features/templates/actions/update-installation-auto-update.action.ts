@@ -3,9 +3,9 @@
 import { templateService } from "@chatbotx.io/business"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import { z } from "zod"
-import { templateActionClient } from "./template-action-client"
+import { settingsActionClient } from "@/lib/safe-action"
 
-export const updateInstallationAutoUpdateAction = templateActionClient
+export const updateInstallationAutoUpdateAction = settingsActionClient
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .inputSchema(z.object({ autoUpdate: z.boolean() }))
   .action(

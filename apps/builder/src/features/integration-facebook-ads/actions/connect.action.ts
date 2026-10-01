@@ -2,28 +2,22 @@
 
 import type { UserModel, WorkspaceModel } from "@chatbotx.io/database/types"
 import { workspaceIdrequestParams } from "@/features/common/schema"
-import { assertWorkspaceSuperAdmin } from "@/lib/auth/assert-workspace-super-admin"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { buildFacebookAdsAuthRedirect } from "./connect-redirect"
 
-export const connectFacebookAds = workspaceActionClient
+export const connectFacebookAds = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .action(
-    async ({
-      bindArgsParsedInputs: [workspaceId],
+    ({
       ctx,
     }: {
-      bindArgsParsedInputs: [string]
       ctx: {
         user: UserModel
         workspace: WorkspaceModel
       }
-    }) => {
-      await assertWorkspaceSuperAdmin(workspaceId)
-
-      return buildFacebookAdsAuthRedirect({
+    }) =>
+      buildFacebookAdsAuthRedirect({
         workspace: ctx.workspace,
         refererPath: `/space/${ctx.workspace.id}/settings/integrations`,
-      })
-    },
+      }),
   )

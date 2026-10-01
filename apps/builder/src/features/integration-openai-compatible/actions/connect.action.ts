@@ -12,7 +12,7 @@ import {
   type WorkspaceIdRequestParams,
   workspaceIdrequestParams,
 } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { verifyOpenaiCompatibleProvider } from "../lib"
 import {
   type ConnectOpenaiCompatibleSchema,
@@ -20,7 +20,7 @@ import {
   resolveOpenaiCompatibleDefaultModel,
 } from "../schema/request"
 
-export const connectOpenaiCompatibleAction = workspaceActionClient
+export const connectOpenaiCompatibleAction = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(connectOpenaiCompatibleSchema)
   .action(

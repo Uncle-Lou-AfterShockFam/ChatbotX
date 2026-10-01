@@ -15,7 +15,7 @@ vi.mock("@/lib/safe-action", () => {
   chain.bindArgsSchemas = () => chain
   chain.action = (fn: unknown) => fn
   return {
-    workspaceActionClientAllowExpired: chain,
+    settingsActionClientAllowExpired: chain,
   }
 })
 

@@ -5,7 +5,7 @@ import { normalizeError } from "universal-error-normalizer"
 import { env } from "@/env"
 import { workspaceIdrequestParams } from "@/features/common/schema"
 import { logger } from "@/lib/log"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { settingsActionClient } from "@/lib/safe-action"
 import { connectWooCommerceSchema } from "../schema"
 
 /** Where the site posts `order.paid` (its wp-config HUBC_HUB_URL). */
@@ -19,7 +19,7 @@ const wooCommerceWebhookUrl = (integrationId: string) =>
  * Link a site. The answer carries the wp-config lines ONCE: the hub never
  * shows the webhook secret again (reconnecting the same slug keeps it).
  */
-export const connectWooCommerceAction = workspaceActionClient
+export const connectWooCommerceAction = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(connectWooCommerceSchema)
   .action(async ({ bindArgsParsedInputs: [workspaceId], parsedInput }) => {
