@@ -7,17 +7,13 @@ type InvitationsPageProps = {
 
 export default async function InvitationsPage(props: InvitationsPageProps) {
   const params = await props.params
-  const { invitation, user, workspace } = await findInvitation({
-    code: params.code,
-  })
+  // null (unknown / expired code, deleted inviter) renders the card's
+  // invalid-invitation state, never a 500 (s233a).
+  const invitation = await findInvitation({ code: params.code })
 
   return (
     <div className="flex h-screen w-screen items-center justify-center">
-      <InvitationCard
-        invitation={invitation}
-        user={user}
-        workspace={workspace}
-      />
+      <InvitationCard invitation={invitation} />
     </div>
   )
 }
