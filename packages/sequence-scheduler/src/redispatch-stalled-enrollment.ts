@@ -58,17 +58,20 @@ export const CYCLE_CLOCK_TOLERANCE = "5 minutes"
  * Never `nextStepId` alone: deleting an EARLIER step can leave it pointing
  * one step ahead, and trusting it would skip a step (s235 probe e).
  */
-const targetStepId = sql`(
+const targetStepId = () => sql`(
   SELECT st."id" FROM "SequenceStep" st
    WHERE st."sequenceId" = cos."sequenceId" AND st."isActive" = true
      AND st."order" >= cos."currentStep"
    ORDER BY st."order", st."id"
    LIMIT 1)`
 
-const liveStatuses = sql.join(
-  LIVE_DISPATCH_STATUSES.map((status) => sql`${status}`),
-  sql`, `,
-)
+// Built per call, never at import: a test that mocks the database client
+// without `sql` must still be able to import this package.
+const liveStatuses = () =>
+  sql.join(
+    LIVE_DISPATCH_STATUSES.map((status) => sql`${status}`),
+    sql`, `,
+  )
 
 /**
  * The stall predicate, on the enrolment row `cos` (SQL fragment):
@@ -89,16 +92,16 @@ const stalledPredicate = (now: Date) => {
     AND cos."nextRunAt" <= ${dueBefore}
     AND cos."nextRunAt" > ${notOlderThan}
     AND (cos."pausedUntil" IS NULL OR cos."pausedUntil" <= ${now})
-    AND ${targetStepId} IS NOT NULL
+    AND ${targetStepId()} IS NOT NULL
     AND NOT EXISTS (
       SELECT 1 FROM "SequenceDispatch" sd
        WHERE sd."workspaceId" = cos."workspaceId" AND sd."enrollmentId" = cos."id"
-         AND sd."status" IN (${liveStatuses})
+         AND sd."status" IN (${liveStatuses()})
     )
     AND NOT EXISTS (
       SELECT 1 FROM "SequenceDispatch" sd
        WHERE sd."workspaceId" = cos."workspaceId" AND sd."enrollmentId" = cos."id"
-         AND sd."stepId" = ${targetStepId}
+         AND sd."stepId" = ${targetStepId()}
          AND sd."createdAt" >= cos."enrolledAt" - ${CYCLE_CLOCK_TOLERANCE}::interval
     )`
 }
@@ -182,7 +185,7 @@ export async function redispatchStalledEnrollment(params: {
         return { kind: "skipped", reason: "not-stalled" } as const
       }
       const still = await tx.execute<{ targetStepId: string }>(sql`
-        SELECT ${targetStepId}::text AS "targetStepId"
+        SELECT ${targetStepId()}::text AS "targetStepId"
           FROM "ContactOnSequence" cos
          WHERE cos."id" = ${enrollmentId} AND cos."workspaceId" = ${workspaceId}
            AND ${stalledPredicate(now)}`)
