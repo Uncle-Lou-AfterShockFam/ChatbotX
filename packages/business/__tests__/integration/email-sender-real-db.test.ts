@@ -251,9 +251,7 @@ describe.skipIf(!databaseUrl)("emailSenderService (s229b)", () => {
       workspaceId: s.workspaceId,
     })
     expect(lines.map((l) => l.id).sort()).toEqual([s.lineA, s.lineB].sort())
-    const onText = await create(s, s.textLine, "a@example.com").catch(
-      (e) => e,
-    )
+    const onText = await create(s, s.textLine, "a@example.com").catch((e) => e)
     expect(onText).toMatchObject({ httpStatusCode: 422, field: "lineInboxId" })
     await expect(
       emailSenderService.listForLine({
@@ -278,6 +276,33 @@ describe.skipIf(!databaseUrl)("emailSenderService (s229b)", () => {
         lineInboxId: s.lineA,
       }),
     ).rejects.toMatchObject({ code: "notEmailLine" })
+    // Blind probe s231b: no new credentials on an unmarked line either.
+    const [sender] = await emailSenderService.list({
+      workspaceId: s.workspaceId,
+      lineInboxId: s.lineA,
+    })
+    await expect(
+      emailSenderService.update({
+        workspaceId: s.workspaceId,
+        id: sender.id,
+        connection: connection("a@example.com", "rotated-pass-1"),
+      }),
+    ).rejects.toMatchObject({ field: "lineInboxId" })
+  })
+
+  test("s231b: an IntegrationApi row of ANOTHER workspace never makes an inbox an email line", async () => {
+    const s = await seed()
+    const other = await seed()
+    await db.execute(
+      sql`UPDATE "IntegrationApi" SET "workspaceId" = ${other.workspaceId}, "lineKind" = 'email' WHERE "inboxId" = ${s.textLine}`,
+    )
+    const lines = await emailSenderService.listLines({
+      workspaceId: s.workspaceId,
+    })
+    expect(lines.map((l) => l.id)).not.toContain(s.textLine)
+    await expect(create(s, s.textLine, "x@example.com")).rejects.toMatchObject({
+      field: "lineInboxId",
+    })
   })
 
   test("the feed: this line's non-archived senders only, WITH the password; an update with a blank password keeps it", async () => {

@@ -38,12 +38,7 @@ const { superAdminAuthorizedMiddleware, superAdminRealMemberMiddleware } =
 const next = vi.fn(async () => ({ output: "ok" }))
 
 const call = (method: string, mw: unknown = superAdminAuthorizedMiddleware) =>
-  (
-    mw as unknown as (
-      opts: unknown,
-      workspaceId: string,
-    ) => Promise<unknown>
-  )(
+  (mw as unknown as (opts: unknown, workspaceId: string) => Promise<unknown>)(
     {
       context: { user: { id: "user-1" }, headers: new Headers() },
       next,

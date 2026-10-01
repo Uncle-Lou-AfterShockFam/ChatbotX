@@ -2,7 +2,6 @@
 
 import { assertPublicUrl } from "@chatbotx.io/business"
 import { auditService } from "@chatbotx.io/business/audit"
-import { ChatbotXException } from "@chatbotx.io/business/errors"
 import type { WorkspaceMemberPermissions } from "@chatbotx.io/database/partials"
 import { integrationApiRepository } from "@chatbotx.io/database/repositories"
 import type { ApiAuthValue } from "@chatbotx.io/integration-api"
@@ -11,8 +10,8 @@ import {
   workspaceIdAndIdRequestParams,
 } from "@/features/common/schema"
 import { findIntegrationApiByWorkspaceAndId } from "@/features/integration-api/queries"
-import { hasWorkspacePermission } from "@/lib/auth/permission-routes"
 import { workspaceActionClient } from "@/lib/safe-action"
+import { assertEmailLineAdmin } from "../lib/email-line-guard"
 import type { UpdateApiRequest } from "../schema/mutation"
 import { updateApiRequest } from "../schema/mutation"
 
@@ -47,24 +46,19 @@ export const updateApiAction = workspaceActionClient
       // s231b (owner 2026-10-01): changing whether this channel is an email
       // line decides whether its token receives mailbox credentials - a real
       // super admin only, never a platform-support session.
-      const lineKind =
-        parsedInput.emailLine === undefined
-          ? undefined
-          : parsedInput.emailLine
-            ? ("email" as const)
-            : null
+      let lineKind: "email" | null | undefined
+      if (parsedInput.emailLine !== undefined) {
+        lineKind = parsedInput.emailLine ? "email" : null
+      }
       const lineKindChanges =
         lineKind !== undefined && lineKind !== (existing.lineKind ?? null)
-      if (
-        lineKindChanges &&
-        (ctx.isSupportSession ||
-          !hasWorkspacePermission(ctx.workspaceMemberPermissions, "superAdmin"))
-      ) {
-        throw new ChatbotXException(
-          "Only a workspace admin can mark an API channel as an email line",
-          "emailLineSuperAdminRequired",
-          403,
-        )
+      let lineKindNote = ""
+      if (lineKindChanges) {
+        assertEmailLineAdmin(ctx, lineKind === "email" ? "mark" : "unmark")
+        lineKindNote =
+          lineKind === "email"
+            ? ", marked as an email line"
+            : ", no longer an email line"
       }
 
       // An empty string from the form means "clear the callback".
@@ -95,7 +89,7 @@ export const updateApiAction = workspaceActionClient
       await auditService.record({
         workspaceId,
         action: "update",
-        detail: `updated the API key configuration (#${id})${lineKindChanges ? (lineKind === "email" ? ", marked as an email line" : ", no longer an email line") : ""}`,
+        detail: `updated the API key configuration (#${id})${lineKindNote}`,
       })
     },
   )

@@ -192,7 +192,10 @@ export class EmailSenderService extends BaseService {
       .from(inboxModel)
       .innerJoin(
         integrationApiModel,
-        eq(integrationApiModel.inboxId, inboxModel.id),
+        and(
+          eq(integrationApiModel.inboxId, inboxModel.id),
+          eq(integrationApiModel.workspaceId, inboxModel.workspaceId),
+        ),
       )
       .where(
         and(
@@ -312,6 +315,10 @@ export class EmailSenderService extends BaseService {
             "connection",
             "A Google mailbox has no password: reconnect it with Google",
           )
+        }
+        // s231b (blind probe): a credential write only on an email line.
+        if (connection) {
+          await this.assertLine(workspaceId, current.lineInboxId)
         }
         const reconnect = Boolean(
           connection?.smtp.password || connection?.imap.password,
@@ -1017,7 +1024,10 @@ export class EmailSenderService extends BaseService {
       .from(inboxModel)
       .leftJoin(
         integrationApiModel,
-        eq(integrationApiModel.inboxId, inboxModel.id),
+        and(
+          eq(integrationApiModel.inboxId, inboxModel.id),
+          eq(integrationApiModel.workspaceId, inboxModel.workspaceId),
+        ),
       )
       .where(
         and(

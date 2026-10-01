@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   find: vi.fn(),
   updateSettings: vi.fn(),
   record: vi.fn(),
+  rotateToken: vi.fn(),
+  disconnect: vi.fn(),
 }))
 
 vi.mock("@/lib/safe-action", () => {
@@ -23,7 +25,10 @@ vi.mock("@/lib/safe-action", () => {
   chain.bindArgsSchemas = () => chain
   chain.inputSchema = () => chain
   chain.action = (fn: unknown) => fn
-  return { workspaceActionClient: chain }
+  return {
+    workspaceActionClient: chain,
+    workspaceActionClientAllowExpired: chain,
+  }
 })
 vi.mock("@/features/common/schema", () => ({
   workspaceIdrequestParams: [],
@@ -38,6 +43,8 @@ vi.mock("next/headers", () => ({
 vi.mock("@chatbotx.io/business", () => ({
   platformCredentialService: { resolveForOwner: mocks.resolveForOwner },
   assertPublicUrl: vi.fn(),
+  integrationApiService: { disconnect: mocks.disconnect },
+  workspaceService: { findById: async () => ({ ownerId: "o-1" }) },
 }))
 vi.mock("@chatbotx.io/business/email-sender", () => ({
   emailSenderService: { listLines: mocks.listLines, list: mocks.list },
@@ -56,14 +63,34 @@ vi.mock("@/features/integration-api/queries", () => ({
   findIntegrationApiByWorkspaceAndId: mocks.find,
 }))
 vi.mock("@chatbotx.io/database/repositories", () => ({
-  integrationApiRepository: { updateSettings: mocks.updateSettings },
+  integrationApiRepository: {
+    updateSettings: mocks.updateSettings,
+    rotateToken: mocks.rotateToken,
+  },
 }))
+vi.mock("@chatbotx.io/business/workspace-api-token/credentials", () => ({
+  generateApiChannelToken: async () => ({
+    token: "cbx_api_new",
+    tokenHash: "h",
+    tokenPrefix: "cbx",
+  }),
+}))
+vi.mock("@chatbotx.io/integration-api", () => ({
+  integration: { disconnect: vi.fn() },
+}))
+vi.mock("@/lib/log", () => ({ logger: { warn: vi.fn(), error: vi.fn() } }))
 
 const { startEmailSenderGoogleConnectAction } = await import(
   "../src/features/email-senders/actions/connect-google.action"
 )
 const { updateApiAction } = await import(
   "../src/features/integration-api/actions/update-api.action"
+)
+const { rotateApiTokenAction } = await import(
+  "../src/features/integration-api/actions/rotate-token.action"
+)
+const { deleteApiAction } = await import(
+  "../src/features/integration-api/actions/delete-api.action"
 )
 type Action = (args: unknown) => Promise<unknown>
 
@@ -161,5 +188,55 @@ describe("updateApiAction email line (s231b)", () => {
       emailLine: false,
     })
     expect(mocks.updateSettings).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe("rotate / delete an EMAIL line's API channel (s231b blind probe)", () => {
+  const run = (action: unknown, permissions: object, support: boolean) =>
+    (action as Action)({
+      ctx: ctx(permissions, support),
+      bindArgsParsedInputs: ["1", "7"],
+    })
+
+  test.each([
+    ["a platform-support session", admin, true],
+    ["a member who is not an admin", { contacts: true }, false],
+  ])("%s cannot rotate the token of, or delete, an email line", async (_label, permissions, support) => {
+    mocks.find.mockResolvedValue({
+      id: "7",
+      inboxId: "2",
+      auth: {},
+      lineKind: "email",
+    })
+    await expect(
+      run(rotateApiTokenAction, permissions, support),
+    ).rejects.toMatchObject({ code: "emailLineSuperAdminRequired" })
+    await expect(
+      run(deleteApiAction, permissions, support),
+    ).rejects.toMatchObject({ code: "emailLineSuperAdminRequired" })
+    expect(mocks.rotateToken).not.toHaveBeenCalled()
+    expect(mocks.disconnect).not.toHaveBeenCalled()
+  })
+
+  test("a real admin rotates an email line; anyone the action allowed before rotates a non-email line", async () => {
+    mocks.find.mockResolvedValue({
+      id: "7",
+      inboxId: "2",
+      auth: {},
+      lineKind: "email",
+    })
+    await expect(run(rotateApiTokenAction, admin, false)).resolves.toEqual({
+      token: "cbx_api_new",
+    })
+    mocks.find.mockResolvedValue({
+      id: "7",
+      inboxId: "2",
+      auth: {},
+      lineKind: null,
+    })
+    await expect(
+      run(rotateApiTokenAction, { contacts: true }, true),
+    ).resolves.toEqual({ token: "cbx_api_new" })
+    expect(mocks.rotateToken).toHaveBeenCalledTimes(2)
   })
 })
