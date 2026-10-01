@@ -8,6 +8,7 @@ import {
   sql,
 } from "@chatbotx.io/database/client"
 import { contactsOnSequenceModel } from "@chatbotx.io/database/schema"
+import { LIVE_DISPATCH_STATUSES } from "@chatbotx.io/sequence-scheduler"
 
 type SequenceStepForDelay = {
   id: string
@@ -207,7 +208,10 @@ async function recalculateNextRunAtForStep(
           // pending (and a reopen then queued it a second time). The send or
           // its advance completes it.
           sql`NOT EXISTS (SELECT 1 FROM "SequenceStep" st WHERE st."sequenceId" = ${sequenceId} AND st."isActive" = true AND st."order" >= ${stepOrder})`,
-          sql`NOT EXISTS (SELECT 1 FROM "SequenceDispatch" sd WHERE sd."workspaceId" = ${contactsOnSequenceModel.workspaceId} AND sd."enrollmentId" = ${contactsOnSequenceModel.id} AND sd."status" IN ('pending', 'running', 'held'))`,
+          sql`NOT EXISTS (SELECT 1 FROM "SequenceDispatch" sd WHERE sd."workspaceId" = ${contactsOnSequenceModel.workspaceId} AND sd."enrollmentId" = ${contactsOnSequenceModel.id} AND sd."status" IN (${sql.join(
+            LIVE_DISPATCH_STATUSES.map((status) => sql`${status}`),
+            sql`, `,
+          )}))`,
         ),
       )
     return
