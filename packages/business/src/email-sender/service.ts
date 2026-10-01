@@ -394,7 +394,7 @@ export class EmailSenderService extends BaseService {
   async listForLine(input: unknown): Promise<EmailSenderFeedRow[]> {
     const { workspaceId, lineInboxId } = parseInput(emailSenderLineInput, input)
     // s231b: a token of any other line never sees a sender's credentials.
-    if (!(await this.isEmailLine(workspaceId, lineInboxId))) {
+    if (!(await this.lineOf(workspaceId, lineInboxId))?.isEmailLine) {
       throw notEmailLineException()
     }
     const rows = await db
@@ -992,6 +992,23 @@ export class EmailSenderService extends BaseService {
   }
 
   private async assertLine(workspaceId: string, lineInboxId: string) {
+    const line = await this.lineOf(workspaceId, lineInboxId)
+    if (!line) {
+      throw notFoundException("Email line not found")
+    }
+    if (!line.isEmailLine) {
+      throw validationException(
+        "lineInboxId",
+        "Senders belong to an email line (an API channel marked as one)",
+      )
+    }
+  }
+
+  /**
+   * The workspace's inbox, or undefined; `isEmailLine` (s231b) = an API
+   * channel whose IntegrationApi is marked lineKind 'email'.
+   */
+  private async lineOf(workspaceId: string, lineInboxId: string) {
     const [inbox] = await db
       .select({
         channel: inboxModel.channel,
@@ -1009,31 +1026,9 @@ export class EmailSenderService extends BaseService {
         ),
       )
       .limit(1)
-    if (!inbox) {
-      throw notFoundException("Email line not found")
-    }
-    if (inbox.channel !== "api" || inbox.lineKind !== "email") {
-      throw validationException(
-        "lineInboxId",
-        "Senders belong to an email line (an API channel marked as one)",
-      )
-    }
-  }
-
-  /** s231b: whether this inbox is an API channel marked as an email line. */
-  private async isEmailLine(workspaceId: string, lineInboxId: string) {
-    const [row] = await db
-      .select({ id: integrationApiModel.id })
-      .from(integrationApiModel)
-      .where(
-        and(
-          eq(integrationApiModel.inboxId, lineInboxId),
-          eq(integrationApiModel.workspaceId, workspaceId),
-          eq(integrationApiModel.lineKind, "email"),
-        ),
-      )
-      .limit(1)
-    return row !== undefined
+    return inbox
+      ? { isEmailLine: inbox.channel === "api" && inbox.lineKind === "email" }
+      : undefined
   }
 
   private async lockLine(tx: DatabaseClient, lineInboxId: string) {
