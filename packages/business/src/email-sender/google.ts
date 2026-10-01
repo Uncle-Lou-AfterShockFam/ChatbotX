@@ -84,9 +84,13 @@ export function buildGoogleSenderAuthorizeUrl(props: {
   return url.toString()
 }
 
-async function tokenCall(
-  form: Record<string, string>,
-): Promise<{ status: number; body: Record<string, unknown> | null }> {
+async function tokenCall(form: Record<string, string>): Promise<{
+  status: number
+  body: Record<string, unknown> | null
+  /** When the call left: a token's life is counted from here, never from the answer. */
+  sentAt: number
+}> {
+  const sentAt = Date.now()
   let response: Response
   try {
     response = await fetch(GOOGLE_TOKEN_URL, {
@@ -135,12 +139,13 @@ async function tokenCall(
       },
     )
   }
-  return { status: response.status, body }
+  return { status: response.status, body, sentAt }
 }
 
 function accessTokenOf(
   body: Record<string, unknown> | null,
   status: number,
+  sentAt: number,
 ): GoogleAccessToken {
   const token = body?.access_token
   const expiresIn = body?.expires_in
@@ -159,7 +164,7 @@ function accessTokenOf(
     typeof expiresIn === "number" && Number.isFinite(expiresIn) && expiresIn > 0
       ? Math.min(expiresIn, 24 * 3600)
       : 3600
-  return { accessToken: token, expiresAt: Date.now() + seconds * 1000 }
+  return { accessToken: token, expiresAt: sentAt + seconds * 1000 }
 }
 
 /**
@@ -202,14 +207,14 @@ export async function exchangeGoogleSenderCode(props: {
   code: string
   redirectUri: string
 }): Promise<GoogleSenderGrant> {
-  const { status, body } = await tokenCall({
+  const { status, body, sentAt } = await tokenCall({
     grant_type: "authorization_code",
     code: props.code,
     redirect_uri: props.redirectUri,
     client_id: props.client.clientId,
     client_secret: props.client.clientSecret,
   })
-  const access = accessTokenOf(body, status)
+  const access = accessTokenOf(body, status, sentAt)
   const scope = typeof body?.scope === "string" ? body.scope : ""
   if (!scope.split(" ").includes(GMAIL_SCOPE)) {
     throw new GoogleOAuthError("gmail-scope-not-granted", {
@@ -242,7 +247,7 @@ export async function refreshGoogleAccessToken(props: {
   client: GoogleOAuthClient
   refreshToken: string
 }): Promise<GoogleAccessToken & { refreshToken: string | null }> {
-  const { status, body } = await tokenCall({
+  const { status, body, sentAt } = await tokenCall({
     grant_type: "refresh_token",
     refresh_token: props.refreshToken,
     client_id: props.client.clientId,
@@ -250,7 +255,7 @@ export async function refreshGoogleAccessToken(props: {
   })
   const rotated = body?.refresh_token
   return {
-    ...accessTokenOf(body, status),
+    ...accessTokenOf(body, status, sentAt),
     refreshToken:
       typeof rotated === "string" && rotated.length > 0 ? rotated : null,
   }

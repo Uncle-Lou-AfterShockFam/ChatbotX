@@ -21,7 +21,6 @@ const {
   mockCookieGet,
   mockCookieSet,
   mockRedirect,
-  mockNotFound,
 } = vi.hoisted(() => ({
   mockGetCurrentUser: vi.fn(),
   mockTarget: vi.fn(),
@@ -31,9 +30,6 @@ const {
   mockCookieSet: vi.fn(),
   mockRedirect: vi.fn((url: string) => {
     throw new Error(`redirect:${url}`)
-  }),
-  mockNotFound: vi.fn(() => {
-    throw new Error("not-found")
   }),
 }))
 
@@ -69,7 +65,6 @@ vi.mock("next/headers", () => ({
 }))
 vi.mock("next/navigation", () => ({
   redirect: mockRedirect,
-  notFound: mockNotFound,
 }))
 vi.mock("@/lib/auth/utils", () => ({
   getCurrentUser: mockGetCurrentUser,
@@ -105,6 +100,9 @@ const USER = "11701868563300001"
 const WORKSPACE = "11701868563365888"
 const LINE = "11701908099366912"
 const BACK = `/space/${WORKSPACE}/settings/email-senders`
+/** The refusal's Set-Cookie: the nonce cleared on its own path. */
+const NONCE_CLEARED =
+  /email_sender_oauth_nonce=;.*Path=\/integrations\/email-sender/i
 
 async function state(extra: Record<string, string> = {}) {
   const nonce = mintEmailSenderOAuthNonce()
@@ -121,6 +119,8 @@ async function state(extra: Record<string, string> = {}) {
   return { nonce, signed }
 }
 
+let lastResponse: Response | null = null
+
 async function call(query: Record<string, string>): Promise<string> {
   const url = new URL(
     "https://chat.example.org/integrations/email-sender/callback",
@@ -129,14 +129,15 @@ async function call(query: Record<string, string>): Promise<string> {
     url.searchParams.set(k, v)
   }
   try {
-    await GET({
+    const res = await GET({
       url: url.toString(),
       headers: new Headers(),
     } as unknown as NextRequest)
+    lastResponse = res
+    return `status:${res.status}`
   } catch (error) {
     return (error as Error).message
   }
-  return "returned"
 }
 
 beforeEach(() => {
@@ -217,8 +218,11 @@ describe("email sender Google callback (s230b)", () => {
     const { nonce, signed } = await state()
     mockCookieGet.mockReturnValue({ value: nonce })
     await arrange()
-    expect(await call({ state: signed, code: "c" })).toBe("not-found")
+    expect(await call({ state: signed, code: "c" })).toBe("status:404")
     expect(mockConnectGoogle).not.toHaveBeenCalled()
+    // Review s230b: the refusal itself clears the nonce (a thrown notFound()
+    // would drop the cookie jar's change).
+    expect(lastResponse?.headers.get("set-cookie")).toMatch(NONCE_CLEARED)
   })
 
   test.each([
@@ -229,7 +233,7 @@ describe("email sender Google callback (s230b)", () => {
     ["no state", ""],
   ])("%s: 404", async (_label, forged) => {
     mockCookieGet.mockReturnValue({ value: mintEmailSenderOAuthNonce() })
-    expect(await call({ state: forged, code: "c" })).toBe("not-found")
+    expect(await call({ state: forged, code: "c" })).toBe("status:404")
     expect(mockConnectGoogle).not.toHaveBeenCalled()
   })
 

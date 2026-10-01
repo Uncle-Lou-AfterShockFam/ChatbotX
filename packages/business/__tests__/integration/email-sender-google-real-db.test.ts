@@ -36,9 +36,11 @@ vi.mock("../../src/logger", () => ({
 const databaseUrl = requireRealDatabaseUrl()
 
 const { emailSenderService } = await import("../../src/email-sender")
-const { GOOGLE_APP_CHANGED_REASON, GOOGLE_REVOKED_REASON } = await import(
-  "../../src/email-sender/service"
-)
+const {
+  GOOGLE_APP_CHANGED_REASON,
+  GOOGLE_FEED_REFRESH_WAIT_MS,
+  GOOGLE_REVOKED_REASON,
+} = await import("../../src/email-sender/service")
 const { decryptEmailSenderGoogleSecret, encryptEmailSenderGoogleSecret } =
   await import("../../src/email-sender/secret")
 const { GOOGLE_TOKEN_URL } = await import("../../src/email-sender/google")
@@ -453,7 +455,7 @@ describe.skipIf(!databaseUrl)("Google mailbox senders (s230b)", () => {
         HttpResponse.json({ error: "backend_error" }, { status: 503 }),
     })
     const view = await connect(s)
-    await expireIn(view.id, 120_000)
+    await expireIn(view.id, 5 * 60_000)
     const [soon] = await feed(s)
     expect(soon?.auth).toMatchObject({ accessToken: "ya29.code-1" })
     await expireIn(view.id, -1000)
@@ -546,5 +548,124 @@ describe.skipIf(!databaseUrl)("Google mailbox senders (s230b)", () => {
       httpStatusCode: 422,
     })
     expect(calls.code).toBe(0)
+  })
+  // Review s230b (blind probe): each of these failed before its fix.
+  test("a stale invalid_grant while a reconnect lands: the feed serves the reconnect's grant as active, never 'disconnected'", async () => {
+    const s = await seed()
+    let view: { id: string } | null = null
+    google({
+      refresh: async () => {
+        const current = await row(view?.id ?? "0")
+        const secret = await decryptEmailSenderGoogleSecret(current)
+        await db
+          .update(emailSenderModel)
+          .set({
+            secret: await encryptEmailSenderGoogleSecret(
+              {
+                ...secret,
+                accessToken: "ya29.reconnected",
+                expiresAt: Date.now() + 3_600_000,
+              },
+              current.id,
+            ),
+            tokenVersion: current.tokenVersion + 1,
+          })
+          .where(eq(emailSenderModel.id, current.id))
+        return HttpResponse.json({ error: "invalid_grant" }, { status: 400 })
+      },
+    })
+    view = await connect(s)
+    await expireIn(view.id, 30_000)
+    const [fed] = await feed(s)
+    expect(fed?.status).toBe("active")
+    expect(fed?.auth).toMatchObject({ accessToken: "ya29.reconnected" })
+    expect((await row(view.id)).status).toBe("active")
+  })
+
+  test("an archive landing while Google answers keeps the archived row free of the new token, and none is fed", async () => {
+    const s = await seed()
+    let view: { id: string } | null = null
+    google({
+      refresh: async () => {
+        await emailSenderService.archive({
+          workspaceId: s.workspaceId,
+          id: view?.id ?? "0",
+        })
+        return HttpResponse.json({
+          access_token: "ya29.after-archive",
+          expires_in: 3599,
+        })
+      },
+    })
+    view = await connect(s)
+    await expireIn(view.id, 30_000)
+    const [fed] = await feed(s)
+    expect(fed?.auth).toBeNull()
+    const r = await row(view.id)
+    expect(r.status).toBe("archived")
+    expect((await decryptEmailSenderGoogleSecret(r)).accessToken).not.toBe(
+      "ya29.after-archive",
+    )
+  })
+
+  test("Google hanging never holds the feed past the wait: the stored token is fed, the late refresh is stored for the next read", async () => {
+    const s = await seed()
+    const ids: string[] = []
+    for (let i = 0; i < 5; i += 1) {
+      google({ email: `hang${i}@example.org` })
+      ids.push((await connect(s)).id)
+    }
+    server.use(
+      http.post(GOOGLE_TOKEN_URL, async () => {
+        await new Promise((r) =>
+          setTimeout(r, GOOGLE_FEED_REFRESH_WAIT_MS + 1500),
+        )
+        return HttpResponse.json({
+          access_token: "ya29.late",
+          expires_in: 3599,
+        })
+      }),
+    )
+    for (const id of ids) {
+      await expireIn(id, 9 * 60_000)
+    }
+    const started = Date.now()
+    const fed = await feed(s)
+    // Two chunks (4 + 1), each bounded by the wait - well under the line's 10 s.
+    expect(Date.now() - started).toBeLessThan(
+      2 * GOOGLE_FEED_REFRESH_WAIT_MS + 1500,
+    )
+    for (const f of fed) {
+      expect(f.auth).toMatchObject({ accessToken: "ya29.code-1" })
+    }
+    await new Promise((r) => setTimeout(r, 3000))
+    const later = await decryptEmailSenderGoogleSecret(await row(ids[0] ?? ""))
+    expect(later.accessToken).toBe("ya29.late")
+  }, 30_000)
+
+  test("a refresh failure with under 2 min left feeds null (a token the line would hold anyway), not a dying token", async () => {
+    const s = await seed()
+    google({
+      refresh: () =>
+        HttpResponse.json({ error: "backend_error" }, { status: 503 }),
+    })
+    const view = await connect(s)
+    await expireIn(view.id, 90_000)
+    const [fed] = await feed(s)
+    expect(fed?.auth).toBeNull()
+    expect(fed?.status).toBe("active")
+  })
+  test("a Google address that is not one clean address (CRLF, no @) is refused before any row is written", async () => {
+    const s = await seed()
+    for (const email of ["a@b.org\r\nbcc: x@evil.example", "not-an-address"]) {
+      google({ email })
+      await expect(connect(s)).rejects.toMatchObject({
+        name: "GoogleOAuthError",
+        message: "no-verified-email",
+      })
+    }
+    expect(
+      await emailSenderService.list({ workspaceId: s.workspaceId }),
+    ).toEqual([])
   })
 })

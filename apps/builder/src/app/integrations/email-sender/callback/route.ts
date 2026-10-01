@@ -12,8 +12,8 @@ import {
 } from "@chatbotx.io/encryption/email-sender-oauth-state"
 import { getPublicUrlFromRequest } from "@chatbotx.io/utils"
 import { cookies } from "next/headers"
-import { notFound, redirect } from "next/navigation"
-import type { NextRequest } from "next/server"
+import { redirect } from "next/navigation"
+import { type NextRequest, NextResponse } from "next/server"
 import {
   EMAIL_SENDER_CALLBACK_PATH,
   type EmailSenderConnectOutcome,
@@ -47,6 +47,20 @@ function outcomeOfError(error: unknown): EmailSenderConnectOutcome {
 }
 
 /**
+ * A refusal: a bare 404 that still clears the nonce cookie (review s230b:
+ * Next drops the cookie jar's changes on a thrown `notFound()`, so the nonce
+ * would outlive a refused callback).
+ */
+function refuse(): NextResponse {
+  const response = new NextResponse(null, { status: 404 })
+  response.cookies.set(EMAIL_SENDER_OAUTH_NONCE_COOKIE, "", {
+    path: EMAIL_SENDER_OAUTH_COOKIE_PATH,
+    maxAge: 0,
+  })
+  return response
+}
+
+/**
  * Google's OAuth redirect for a mailbox-sender connect (s230b). Nothing is
  * exchanged unless the signed state verifies for THIS signed-in user, its
  * nonce equals the HttpOnly cookie the connect action set on this browser,
@@ -57,7 +71,7 @@ export async function GET(request: NextRequest) {
   const url = new URL(getPublicUrlFromRequest(request))
   const user = await getCurrentUser()
   if (!user) {
-    return notFound()
+    return refuse()
   }
   const jar = await cookies()
   const nonceCookie = jar.get(EMAIL_SENDER_OAUTH_NONCE_COOKIE)?.value
@@ -72,7 +86,7 @@ export async function GET(request: NextRequest) {
   })
   if (!state) {
     logger.info({ userId: user.id }, "email sender callback: state refused")
-    return notFound()
+    return refuse()
   }
   const access = await getCurrentUserAndTargetWorkspace(state.workspaceId)
   if (
@@ -84,7 +98,7 @@ export async function GET(request: NextRequest) {
       )
     )
   ) {
-    return notFound()
+    return refuse()
   }
   const back = emailSenderSettingsPath(state.workspaceId)
   const googleError = url.searchParams.get("error")

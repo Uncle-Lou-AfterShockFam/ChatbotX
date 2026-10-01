@@ -19,7 +19,7 @@ import {
 const bigintId = z.string().regex(/^\d{1,19}$/, "Invalid id")
 
 /** One single address, trimmed and lower-cased (the suppression parser). */
-const emailAddress = z.string().transform((value, ctx) => {
+export const emailSenderAddress = z.string().transform((value, ctx) => {
   const parsed = parseEmailSuppression(value)
   if (!(parsed.ok && parsed.kind === "address" && noControlChars(value))) {
     ctx.addIssue({ code: "custom", message: "Enter a valid email address" })
@@ -125,7 +125,7 @@ export const createEmailSenderInput = z
     lineInboxId: bigintId,
     /** `google_oauth` senders are connected by the OAuth flow (PR 3), never here. */
     provider: z.literal("smtp"),
-    address: emailAddress,
+    address: emailSenderAddress,
     fromName: name,
     firstName: name,
     lastName: name,

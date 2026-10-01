@@ -7,6 +7,7 @@ import {
   gte,
   isUniqueViolationError,
   ne,
+  notInArray,
   sql,
 } from "@chatbotx.io/database/client"
 import {
@@ -37,12 +38,14 @@ import { platformCredentialService } from "../platform-credential/service"
 import {
   exchangeGoogleSenderCode,
   type GoogleOAuthClient,
+  GoogleOAuthError,
   GoogleReconnectRequiredError,
   refreshGoogleAccessToken,
 } from "./google"
 import {
   connectGoogleEmailSenderInput,
   createEmailSenderInput,
+  emailSenderAddress,
   emailSenderLineInput,
   emailSenderRefInput,
   listEmailSendersInput,
@@ -103,6 +106,19 @@ export type EmailSenderFeedAuth =
 export const GOOGLE_REFRESH_MARGIN_MS = 10 * 60 * 1000
 /** Outlives the token call's 15 s timeout: one refresh per sender at a time. */
 const GOOGLE_REFRESH_LOCK_SECONDS = 45
+/**
+ * How long one feed read waits for a sender's refresh (probe s230b): the
+ * line's feed request gives up at 10 s, so a hanging Google or Redis must
+ * never hold the whole feed. Past it the stored token is fed and the refresh
+ * finishes in the background (stored for the next read).
+ */
+export const GOOGLE_FEED_REFRESH_WAIT_MS = 4000
+/**
+ * The least life a FED token has (probe s230b): the line forces a re-read
+ * 60 s before expiry and at most once a minute, so a shorter-lived token
+ * would only hold its mail.
+ */
+export const GOOGLE_FEED_MIN_TOKEN_MS = 2 * 60 * 1000
 /** A Google sender's feed auth; `disconnected` when this read disconnected it. */
 type GoogleFeedAuth = {
   auth: EmailSenderFeedAuth | null
@@ -479,6 +495,14 @@ export class EmailSenderService extends BaseService {
       code: data.code,
       redirectUri: data.redirectUri,
     })
+    // The address becomes the SMTP/IMAP user and the From: the same closed
+    // parser as an SMTP sender's (review s230b), never Google's raw claim.
+    if (!emailSenderAddress.safeParse(grant.email).success) {
+      throw new GoogleOAuthError("no-verified-email", {
+        status: 200,
+        retryable: false,
+      })
+    }
     const secretOf = (): EmailSenderGoogleSecret => ({
       refreshToken: grant.refreshToken,
       accessToken: grant.accessToken,
@@ -626,7 +650,7 @@ export class EmailSenderService extends BaseService {
     }
     const feedAuth = (s: { accessToken: string; expiresAt: number }) => ({
       auth:
-        s.expiresAt > Date.now()
+        s.expiresAt - Date.now() > GOOGLE_FEED_MIN_TOKEN_MS
           ? {
               type: "oauth2" as const,
               accessToken: s.accessToken,
@@ -638,8 +662,22 @@ export class EmailSenderService extends BaseService {
     if (secret.expiresAt - Date.now() > GOOGLE_REFRESH_MARGIN_MS) {
       return feedAuth(secret)
     }
+    const refresh = this.refreshGoogle(row.id)
+    // A refresh that outlives the wait still settles (and stores) later.
+    refresh.catch(() => undefined)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const late = new Promise<"late">((resolve) => {
+      timer = setTimeout(() => resolve("late"), GOOGLE_FEED_REFRESH_WAIT_MS)
+    })
     try {
-      const fresh = await this.refreshGoogle(row.id)
+      const fresh = await Promise.race([refresh, late])
+      if (fresh === "late") {
+        logger.warn(
+          { senderId: row.id },
+          "google sender token refresh is slow; feeding the stored token",
+        )
+        return feedAuth(secret)
+      }
       return fresh ? feedAuth(fresh) : none
     } catch (err) {
       if (err instanceof GoogleReconnectRequiredError) {
@@ -650,6 +688,8 @@ export class EmailSenderService extends BaseService {
         "google sender token refresh failed; feeding the stored token",
       )
       return feedAuth(secret)
+    } finally {
+      clearTimeout(timer)
     }
   }
 
@@ -658,8 +698,9 @@ export class EmailSenderService extends BaseService {
    * at the same time: a per-sender Redis lock, then a re-read (another
    * holder may have refreshed already), then a CAS on `tokenVersion` (a
    * reconnect that landed meanwhile wins). Google refusing the grant marks
-   * the sender disconnected at the version it read. Returns null when the
-   * sender is gone, archived or disconnected.
+   * the sender disconnected at the version it read; when a reconnect beat
+   * that disconnect, the reconnect's grant is returned instead of the
+   * refusal. Returns null when the sender is gone, archived or disconnected.
    */
   private async refreshGoogle(
     id: string,
@@ -688,13 +729,16 @@ export class EmailSenderService extends BaseService {
         if (!client) {
           throw new Error("the Google app is not configured")
         }
+        // The grant held at `row.tokenVersion` is dead: disconnect at that
+        // version, or (a reconnect won) feed the newer grant.
+        const refused = async (reason: string) => {
+          if (await this.markDisconnected(id, row.tokenVersion, reason)) {
+            throw new GoogleReconnectRequiredError(reason)
+          }
+          return await this.currentGoogleSecret(id)
+        }
         if (client.clientId !== secret.clientId) {
-          await this.markDisconnected(
-            id,
-            row.tokenVersion,
-            GOOGLE_APP_CHANGED_REASON,
-          )
-          throw new GoogleReconnectRequiredError(GOOGLE_APP_CHANGED_REASON)
+          return await refused(GOOGLE_APP_CHANGED_REASON)
         }
         let fresh: Awaited<ReturnType<typeof refreshGoogleAccessToken>>
         try {
@@ -704,11 +748,7 @@ export class EmailSenderService extends BaseService {
           })
         } catch (err) {
           if (err instanceof GoogleReconnectRequiredError) {
-            await this.markDisconnected(
-              id,
-              row.tokenVersion,
-              GOOGLE_REVOKED_REASON,
-            )
+            return await refused(GOOGLE_REVOKED_REASON)
           }
           throw err
         }
@@ -729,36 +769,49 @@ export class EmailSenderService extends BaseService {
             and(
               eq(emailSenderModel.id, id),
               eq(emailSenderModel.tokenVersion, row.tokenVersion),
+              // An archive or disconnect that landed while Google answered
+              // keeps its row: no token is written into it (probe s230b).
+              notInArray(emailSenderModel.status, ["archived", "disconnected"]),
             ),
           )
           .returning({ id: emailSenderModel.id })
         if (saved) {
           return next
         }
-        // A reconnect landed while Google answered: its grant wins.
-        const [current] = await db
-          .select()
-          .from(emailSenderModel)
-          .where(eq(emailSenderModel.id, id))
-          .limit(1)
-        return current && current.status !== "archived"
-          ? await decryptEmailSenderGoogleSecret(current)
-          : null
+        // A reconnect (its grant wins), an archive or a disconnect landed
+        // while Google answered.
+        return await this.currentGoogleSecret(id)
       },
     })
+  }
+
+  /** The sender's stored grant, or null when it is gone, archived or disconnected. */
+  private async currentGoogleSecret(
+    id: string,
+  ): Promise<EmailSenderGoogleSecret | null> {
+    const [current] = await db
+      .select()
+      .from(emailSenderModel)
+      .where(eq(emailSenderModel.id, id))
+      .limit(1)
+    return current?.provider === "google_oauth" &&
+      current.status !== "archived" &&
+      current.status !== "disconnected"
+      ? await decryptEmailSenderGoogleSecret(current)
+      : null
   }
 
   /**
    * The system's disconnect (s230b): Google refused the grant the sender
    * held at `seenVersion`. Lands only if no reconnect or refresh wrote a
    * newer grant since, and never on an archived sender. Same lock order as
-   * every writer (line lock, then the row FOR UPDATE).
+   * every writer (line lock, then the row FOR UPDATE). True when it landed.
    */
   private async markDisconnected(
     id: string,
     seenVersion: number,
     reason: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const landed = await db.transaction(async (tx) => {
       const [line] = await tx
         .select({ lineInboxId: emailSenderModel.lineInboxId })
@@ -794,6 +847,7 @@ export class EmailSenderService extends BaseService {
       logger.warn({ senderId: id }, "google email sender disconnected")
       await this.audit("update", `disconnected email sender #${id}: ${reason}`)
     }
+    return landed
   }
 
   /** The owner's Google app (the tenant's own, else the platform's). */

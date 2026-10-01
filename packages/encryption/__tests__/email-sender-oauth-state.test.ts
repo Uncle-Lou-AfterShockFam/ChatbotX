@@ -124,3 +124,28 @@ describe("email sender oauth state (s230b)", () => {
     ).rejects.toThrow()
   })
 })
+
+describe("email sender oauth state names (review s230b)", () => {
+  test("a name with CR/LF or NUL, a blank name, names on a reconnect, or a new sender without names is refused at sign", async () => {
+    const nonce = mintEmailSenderOAuthNonce()
+    const base = {
+      workspaceId: WORKSPACE,
+      userId: USER,
+      lineInboxId: LINE,
+      nonce,
+    }
+    const names = { fromName: "Lou", firstName: "Lou", lastName: "P" }
+    for (const bad of [
+      { ...base, ...names, fromName: "Lou\r\nBcc: x@evil.example" },
+      { ...base, ...names, lastName: "P\u0000" },
+      { ...base, ...names, firstName: "   " },
+      { ...base, ...names, senderId: "42" },
+      { ...base },
+    ]) {
+      await expect(signEmailSenderOAuthState(bad)).rejects.toThrow()
+    }
+    await expect(
+      signEmailSenderOAuthState({ ...base, senderId: "42" }),
+    ).resolves.toEqual(expect.any(String))
+  })
+})

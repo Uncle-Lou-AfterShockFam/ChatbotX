@@ -9,8 +9,15 @@ export { OAUTH_STATE_TTL_MS as EMAIL_SENDER_OAUTH_STATE_TTL_MS } from "./oauth-s
 export const mintEmailSenderOAuthNonce = mintOAuthNonce
 
 const id = z.string().regex(/^\d{1,19}$/)
+// biome-ignore lint/suspicious/noControlCharactersInRegex: refusing them
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/
 /** A display name the sender is created with (the connect dialog's). */
-const identity = z.string().min(1).max(100)
+const identity = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .refine((v) => !CONTROL_CHARS.test(v), "Remove control characters")
 
 /**
  * The `state` of a Google mailbox-sender connect (s230b): who started it,
@@ -30,6 +37,17 @@ export const emailSenderOAuthStateSchema = z
     expiresAt: z.number(),
   })
   .strict()
+  // Refused before the user ever reaches Google (review s230b): a reconnect
+  // names only its sender, a new sender all three names.
+  .refine((v) =>
+    v.senderId
+      ? v.fromName === undefined &&
+        v.firstName === undefined &&
+        v.lastName === undefined
+      : v.fromName !== undefined &&
+        v.firstName !== undefined &&
+        v.lastName !== undefined,
+  )
 export type EmailSenderOAuthState = z.infer<typeof emailSenderOAuthStateSchema>
 
 const state = oauthState({
