@@ -1,16 +1,16 @@
-import type { IntegrationOpenAIModel } from "@chatbotx.io/database/types"
 import { Switch } from "@chatbotx.io/ui/components/ui/switch"
 import { useTranslations } from "next-intl"
 import { useAction } from "next-safe-action/hooks"
 import { useState } from "react"
 import { toast } from "sonner"
 import { useWorkspaceId } from "@/hooks/routing"
+import type { AiIntegrationSummary } from "@/lib/ai-integration-summary"
 import { updateIntegrationOpenAIAction } from "../actions/update-openai.action"
 
 export default function ChangeAutoReply({
   integrationOpenAI,
 }: {
-  integrationOpenAI: IntegrationOpenAIModel
+  integrationOpenAI: Pick<AiIntegrationSummary, "id" | "autoReply">
 }) {
   const workspaceId = useWorkspaceId()
 
