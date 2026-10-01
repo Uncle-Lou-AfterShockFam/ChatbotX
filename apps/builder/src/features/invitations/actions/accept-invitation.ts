@@ -25,14 +25,22 @@ export const acceptInvitationAction = authActionClient
   .action(async ({ ctx, parsedInput }) => {
     const { code } = parsedInput
 
-    const invitation = await invitationService.findByCodeOrFail(code)
+    const invitation = await invitationService.findByCode(code)
 
-    if (invitation.expiresAt < new Date()) {
-      throw new ChatbotXException("Invitation expired")
-    }
-
-    if (!invitation.workspaceId) {
-      throw new ChatbotXException("Invalid invitation: no workspace associated")
+    // One answer for an unknown, expired or workspace-less code, the same
+    // collapse the invitation page renders: not an oracle for which codes
+    // exist (s233a).
+    if (
+      !invitation ||
+      invitation.expiresAt < new Date() ||
+      !invitation.workspaceId
+    ) {
+      const t = await getTranslations("invitation")
+      throw new ChatbotXException(
+        t("invalidInvitation"),
+        "invalidInvitation",
+        404,
+      )
     }
 
     const existingMember =
