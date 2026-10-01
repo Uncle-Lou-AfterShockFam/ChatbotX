@@ -53,8 +53,10 @@ vi.mock("@/orpc", () => {
   }
 })
 const MW = Symbol("superAdminAuthorizedMiddleware")
+const REAL_MW = Symbol("superAdminRealMemberMiddleware")
 vi.mock("@/middlewares/auth", () => ({
   superAdminAuthorizedMiddleware: MW,
+  superAdminRealMemberMiddleware: REAL_MW,
 }))
 const rateLimit = vi.fn(async (_args: unknown) => undefined)
 vi.mock("@/lib/rate-limit/api-rate-limit", () => ({
@@ -107,7 +109,12 @@ describe("email sender private routes (s229b)", () => {
     expect(own).toHaveLength(5)
     for (const entry of own) {
       expect(entry.api).toBe("authorized")
-      expect(entry.uses).toEqual([MW])
+      // s231b: the two routes that WRITE credentials refuse a platform-support
+      // session; list / status / archive keep the plain admin gate.
+      const writesCredentials =
+        (entry.route.method === "POST" && entry.route.path === base) ||
+        entry.route.method === "PATCH"
+      expect(entry.uses).toEqual([writesCredentials ? REAL_MW : MW])
     }
   })
 

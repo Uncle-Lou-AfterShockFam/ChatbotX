@@ -41,7 +41,8 @@ const connectGoogleRequest = z.union([
 
 /**
  * Start a Google mailbox-sender connect (s230b); the answer is Google's
- * consent URL. Super admins only (a sender holds mailbox credentials). The
+ * consent URL. Super admins only (a sender holds mailbox credentials), never
+ * a platform-support session (s231b). The
  * `state` is signed and bound to this user, workspace and line, and its
  * nonce rides an HttpOnly cookie only this browser sends back.
  */
@@ -53,6 +54,15 @@ export const startEmailSenderGoogleConnectAction = workspaceActionClient
       throw new ChatbotXException(
         "You need to be a super admin to manage email senders",
         "emailSenderSuperAdminRequired",
+        403,
+      )
+    }
+    // s231b (owner 2026-10-01): a platform-support session never binds a
+    // mailbox into a customer's workspace (its membership is synthetic).
+    if (ctx.isSupportSession) {
+      throw new ChatbotXException(
+        "Platform support sessions cannot connect a mailbox",
+        "supportSessionBlocked",
         403,
       )
     }

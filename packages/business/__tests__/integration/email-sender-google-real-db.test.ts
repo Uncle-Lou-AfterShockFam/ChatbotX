@@ -81,6 +81,10 @@ async function seed() {
   seededWorkspaces.push(workspaceId)
   await asReplica(sql`
     INSERT INTO "Inbox" (id, name, channel, "sourceId", "workspaceId") VALUES (${line}, 'line', 'api', ${line}, ${workspaceId})`)
+  // s231b: an email line (IntegrationApi.lineKind).
+  await asReplica(sql`
+    INSERT INTO "IntegrationApi" (id, auth, name, "tokenHash", "tokenPrefix", "workspaceId", "inboxId", "lineKind")
+    VALUES (${mintId()}, '{}'::jsonb, 'line', ${`h-${line}`}, 'cbx', ${workspaceId}, ${line}, 'email')`)
   return { workspaceId, line }
 }
 
@@ -211,6 +215,9 @@ afterEach(async () => {
   )
   await asReplica(
     sql`DELETE FROM "EmailSender" WHERE "workspaceId" IN (${list})`,
+  )
+  await asReplica(
+    sql`DELETE FROM "IntegrationApi" WHERE "workspaceId" IN (${list})`,
   )
   await asReplica(sql`DELETE FROM "Inbox" WHERE "workspaceId" IN (${list})`)
   await asReplica(sql`DELETE FROM "Workspace" WHERE id IN (${list})`)

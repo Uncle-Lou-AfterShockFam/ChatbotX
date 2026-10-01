@@ -214,6 +214,15 @@ describe("email sender Google callback (s230b)", () => {
       "a user who left the workspace",
       async () => mockTarget.mockResolvedValue(null),
     ],
+    [
+      // s231b (owner 2026-10-01): a synthetic support membership never binds a mailbox.
+      "a platform-support session",
+      async () =>
+        mockTarget.mockResolvedValue({
+          targetWorkspaceMember: { permissions: [] },
+          isSupportSession: true,
+        }),
+    ],
   ])("%s: 404 and nothing exchanged", async (_label, arrange) => {
     const { nonce, signed } = await state()
     mockCookieGet.mockReturnValue({ value: nonce })

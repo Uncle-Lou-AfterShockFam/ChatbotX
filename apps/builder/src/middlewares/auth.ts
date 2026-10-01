@@ -59,6 +59,12 @@ const createWorkspaceAuthorizedMiddleware = (options: {
   requireContactsAccess: boolean
   requireSuperAdmin?: boolean
   requirePermission?: WorkspacePermissionKey
+  /**
+   * s231b (owner 2026-10-01): refuse a platform-support session (its
+   * membership is synthetic, with superAdmin) - for routes that write
+   * credentials into the customer's workspace.
+   */
+  rejectSupportSession?: boolean
 }) =>
   base.middleware(async ({ context, next, procedure }, workspaceId: string) => {
     if (!context.user) {
@@ -81,6 +87,12 @@ const createWorkspaceAuthorizedMiddleware = (options: {
     }
 
     const { workspace, member } = access
+
+    if (options.rejectSupportSession && access.isSupportSession) {
+      throw new ORPCError("FORBIDDEN", {
+        message: "Platform support sessions cannot change credentials",
+      })
+    }
 
     if (
       options.requireContactsAccess &&
@@ -150,6 +162,18 @@ export const workspaceAuthorizedMidddleware =
 /** Deals, pipelines: the contacts-section permission gates the API as well as the nav. */
 export const contactsAccessAuthorizedMiddleware =
   createWorkspaceAuthorizedMiddleware({ requireContactsAccess: true })
+
+/**
+ * s231b: the same, and never a platform-support session - for the routes that
+ * WRITE mailbox credentials (add a sender, edit its login). Pausing and
+ * archiving stay on the plain super-admin gate so support can stop a mailbox.
+ */
+export const superAdminRealMemberMiddleware =
+  createWorkspaceAuthorizedMiddleware({
+    requireContactsAccess: false,
+    requireSuperAdmin: true,
+    rejectSupportSession: true,
+  })
 
 /**
  * Workspace settings that hold credentials (s229b mailbox senders): admins

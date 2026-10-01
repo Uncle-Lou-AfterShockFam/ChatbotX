@@ -52,6 +52,7 @@ async function seed() {
   const lineA = mintId()
   const lineB = mintId()
   const messenger = mintId()
+  const textLine = mintId()
   await asReplica(sql`
     INSERT INTO "Workspace" (id, name, "ownerId") VALUES (${workspaceId}, ${`s229b ${workspaceId}`}, 1)`)
   seededWorkspaces.push(workspaceId)
@@ -61,11 +62,23 @@ async function seed() {
     [lineA, "api"],
     [lineB, "api"],
     [messenger, "messenger"],
+    [textLine, "api"],
   ] as const) {
     await asReplica(sql`
       INSERT INTO "Inbox" (id, name, channel, "sourceId", "workspaceId") VALUES (${id}, 'line', ${channel}, ${id}, ${workspaceId})`)
   }
-  return { workspaceId, contactId, lineA, lineB, messenger }
+  // s231b: lineA / lineB are email lines; textLine is an API channel of
+  // another kind (a GV line) that must never hold senders.
+  for (const [inboxId, kind] of [
+    [lineA, "email"],
+    [lineB, "email"],
+    [textLine, null],
+  ] as const) {
+    await asReplica(sql`
+      INSERT INTO "IntegrationApi" (id, auth, name, "tokenHash", "tokenPrefix", "workspaceId", "inboxId", "lineKind")
+      VALUES (${mintId()}, '{}'::jsonb, 'line', ${`h-${inboxId}`}, 'cbx', ${workspaceId}, ${inboxId}, ${kind})`)
+  }
+  return { workspaceId, contactId, lineA, lineB, messenger, textLine }
 }
 
 const connection = (address: string, password = PASSWORD) => ({
@@ -137,7 +150,7 @@ afterEach(async () => {
   await asReplica(
     sql`DELETE FROM "EmailSender" WHERE "workspaceId" IN (${list})`,
   )
-  for (const table of ["Inbox", "Contact"]) {
+  for (const table of ["IntegrationApi", "Inbox", "Contact"]) {
     await asReplica(
       sql`DELETE FROM ${sql.identifier(table)} WHERE "workspaceId" IN (${list})`,
     )
@@ -232,6 +245,41 @@ describe.skipIf(!databaseUrl)("emailSenderService (s229b)", () => {
     ).toEqual([])
   })
 
+  test("s231b: only an API channel MARKED as an email line holds senders; another line's token never gets the feed", async () => {
+    const s = await seed()
+    const lines = await emailSenderService.listLines({
+      workspaceId: s.workspaceId,
+    })
+    expect(lines.map((l) => l.id).sort()).toEqual([s.lineA, s.lineB].sort())
+    const onText = await create(s, s.textLine, "a@example.com").catch(
+      (e) => e,
+    )
+    expect(onText).toMatchObject({ httpStatusCode: 422, field: "lineInboxId" })
+    await expect(
+      emailSenderService.listForLine({
+        workspaceId: s.workspaceId,
+        lineInboxId: s.textLine,
+      }),
+    ).rejects.toMatchObject({ code: "notEmailLine", httpStatusCode: 403 })
+    // A sender already on a line that is UNMARKED later is never fed again.
+    await create(s, s.lineA, "a@example.com")
+    expect(
+      await emailSenderService.listForLine({
+        workspaceId: s.workspaceId,
+        lineInboxId: s.lineA,
+      }),
+    ).toHaveLength(1)
+    await db.execute(
+      sql`UPDATE "IntegrationApi" SET "lineKind" = NULL WHERE "inboxId" = ${s.lineA}`,
+    )
+    await expect(
+      emailSenderService.listForLine({
+        workspaceId: s.workspaceId,
+        lineInboxId: s.lineA,
+      }),
+    ).rejects.toMatchObject({ code: "notEmailLine" })
+  })
+
   test("the feed: this line's non-archived senders only, WITH the password; an update with a blank password keeps it", async () => {
     const s = await seed()
     const a1 = await create(s, s.lineA, "a1@example.com")
@@ -291,14 +339,15 @@ describe.skipIf(!databaseUrl)("emailSenderService (s229b)", () => {
         "auth",
       ].sort(),
     )
-    // Another workspace's token (same line id) sees nothing.
+    // Another workspace's token (same line id) sees nothing: that line is not
+    // an email line OF that workspace (s231b: refused, never an empty feed).
     const other = await seed()
-    expect(
-      await emailSenderService.listForLine({
+    await expect(
+      emailSenderService.listForLine({
         workspaceId: other.workspaceId,
         lineInboxId: s.lineA,
       }),
-    ).toEqual([])
+    ).rejects.toMatchObject({ code: "notEmailLine" })
 
     // Blank password keeps the stored one; a new one replaces it.
     const blank = connection("a1@example.com", "")

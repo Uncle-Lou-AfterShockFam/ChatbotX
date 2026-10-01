@@ -21,6 +21,7 @@ const toResource = (row: IntegrationApiModel): ApiResource => ({
   createdAt: row.createdAt,
   deliveryMode: deliveryModeOf(row.auth),
   shortenLinks: shortenLinksOf(row.auth),
+  emailLine: row.lineKind === "email",
 })
 
 export const listIntegrationApis = async ({
