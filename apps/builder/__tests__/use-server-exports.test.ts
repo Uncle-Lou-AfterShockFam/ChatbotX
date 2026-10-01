@@ -29,8 +29,6 @@ const SRC_ROOT = join(import.meta.dirname, "..", "src")
 const SAFE_ACTION_MODULES = new Set([
   "lib/safe-action",
   "lib/integration-actions",
-  "features/templates/actions/template-action-client",
-  "features/integration-quickbooks/actions/action-client",
 ])
 
 // Plain Server Actions that are called from the browser on purpose. Each

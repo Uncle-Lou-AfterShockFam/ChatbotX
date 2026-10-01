@@ -13,7 +13,7 @@ vi.mock("@/lib/safe-action", () => {
   chain.bindArgsSchemas = () => chain
   chain.inputSchema = () => chain
   chain.action = (fn: unknown) => fn
-  return { workspaceActionClient: chain, settingsActionClient: chain }
+  return { settingsActionClient: chain }
 })
 vi.mock("@/features/common/schema", () => ({ workspaceIdrequestParams: [] }))
 vi.mock("@/lib/log", () => ({ logger: { error: vi.fn() } }))

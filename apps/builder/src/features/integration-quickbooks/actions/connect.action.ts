@@ -13,8 +13,8 @@ import {
 import { cookies } from "next/headers"
 import { env } from "@/env"
 import { workspaceIdrequestParams } from "@/features/common/schema"
+import { settingsActionClient } from "@/lib/safe-action"
 import { quickbooksRedirectUri } from "../lib"
-import { quickbooksActionClient } from "./action-client"
 
 /**
  * Start a QuickBooks connect (s214b): the answer is Intuit's authorize URL.
@@ -22,7 +22,7 @@ import { quickbooksActionClient } from "./action-client"
  * rides an HttpOnly cookie that only this browser sends back, so a code
  * cannot be replayed into another session or workspace.
  */
-export const startQuickbooksConnectAction = quickbooksActionClient
+export const startQuickbooksConnectAction = settingsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .action(async ({ ctx, bindArgsParsedInputs: [workspaceId] }) => {
     const app = await quickbooksAppCredential()

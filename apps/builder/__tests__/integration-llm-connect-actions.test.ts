@@ -29,7 +29,6 @@ vi.mock("@/lib/safe-action", () => {
   chain.inputSchema = () => chain
   chain.action = (fn: unknown) => fn
   return {
-    workspaceActionClient: chain,
     settingsActionClient: chain,
     authActionClient: chain,
   }

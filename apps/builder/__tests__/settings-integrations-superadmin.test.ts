@@ -172,12 +172,11 @@ describe("every Settings integration action is built on a superAdmin client", ()
     "workspaces/actions/delete-workspace-token-action.ts",
   ]
   // createDisconnectAction is built on settingsActionClientAllowExpired
-  // (asserted below); quickbooksActionClient carries its own superAdmin check.
+  // (asserted below).
   const SUPER_ADMIN_ROOTS = new Set([
     "settingsActionClient",
     "settingsActionClientAllowExpired",
     "createDisconnectAction",
-    "quickbooksActionClient",
   ])
 
   test("the integration action files", () => {
