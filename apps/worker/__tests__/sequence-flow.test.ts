@@ -33,8 +33,11 @@ vi.mock("@chatbotx.io/sequence-scheduler", () => ({
 
 // ---------- contactSequenceService spies ----------
 // sequence-flow.ts now delegates all dispatch persistence to
-// contactSequenceService.{findRunningDispatch,markDispatchCompleted,
-// markDispatchCanceled,markDispatchFailed}.
+// contactSequenceService.{findDispatchForSend,findRunningDispatch,
+// markDispatchCompleted,markDispatchCanceled,markDispatchFailed}.
+// findDispatchForSend = the job's first load (running or completed, s236);
+// findRunningDispatch = the re-read right before sending.
+const findForSendSpy = vi.fn()
 const findRunningSpy = vi.fn()
 const markCompletedSpy = vi.fn()
 const markCanceledSpy = vi.fn()
@@ -45,6 +48,7 @@ const missingHoldFieldsSpy = vi.fn()
 
 vi.mock("@chatbotx.io/business/contact-sequence", () => ({
   contactSequenceService: {
+    findDispatchForSend: (...args: unknown[]) => findForSendSpy(...args),
     findRunningDispatch: (...args: unknown[]) => findRunningSpy(...args),
     markDispatchCompleted: (...args: unknown[]) => markCompletedSpy(...args),
     markDispatchCanceled: (...args: unknown[]) => markCanceledSpy(...args),
@@ -135,7 +139,7 @@ function makeDispatch(overrides: Record<string, unknown> = {}) {
   return {
     id: "dispatch-1",
     workspaceId: "ws-1",
-    status: "pending",
+    status: "running",
     completedAt: null,
     contactInboxId: "ci-pinned",
     ...overrides,
@@ -154,6 +158,7 @@ function makeStep(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   // sequence-scheduler defaults
+  findForSendSpy.mockResolvedValue(makeDispatch())
   findRunningSpy.mockResolvedValue(makeDispatch())
   markCompletedSpy.mockResolvedValue(undefined)
   markCanceledSpy.mockResolvedValue(undefined)
@@ -274,9 +279,7 @@ describe("handleSendSequenceFlow", () => {
 
   describe("enrolment removed while the step was looked up (s220b)", () => {
     test("the re-read before sending misses the dispatch: nothing is sent", async () => {
-      findRunningSpy
-        .mockResolvedValueOnce(makeDispatch())
-        .mockResolvedValueOnce(undefined)
+      findRunningSpy.mockResolvedValueOnce(undefined)
 
       await handleSendSequenceFlow(makeData(), makeJob())
 
@@ -365,19 +368,55 @@ describe("handleSendSequenceFlow", () => {
     })
   })
 
-  describe("idempotent re-delivery — dispatch already has completedAt", () => {
-    test("skips sendFlowDirect and reuses the existing sentAt", async () => {
-      // Arrange
-      const completedAt = new Date("2025-01-01T10:00:00Z")
-      findRunningSpy.mockResolvedValue(makeDispatch({ completedAt }))
+  describe("retry after the send (s236): the dispatch is already completed", () => {
+    const completedAt = new Date("2025-01-01T10:00:00Z")
+    beforeEach(() => {
+      findForSendSpy.mockResolvedValue(
+        makeDispatch({ status: "completed", completedAt }),
+      )
+    })
 
-      // Act
+    test("never sends again; advances from the send time, guarded by this dispatch", async () => {
+      await handleSendSequenceFlow(makeData(), makeJob({ attemptsMade: 1 }))
+
+      expect(sendFlowDirectSpy).not.toHaveBeenCalled()
+      expect(markCompletedSpy).not.toHaveBeenCalled()
+      expect(deferIfPausedSpy).not.toHaveBeenCalled()
+      expect(advanceEnrollmentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sentAt: completedAt,
+          currentStep: { id: "step-1", order: 1 },
+          afterDispatchId: "dispatch-1",
+        }),
+      )
+      expect(removeFromScheduleSpy).toHaveBeenCalledWith(42, "dispatch-1")
+    })
+
+    test("its step became invalid: the advance is still guarded by this dispatch", async () => {
+      fetchStepSpy.mockResolvedValue(makeStep({ isActive: false }))
+      validateStepSpy.mockReturnValue({ valid: false, reason: "step_inactive" })
+
+      await handleSendSequenceFlow(makeData(), makeJob({ attemptsMade: 1 }))
+
+      expect(sendFlowDirectSpy).not.toHaveBeenCalled()
+      // It was sent: never re-labelled canceled, and the delay counts from the send.
+      expect(markCanceledSpy).not.toHaveBeenCalled()
+      expect(advanceEnrollmentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          afterDispatchId: "dispatch-1",
+          sentAt: completedAt,
+        }),
+      )
+    })
+  })
+
+  describe("a running dispatch is never treated as a retry", () => {
+    test("the advance carries no afterDispatchId", async () => {
       await handleSendSequenceFlow(makeData(), makeJob())
 
-      // Assert — flow must NOT be sent again
-      expect(sendFlowDirectSpy).not.toHaveBeenCalled()
-      expect(advanceEnrollmentSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ sentAt: completedAt }),
+      expect(sendFlowDirectSpy).toHaveBeenCalledOnce()
+      expect(advanceEnrollmentSpy.mock.calls[0]?.[0]).not.toHaveProperty(
+        "afterDispatchId",
       )
     })
   })
@@ -385,7 +424,7 @@ describe("handleSendSequenceFlow", () => {
   describe("dispatch not found", () => {
     test("returns early without touching db, scheduler, or advanceEnrollment", async () => {
       // Arrange
-      findRunningSpy.mockResolvedValue(undefined)
+      findForSendSpy.mockResolvedValue(undefined)
 
       // Act
       await handleSendSequenceFlow(makeData(), makeJob())

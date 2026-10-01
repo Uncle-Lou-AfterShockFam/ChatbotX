@@ -3,7 +3,10 @@ import { sequenceConnections } from "@chatbotx.io/redis"
 import { SchedulerClient } from "@chatbotx.io/scheduler"
 import {
   listStalledEnrollments,
+  listUnadvancedEnrollments,
+  recoverUnadvancedEnrollment,
   redispatchStalledEnrollment,
+  type StalledEnrollment,
 } from "@chatbotx.io/sequence-scheduler"
 import { ensureBootstrapped } from "../lib/bootstrap"
 import { logger } from "../lib/logger"
@@ -15,7 +18,7 @@ const RETENTION_BATCH_SIZE_DEFAULT = 1000
 const RETENTION_INTERVAL_MS_DEFAULT = 86_400_000
 const RETENTION_TTL_DAYS_DEFAULT = 30
 const BATCH_SIZE = 1000
-/** s235: at most this many stalled-enrolment pages (of 200) per pass. */
+/** s235: at most this many stalled-enrolment pages (of 200) per pass (each kind). */
 const STALLED_MAX_PAGES = 500
 const TOTAL_BUCKETS = 256
 
@@ -138,11 +141,93 @@ export class ReconcileJob {
       logger.error(error, "Error in reconciliation")
       throw error
     }
-    // After the ZSet pass, on the same interval: its own failure is logged and
-    // never fails the ZSet reconcile.
+    // After the ZSet pass, on the same interval: each failure is logged and
+    // never fails the ZSet reconcile. Unadvanced first: an advance it makes
+    // leaves a live dispatch, so the stalled pass then skips that enrolment.
+    await this.recoverUnadvanced().catch((err: unknown) => {
+      logger.error({ err }, "Error advancing unadvanced sequence enrolments")
+    })
     await this.redispatchStalled().catch((err: unknown) => {
       logger.error({ err }, "Error re-dispatching stalled sequence enrolments")
     })
+  }
+
+  /**
+   * Page through enrolments (`list`, by ascending id) and `handle` each one.
+   * Capped at STALLED_MAX_PAGES and stopped if paging does not advance.
+   */
+  private async eachEnrollmentPage(
+    label: string,
+    list: (afterId?: string) => Promise<StalledEnrollment[]>,
+    handle: (enrollment: StalledEnrollment) => Promise<void>,
+  ): Promise<void> {
+    let afterId: string | undefined
+    for (let pages = 0; ; pages++) {
+      if (pages >= STALLED_MAX_PAGES) {
+        logger.error(
+          { pages, afterId },
+          `${label}: page cap reached; the rest wait for the next pass`,
+        )
+        break
+      }
+      const page = await list(afterId)
+      const lastId = page.at(-1)?.id
+      if (!lastId) {
+        break
+      }
+      // Paging must move forward (ids ascend); never re-read a page forever.
+      if (afterId !== undefined && BigInt(lastId) <= BigInt(afterId)) {
+        logger.error(
+          { afterId, lastId },
+          `${label}: paging did not advance; pass stopped`,
+        )
+        break
+      }
+      for (const enrollment of page) {
+        await handle(enrollment)
+      }
+      afterId = lastId
+    }
+  }
+
+  /**
+   * s236: an enrolment whose step was sent and marked completed but never
+   * advanced (the worker died, or the advance threw, in between) waits
+   * forever: the job retry finds no running dispatch and the stalled pass
+   * sees the completed one. Advance each from that dispatch
+   * (`recoverUnadvancedEnrollment` re-checks it under the enrolment lock).
+   */
+  async recoverUnadvanced(now = new Date()): Promise<number> {
+    let advanced = 0
+    await this.eachEnrollmentPage(
+      "unadvanced enrolments",
+      (afterId) => listUnadvancedEnrollments({ now, afterId }),
+      async (enrollment) => {
+        const result = await recoverUnadvancedEnrollment({
+          workspaceId: enrollment.workspaceId,
+          enrollmentId: enrollment.id,
+          scheduler: this.scheduler,
+          now,
+        }).catch((err: unknown) => {
+          logger.error(
+            { err, enrollmentId: enrollment.id },
+            "unadvanced enrolment: advance failed",
+          )
+          return null
+        })
+        if (result?.kind === "advanced") {
+          advanced += 1
+          logger.warn(
+            {
+              enrollmentId: enrollment.id,
+              workspaceId: enrollment.workspaceId,
+            },
+            "unadvanced enrolment advanced",
+          )
+        }
+      },
+    )
+    return advanced
   }
 
   /**
@@ -152,30 +237,11 @@ export class ReconcileJob {
    * (`redispatchStalledEnrollment` locks and re-checks it).
    */
   async redispatchStalled(now = new Date()): Promise<number> {
-    let afterId: string | undefined
     let redispatched = 0
-    for (let pages = 0; ; pages++) {
-      if (pages >= STALLED_MAX_PAGES) {
-        logger.error(
-          { pages, afterId },
-          "stalled enrolments: page cap reached; the rest wait for the next pass",
-        )
-        break
-      }
-      const page = await listStalledEnrollments({ now, afterId })
-      const lastId = page.at(-1)?.id
-      if (!lastId) {
-        break
-      }
-      // Paging must move forward (ids ascend); never re-read a page forever.
-      if (afterId !== undefined && BigInt(lastId) <= BigInt(afterId)) {
-        logger.error(
-          { afterId, lastId },
-          "stalled enrolments: paging did not advance; pass stopped",
-        )
-        break
-      }
-      for (const enrollment of page) {
+    await this.eachEnrollmentPage(
+      "stalled enrolments",
+      (afterId) => listStalledEnrollments({ now, afterId }),
+      async (enrollment) => {
         const result = await redispatchStalledEnrollment({
           workspaceId: enrollment.workspaceId,
           enrollmentId: enrollment.id,
@@ -206,9 +272,8 @@ export class ReconcileJob {
             "stalled enrolment re-dispatched",
           )
         }
-      }
-      afterId = lastId
-    }
+      },
+    )
     this.lastStalledRun = new Date()
     this.lastStalledRedispatched = redispatched
     return redispatched

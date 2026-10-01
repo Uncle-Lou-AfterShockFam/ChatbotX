@@ -18,6 +18,7 @@ import { calculateNextRunAtFromStep } from "./calculate-next-run-at"
 import { getDispatchContactInboxes } from "./contacts-on-sequences"
 import { createDispatch } from "./dispatch-manager"
 import { LIVE_DISPATCH_STATUSES } from "./enrollment-constants"
+import { targetStepId } from "./redispatch-stalled-enrollment"
 import { calculateNextValidSendTime } from "./send-time-validator"
 
 type NextStepForSchedule = {
@@ -69,6 +70,15 @@ export class EnrollmentNotFoundError extends Error {
 }
 
 export interface AdvanceEnrollmentParams {
+  /**
+   * s236 recovery: the finished dispatch this advance is for, when it is re-run
+   * after the fact (a job retry, the reconcile pass). The advance is a no-op
+   * unless that dispatch is still where the enrolment stands: its step is the
+   * enrolment's target step (the first active one at or after `currentStep`)
+   * and the enrolment has no live dispatch. An old job redelivered, or one of
+   * a previous cycle, never moves it; a vanished anchor fails closed.
+   */
+  afterDispatchId?: string
   contactId: string
   currentStep: { id: string; order: number }
   enrollmentId: string
@@ -78,9 +88,10 @@ export interface AdvanceEnrollmentParams {
   workspaceId: string
 }
 
+/** Whether the enrolment was moved: a next dispatch queued, or completed. */
 export async function advanceEnrollment(
   params: AdvanceEnrollmentParams,
-): Promise<void> {
+): Promise<boolean> {
   const {
     enrollmentId,
     workspaceId,
@@ -89,6 +100,7 @@ export async function advanceEnrollment(
     currentStep,
     sentAt,
     scheduler,
+    afterDispatchId,
   } = params
 
   const enrollment = await db.query.contactsOnSequenceModel.findFirst({
@@ -100,11 +112,11 @@ export async function advanceEnrollment(
   }
 
   if (enrollment.status !== "active") {
-    return
+    return false
   }
 
   if (enrollment.lastStepId === currentStep.id) {
-    return
+    return false
   }
 
   const [nextStep] = await db
@@ -120,6 +132,7 @@ export async function advanceEnrollment(
     .orderBy(asc(sequenceStepModel.order))
     .limit(1)
 
+  let moved = false
   const dispatches = await db
     .transaction(async (tx) => {
       // s226b: an out-of-office pause holds the next step. Read under the
@@ -129,6 +142,7 @@ export async function advanceEnrollment(
         .select({
           status: contactsOnSequenceModel.status,
           pausedUntil: contactsOnSequenceModel.pausedUntil,
+          lastStepId: contactsOnSequenceModel.lastStepId,
         })
         .from(contactsOnSequenceModel)
         .where(
@@ -142,6 +156,36 @@ export async function advanceEnrollment(
       // was held) after the unlocked read above is never advanced.
       if (locked?.status !== "active") {
         return []
+      }
+      // s236: a concurrent advance (a job retry racing the reconcile pass)
+      // already moved it on from this step while we waited for the lock.
+      if (locked.lastStepId === currentStep.id) {
+        return []
+      }
+      // s236: re-run for a dispatch after the fact. Never trust createdAt for
+      // the cycle (a restart within minutes, a revived row): the anchor must
+      // be the step the enrolment stands at, with nothing live (probe s236).
+      if (afterDispatchId !== undefined) {
+        const current = await tx.execute(sql`
+          SELECT 1 FROM "ContactOnSequence" cos
+            JOIN "SequenceDispatch" anchor
+              ON anchor."id" = ${afterDispatchId}
+             AND anchor."workspaceId" = cos."workspaceId"
+             AND anchor."enrollmentId" = cos."id"
+           WHERE cos."id" = ${enrollmentId} AND cos."workspaceId" = ${workspaceId}
+             AND anchor."stepId" = ${currentStep.id}
+             AND anchor."stepId" = ${targetStepId()}
+             AND NOT EXISTS (
+               SELECT 1 FROM "SequenceDispatch" sd
+                WHERE sd."workspaceId" = cos."workspaceId"
+                  AND sd."enrollmentId" = cos."id"
+                  AND sd."status" IN (${sql.join(
+                    LIVE_DISPATCH_STATUSES.map((status) => sql`${status}`),
+                    sql`, `,
+                  )}))`)
+        if (current.rows.length === 0) {
+          return []
+        }
       }
       // s228b (probe): a reactivation already moved it on (it resumed past
       // this step and queued another): never a second live dispatch.
@@ -178,6 +222,7 @@ export async function advanceEnrollment(
               eq(contactsOnSequenceModel.workspaceId, workspaceId),
             ),
           )
+        moved = true
         return []
       }
       const scheduled = calculateNextRunAt(nextStep, sentAt)
@@ -208,6 +253,7 @@ export async function advanceEnrollment(
           ),
         )
 
+      moved = true
       const contactInboxes = await getDispatchContactInboxes(
         workspaceId,
         contactId,
@@ -251,4 +297,5 @@ export async function advanceEnrollment(
       Number(dispatch.runAtMs),
     )
   }
+  return moved
 }
