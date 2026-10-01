@@ -8,6 +8,7 @@ import { getTranslations } from "next-intl/server"
 import { returnValidationErrors } from "next-safe-action"
 import { isValidationException } from "@/lib/errors/validation-exception"
 import { workspaceActionClient } from "@/lib/safe-action"
+import { mergeStoredAuth } from "../lib/merge-stored-auth"
 import { updatePrivateAIMcpServerRequest } from "../schema/action"
 
 export const updateAIMcpServerAction = workspaceActionClient
@@ -19,18 +20,6 @@ export const updateAIMcpServerAction = workspaceActionClient
       parsedInput,
     } = props
     const t = await getTranslations()
-
-    if (parsedInput.auth.type === "token") {
-      const resolution = await resolveBotFieldVariableText({
-        text: parsedInput.auth.token,
-        workspaceId,
-      })
-      if (resolution.status !== "resolved") {
-        return returnValidationErrors(updatePrivateAIMcpServerRequest, {
-          auth: { token: { _errors: [t("validation.invalidApiKey")] } },
-        })
-      }
-    }
 
     const mcpServer = await aiMcpServerService.findBy({
       where: {
@@ -44,8 +33,32 @@ export const updateAIMcpServerAction = workspaceActionClient
       )
     }
 
+    // The form never receives the stored secret; an empty token or header
+    // value keeps the stored one (s232a).
+    const merged = mergeStoredAuth(parsedInput.auth, mcpServer.auth)
+    if (merged.status === "missing") {
+      return returnValidationErrors(updatePrivateAIMcpServerRequest, {
+        auth: { _errors: [t("forms.issues.required")] },
+      })
+    }
+
+    if (parsedInput.auth.type === "token" && parsedInput.auth.token !== "") {
+      const resolution = await resolveBotFieldVariableText({
+        text: parsedInput.auth.token,
+        workspaceId,
+      })
+      if (resolution.status !== "resolved") {
+        return returnValidationErrors(updatePrivateAIMcpServerRequest, {
+          auth: { token: { _errors: [t("validation.invalidApiKey")] } },
+        })
+      }
+    }
+
     try {
-      await aiMcpServerService.update({ workspaceId, id }, parsedInput)
+      await aiMcpServerService.update(
+        { workspaceId, id },
+        { ...parsedInput, auth: merged.auth },
+      )
     } catch (error) {
       if (isValidationException(error)) {
         return returnValidationErrors(updatePrivateAIMcpServerRequest, {

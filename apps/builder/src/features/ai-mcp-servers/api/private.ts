@@ -5,6 +5,7 @@ import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
 import { workspaceAuthorizedMidddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
 import { validateAIMcpServer } from "../actions/validate-ai-mcp-server.action"
+import { resolveValidateAuth } from "../lib/resolve-validate-auth"
 import { listAIMcpServers } from "../queries"
 import {
   listAIMcpServersRequest,
@@ -24,8 +25,9 @@ export const aiMcpServersAuthenticatedAPI = {
     .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
     .output(z.any())
     .handler(async ({ input }) => {
+      const auth = await resolveValidateAuth(input)
       try {
-        return await validateAIMcpServer({ parsedInput: input })
+        return await validateAIMcpServer({ parsedInput: { ...input, auth } })
       } catch (err) {
         const error = normalizeError(err)
         throw new ChatbotXException(error.message, error.code)

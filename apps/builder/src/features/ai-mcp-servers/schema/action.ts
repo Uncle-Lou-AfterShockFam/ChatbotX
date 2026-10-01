@@ -61,9 +61,38 @@ const privateAIMcpServerAuth = z.discriminatedUnion("type", [
   }),
 ])
 
+// Update and validate accept an empty token or header value: the client never
+// receives the stored secret (aiMcpServerClientAuth), so "" means keep it.
+// The server fills it from the stored row (lib/merge-stored-auth.ts).
+const privateAIMcpServerAuthKeepingSecrets = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("none") }),
+  z.object({
+    type: z.literal("token"),
+    token: z
+      .string()
+      .trim()
+      .refine((token) => token === "" || isPrivateBotFieldVariableText(token)),
+  }),
+  z.object({
+    type: z.literal("header"),
+    headers: z.array(
+      z.object({
+        header: z.string().trim().min(1),
+        value: z.string().trim(),
+      }),
+    ),
+  }),
+])
+export type PrivateAIMcpServerAuthKeepingSecrets = z.infer<
+  typeof privateAIMcpServerAuthKeepingSecrets
+>
+
 const privateBaseAIMcpServerRequest = z.object({
   url: z.url(),
-  auth: privateAIMcpServerAuth,
+  auth: privateAIMcpServerAuthKeepingSecrets,
+  id: zodBigintAsString()
+    .optional()
+    .describe("The stored MCP server whose secrets an empty value keeps."),
 })
 
 /** Private Builder form schema. Public API schemas above intentionally remain unchanged. */
@@ -75,7 +104,7 @@ export type CreatePrivateAIMcpServerRequest = z.infer<
 >
 
 export const updatePrivateAIMcpServerRequest = updateAIMcpServerRequest.extend({
-  auth: privateAIMcpServerAuth,
+  auth: privateAIMcpServerAuthKeepingSecrets,
 })
 export type UpdatePrivateAIMcpServerRequest = z.infer<
   typeof updatePrivateAIMcpServerRequest
