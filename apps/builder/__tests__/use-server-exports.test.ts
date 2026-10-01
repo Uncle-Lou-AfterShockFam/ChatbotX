@@ -1,12 +1,12 @@
 // @vitest-environment node
 
-import { readdirSync, readFileSync, statSync } from "node:fs"
-import { join, relative } from "node:path"
+import { readFileSync } from "node:fs"
+import { dirname, join, relative, resolve } from "node:path"
 import ts from "typescript"
 import { describe, expect, test } from "vitest"
+import { collectSourceFiles } from "./source-files.test-utils"
 
 const SRC_ROOT = join(import.meta.dirname, "..", "src")
-const TS_LIKE_EXTENSION_PATTERN = /\.(ts|tsx)$/
 
 // s232a: every value export of a "use server" file is a Server Action that
 // anyone holding its id can POST to, with arguments of their choosing. A
@@ -17,30 +17,22 @@ const TS_LIKE_EXTENSION_PATTERN = /\.(ts|tsx)$/
 // in `import "server-only"` modules (or stay unexported); a "use server" file
 // exports only values built from a safe-action client (lib/safe-action.ts)
 // or the integration disconnect factory built on one.
-const SAFE_ACTION_ROOT_PATTERN =
-  /ActionClient(?:AllowExpired|AllowScheduledDeletion)?$|^actionClient$/
-const SAFE_ACTION_FACTORIES = new Set(["createDisconnectAction"])
+// The modules a wrapper may be built from, src-relative without extension.
+// The root of the export's call chain must be a binding IMPORTED from one of
+// them; a name that merely looks like a client (`myActionClient`) does not
+// count.
+const SAFE_ACTION_MODULES = new Set([
+  "lib/safe-action",
+  "lib/integration-actions",
+  "features/templates/actions/template-action-client",
+  "features/integration-quickbooks/actions/action-client",
+])
 
 // Plain Server Actions that are called from the browser on purpose. Each
 // touches only the caller's own cookie and validates its input itself.
 const ALLOWED_PLAIN_EXPORTS: Record<string, string[]> = {
   "lib/locale.ts": ["getUserLocale", "setUserLocale"],
   "lib/timezone.action.ts": ["setUserTimezone"],
-}
-
-function collectSourceFiles(dir: string, results: string[] = []) {
-  for (const entry of readdirSync(dir)) {
-    if (entry === "node_modules" || entry === "__tests__") {
-      continue
-    }
-    const fullPath = join(dir, entry)
-    if (statSync(fullPath).isDirectory()) {
-      collectSourceFiles(fullPath, results)
-    } else if (TS_LIKE_EXTENSION_PATTERN.test(entry)) {
-      results.push(fullPath)
-    }
-  }
-  return results
 }
 
 function parse(fileName: string, source: string) {
@@ -82,12 +74,51 @@ function chainRoot(expression: ts.Expression | undefined): string | null {
   return current && ts.isIdentifier(current) ? current.text : null
 }
 
-function isSafeActionValue(initializer: ts.Expression | undefined) {
+function resolveSpecifier(fileName: string, specifier: string) {
+  if (specifier.startsWith("@/")) {
+    return join(SRC_ROOT, specifier.slice(2))
+  }
+  if (specifier.startsWith(".")) {
+    return resolve(dirname(fileName), specifier)
+  }
+  return null
+}
+
+/** Import bindings of a file: local name -> src-relative module, if resolvable. */
+function importedModules(fileName: string, sourceFile: ts.SourceFile) {
+  const modules = new Map<string, string>()
+  for (const statement of sourceFile.statements) {
+    if (
+      !(
+        ts.isImportDeclaration(statement) &&
+        ts.isStringLiteral(statement.moduleSpecifier)
+      ) ||
+      statement.importClause?.isTypeOnly
+    ) {
+      continue
+    }
+    const absolute = resolveSpecifier(fileName, statement.moduleSpecifier.text)
+    const bindings = statement.importClause?.namedBindings
+    if (!(absolute && bindings && ts.isNamedImports(bindings))) {
+      continue
+    }
+    const module = relative(SRC_ROOT, absolute).split("\\").join("/")
+    for (const element of bindings.elements) {
+      if (!element.isTypeOnly) {
+        modules.set(element.name.text, module)
+      }
+    }
+  }
+  return modules
+}
+
+function isSafeActionValue(
+  initializer: ts.Expression | undefined,
+  modules: Map<string, string>,
+) {
   const root = chainRoot(initializer)
-  return (
-    root !== null &&
-    (SAFE_ACTION_ROOT_PATTERN.test(root) || SAFE_ACTION_FACTORIES.has(root))
-  )
+  const module = root === null ? undefined : modules.get(root)
+  return module !== undefined && SAFE_ACTION_MODULES.has(module)
 }
 
 const isExported = (statement: ts.Statement) =>
@@ -103,6 +134,7 @@ function plainServerActionExports(fileName: string, source: string) {
     return []
   }
 
+  const modules = importedModules(fileName, sourceFile)
   const names: string[] = []
   for (const statement of sourceFile.statements) {
     if (ts.isExportDeclaration(statement)) {
@@ -115,7 +147,7 @@ function plainServerActionExports(fileName: string, source: string) {
       names.push(statement.name?.text ?? "export default function")
     } else if (ts.isVariableStatement(statement) && isExported(statement)) {
       for (const declaration of statement.declarationList.declarations) {
-        if (!isSafeActionValue(declaration.initializer)) {
+        if (!isSafeActionValue(declaration.initializer, modules)) {
           names.push(declaration.name.getText(sourceFile))
         }
       }
@@ -128,7 +160,10 @@ describe('"use server" files export only safe-action values', () => {
   test("the scanner flags plain exports and passes wrapped ones", () => {
     const source = `"use server"
 import { workspaceActionClient } from "@/lib/safe-action"
+import { createDisconnectAction } from "@/lib/integration-actions"
+import { myActionClient } from "./helpers"
 export type Row = { id: string }
+export const lookAlike = myActionClient.action(async () => {})
 export const updateThingAction = workspaceActionClient
   .inputSchema(schema)
   .action(async () => {})
@@ -138,7 +173,9 @@ export async function readThing() {}
 export { helper }
 export default updateThing
 `
-    expect(plainServerActionExports("fixture.ts", source)).toEqual([
+    const fixture = join(SRC_ROOT, "features/fixture/actions/fixture.ts")
+    expect(plainServerActionExports(fixture, source)).toEqual([
+      "lookAlike",
       "updateThing",
       "readThing",
       "export { ... } export { helper }",
@@ -146,7 +183,7 @@ export default updateThing
     ])
     expect(
       plainServerActionExports(
-        "fixture.ts",
+        fixture,
         source.replace('"use server"', 'import "server-only"'),
       ),
     ).toEqual([])
