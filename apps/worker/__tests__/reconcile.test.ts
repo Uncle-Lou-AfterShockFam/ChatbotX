@@ -57,13 +57,19 @@ vi.mock("../src/lib/logger", () => ({
 
 // s235: the stalled-enrolment pass (its SQL is pinned by the business
 // real-DB suite sequence-stalled-redispatch.test.ts).
-const { listStalledSpy, redispatchSpy } = vi.hoisted(() => ({
-  listStalledSpy: vi.fn().mockResolvedValue([]),
-  redispatchSpy: vi.fn(),
-}))
+// s236: the unadvanced-enrolment pass (sequence-unadvanced-recovery.test.ts).
+const { listStalledSpy, redispatchSpy, listUnadvancedSpy, recoverSpy } =
+  vi.hoisted(() => ({
+    listStalledSpy: vi.fn().mockResolvedValue([]),
+    redispatchSpy: vi.fn(),
+    listUnadvancedSpy: vi.fn().mockResolvedValue([]),
+    recoverSpy: vi.fn(),
+  }))
 vi.mock("@chatbotx.io/sequence-scheduler", () => ({
   listStalledEnrollments: listStalledSpy,
   redispatchStalledEnrollment: redispatchSpy,
+  listUnadvancedEnrollments: listUnadvancedSpy,
+  recoverUnadvancedEnrollment: recoverSpy,
 }))
 
 const { ReconcileJob } = await import("../src/sequence-scheduler/worker")
@@ -190,6 +196,68 @@ describe("ReconcileJob", () => {
     expect(listStalledSpy).toHaveBeenCalledTimes(2)
     listStalledSpy.mockReset()
     listStalledSpy.mockResolvedValue([])
+  })
+
+  test("reconcile advances unadvanced enrolments BEFORE the stalled pass, page by page", async () => {
+    findManySpy.mockResolvedValue([])
+    const order: string[] = []
+    listUnadvancedSpy
+      .mockImplementationOnce(() => {
+        order.push("unadvanced")
+        return Promise.resolve([
+          { id: "21", workspaceId: "w1" },
+          { id: "22", workspaceId: "w1" },
+        ])
+      })
+      .mockResolvedValueOnce([])
+    listStalledSpy.mockImplementationOnce(() => {
+      order.push("stalled")
+      return Promise.resolve([])
+    })
+    recoverSpy
+      .mockResolvedValueOnce({ kind: "advanced" })
+      .mockRejectedValueOnce(new Error("db blip"))
+    const job = new ReconcileJob({ intervalMs: 1000, cleanupIntervalMs: 1000 })
+    attachScheduler(job)
+
+    await job.reconcile()
+
+    expect(order).toEqual(["unadvanced", "stalled"])
+    expect(listUnadvancedSpy).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ afterId: "22" }),
+    )
+    expect(recoverSpy).toHaveBeenCalledTimes(2)
+    // The advance schedules its own dispatch with the job's scheduler.
+    expect(recoverSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enrollmentId: "21",
+        workspaceId: "w1",
+        scheduler: expect.objectContaining({ addToSchedule: addToScheduleSpy }),
+      }),
+    )
+  })
+
+  test("the unadvanced pass stops on a page that does not advance", async () => {
+    listUnadvancedSpy.mockResolvedValue([{ id: "5", workspaceId: "w1" }])
+    recoverSpy.mockResolvedValue({ kind: "skipped", reason: "not-unadvanced" })
+    const job = new ReconcileJob({ intervalMs: 1000, cleanupIntervalMs: 1000 })
+    attachScheduler(job)
+
+    expect(await job.recoverUnadvanced()).toBe(0)
+    expect(listUnadvancedSpy).toHaveBeenCalledTimes(2)
+    listUnadvancedSpy.mockReset()
+    listUnadvancedSpy.mockResolvedValue([])
+  })
+
+  test("a failing unadvanced pass never stops the stalled pass or the ZSet reconcile", async () => {
+    findManySpy.mockResolvedValue([])
+    listUnadvancedSpy.mockRejectedValueOnce(new Error("db down"))
+    const job = new ReconcileJob({ intervalMs: 1000, cleanupIntervalMs: 1000 })
+    attachScheduler(job)
+
+    await expect(job.reconcile()).resolves.toBeUndefined()
+    expect(listStalledSpy).toHaveBeenCalled()
   })
 
   test("a failing stalled pass never fails the ZSet reconcile", async () => {
