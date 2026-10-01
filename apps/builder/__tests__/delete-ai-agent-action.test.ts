@@ -16,8 +16,8 @@ vi.mock("@/features/common/schema", () => ({
 }))
 
 // ── safe-action client spies ────────────────────────────────────────────────
-// `deleteAIAgentAction` must be built on `workspaceActionClientAllowExpired`
-// (which verifies the caller is a member of the bound workspaceId before
+// `deleteAIAgentAction` must be built on `flowsActionClientAllowExpired`
+// (`workspaceActionClientAllowExpired` + the s233a `flows` gate, which verifies the caller is a member of the bound workspaceId before
 // running) rather than the bare `authActionClient` (which only checks the
 // caller is logged in). Using `authActionClient` here was a cross-tenant IDOR:
 // any authenticated user could delete AI Agents in a workspace they don't
@@ -47,8 +47,8 @@ function makeClientStub(name: string) {
 
 vi.mock("@/lib/safe-action", () => ({
   authActionClient: makeClientStub("authActionClient"),
-  workspaceActionClientAllowExpired: makeClientStub(
-    "workspaceActionClientAllowExpired",
+  flowsActionClientAllowExpired: makeClientStub(
+    "flowsActionClientAllowExpired",
   ),
 }))
 
@@ -67,9 +67,7 @@ beforeEach(() => {
 
 describe("deleteAIAgentAction", () => {
   test("is built on the workspace-scoped client, not the bare auth client", () => {
-    expect(deleteAIAgentAction.__client).toBe(
-      "workspaceActionClientAllowExpired",
-    )
+    expect(deleteAIAgentAction.__client).toBe("flowsActionClientAllowExpired")
   })
 
   test("calls aiAgentService.delete with the bound workspaceId and requested ids", async () => {

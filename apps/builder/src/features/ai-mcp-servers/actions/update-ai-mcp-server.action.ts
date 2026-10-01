@@ -7,11 +7,11 @@ import { resolveBotFieldVariableText } from "@chatbotx.io/variables"
 import { getTranslations } from "next-intl/server"
 import { returnValidationErrors } from "next-safe-action"
 import { isValidationException } from "@/lib/errors/validation-exception"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { flowsActionClient } from "@/lib/safe-action"
 import { mergeStoredAuth } from "../lib/merge-stored-auth"
 import { updatePrivateAIMcpServerRequest } from "../schema/action"
 
-export const updateAIMcpServerAction = workspaceActionClient
+export const updateAIMcpServerAction = flowsActionClient
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .inputSchema(updatePrivateAIMcpServerRequest)
   .action(async (props) => {

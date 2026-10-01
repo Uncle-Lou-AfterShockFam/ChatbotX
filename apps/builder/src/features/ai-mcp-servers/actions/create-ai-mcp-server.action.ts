@@ -6,10 +6,10 @@ import { getTranslations } from "next-intl/server"
 import { returnValidationErrors } from "next-safe-action"
 import { workspaceIdrequestParams } from "@/features/common/schema"
 import { isValidationException } from "@/lib/errors/validation-exception"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { flowsActionClient } from "@/lib/safe-action"
 import { createPrivateAIMcpServerRequest } from "../schema/action"
 
-export const createAIMcpServerAction = workspaceActionClient
+export const createAIMcpServerAction = flowsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(createPrivateAIMcpServerRequest)
   .action(async ({ bindArgsParsedInputs: [workspaceId], parsedInput }) => {

@@ -322,3 +322,28 @@ export const requireCallHistoryAccess = createMiddleware<{
 export const callHistoryActionClient = workspaceActionClientAllowExpired.use(
   requireCallHistoryAccess,
 )
+
+/**
+ * The AI tools (agents, files, functions, MCP servers): the `flows`
+ * permission the `(ai)` layout already applies, so a member without it cannot
+ * write AI tools by calling the action directly (s233a). superAdmin passes via
+ * hasWorkspacePermission.
+ */
+export const requireFlowsAccess = createMiddleware<{
+  ctx: { workspaceMemberPermissions: PermissionsInput }
+}>().define(async ({ ctx, next }) => {
+  if (!hasWorkspacePermission(ctx.workspaceMemberPermissions, "flows")) {
+    throw new ChatbotXException(
+      "Flows access required",
+      "flowsAccessRequired",
+      403,
+    )
+  }
+  return await next({ ctx })
+})
+
+export const flowsActionClient = workspaceActionClient.use(requireFlowsAccess)
+
+/** Deletes stay open on an expired workspace (invariant #14), still `flows`-gated. */
+export const flowsActionClientAllowExpired =
+  workspaceActionClientAllowExpired.use(requireFlowsAccess)

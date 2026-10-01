@@ -4,10 +4,10 @@ import { aiFileService } from "@chatbotx.io/business"
 import { ChatbotXException } from "@chatbotx.io/business/errors"
 import { getTranslations } from "next-intl/server"
 import { workspaceIdrequestParams } from "@/features/common/schema"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { flowsActionClient } from "@/lib/safe-action"
 import { createAIFileRequest } from "../schema"
 
-export const createAIFileAction = workspaceActionClient
+export const createAIFileAction = flowsActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(createAIFileRequest)
   .action(async ({ bindArgsParsedInputs, parsedInput }) => {

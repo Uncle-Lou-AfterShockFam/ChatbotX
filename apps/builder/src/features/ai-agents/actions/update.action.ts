@@ -3,9 +3,9 @@
 import { aiAgentService } from "@chatbotx.io/business"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import { updateAIAgentRequest } from "@/features/ai-agents/schema/action"
-import { workspaceActionClient } from "@/lib/safe-action"
+import { flowsActionClient } from "@/lib/safe-action"
 
-export const updateAIAgentAction = workspaceActionClient
+export const updateAIAgentAction = flowsActionClient
   .bindArgsSchemas([zodBigintAsString(), zodBigintAsString()])
   .inputSchema(updateAIAgentRequest)
   .action(async (props) => {

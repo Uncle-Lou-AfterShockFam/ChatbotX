@@ -2,7 +2,7 @@ import { ChatbotXException } from "@chatbotx.io/business/errors"
 import { normalizeError } from "universal-error-normalizer"
 import z from "zod"
 import { withWorkspaceIdSchema } from "@/features/workspaces/schema/resource"
-import { workspaceAuthorizedMidddleware } from "@/middlewares/auth"
+import { flowsAuthorizedMiddleware } from "@/middlewares/auth"
 import { authorizedAPI } from "@/orpc"
 import { validateAIMcpServer } from "../actions/validate-ai-mcp-server.action"
 import { resolveValidateAuth } from "../lib/resolve-validate-auth"
@@ -22,7 +22,7 @@ export const aiMcpServersAuthenticatedAPI = {
       tags: ["AI"],
     })
     .input(validatePrivateAIMcpServerRequest.and(withWorkspaceIdSchema))
-    .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+    .use(flowsAuthorizedMiddleware, (input) => input.workspaceId)
     .output(z.any())
     .handler(async ({ input }) => {
       const auth = await resolveValidateAuth(input)
@@ -42,7 +42,7 @@ export const aiMcpServersAuthenticatedAPI = {
       tags: ["AI MCP Servers"],
     })
     .input(listAIMcpServersRequest)
-    .use(workspaceAuthorizedMidddleware, (input) => input.workspaceId)
+    .use(flowsAuthorizedMiddleware, (input) => input.workspaceId)
     .output(listAIMcpServersResponse)
     .handler(async ({ input }) => await listAIMcpServers(input)),
 }
