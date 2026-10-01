@@ -1,0 +1,52 @@
+import "server-only"
+
+import { contactInboxService, conversationService } from "@chatbotx.io/business"
+import { ChatbotXException } from "@chatbotx.io/business/errors"
+import { createMessageRepository } from "@chatbotx.io/database/repositories"
+import { ChatJobAction, chatQueue } from "@chatbotx.io/worker-config"
+import type { ChangeMessageAttributesRequest } from "../schema/mutation"
+
+export const changeMessageAttributes = async (props: {
+  workspaceId: string
+  conversationId: string
+  parsedInput: ChangeMessageAttributesRequest
+}) => {
+  const { workspaceId, conversationId, parsedInput } = props
+  const { messageId, createdAt, liked, hidden } = parsedInput
+
+  const conversation = await conversationService.findByOrFail({
+    where: { id: conversationId, workspaceId },
+  })
+
+  const repository = await createMessageRepository()
+  const message = await repository.findById({
+    id: messageId,
+    createdAt,
+    workspaceId,
+  })
+  if (!message || message.conversationId !== conversationId) {
+    throw new ChatbotXException("Message not found")
+  }
+
+  const contactInbox = await contactInboxService.findBy({
+    where: { id: message.contactInboxId },
+  })
+  if (!contactInbox) {
+    throw new ChatbotXException("Inbox not found")
+  }
+
+  await Promise.allSettled([
+    chatQueue.add(ChatJobAction.changeChannelMessageState, {
+      type: ChatJobAction.changeChannelMessageState,
+      data: {
+        conversation,
+        contactInbox,
+        message: { id: messageId, createdAt: message.createdAt },
+        liked,
+        hidden,
+      },
+    }),
+  ])
+
+  return { success: true, messageId }
+}

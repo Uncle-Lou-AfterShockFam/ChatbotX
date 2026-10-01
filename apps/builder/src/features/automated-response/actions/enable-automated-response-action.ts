@@ -1,19 +1,15 @@
 "use server"
-
-import { automatedResponseService } from "@chatbotx.io/business"
-import {
-  type AutomatedResponseType,
-  automatedResponseTypes,
-} from "@chatbotx.io/database/partials"
+import { automatedResponseTypes } from "@chatbotx.io/database/partials"
 import { zodBigintAsString } from "@chatbotx.io/utils"
-import z from "zod"
 import { workspaceActionClient } from "@/lib/safe-action"
+import {
+  enableAutomatedResponse,
+  enableRequest,
+} from "../lib/enable-automated-response"
 
-const enableRequest = z.object({
-  status: z.boolean(),
-})
-type EnableRequest = z.infer<typeof enableRequest>
-
+// Only the safe-action wrapper lives here: every export of a "use server"
+// file is a Server Action, and the helper behind it skips this wrapper's
+// input parse and auth, so it stays in a server-only lib module (s232a).
 export const enableAutomatedResponseAction = workspaceActionClient
   .bindArgsSchemas([
     zodBigintAsString(),
@@ -29,15 +25,3 @@ export const enableAutomatedResponseAction = workspaceActionClient
 
     return await enableAutomatedResponse({ workspaceId, id, type }, parsedInput)
   })
-
-export const enableAutomatedResponse = async (
-  ctx: { workspaceId: string; id: string; type: AutomatedResponseType },
-  parsedInput: EnableRequest,
-) => {
-  await automatedResponseService.findOrFail({
-    workspaceId: ctx.workspaceId,
-    id: ctx.id,
-    type: ctx.type,
-  })
-  await automatedResponseService.setStatus(ctx, parsedInput.status)
-}

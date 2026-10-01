@@ -67,17 +67,17 @@ const listMessages = vi.fn()
 vi.mock("@/features/messages/queries", () => ({ listMessages }))
 
 const editMessage = vi.fn()
-vi.mock("@/features/messages/actions/edit-message.action", () => ({
+vi.mock("@/features/messages/lib/edit-message", () => ({
   editMessage,
 }))
 
 const deleteMessage = vi.fn()
-vi.mock("@/features/messages/actions/delete-message.action", () => ({
+vi.mock("@/features/messages/lib/delete-message", () => ({
   deleteMessage,
 }))
 
 const changeMessageAttributes = vi.fn()
-vi.mock("@/features/messages/actions/change-message-attributes.action", () => ({
+vi.mock("@/features/messages/lib/change-message-attributes", () => ({
   changeMessageAttributes,
 }))
 

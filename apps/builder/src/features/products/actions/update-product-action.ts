@@ -13,7 +13,7 @@ export const updateProductAction = workspaceActionClient
       await updateProduct({ workspaceId, productId, ...parsedInput }),
   )
 
-export const updateProduct = async (
+const updateProduct = async (
   input: ProductFormRequest & { workspaceId: string; productId: string },
 ) => {
   await productService.updateFull(input)

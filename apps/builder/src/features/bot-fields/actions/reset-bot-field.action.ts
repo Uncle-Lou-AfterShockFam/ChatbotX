@@ -7,13 +7,6 @@ import {
 } from "@/features/common/schema"
 import { workspaceActionClient } from "@/lib/safe-action"
 
-export const resetBotFields = async (
-  workspaceId: string,
-  ids: string[],
-): Promise<void> => {
-  await botFieldService.bulkClearValues({ workspaceId, ids })
-}
-
 export const resetBotFieldsAction = workspaceActionClient
   .bindArgsSchemas(workspaceIdrequestParams)
   .inputSchema(bulkUpdateIdsRequest)
@@ -23,5 +16,8 @@ export const resetBotFieldsAction = workspaceActionClient
       parsedInput,
     } = props
 
-    await resetBotFields(workspaceId, parsedInput.ids)
+    await botFieldService.bulkClearValues({
+      workspaceId,
+      ids: parsedInput.ids,
+    })
   })

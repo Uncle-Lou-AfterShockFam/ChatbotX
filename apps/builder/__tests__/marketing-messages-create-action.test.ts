@@ -75,7 +75,7 @@ vi.mock("next-intl/server", () => ({
 }))
 
 const { createMarketingMessage } = await import(
-  "@/features/facebook-marketing-messages/actions/create.action"
+  "@/features/facebook-marketing-messages/lib/create-marketing-message"
 )
 
 const workspace = { id: "w1" } as never

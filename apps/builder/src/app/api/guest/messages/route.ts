@@ -14,7 +14,7 @@ import { GUEST_SECRET_HEADER } from "@/features/integration-webchat/lib/guest-co
 import { assertGuestSecret } from "@/features/integration-webchat/lib/guest-secret"
 import { verifyWebchatAccessToken } from "@/features/integration-webchat/lib/webchat-access-token"
 import { findIntegrationWebchat } from "@/features/integration-webchat/queries"
-import { handleCreateWebchatMessage } from "@/features/messages/actions/create-webchat-message.action"
+import { handleCreateWebchatMessage } from "@/features/messages/lib/create-webchat-message"
 import { listMessages } from "@/features/messages/queries"
 import { createWebchatMessageRequest } from "@/features/messages/schema/mutation"
 import { listGuestMessagesRequest } from "@/features/messages/schema/query"

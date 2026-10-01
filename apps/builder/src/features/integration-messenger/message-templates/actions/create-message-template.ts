@@ -9,8 +9,8 @@ import { SdkException } from "@chatbotx.io/sdk"
 import { zodBigintAsString } from "@chatbotx.io/utils"
 import { workspaceActionClient } from "@/lib/safe-action"
 import { buildMessengerMessageTemplateComponents } from "../lib/build-template-components"
+import { syncMessengerMessageTemplatesForIntegration } from "../lib/sync-message-templates"
 import { createMessengerMessageTemplateRequest } from "../schema/mutation"
-import { syncMessengerMessageTemplatesForIntegration } from "./sync-message-templates"
 
 function formatTemplateRejectionMessage({
   rejectionReason,

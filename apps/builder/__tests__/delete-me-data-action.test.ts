@@ -23,7 +23,7 @@ vi.mock("@/lib/workspace/load-servable-workspace", () => ({
 }))
 
 const { handleDeleteMeData } = await import(
-  "../src/features/system-fields/actions/delete-me-data.action"
+  "../src/features/system-fields/lib/delete-me-data"
 )
 
 describe("delete me data action", () => {

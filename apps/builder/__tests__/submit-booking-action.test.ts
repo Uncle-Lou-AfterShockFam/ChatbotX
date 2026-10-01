@@ -61,7 +61,7 @@ vi.mock("@/lib/log", () => ({
 }))
 
 const { submitBooking } = await import(
-  "../src/app/booking/picker/actions/submit-booking.action"
+  "../src/app/booking/picker/lib/submit-booking"
 )
 
 describe("submitBookingAction", () => {
