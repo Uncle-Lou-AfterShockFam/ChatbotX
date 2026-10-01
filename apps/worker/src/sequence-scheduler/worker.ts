@@ -1,6 +1,10 @@
 import { sequenceDispatchRepository } from "@chatbotx.io/database/repositories"
 import { sequenceConnections } from "@chatbotx.io/redis"
 import { SchedulerClient } from "@chatbotx.io/scheduler"
+import {
+  listStalledEnrollments,
+  redispatchStalledEnrollment,
+} from "@chatbotx.io/sequence-scheduler"
 import { ensureBootstrapped } from "../lib/bootstrap"
 import { logger } from "../lib/logger"
 
@@ -11,6 +15,8 @@ const RETENTION_BATCH_SIZE_DEFAULT = 1000
 const RETENTION_INTERVAL_MS_DEFAULT = 86_400_000
 const RETENTION_TTL_DAYS_DEFAULT = 30
 const BATCH_SIZE = 1000
+/** s235: at most this many stalled-enrolment pages (of 200) per pass. */
+const STALLED_MAX_PAGES = 500
 const TOTAL_BUCKETS = 256
 
 interface ReconcileJobOptions {
@@ -29,6 +35,8 @@ export class ReconcileJob {
   private lastReconcileRun: Date | null = null
   private lastCleanupRun: Date | null = null
   private lastRetentionRun: Date | null = null
+  private lastStalledRun: Date | null = null
+  private lastStalledRedispatched = 0
   private _scheduler: SchedulerClient | null = null
   private readonly options: ReconcileJobOptions
 
@@ -130,6 +138,80 @@ export class ReconcileJob {
       logger.error(error, "Error in reconciliation")
       throw error
     }
+    // After the ZSet pass, on the same interval: its own failure is logged and
+    // never fails the ZSet reconcile.
+    await this.redispatchStalled().catch((err: unknown) => {
+      logger.error({ err }, "Error re-dispatching stalled sequence enrolments")
+    })
+  }
+
+  /**
+   * s235: an active, due enrolment whose next step has no dispatch (its row
+   * was cascaded away: a deleted step or inbox; or never made) is stalled for
+   * good, since only a finished dispatch advances it. Re-dispatch each one
+   * (`redispatchStalledEnrollment` locks and re-checks it).
+   */
+  async redispatchStalled(now = new Date()): Promise<number> {
+    let afterId: string | undefined
+    let redispatched = 0
+    for (let pages = 0; ; pages++) {
+      if (pages >= STALLED_MAX_PAGES) {
+        logger.error(
+          { pages, afterId },
+          "stalled enrolments: page cap reached; the rest wait for the next pass",
+        )
+        break
+      }
+      const page = await listStalledEnrollments({ now, afterId })
+      const lastId = page.at(-1)?.id
+      if (!lastId) {
+        break
+      }
+      // Paging must move forward (ids ascend); never re-read a page forever.
+      if (afterId !== undefined && BigInt(lastId) <= BigInt(afterId)) {
+        logger.error(
+          { afterId, lastId },
+          "stalled enrolments: paging did not advance; pass stopped",
+        )
+        break
+      }
+      for (const enrollment of page) {
+        const result = await redispatchStalledEnrollment({
+          workspaceId: enrollment.workspaceId,
+          enrollmentId: enrollment.id,
+          now,
+        }).catch((err: unknown) => {
+          logger.error(
+            { err, enrollmentId: enrollment.id },
+            "stalled enrolment: re-dispatch failed",
+          )
+          return null
+        })
+        if (result?.kind === "redispatched") {
+          redispatched += 1
+          // A failed schedule is picked up by the next ZSet reconcile.
+          await this.scheduler
+            .addToSchedule(
+              result.dispatch.bucket,
+              result.dispatch.id,
+              Number(result.dispatch.runAtMs),
+            )
+            .catch(() => undefined)
+          logger.warn(
+            {
+              enrollmentId: enrollment.id,
+              workspaceId: enrollment.workspaceId,
+              dispatchId: result.dispatch.id,
+            },
+            "stalled enrolment re-dispatched",
+          )
+        }
+      }
+      afterId = lastId
+    }
+    this.lastStalledRun = new Date()
+    this.lastStalledRedispatched = redispatched
+    return redispatched
   }
 
   stop() {
@@ -245,6 +327,8 @@ export class ReconcileJob {
     lastReconcileRun: Date | null
     lastCleanupRun: Date | null
     lastRetentionRun: Date | null
+    lastStalledRun: Date | null
+    lastStalledRedispatched: number
     reconcileIntervalMs: number
     cleanupIntervalMs: number
     retentionIntervalMs: number
@@ -254,6 +338,8 @@ export class ReconcileJob {
       lastReconcileRun: this.lastReconcileRun,
       lastCleanupRun: this.lastCleanupRun,
       lastRetentionRun: this.lastRetentionRun,
+      lastStalledRun: this.lastStalledRun,
+      lastStalledRedispatched: this.lastStalledRedispatched,
       reconcileIntervalMs: this.options.intervalMs,
       cleanupIntervalMs: this.options.cleanupIntervalMs,
       retentionIntervalMs: this.options.retentionIntervalMs,
