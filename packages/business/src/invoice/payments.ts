@@ -1,4 +1,4 @@
-import { and, db, eq, isNull } from "@chatbotx.io/database/client"
+import { and, db, eq, isNull, lt, or } from "@chatbotx.io/database/client"
 import {
   decimalStringToMinor,
   type InvoiceCheckoutKind,
@@ -195,24 +195,169 @@ export async function applyCheckoutPayment(
 }
 
 /**
+ * A marks claim older than this with no `marksDoneAt` belongs to a run that
+ * died after its claim (s235): the next delivery may claim it again. The
+ * marks are a few row writes, so a live run never holds a claim this long.
+ */
+export const PAYMENT_MARKS_LEASE_MS = 10 * 60 * 1000
+
+/** The ledger row of one PaymentIntent on one invoice, if recorded. */
+export async function findCheckoutPayment(
+  invoiceId: string,
+  paymentIntentId: string,
+): Promise<InvoicePaymentModel | null> {
+  const [row] = await db
+    .select()
+    .from(invoicePaymentModel)
+    .where(
+      and(
+        eq(invoicePaymentModel.invoiceId, invoiceId),
+        eq(invoicePaymentModel.providerPaymentId, paymentIntentId),
+      ),
+    )
+    .limit(1)
+  return row ?? null
+}
+
+/**
  * Claim a payment's marks: the claim's timestamp (this caller runs them), or
- * null when another caller holds or ran them.
+ * null when another caller holds a live claim or the marks are done. A claim
+ * past `PAYMENT_MARKS_LEASE_MS` that never finished is taken over (s235: a
+ * crash between the claim and `finishPaymentMarks` lost the marks for good).
  */
 export async function claimPaymentMarks(
   paymentId: string,
 ): Promise<Date | null> {
   const at = new Date()
+  const stale = new Date(at.getTime() - PAYMENT_MARKS_LEASE_MS)
   const [claimed] = await db
     .update(invoicePaymentModel)
     .set({ markedAt: at, updatedAt: at })
     .where(
       and(
         eq(invoicePaymentModel.id, paymentId),
-        isNull(invoicePaymentModel.markedAt),
+        isNull(invoicePaymentModel.marksDoneAt),
+        or(
+          isNull(invoicePaymentModel.markedAt),
+          lt(invoicePaymentModel.markedAt, stale),
+        ),
       ),
     )
     .returning({ id: invoicePaymentModel.id })
   return claimed ? at : null
+}
+
+/** THIS caller's marks ran: no later delivery may run them again. */
+export async function finishPaymentMarks(
+  paymentId: string,
+  claimedAt: Date,
+): Promise<void> {
+  const at = new Date()
+  await db
+    .update(invoicePaymentModel)
+    .set({ marksDoneAt: at, updatedAt: at })
+    .where(
+      and(
+        eq(invoicePaymentModel.id, paymentId),
+        eq(invoicePaymentModel.markedAt, claimedAt),
+      ),
+    )
+}
+
+export type AppliedRefund =
+  /** Recorded now: the invoice moved from `from` to `row.status`. */
+  | {
+      kind: "applied"
+      row: InvoiceModel
+      payment: InvoicePaymentModel
+      from: InvoiceModel["status"]
+    }
+  /** This payment's refund was recorded before (a redelivery). */
+  | { kind: "known"; row: InvoiceModel }
+  /** No ledger row for that PaymentIntent on this invoice. */
+  | { kind: "unknownPayment"; row: InvoiceModel | null }
+
+/** `lastError` keeps earlier operator notes (a "refund it" flag); bounded. */
+const LAST_ERROR_MAX = 2000
+const appendNote = (previous: string | null, note: string) => {
+  const joined = previous ? `${previous} | ${note}` : note
+  return joined.length > LAST_ERROR_MAX
+    ? joined.slice(joined.length - LAST_ERROR_MAX)
+    : joined
+}
+
+/**
+ * s235 (owner: "roll back what's owed"): Stripe refunded ONE payment of a
+ * deposit invoice in full. Under the invoice's row lock, the payment is
+ * marked refunded, `amountPaid` becomes the sum of the payments still held,
+ * and the status follows it:
+ * - nothing held: `refunded` when the invoice was once fully paid, else `open`
+ *   (a refunded deposit: the pay link offers the deposit again);
+ * - part held: `partiallyPaid` (the pay link collects the rest as a balance);
+ * - the total held: `paid`.
+ * The pay session is spent either way, and an operator note is appended.
+ */
+export async function applyCheckoutRefund(
+  tx: Tx,
+  props: { invoiceId: string; paymentIntentId: string; now: Date },
+): Promise<AppliedRefund> {
+  const [row] = await tx
+    .select()
+    .from(invoiceModel)
+    .where(eq(invoiceModel.id, props.invoiceId))
+    .for("update")
+  if (!row) {
+    return { kind: "unknownPayment", row: null }
+  }
+  const payments = await tx
+    .select()
+    .from(invoicePaymentModel)
+    .where(eq(invoicePaymentModel.invoiceId, row.id))
+  const payment = payments.find(
+    (p) => p.providerPaymentId === props.paymentIntentId,
+  )
+  if (!payment) {
+    return { kind: "unknownPayment", row }
+  }
+  if (payment.refundedAt) {
+    return { kind: "known", row }
+  }
+  const heldMinor = payments
+    .filter((p) => p.id !== payment.id && !p.refundedAt)
+    .reduce((sum, p) => sum + minor(row, p.amount), 0n)
+  const totalMinor = minor(row, row.total)
+  let status: InvoiceModel["status"] = "partiallyPaid"
+  if (heldMinor === 0n) {
+    status = row.paidAt ? "refunded" : "open"
+  } else if (heldMinor >= totalMinor) {
+    status = "paid"
+  }
+  const [refunded] = await tx
+    .update(invoicePaymentModel)
+    .set({ refundedAt: props.now, updatedAt: props.now })
+    .where(eq(invoicePaymentModel.id, payment.id))
+    .returning()
+  const [updated] = await tx
+    .update(invoiceModel)
+    .set({
+      status,
+      amountPaid: minorToDecimalString(heldMinor, row.currency),
+      checkoutSessionId: null,
+      checkoutMintedAt: null,
+      checkoutKind: null,
+      checkoutGeneration: row.checkoutGeneration + 1,
+      lastError: appendNote(
+        row.lastError,
+        `Payment ${payment.providerPaymentId} (${payment.kind} ${payment.amount}) was refunded in Stripe: the invoice moved ${row.status} -> ${status}`,
+      ),
+      updatedAt: props.now,
+    })
+    .where(eq(invoiceModel.id, row.id))
+    .returning()
+  if (!(refunded && updated)) {
+    throw new Error("invoice refund: update returned no row")
+  }
+  return { kind: "applied", row: updated, payment: refunded, from: row.status }
 }
 
 /** Hand back THIS caller's claim after its marks failed, so a redelivery runs them. */

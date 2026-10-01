@@ -29,7 +29,10 @@ const SECRET_KEY = ["sk", "test", "depositSuiteKey0123456789"].join("_")
 const m = vi.hoisted(() => ({
   integrations: new Map<string, string>(),
   sessionRetrieve: vi.fn(),
+  chargeRetrieve: vi.fn(),
+  piRetrieve: vi.fn(),
   marks: vi.fn(async () => undefined),
+  statusMarks: vi.fn(async () => undefined),
   emitPaid: vi.fn(async () => undefined),
   emitPartiallyPaid: vi.fn(async () => undefined),
   token: 0,
@@ -113,11 +116,16 @@ vi.mock("../../src/integration-stripe/client", async (importOriginal) => {
       checkout: {
         sessions: { retrieve: (...a: unknown[]) => m.sessionRetrieve(...a) },
       },
+      charges: { retrieve: (...a: unknown[]) => m.chargeRetrieve(...a) },
+      paymentIntents: { retrieve: (...a: unknown[]) => m.piRetrieve(...a) },
+      // A checkout payment has no Stripe Invoice behind it.
+      invoicePayments: { list: async () => ({ data: [] }) },
     }),
   }
 })
 vi.mock("../../src/invoice/contact-marks", () => ({
   markInvoiceOnContact: (...a: unknown[]) => m.marks(...(a as [])),
+  markInvoiceStatusOnContact: (...a: unknown[]) => m.statusMarks(...(a as [])),
   markInvoiceCreated: vi.fn(async () => undefined),
 }))
 vi.mock("../../src/invoice/document", async (importOriginal) => ({
@@ -142,8 +150,10 @@ const databaseUrl = requireRealDatabaseUrl()
 
 const { invoiceService } = await import("../../src/invoice/service")
 const { handleStripeWebhook } = await import("../../src/invoice/stripe-webhook")
-const { applyCheckoutPayment, claimPaymentMarks } = await import(
-  "../../src/invoice/payments"
+const { applyCheckoutPayment, claimPaymentMarks, PAYMENT_MARKS_LEASE_MS } =
+  await import("../../src/invoice/payments")
+const { invoiceEventModel, invoicePaymentModel } = await import(
+  "@chatbotx.io/database/schema"
 )
 const signer = new Stripe(SECRET_KEY).webhooks
 
@@ -628,3 +638,418 @@ describe.skipIf(!databaseUrl)("signed checkout webhook, end to end", () => {
     expect(row?.lastError).toContain("pi_h3f")
   })
 })
+
+describe.skipIf(!databaseUrl)(
+  "s235 B-3: a crash between the payment commit and its marks",
+  () => {
+    const depositSession = (
+      invoice: { id: string; workspaceId: string },
+      pi: string,
+    ) => ({
+      id: `cs_${pi}`,
+      object: "checkout.session",
+      mode: "payment",
+      status: "complete",
+      payment_status: "paid",
+      amount_total: 5000,
+      currency: "usd",
+      payment_intent: pi,
+      metadata: {
+        hub_invoice_id: invoice.id,
+        hub_workspace_id: invoice.workspaceId,
+        hub_payment_kind: "deposit",
+        hub_payment_minor: "5000",
+      },
+    })
+
+    /** What a process killed right after the webhook's transaction leaves behind. */
+    async function crashedAfterCommit(eventId: string, pi: string) {
+      const { invoice } = await createDepositInvoice()
+      const integrationId = m.integrations.get(invoice.workspaceId) as string
+      const applied = await apply(invoice.id, "deposit", 5000n, pi)
+      if (applied.kind !== "applied") {
+        throw new Error("deposit not applied")
+      }
+      await db.insert(invoiceEventModel).values({
+        workspaceId: invoice.workspaceId,
+        integrationId,
+        invoiceId: invoice.id,
+        providerEventId: eventId,
+        type: "checkout.session.completed",
+        outcome: "received",
+      })
+      m.sessionRetrieve.mockResolvedValue(depositSession(invoice, pi))
+      return { invoice, integrationId, payment: applied.payment }
+    }
+
+    test("before the claim: Stripe's redelivery of the SAME event runs the marks once", async () => {
+      const { invoice, integrationId, payment } = await crashedAfterCommit(
+        "evt_crash1",
+        "pi_crash1",
+      )
+      const first = await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted("evt_crash1", "cs_x"),
+      })
+      expect(first.outcome).toBe("noop")
+      expect(m.marks).toHaveBeenCalledTimes(1)
+      expect(m.marks).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "partiallyPaid" }),
+      )
+      expect(m.emitPartiallyPaid).toHaveBeenCalledTimes(1)
+      const [row] = await paymentRows(invoice.id)
+      expect(row?.id).toBe(payment.id)
+      expect(row?.marksDoneAt).toBeInstanceOf(Date)
+      // A later redelivery is a plain duplicate: the marks are done.
+      const again = await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted("evt_crash1", "cs_x"),
+      })
+      expect(again).toEqual({ outcome: "duplicate", detail: "evt_crash1" })
+      expect(m.marks).toHaveBeenCalledTimes(1)
+    })
+
+    test("after the claim: a claim older than the lease is taken over; a fresh one is not", async () => {
+      const { invoice, integrationId, payment } = await crashedAfterCommit(
+        "evt_crash2",
+        "pi_crash2",
+      )
+      await db
+        .update(invoicePaymentModel)
+        .set({ markedAt: new Date(Date.now() - 5000) })
+        .where(sql`id = ${payment.id}`)
+      const live = await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted("evt_crash2", "cs_x"),
+      })
+      expect(live).toEqual({ outcome: "noop", detail: "already-marked" })
+      expect(m.marks).not.toHaveBeenCalled()
+
+      await db
+        .update(invoicePaymentModel)
+        .set({ markedAt: new Date(Date.now() - PAYMENT_MARKS_LEASE_MS - 1000) })
+        .where(sql`id = ${payment.id}`)
+      const stale = await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted("evt_crash2", "cs_x"),
+      })
+      expect(stale.outcome).toBe("noop")
+      expect(m.marks).toHaveBeenCalledTimes(1)
+      expect(m.emitPartiallyPaid).toHaveBeenCalledTimes(1)
+      expect((await paymentRows(invoice.id))[0]?.marksDoneAt).toBeInstanceOf(
+        Date,
+      )
+    })
+
+    test("8 concurrent redeliveries after a crash mark exactly once", async () => {
+      const { integrationId } = await crashedAfterCommit(
+        "evt_crash3",
+        "pi_crash3",
+      )
+      const results = await Promise.all(
+        Array.from({ length: 8 }, () =>
+          handleStripeWebhook({
+            integrationId,
+            ...signedCompleted("evt_crash3", "cs_x"),
+          }),
+        ),
+      )
+      expect(m.marks).toHaveBeenCalledTimes(1)
+      expect(m.emitPartiallyPaid).toHaveBeenCalledTimes(1)
+      expect(results.every((r) => r.outcome !== "retry")).toBe(true)
+    })
+
+    test("a done payment is never re-claimed, even past the lease", async () => {
+      const { payment } = await crashedAfterCommit("evt_crash4", "pi_crash4")
+      const at = new Date(Date.now() - PAYMENT_MARKS_LEASE_MS - 60_000)
+      await db
+        .update(invoicePaymentModel)
+        .set({ markedAt: at, marksDoneAt: at })
+        .where(sql`id = ${payment.id}`)
+      expect(await claimPaymentMarks(payment.id)).toBeNull()
+    })
+  },
+)
+
+describe.skipIf(!databaseUrl)(
+  "s235 B-3: refunding ONE payment rolls back what is owed",
+  () => {
+    const paySession = (
+      invoice: { id: string; workspaceId: string },
+      kind: "deposit" | "balance",
+      minor: number,
+      pi: string,
+    ) => ({
+      id: `cs_${pi}`,
+      object: "checkout.session",
+      mode: "payment",
+      status: "complete",
+      payment_status: "paid",
+      amount_total: minor,
+      currency: "usd",
+      payment_intent: pi,
+      metadata: {
+        hub_invoice_id: invoice.id,
+        hub_workspace_id: invoice.workspaceId,
+        hub_payment_kind: kind,
+        hub_payment_minor: String(minor),
+      },
+    })
+
+    async function pay(
+      invoice: { id: string; workspaceId: string },
+      integrationId: string,
+      kind: "deposit" | "balance",
+      minor: number,
+      pi: string,
+    ) {
+      m.sessionRetrieve.mockResolvedValueOnce(
+        paySession(invoice, kind, minor, pi),
+      )
+      const result = await handleStripeWebhook({
+        integrationId,
+        ...signedCompleted(`evt_${pi}`, `cs_${pi}`),
+      })
+      expect(result.outcome).toBe("applied")
+    }
+
+    const piMetadata = new Map<string, Record<string, string>>()
+
+    function refund(
+      invoice: { id: string; workspaceId: string },
+      integrationId: string,
+      pi: string,
+      kind: "deposit" | "balance",
+      minor: number,
+      eventId = `evt_ref_${pi}`,
+    ) {
+      // Keyed by id: concurrent refunds of different payments must not share
+      // one mocked answer.
+      m.chargeRetrieve.mockImplementation(async (id: string) => ({
+        id,
+        refunded: true,
+        payment_intent: id.slice("ch_".length),
+      }))
+      piMetadata.set(pi, paySession(invoice, kind, minor, pi).metadata)
+      m.piRetrieve.mockImplementation(async (id: string) => ({
+        id,
+        metadata: piMetadata.get(id),
+      }))
+      const payload = JSON.stringify({
+        id: eventId,
+        object: "event",
+        api_version: "2026-05-27.dahlia",
+        created: Math.floor(Date.now() / 1000),
+        livemode: false,
+        type: "charge.refunded",
+        data: { object: { id: `ch_${pi}`, object: "charge" } },
+      })
+      return handleStripeWebhook({
+        integrationId,
+        rawBody: Buffer.from(payload),
+        signature: signer.generateTestHeaderString({
+          payload,
+          secret: WEBHOOK_SECRET,
+        }),
+      })
+    }
+
+    async function paidInFull() {
+      const { invoice } = await createDepositInvoice()
+      const integrationId = m.integrations.get(invoice.workspaceId) as string
+      await pay(invoice, integrationId, "deposit", 5000, `pi_d_${invoice.id}`)
+      await pay(invoice, integrationId, "balance", 15_000, `pi_b_${invoice.id}`)
+      expect((await invoiceRow(invoice.id))?.status).toBe("paid")
+      vi.clearAllMocks()
+      return { invoice, integrationId }
+    }
+
+    test("the balance refunded on a paid invoice: partiallyPaid holding the deposit; the link collects the balance again", async () => {
+      const { invoice, integrationId } = await paidInFull()
+      const result = await refund(
+        invoice,
+        integrationId,
+        `pi_b_${invoice.id}`,
+        "balance",
+        15_000,
+      )
+      expect(result.outcome).toBe("applied")
+      const row = await invoiceRow(invoice.id)
+      expect(row).toMatchObject({
+        status: "partiallyPaid",
+        amountPaid: "50.00",
+        checkoutSessionId: null,
+      })
+      expect(row?.lastError).toContain("paid -> partiallyPaid")
+      expect(m.statusMarks).toHaveBeenCalledWith({
+        invoice: expect.objectContaining({ status: "partiallyPaid" }),
+      })
+      // No paid / deposit marks or events re-fire on a rollback.
+      expect(m.marks).not.toHaveBeenCalled()
+      expect(m.emitPaid).not.toHaveBeenCalled()
+      expect(m.emitPartiallyPaid).not.toHaveBeenCalled()
+      const refunded = (await paymentRows(invoice.id)).find(
+        (p) => p.kind === "balance",
+      )
+      expect(refunded?.refundedAt).toBeInstanceOf(Date)
+      // A NEW balance payment pays it again.
+      await pay(
+        invoice,
+        integrationId,
+        "balance",
+        15_000,
+        `pi_b2_${invoice.id}`,
+      )
+      expect(await invoiceRow(invoice.id)).toMatchObject({
+        status: "paid",
+        amountPaid: "200.00",
+      })
+    })
+
+    test("the deposit refunded while partly paid: open again, the deposit is payable again", async () => {
+      const { invoice } = await createDepositInvoice()
+      const integrationId = m.integrations.get(invoice.workspaceId) as string
+      await pay(invoice, integrationId, "deposit", 5000, `pi_d_${invoice.id}`)
+      const result = await refund(
+        invoice,
+        integrationId,
+        `pi_d_${invoice.id}`,
+        "deposit",
+        5000,
+      )
+      expect(result.outcome).toBe("applied")
+      expect(await invoiceRow(invoice.id)).toMatchObject({
+        status: "open",
+        amountPaid: "0.00",
+        paidAt: null,
+      })
+      await pay(invoice, integrationId, "deposit", 5000, `pi_d2_${invoice.id}`)
+      expect((await invoiceRow(invoice.id))?.status).toBe("partiallyPaid")
+    })
+
+    test("both refunded on a paid invoice: deposit first -> partiallyPaid (balance held), then refunded", async () => {
+      const { invoice, integrationId } = await paidInFull()
+      await refund(
+        invoice,
+        integrationId,
+        `pi_d_${invoice.id}`,
+        "deposit",
+        5000,
+      )
+      expect(await invoiceRow(invoice.id)).toMatchObject({
+        status: "partiallyPaid",
+        amountPaid: "150.00",
+      })
+      await refund(
+        invoice,
+        integrationId,
+        `pi_b_${invoice.id}`,
+        "balance",
+        15_000,
+      )
+      const row = await invoiceRow(invoice.id)
+      expect(row).toMatchObject({ status: "refunded", amountPaid: "0.00" })
+      expect(row?.lastError).toContain("partiallyPaid -> refunded")
+    })
+
+    test("a redelivered refund and a second event for the same refund change nothing", async () => {
+      const { invoice, integrationId } = await paidInFull()
+      const pi = `pi_b_${invoice.id}`
+      await refund(invoice, integrationId, pi, "balance", 15_000, "evt_r1")
+      const dup = await refund(
+        invoice,
+        integrationId,
+        pi,
+        "balance",
+        15_000,
+        "evt_r1",
+      )
+      expect(dup).toEqual({ outcome: "duplicate", detail: "evt_r1" })
+      const other = await refund(
+        invoice,
+        integrationId,
+        pi,
+        "balance",
+        15_000,
+        "evt_r2",
+      )
+      expect(other.outcome).toBe("noop")
+      expect(await invoiceRow(invoice.id)).toMatchObject({
+        status: "partiallyPaid",
+        amountPaid: "50.00",
+      })
+    })
+
+    test("6 concurrent refund events of both payments: the ledger and the row agree", async () => {
+      for (let round = 0; round < 3; round += 1) {
+        const { invoice, integrationId } = await paidInFull()
+        await Promise.all(
+          Array.from({ length: 6 }, (_, i) =>
+            i % 2 === 0
+              ? refund(
+                  invoice,
+                  integrationId,
+                  `pi_d_${invoice.id}`,
+                  "deposit",
+                  5000,
+                  `evt_cd${i}_${round}`,
+                )
+              : refund(
+                  invoice,
+                  integrationId,
+                  `pi_b_${invoice.id}`,
+                  "balance",
+                  15_000,
+                  `evt_cb${i}_${round}`,
+                ),
+          ),
+        )
+        const payments = await paymentRows(invoice.id)
+        expect(payments.every((p) => p.refundedAt instanceof Date)).toBe(true)
+        expect(await invoiceRow(invoice.id)).toMatchObject({
+          status: "refunded",
+          amountPaid: "0.00",
+        })
+      }
+    })
+
+    test("a refund that arrives before its balance payment was applied is retried, never dropped", async () => {
+      const { invoice } = await createDepositInvoice()
+      const integrationId = m.integrations.get(invoice.workspaceId) as string
+      await pay(invoice, integrationId, "deposit", 5000, `pi_d_${invoice.id}`)
+      const early = await refund(
+        invoice,
+        integrationId,
+        `pi_b_${invoice.id}`,
+        "balance",
+        15_000,
+      )
+      expect(early).toEqual({
+        outcome: "retry",
+        detail: "payment not recorded yet",
+      })
+      expect((await invoiceRow(invoice.id))?.status).toBe("partiallyPaid")
+    })
+
+    test("a refund of a payment the invoice never took is noted, nothing rolls back", async () => {
+      const { invoice } = await createDepositInvoice()
+      const integrationId = m.integrations.get(invoice.workspaceId) as string
+      await pay(invoice, integrationId, "deposit", 5000, `pi_d_${invoice.id}`)
+      // A second deposit (flagged, never applied) refunded by the operator.
+      const result = await refund(
+        invoice,
+        integrationId,
+        "pi_dup",
+        "deposit",
+        5000,
+      )
+      expect(result.outcome).toBe("noop")
+      const row = await invoiceRow(invoice.id)
+      expect(row).toMatchObject({
+        status: "partiallyPaid",
+        amountPaid: "50.00",
+      })
+      expect(row?.lastError).toContain("never took it")
+    })
+  },
+)

@@ -1,5 +1,6 @@
 import { and, db, eq } from "@chatbotx.io/database/client"
 import {
+  decimalStringToMinor,
   hubDocumentMethods,
   INVOICE_DOCUMENT_REF_PREFIX,
   type InvoiceDocumentKind,
@@ -31,7 +32,28 @@ import { amountDueMinor } from "./payments"
 export const invoiceDocumentRef = (
   invoiceId: string,
   kind: InvoiceDocumentKind,
-): string => `${INVOICE_DOCUMENT_REF_PREFIX}${invoiceId}:${kind}`
+  variant?: string,
+): string =>
+  `${INVOICE_DOCUMENT_REF_PREFIX}${invoiceId}:${kind}${variant ? `:${variant}` : ""}`
+
+/**
+ * s235: a refund can leave a partly paid invoice holding something other than
+ * its deposit (the deposit refunded, the balance kept). Its deposit receipt
+ * then states a different amount, so it is a different document: keyed by the
+ * amount held. The usual case (the deposit held) keeps the plain ref.
+ */
+const invoiceDocumentVariant = (
+  invoice: Pick<InvoiceModel, "amountPaid" | "depositAmount" | "currency">,
+  kind: InvoiceDocumentKind,
+): string | undefined => {
+  if (kind !== "depositReceipt" || !invoice.depositAmount) {
+    return
+  }
+  const held = decimalStringToMinor(invoice.amountPaid, invoice.currency)
+  return held === decimalStringToMinor(invoice.depositAmount, invoice.currency)
+    ? undefined
+    : `held-${held}`
+}
 
 const invoiceDocumentTitle = (
   number: number,
@@ -199,7 +221,11 @@ export async function ensureInvoiceDocument(props: {
 }): Promise<ContactDocumentModel> {
   const { invoice, kind } = props
   const now = props.now ?? new Date()
-  const ref = invoiceDocumentRef(invoice.id, kind)
+  const ref = invoiceDocumentRef(
+    invoice.id,
+    kind,
+    invoiceDocumentVariant(invoice, kind),
+  )
   const existing = await documentService.findByRef({
     contactId: invoice.contactId,
     ref,

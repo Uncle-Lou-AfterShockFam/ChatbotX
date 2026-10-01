@@ -119,6 +119,22 @@ export async function markInvoiceCreated(props: {
   }
 }
 
+/**
+ * s235: a refund rolled the invoice back (paid -> partiallyPaid, partiallyPaid
+ * -> open, -> refunded). Only `invoice_last_status` moves: the paid / deposit
+ * ids and tags record that a payment once landed and never re-fire. Idempotent,
+ * so a redelivery may always run it again.
+ */
+export async function markInvoiceStatusOnContact(props: {
+  invoice: InvoiceModel
+}): Promise<void> {
+  await setFields({
+    workspaceId: props.invoice.workspaceId,
+    contactId: props.invoice.contactId,
+    values: { [INVOICE_LAST_STATUS_FIELD]: props.invoice.status },
+  })
+}
+
 /** A provider status change (webhook): status field, and on paid the id + tag. */
 export async function markInvoiceOnContact(props: {
   invoice: InvoiceModel

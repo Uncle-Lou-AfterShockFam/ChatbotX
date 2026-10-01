@@ -273,6 +273,22 @@ vi.mock("../src/invoice/payments", async (importOriginal) => {
       m.state.paymentMarks.delete(id)
       return Promise.resolve()
     },
+    finishPaymentMarks: () => Promise.resolve(),
+    // s235: a redelivered event's payment, for the crash recovery. A payment
+    // whose marks were claimed counts as done here (the lease is real-DB).
+    findCheckoutPayment: (_invoiceId: string, paymentIntentId: string) => {
+      const payment = m.state.payments.get(paymentIntentId)
+      return Promise.resolve(
+        payment
+          ? {
+              ...payment,
+              marksDoneAt: m.state.paymentMarks.has(String(payment.id))
+                ? new Date()
+                : null,
+            }
+          : null,
+      )
+    },
   }
 })
 vi.mock("../src/audit/dispatcher", () => ({ dispatchAuditRecord: vi.fn() }))
@@ -1217,7 +1233,7 @@ describe("stripeCheckout (s207b): checkout.session.* and refunds", () => {
       expectNoSideEffects()
     })
 
-    test("a refund of a deposit flags the invoice and moves nothing", async () => {
+    test("a refund of a payment with no ledger row (never taken) is noted and moves nothing", async () => {
       m.state.hubRow = depositRow("partiallyPaid", {
         amountPaid: "50.00",
         providerInvoiceId: "pi_1",
@@ -1230,7 +1246,7 @@ describe("stripeCheckout (s207b): checkout.session.* and refunds", () => {
       expect(result).toEqual({ outcome: "noop", detail: "unknown-invoice" })
       expect(m.state.updates).toEqual([
         expect.objectContaining({
-          lastError: expect.stringContaining("was refunded in Stripe"),
+          lastError: expect.stringContaining("the invoice never took it"),
         }),
       ])
       expect(m.state.updates[0]).not.toHaveProperty("status")

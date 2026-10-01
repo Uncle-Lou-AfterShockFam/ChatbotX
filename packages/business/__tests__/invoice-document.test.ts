@@ -262,6 +262,32 @@ describe("ensureInvoiceDocument", () => {
     expect(call.html).toContain("Pat Doe")
   })
 
+  test.each([
+    [
+      "holding its deposit: the plain ref",
+      "50.00",
+      "invoice:501:depositReceipt",
+    ],
+    [
+      "holding the balance after a refunded deposit (s235): keyed by the amount held",
+      "150.00",
+      "invoice:501:depositReceipt:held-15000",
+    ],
+  ])("a deposit receipt %s", async (_l, amountPaid, ref) => {
+    m.selects.push([contact], [workspace])
+    await ensureInvoiceDocument({
+      invoice: invoiceRow({
+        status: "partiallyPaid",
+        total: "200.00",
+        depositAmount: "50.00",
+        amountPaid,
+      }) as never,
+      kind: "depositReceipt",
+    })
+    expect(m.findByRef).toHaveBeenCalledWith(expect.objectContaining({ ref }))
+    expect(m.storeRenderedPdf.mock.calls[0]?.[0]).toMatchObject({ ref })
+  })
+
   test("over budget: nothing is rendered and the refusal propagates", async () => {
     m.selects.push([contact], [workspace])
     m.assertGenerateBudget.mockRejectedValue(new Error("Too many documents"))
