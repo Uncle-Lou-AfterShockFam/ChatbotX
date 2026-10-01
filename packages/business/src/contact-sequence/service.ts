@@ -43,6 +43,10 @@ import { logger } from "../logger"
 import { assertIds } from "../validation"
 
 type DrizzleClient = DatabaseClient | Transaction
+
+/** s236: a bigint id as it travels (findReplyGate guards its inputs). */
+const BIGINT_ID = /^\d{1,19}$/
+
 /** lastError is operator-facing: the missing names, capped. */
 const MAX_HOLD_REASON = 500
 type DispatchToRemove = { id: string; bucket: number }
@@ -1523,6 +1527,66 @@ class ContactSequenceService extends BaseService {
       columns: { name: true },
     })
     return sequence?.name
+  }
+
+  /**
+   * s236: what an email-line send of this dispatch needs to gate itself on a
+   * reply at the line: the sequence's stop rule and the enrolment's cycle
+   * (`enrolledAt`, `status`, and `repliedAt`, the answer the hub already
+   * acted on). Workspace-scoped; null when the dispatch or enrolment is gone.
+   */
+  async findReplyGate(props: {
+    dispatchId: string
+    workspaceId: string
+  }): Promise<{
+    stopOnReply: boolean
+    status: string | null
+    enrolledAt: Date
+    repliedAt: Date | null
+  } | null> {
+    // Ids are bigints: anything else can name no dispatch (and must not
+    // reach the query as a cast error).
+    if (
+      !(
+        BIGINT_ID.test(String(props?.dispatchId)) &&
+        BIGINT_ID.test(String(props?.workspaceId))
+      )
+    ) {
+      return null
+    }
+    const [row] = await db
+      .select({
+        stopOnReply: sequenceModel.stopOnReply,
+        status: contactsOnSequenceModel.status,
+        enrolledAt: contactsOnSequenceModel.enrolledAt,
+        repliedAt: contactsOnSequenceModel.repliedAt,
+      })
+      .from(sequenceDispatchModel)
+      .innerJoin(
+        contactsOnSequenceModel,
+        and(
+          eq(contactsOnSequenceModel.id, sequenceDispatchModel.enrollmentId),
+          eq(
+            contactsOnSequenceModel.workspaceId,
+            sequenceDispatchModel.workspaceId,
+          ),
+        ),
+      )
+      .innerJoin(
+        sequenceModel,
+        and(
+          eq(sequenceModel.id, contactsOnSequenceModel.sequenceId),
+          eq(sequenceModel.workspaceId, contactsOnSequenceModel.workspaceId),
+        ),
+      )
+      .where(
+        and(
+          eq(sequenceDispatchModel.id, props.dispatchId),
+          eq(sequenceDispatchModel.workspaceId, props.workspaceId),
+        ),
+      )
+      .limit(1)
+    return row ?? null
   }
 
   /** Load a running dispatch for the sequence-flow worker handler. */

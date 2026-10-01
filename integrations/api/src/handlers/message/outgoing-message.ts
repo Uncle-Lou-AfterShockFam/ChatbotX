@@ -234,6 +234,7 @@ export const sendEmail: ApiActions["sendEmail"] = async ({
   contact,
   email,
   ref,
+  skipIfRepliedSince,
 }) => {
   if (!isPullMode(ctx)) {
     throw new Error(
@@ -248,7 +249,15 @@ export const sendEmail: ApiActions["sendEmail"] = async ({
       text: email.subject,
       messageType: "outgoing",
       contentType: contentTypes.enum.text,
-      contentAttributes: { bulktext: { ref, email } },
+      // s236: the stop-on-reply gate rides beside the mail, as a send
+      // option (the line's email document itself is a CLOSED shape).
+      contentAttributes: {
+        bulktext: {
+          ref,
+          email,
+          ...(skipIfRepliedSince ? { skipIfRepliedSince } : {}),
+        },
+      },
     },
   })
 }

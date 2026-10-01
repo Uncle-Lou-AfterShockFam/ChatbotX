@@ -49,6 +49,7 @@ import {
   renderStepDocument,
 } from "./send-email-document"
 import { buildLineEmail, resolveEmailLine } from "./send-email-line"
+import { lineReplyGateOf } from "./send-email-reply-gate"
 import { isSendSuppressed, SUPPRESSED_ERROR } from "./send-email-suppression"
 import { legacyElementsError, mergeStepText } from "./send-email-text"
 import {
@@ -264,6 +265,8 @@ async function sendViaLine(props: {
   /** s225b: `text` drops the html part; the thread keys travel as-is. */
   format: "html" | "text"
   thread?: ThreadPlan
+  /** s236: a stop-on-reply sequence's cycle start (send-email-reply-gate). */
+  skipIfRepliedSince?: string
 }): Promise<boolean> {
   const { lineContactInbox } = props
   const log = {
@@ -306,6 +309,10 @@ async function sendViaLine(props: {
       contact: { id: lineContactInbox.id, sourceId: lineContactInbox.sourceId },
       email,
       ref: props.ref,
+      // Only when set: every other line mail's envelope stays byte-identical.
+      ...(props.skipIfRepliedSince
+        ? { skipIfRepliedSince: props.skipIfRepliedSince }
+        : {}),
     })
     return true
   } catch (err) {
@@ -555,6 +562,17 @@ export async function sendEmail({
     broadcastId: broadcastIdOf(metadata),
     flowId: flowVersion.flowId,
   }
+  // s236: a stop-on-reply sequence's line mail carries the line's reply
+  // gate: the line may hold it for hours, and a reply in that time must stop
+  // it there (the hub's stop rule cannot recall a queued mail). Read before
+  // anything is written, so a read error retries cleanly.
+  const skipIfRepliedSince =
+    lineContactInbox && !contentError && !suppressed
+      ? await lineReplyGateOf({
+          workspaceId: conversation.workspaceId,
+          metadata,
+        })
+      : undefined
   if (isDocument && !contentError && !suppressed) {
     try {
       prepared = await prepareStepDocument({
@@ -732,6 +750,7 @@ export async function sendEmail({
         ref: lineEmailRef(token, randomUUID()),
         format,
         thread,
+        skipIfRepliedSince,
       })
     : await sendViaSmtp({
         workspaceId: workspace.id,

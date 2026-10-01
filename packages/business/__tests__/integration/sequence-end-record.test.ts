@@ -1004,3 +1004,104 @@ describe.skipIf(!databaseUrl)(
     })
   },
 )
+
+/**
+ * s236: what an email-line send reads to gate a queued mail on a reply
+ * (worker send-email-reply-gate.ts). These are the code facts its
+ * T = nextWholeMinute(max(enrolledAt, repliedAt)) rests on.
+ */
+describe.skipIf(!databaseUrl)(
+  "s236 findReplyGate: the cycle a line mail gates on",
+  () => {
+    const gate = (s: Seed) =>
+      contactSequenceService.findReplyGate({
+        dispatchId: s.dispatchId,
+        workspaceId: s.workspaceId,
+      })
+    const reactivate = async (s: Seed) => {
+      const row = await enrolment(s.enrollmentId)
+      return contactSequenceService.reactivateEnrollment({
+        workspaceId: s.workspaceId,
+        contactId: s.contactId,
+        sequenceId: s.sequenceId,
+        expectedUpdatedAt: row?.updatedAt as Date,
+      })
+    }
+
+    test("an active first cycle: the stop rule, the enrolment instant, no answer yet", async () => {
+      const s = await seed({ stopOnReply: true })
+      const row = await enrolment(s.enrollmentId)
+      expect(await gate(s)).toEqual({
+        stopOnReply: true,
+        status: "active",
+        enrolledAt: row?.enrolledAt,
+        repliedAt: null,
+      })
+    })
+
+    test("a reply end keeps enrolledAt and stamps repliedAt; a resuming reactivation keeps BOTH (so T must step past the reply)", async () => {
+      const s = await seed({ stopOnReply: true, stepCount: 3, atStep: 1 })
+      const enrolledAt = (await enrolment(s.enrollmentId))?.enrolledAt as Date
+      const repliedAt = new Date(Date.now() - 60_000)
+      await contactSequenceService.removeStopOnReplyEnrollments({
+        workspaceId: s.workspaceId,
+        contactId: s.contactId,
+        repliedAt,
+      })
+      expect(await gate(s)).toEqual({
+        stopOnReply: true,
+        status: "ended",
+        enrolledAt,
+        repliedAt,
+      })
+      await reactivate(s)
+      const after = await gate(s)
+      expect(after).toEqual({
+        stopOnReply: true,
+        status: "active",
+        enrolledAt,
+        repliedAt,
+      })
+      expect(after?.repliedAt?.getTime()).toBeGreaterThan(enrolledAt.getTime())
+    })
+
+    test("a restart of a contact that had finished resets enrolledAt past the old reply", async () => {
+      const s = await seed({ stopOnReply: true, stepCount: 1, atStep: 0 })
+      await db.execute(
+        sql`UPDATE "SequenceDispatch" SET status = 'completed', "completedAt" = now() WHERE id = ${s.dispatchId}`,
+      )
+      const repliedAt = new Date(Date.now() - 60_000)
+      await contactSequenceService.removeStopOnReplyEnrollments({
+        workspaceId: s.workspaceId,
+        contactId: s.contactId,
+        repliedAt,
+      })
+      await reactivate(s)
+      const after = await gate(s)
+      expect(after).toMatchObject({ status: "active", repliedAt })
+      expect(after?.enrolledAt.getTime()).toBeGreaterThan(repliedAt.getTime())
+    })
+
+    test("stopOnReply off is reported as off; another workspace, a missing or malformed id is null", async () => {
+      const s = await seed({ stopOnReply: false })
+      expect(await gate(s)).toMatchObject({ stopOnReply: false })
+      expect(
+        await contactSequenceService.findReplyGate({
+          dispatchId: s.dispatchId,
+          workspaceId: mintId(),
+        }),
+      ).toBeNull()
+      for (const dispatchId of [mintId(), "", "d-1", "1".repeat(20)]) {
+        expect(
+          await contactSequenceService.findReplyGate({
+            dispatchId,
+            workspaceId: s.workspaceId,
+          }),
+        ).toBeNull()
+      }
+      expect(
+        await contactSequenceService.findReplyGate(null as never),
+      ).toBeNull()
+    })
+  },
+)

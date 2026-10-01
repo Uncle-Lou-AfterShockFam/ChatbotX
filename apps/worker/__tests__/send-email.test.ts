@@ -219,10 +219,14 @@ vi.mock("@chatbotx.io/business/email-sender", async () => {
   }
 })
 const removeEnrollment = vi.fn()
+// s236: the enrolment cycle a sequence line mail gates itself on (null = no
+// stop-on-reply gate, the default every older test runs under).
+const findReplyGate = vi.fn()
 vi.mock("@chatbotx.io/business/contact-sequence", () => ({
   contactSequenceService: {
     removeContactSequencesForContact: (...args: unknown[]) =>
       removeEnrollment(...args),
+    findReplyGate: (...args: unknown[]) => findReplyGate(...args),
   },
 }))
 
@@ -256,6 +260,8 @@ function makeProps(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  findReplyGate.mockReset()
+  findReplyGate.mockResolvedValue(null)
   isSuppressedMock.mockReset()
   isSuppressedMock.mockResolvedValue(false)
   createRecipient.mockResolvedValue({ token: "test-token-xyz" })
@@ -1327,5 +1333,103 @@ describe("s225b/s226b outreach B-1: line mail is keyed and recorded; the thread 
       expect.objectContaining({ token: "test-token-xyz" }),
     )
     expect(recordOutgoing).not.toHaveBeenCalled()
+  })
+})
+
+describe("s236: a stop-on-reply sequence's line mail carries the line's reply gate", () => {
+  const lineStep = { lineInboxId: "line-1", templateId: "77", elements: [] }
+  const seqMeta = {
+    type: "sequenceSchedule",
+    sequenceId: "555",
+    sequenceStepId: "1",
+    dispatchId: "9001",
+    contactInboxId: "ci-1",
+  }
+  const cycle = (over: Record<string, unknown> = {}) => ({
+    stopOnReply: true,
+    status: "active",
+    enrolledAt: new Date("2026-10-01T12:00:20Z"),
+    repliedAt: null,
+    ...over,
+  })
+  const sendOptions = () =>
+    lineRunAction.mock.calls.at(-1)?.[1] as Record<string, unknown>
+
+  beforeEach(() => {
+    lineRunAction.mockClear()
+    runAction.mockClear()
+    renderStepDocumentMock.mockResolvedValue({
+      html: "<p>doc</p>",
+      text: "doc",
+      attachments: [],
+    })
+  })
+
+  test("stopOnReply true, first cycle: skipIfRepliedSince = the minute after enrolment, read for THIS dispatch", async () => {
+    findReplyGate.mockResolvedValue(cycle())
+    await sendEmail({ ...makeProps(lineStep), metadata: seqMeta } as never)
+    expect(findReplyGate).toHaveBeenCalledWith({
+      dispatchId: "9001",
+      workspaceId: "ws-1",
+    })
+    expect(lineRunAction).toHaveBeenCalledOnce()
+    expect(sendOptions().skipIfRepliedSince).toBe("2026-10-01T12:01:00.000Z")
+  })
+
+  test("stopOnReply true, after a reply end + reactivation (repliedAt > enrolledAt): past the overridden reply", async () => {
+    findReplyGate.mockResolvedValue(
+      cycle({ repliedAt: new Date("2026-10-01T15:42:10.250Z") }),
+    )
+    await sendEmail({ ...makeProps(lineStep), metadata: seqMeta } as never)
+    expect(sendOptions().skipIfRepliedSince).toBe("2026-10-01T15:43:00.000Z")
+  })
+
+  test("stopOnReply false: no option at all (the envelope stays as before)", async () => {
+    findReplyGate.mockResolvedValue(cycle({ stopOnReply: false }))
+    await sendEmail({ ...makeProps(lineStep), metadata: seqMeta } as never)
+    expect(lineRunAction).toHaveBeenCalledOnce()
+    expect(sendOptions()).not.toHaveProperty("skipIfRepliedSince")
+  })
+
+  test("a non-sequence line mail (flow run, broadcast): no option, no enrolment read", async () => {
+    for (const metadata of [
+      {},
+      { type: "broadcast", broadcastId: "7", contactInboxId: "ci-1" },
+    ]) {
+      lineRunAction.mockClear()
+      await sendEmail({ ...makeProps(lineStep), metadata } as never)
+      expect(lineRunAction).toHaveBeenCalledOnce()
+      expect(sendOptions()).not.toHaveProperty("skipIfRepliedSince")
+    }
+    expect(findReplyGate).not.toHaveBeenCalled()
+  })
+
+  test("a hub-SMTP sequence send is unchanged: no enrolment read, nothing new on the SMTP call", async () => {
+    findReplyGate.mockResolvedValue(cycle())
+    await sendEmail({ ...makeProps(), metadata: seqMeta } as never)
+    expect(findReplyGate).not.toHaveBeenCalled()
+    expect(lineRunAction).not.toHaveBeenCalled()
+    expect(runAction).toHaveBeenCalledOnce()
+    expect(runAction.mock.calls[0]?.[1]).not.toHaveProperty(
+      "skipIfRepliedSince",
+    )
+  })
+
+  test("a suppressed recipient is never read for or handed off", async () => {
+    findReplyGate.mockResolvedValue(cycle())
+    isSuppressedMock.mockResolvedValue(true)
+    await sendEmail({ ...makeProps(lineStep), metadata: seqMeta } as never)
+    expect(findReplyGate).not.toHaveBeenCalled()
+    expect(lineRunAction).not.toHaveBeenCalled()
+  })
+
+  test("an enrolment read error fails the job BEFORE the tracking row (the retry starts clean)", async () => {
+    findReplyGate.mockRejectedValue(new Error("db down"))
+    createRecipient.mockClear()
+    await expect(
+      sendEmail({ ...makeProps(lineStep), metadata: seqMeta } as never),
+    ).rejects.toThrow("db down")
+    expect(createRecipient).not.toHaveBeenCalled()
+    expect(lineRunAction).not.toHaveBeenCalled()
   })
 })

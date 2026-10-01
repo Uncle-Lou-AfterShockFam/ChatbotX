@@ -639,6 +639,39 @@ describe("api sendEmail (s222b, B2 phase 4): the rendered newsletter for a bulkt
     expect(result).toEqual({ messageIds: ["outbox:ob_7"] })
   })
 
+  test("s236: a stop-on-reply gate rides contentAttributes.bulktext.skipIfRepliedSince beside the mail; unset = no key", async () => {
+    const pullCtx = {
+      auth: { callbackUrl: null, signingSecret: "s", deliveryMode: "pull" },
+      integrationDetail: { inboxId: "inbox-9", workspaceId: "ws-1" },
+    } as never
+    await sendEmail({
+      ctx: pullCtx,
+      contact: lineContact,
+      email,
+      ref: "email:tok",
+      skipIfRepliedSince: "2026-10-01T12:01:00.000Z",
+    } as never)
+    expect(
+      mockEnqueue.mock.calls[0][0].envelope.message.contentAttributes,
+    ).toEqual({
+      bulktext: {
+        ref: "email:tok",
+        email,
+        skipIfRepliedSince: "2026-10-01T12:01:00.000Z",
+      },
+    })
+    await sendEmail({
+      ctx: pullCtx,
+      contact: lineContact,
+      email,
+      ref: "email:tok2",
+      skipIfRepliedSince: undefined,
+    } as never)
+    expect(
+      mockEnqueue.mock.calls[1][0].envelope.message.contentAttributes.bulktext,
+    ).not.toHaveProperty("skipIfRepliedSince")
+  })
+
   test("a push-mode line fails the newsletter closed: nothing posted, nothing queued (its later status could never settle the recipient)", async () => {
     for (const pushCtx of [
       ctx,
