@@ -208,10 +208,12 @@ const createQuickbooksInvoice = (company: {
 async function invoiceRow(invoiceId: string) {
   const result = await db.execute<{
     status: string
+    amountPaid: string
+    total: string
     providerInvoiceId: string | null
     lastError: string | null
   }>(
-    sql`SELECT status, "providerInvoiceId", "lastError" FROM "Invoice" WHERE id = ${invoiceId}`,
+    sql`SELECT status, "providerInvoiceId", "lastError", "amountPaid", total FROM "Invoice" WHERE id = ${invoiceId}`,
   )
   return result.rows[0]
 }
@@ -374,6 +376,11 @@ describe.skipIf(!databaseUrl)("quickbooks method (s214b)", () => {
     )
     expect(results.flat().filter((o) => o === "paid")).toHaveLength(1)
     expect((await invoiceRow(invoice.id))?.status).toBe("paid")
+    {
+      const row = await invoiceRow(invoice.id)
+      expect(row?.amountPaid).toBe(row?.total)
+      expect(row?.amountPaid).not.toBe("0.00")
+    }
     expect(m.marks).toHaveBeenCalledTimes(1)
     expect(m.emitPaid).toHaveBeenCalledTimes(1)
     const events = await db.execute<{ outcome: string }>(sql`
@@ -538,6 +545,7 @@ describe.skipIf(!databaseUrl)("quickbooks method (s214b)", () => {
       id: draft?.id as string,
     })
     expect(opened.status).toBe("paid")
+    expect(opened.amountPaid).toBe(opened.total)
     expect(m.enqueue).toHaveBeenCalledWith(
       "quickbooksEntityChanged",
       expect.objectContaining({

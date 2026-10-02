@@ -470,6 +470,8 @@ describe.skipIf(!databaseUrl)(
       const stored = await invoiceService.get({ workspaceId, id: invoice.id })
       expect(stored.status).toBe("paid")
       expect(stored.paidAt).toBeInstanceOf(Date)
+      // s237: a Stripe-invoice payment settles the whole amount (live #21 read 0.00).
+      expect(stored.amountPaid).toBe(stored.total)
       expect(m.marks).toHaveBeenCalledTimes(1)
       expect(m.emitPaid).toHaveBeenCalledTimes(1)
 
@@ -534,6 +536,7 @@ describe.skipIf(!databaseUrl)("invoiceService.transition CAS", () => {
       set: { paidAt: new Date() },
     })
     expect(paid?.status).toBe("paid")
+    expect(paid?.amountPaid).toBe(paid?.total)
     expect(
       await invoiceService.transition({ invoiceId: invoice.id, to: "open" }),
     ).toBeNull()

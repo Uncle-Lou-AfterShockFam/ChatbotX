@@ -178,10 +178,12 @@ function deliver(props: {
 async function invoiceRow(invoiceId: string) {
   const result = await db.execute<{
     status: string
+    amountPaid: string
+    total: string
     providerInvoiceId: string | null
     lastError: string | null
   }>(sql`
-    SELECT status, "providerInvoiceId", "lastError"
+    SELECT status, "providerInvoiceId", "lastError", "amountPaid", total
       FROM "Invoice" WHERE id = ${invoiceId}`)
   return result.rows[0]
 }
@@ -257,6 +259,12 @@ describe.skipIf(!databaseUrl)("WooCommerce payment webhook (s211b)", () => {
     expect(reasons.filter((r) => r === "applied")).toHaveLength(1)
     expect(reasons.filter((r) => r === "duplicate")).toHaveLength(7)
     expect((await invoiceRow(invoiceId))?.status).toBe("paid")
+    // s237: the site payment settles the whole amount.
+    {
+      const row = await invoiceRow(invoiceId)
+      expect(row?.amountPaid).toBe(row?.total)
+      expect(row?.amountPaid).not.toBe("0.00")
+    }
     expect(await eventRows(site.integrationId)).toHaveLength(1)
     expect(m.marks).toHaveBeenCalledTimes(1)
     expect(m.emitPaid).toHaveBeenCalledTimes(1)

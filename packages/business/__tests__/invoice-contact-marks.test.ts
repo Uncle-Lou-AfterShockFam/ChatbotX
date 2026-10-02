@@ -1,43 +1,96 @@
 import { beforeEach, describe, expect, test, vi } from "vitest"
 
 /**
- * markInvoiceCreated (s212b): the latest invoice's link, PDF link, id and
- * status land on the contact, keyed by field name (no custom field ids here).
+ * Invoice marks on the contact (s212b, s237). An in-memory contact (field ->
+ * value) and invoice table (id -> status) stand in for Postgres; the
+ * interleavings a blind probe found on real Postgres (s237 T1-T4) are replayed
+ * by holding one write while another mark runs to completion.
  */
 
 const m = vi.hoisted(() => ({
-  resolve: vi.fn(),
-  setValue: vi.fn(),
-  findValue: vi.fn(),
-  /** The row status the post-write re-read sees (null = row gone). */
-  rowStatus: { value: "open" as string | null },
+  /** custom field id -> value, for the one contact under test. */
+  fields: new Map<string, string>(),
+  /** invoice id -> row status (absent = no row). */
+  rows: new Map<string, string>(),
+  /** The next write of this field name waits on `hold` before it lands. */
+  holdField: null as string | null,
+  hold: null as Promise<void> | null,
+  writes: [] as { name: string; value: string; contactInboxId?: string }[],
+  resolveCalls: [] as { fields: { name: string; type: string }[] }[],
+  attach: vi.fn(),
 }))
 
+const idOf = (name: string) => `cf:${name}`
+const nameOf = (id: string) => id.slice(3)
+
 vi.mock("@chatbotx.io/database/client", () => {
+  /** The row a select reads: the value of its `eq(<id column>, value)`. */
+  let wantedId: string | undefined
   const chain: Record<string, unknown> = {}
   chain.from = () => chain
   chain.where = () => chain
-  chain.limit = () =>
-    Promise.resolve(
-      m.rowStatus.value === null ? [] : [{ status: m.rowStatus.value }],
-    )
-  return { db: { select: () => chain }, eq: () => ({}) }
+  chain.limit = () => {
+    const status = wantedId ? m.rows.get(wantedId) : undefined
+    return Promise.resolve(status ? [{ status }] : [])
+  }
+  return {
+    db: { select: () => chain },
+    eq: (column: { name?: string }, value: string) => {
+      if (column?.name === "id") {
+        wantedId = value
+      }
+      return {}
+    },
+    and: () => ({}),
+  }
 })
 
 vi.mock("../src/custom-field/service", () => ({
   customFieldService: {
-    resolveByNameAndType: (...a: unknown[]) => m.resolve(...a),
+    resolveByNameAndType: (arg: {
+      fields: { name: string; type: string }[]
+    }) => {
+      m.resolveCalls.push(arg)
+      return Promise.resolve({
+        idMap: new Map(
+          arg.fields.map((f) => [`${f.type}:${f.name}`, idOf(f.name)]),
+        ),
+        createdIds: [],
+      })
+    },
   },
 }))
 vi.mock("../src/contact-custom-field/service", () => ({
   contactCustomFieldService: {
-    setValueByKey: (...a: unknown[]) => m.setValue(...a),
-    findValue: (...a: unknown[]) => m.findValue(...a),
+    setValueByKey: async (arg: {
+      keyword: string
+      value: string
+      contactInboxId?: string
+    }) => {
+      const name = nameOf(arg.keyword)
+      if (m.hold && m.holdField === name) {
+        const gate = m.hold
+        m.hold = null
+        await gate
+      }
+      m.fields.set(arg.keyword, arg.value)
+      m.writes.push({
+        name,
+        value: arg.value,
+        contactInboxId: arg.contactInboxId,
+      })
+    },
+    findValue: async (arg: { customFieldId: string }) =>
+      m.fields.get(arg.customFieldId) ?? null,
   },
 }))
-vi.mock("../src/tag/service", () => ({ tagService: {} }))
+vi.mock("../src/tag/service", () => ({
+  tagService: { attachByNamesToContacts: (...a: unknown[]) => m.attach(...a) },
+}))
+vi.mock("../src/logger", () => ({ logger: { warn: vi.fn() } }))
 
-const { markInvoiceCreated } = await import("../src/invoice/contact-marks")
+const { markInvoiceCreated, markInvoiceOnContact, markInvoiceStatusOnContact } =
+  await import("../src/invoice/contact-marks")
 
 const invoice = (over: Record<string, unknown> = {}) =>
   ({
@@ -51,45 +104,44 @@ const invoice = (over: Record<string, unknown> = {}) =>
     ...over,
   }) as never
 
-const KEYWORD_NAMES: Record<string, string> = {
-  "cf-last-id": "invoice_last_id",
+const field = (name: string) => m.fields.get(idOf(name))
+
+/** Holds the next write of `name` until the returned release() runs. */
+function holdNextWrite(name: string): () => void {
+  let release: () => void = () => undefined
+  m.holdField = name
+  m.hold = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  return release
 }
 
-/** field name -> value, from every setValueByKey call. */
-const written = () =>
-  Object.fromEntries(
-    m.setValue.mock.calls.map(([arg]) => [
-      KEYWORD_NAMES[(arg as { keyword: string }).keyword] ??
-        (arg as { keyword: string }).keyword,
-      (arg as { value: string }).value,
-    ]),
-  )
+/** Lets a held mark run up to its held write. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 beforeEach(() => {
   vi.clearAllMocks()
-  m.resolve.mockResolvedValue({
-    idMap: new Map([["shortText:invoice_last_id", "cf-last-id"]]),
-  })
-  m.findValue.mockResolvedValue("900")
-  m.setValue.mockResolvedValue(undefined)
-  m.rowStatus.value = "open"
+  m.fields.clear()
+  m.rows.clear()
+  m.rows.set("900", "open")
+  m.hold = null
+  m.holdField = null
+  m.writes = []
+  m.resolveCalls = []
 })
 
 describe("markInvoiceCreated", () => {
   test("stripeInvoice: pay link, Stripe's PDF, id, status; the inbox rides every write", async () => {
     await markInvoiceCreated({ invoice: invoice(), contactInboxId: "ci-1" })
-    expect(written()).toEqual({
-      invoice_link: "https://invoice.stripe.com/i/x",
-      invoice_pdf_link: "https://pay.stripe.com/invoice/x/pdf",
-      invoice_last_id: "900",
-      invoice_last_status: "open",
-    })
-    for (const [arg] of m.setValue.mock.calls) {
-      expect(arg).toMatchObject({
-        workspaceId: "11",
-        contactId: "22",
-        contactInboxId: "ci-1",
-      })
+    expect(field("invoice_link")).toBe("https://invoice.stripe.com/i/x")
+    expect(field("invoice_pdf_link")).toBe(
+      "https://pay.stripe.com/invoice/x/pdf",
+    )
+    expect(field("invoice_last_id")).toBe("900")
+    expect(field("invoice_last_status")).toBe("open")
+    expect(m.writes.length).toBeGreaterThan(0)
+    for (const write of m.writes) {
+      expect(write.contactInboxId).toBe("ci-1")
     }
   })
 
@@ -101,10 +153,8 @@ describe("markInvoiceCreated", () => {
         pdfUrl: null,
       }),
     })
-    expect(written()).toMatchObject({
-      invoice_link: "https://hub.example/pay/tok",
-      invoice_pdf_link: "https://hub.example/pay/tok/pdf",
-    })
+    expect(field("invoice_link")).toBe("https://hub.example/pay/tok")
+    expect(field("invoice_pdf_link")).toBe("https://hub.example/pay/tok/pdf")
   })
 
   test('a woocommerce invoice with no stored PDF (opened before s213b) and a missing link write "", never "null"', async () => {
@@ -115,52 +165,264 @@ describe("markInvoiceCreated", () => {
         pdfUrl: null,
       }),
     })
-    expect(written()).toMatchObject({ invoice_link: "", invoice_pdf_link: "" })
-    expect(m.setValue.mock.calls[0]?.[0]).toMatchObject({
-      contactInboxId: undefined,
-    })
+    expect(field("invoice_link")).toBe("")
+    expect(field("invoice_pdf_link")).toBe("")
+    expect(m.writes[0]?.contactInboxId).toBeUndefined()
   })
 
-  test("a webhook that paid the row during the write wins: the status is written again from the row (s212b review)", async () => {
-    m.rowStatus.value = "paid"
-    await markInvoiceCreated({ invoice: invoice(), contactInboxId: "ci-1" })
-    const statusWrites = m.setValue.mock.calls
-      .map(([arg]) => arg as { keyword: string; value: string })
-      .filter((arg) => arg.keyword === "invoice_last_status")
-      .map((arg) => arg.value)
-    expect(statusWrites).toEqual(["open", "paid"])
+  test("the status comes from the ROW: a webhook that already paid it wins (s212b review)", async () => {
+    m.rows.set("900", "paid")
+    await markInvoiceCreated({ invoice: invoice() })
+    expect(field("invoice_last_status")).toBe("paid")
   })
 
-  test("no rewrite once a NEWER invoice owns the contact: its id must never carry this invoice's status", async () => {
-    m.rowStatus.value = "paid"
-    m.findValue.mockResolvedValue("901")
+  test("an unchanged status is not written again", async () => {
     await markInvoiceCreated({ invoice: invoice() })
-    expect(m.findValue).toHaveBeenCalledWith({
-      contactId: "22",
-      customFieldId: "cf-last-id",
-    })
-    expect(m.setValue).toHaveBeenCalledTimes(4)
+    await markInvoiceCreated({ invoice: invoice() })
+    expect(
+      m.writes.filter((w) => w.name === "invoice_last_status"),
+    ).toHaveLength(1)
   })
 
-  test("an unmoved row (or a missing one) is not written twice", async () => {
+  test("a missing row writes no status", async () => {
+    m.rows.clear()
     await markInvoiceCreated({ invoice: invoice() })
-    expect(m.setValue).toHaveBeenCalledTimes(4)
-    m.setValue.mockClear()
-    m.rowStatus.value = null
-    await markInvoiceCreated({ invoice: invoice() })
-    expect(m.setValue).toHaveBeenCalledTimes(4)
+    expect(field("invoice_last_status")).toBeUndefined()
   })
 
   test("every field is created as shortText", async () => {
     await markInvoiceCreated({ invoice: invoice() })
-    expect(m.resolve).toHaveBeenCalledWith({
-      workspaceId: "11",
-      fields: [
-        { name: "invoice_link", type: "shortText" },
-        { name: "invoice_pdf_link", type: "shortText" },
-        { name: "invoice_last_id", type: "shortText" },
-        { name: "invoice_last_status", type: "shortText" },
-      ],
+    const types = m.resolveCalls.flatMap((c) => c.fields.map((f) => f.type))
+    expect(types.length).toBeGreaterThan(0)
+    expect(new Set(types)).toEqual(new Set(["shortText"]))
+  })
+})
+
+describe("webhook marks follow the contact's LATEST invoice (s237)", () => {
+  test("the latest invoice paid: status, paid id and tag", async () => {
+    await markInvoiceCreated({ invoice: invoice() })
+    m.rows.set("900", "paid")
+    await markInvoiceOnContact({ invoice: invoice(), status: "paid" })
+    expect(field("invoice_last_status")).toBe("paid")
+    expect(field("invoice_paid_id")).toBe("900")
+    expect(m.attach).toHaveBeenCalledTimes(1)
+  })
+
+  test("an OLDER invoice paid while a newer one is open: paid id + tag, never the status (live #26/#28)", async () => {
+    await markInvoiceCreated({ invoice: invoice() })
+    m.rows.set("901", "open")
+    await markInvoiceCreated({ invoice: invoice({ id: "901" }) })
+    m.rows.set("900", "paid")
+    await markInvoiceOnContact({ invoice: invoice(), status: "paid" })
+    expect(field("invoice_last_status")).toBe("open")
+    expect(field("invoice_paid_id")).toBe("900")
+    expect(m.attach).toHaveBeenCalledTimes(1)
+  })
+
+  test("an older invoice's deposit writes the deposit id only", async () => {
+    m.rows.set("901", "open")
+    await markInvoiceCreated({ invoice: invoice({ id: "901" }) })
+    m.rows.set("900", "partiallyPaid")
+    await markInvoiceOnContact({ invoice: invoice(), status: "partiallyPaid" })
+    expect(field("invoice_deposit_paid_id")).toBe("900")
+    expect(field("invoice_last_status")).toBe("open")
+  })
+
+  test("payment_failed lands on the latest open invoice and stands while it stays open", async () => {
+    await markInvoiceCreated({ invoice: invoice() })
+    await markInvoiceOnContact({ invoice: invoice(), status: "payment_failed" })
+    expect(field("invoice_last_status")).toBe("payment_failed")
+    await markInvoiceStatusOnContact({ invoice: invoice() })
+    expect(field("invoice_last_status")).toBe("payment_failed")
+  })
+
+  test("a refund rollback of the latest moves its status; of an older one, nothing", async () => {
+    m.rows.set("900", "paid")
+    await markInvoiceCreated({ invoice: invoice() })
+    m.rows.set("900", "partiallyPaid")
+    await markInvoiceStatusOnContact({ invoice: invoice() })
+    expect(field("invoice_last_status")).toBe("partiallyPaid")
+    m.rows.set("901", "open")
+    await markInvoiceCreated({ invoice: invoice({ id: "901" }) })
+    m.rows.set("900", "open")
+    await markInvoiceStatusOnContact({ invoice: invoice() })
+    expect(field("invoice_last_status")).toBe("open")
+    expect(field("invoice_last_id")).toBe("901")
+  })
+})
+
+describe("a late write never leaves a stale status (s237 probe T1-T4)", () => {
+  test("T1: an older invoice's pay write lands after a newer create and its payment", async () => {
+    await markInvoiceCreated({ invoice: invoice() })
+    m.rows.set("900", "paid")
+    const release = holdNextWrite("invoice_last_status")
+    const payA = markInvoiceOnContact({ invoice: invoice(), status: "paid" })
+    await settle()
+    m.rows.set("901", "open")
+    await markInvoiceCreated({ invoice: invoice({ id: "901" }) })
+    m.rows.set("901", "paid")
+    await markInvoiceOnContact({
+      invoice: invoice({ id: "901" }),
+      status: "paid",
     })
+    release()
+    await payA
+    expect(field("invoice_last_id")).toBe("901")
+    expect(field("invoice_last_status")).toBe("paid")
+  })
+
+  test("T2: a create's status write lands after a newer invoice was created and paid", async () => {
+    m.rows.set("900", "paid")
+    await markInvoiceCreated({ invoice: invoice() })
+    m.rows.set("900", "open")
+    const release = holdNextWrite("invoice_last_status")
+    const createA = markInvoiceCreated({ invoice: invoice() })
+    await settle()
+    m.rows.set("901", "open")
+    await markInvoiceCreated({ invoice: invoice({ id: "901" }) })
+    m.rows.set("901", "paid")
+    await markInvoiceOnContact({
+      invoice: invoice({ id: "901" }),
+      status: "paid",
+    })
+    release()
+    await createA
+    expect(field("invoice_last_id")).toBe("901")
+    expect(field("invoice_last_status")).toBe("paid")
+  })
+
+  test("T3: a deposit mark lands after the balance paid the same invoice", async () => {
+    await markInvoiceCreated({ invoice: invoice() })
+    m.rows.set("900", "partiallyPaid")
+    const release = holdNextWrite("invoice_last_status")
+    const deposit = markInvoiceOnContact({
+      invoice: invoice(),
+      status: "partiallyPaid",
+    })
+    await settle()
+    m.rows.set("900", "paid")
+    await markInvoiceOnContact({ invoice: invoice(), status: "paid" })
+    release()
+    await deposit
+    expect(field("invoice_last_status")).toBe("paid")
+  })
+
+  test("T4: a paid mark lands after its own refund rolled the row back", async () => {
+    await markInvoiceCreated({ invoice: invoice() })
+    m.rows.set("900", "paid")
+    const release = holdNextWrite("invoice_last_status")
+    const pay = markInvoiceOnContact({ invoice: invoice(), status: "paid" })
+    await settle()
+    m.rows.set("900", "open")
+    await markInvoiceStatusOnContact({ invoice: invoice() })
+    release()
+    await pay
+    expect(field("invoice_last_status")).toBe("open")
+  })
+
+  test("a failed-payment write that lands after the invoice was paid is corrected", async () => {
+    await markInvoiceCreated({ invoice: invoice() })
+    const release = holdNextWrite("invoice_last_status")
+    const failed = markInvoiceOnContact({
+      invoice: invoice(),
+      status: "payment_failed",
+    })
+    await settle()
+    m.rows.set("900", "paid")
+    await markInvoiceOnContact({ invoice: invoice(), status: "paid" })
+    release()
+    await failed
+    expect(field("invoice_last_status")).toBe("paid")
+  })
+
+  test("T7: a held failure write of an older invoice lands after a newer create", async () => {
+    await markInvoiceCreated({ invoice: invoice() })
+    const release = holdNextWrite("invoice_last_status")
+    const failA = markInvoiceOnContact({
+      invoice: invoice(),
+      status: "payment_failed",
+    })
+    await settle()
+    m.rows.set("901", "open")
+    await markInvoiceCreated({ invoice: invoice({ id: "901" }) })
+    release()
+    await failA
+    expect(field("invoice_last_id")).toBe("901")
+    expect(field("invoice_last_status")).toBe("open")
+  })
+})
+
+describe("payment_failed belongs to ONE invoice (s237 probe T8, T6)", () => {
+  test("T8: A failed, then B is created: B is open, not failed", async () => {
+    await markInvoiceCreated({ invoice: invoice() })
+    await markInvoiceOnContact({ invoice: invoice(), status: "payment_failed" })
+    expect(field("invoice_failed_id")).toBe("900")
+    m.rows.set("901", "open")
+    await markInvoiceCreated({ invoice: invoice({ id: "901" }) })
+    expect(field("invoice_last_status")).toBe("open")
+  })
+
+  test("an older invoice's failure writes nothing", async () => {
+    m.rows.set("901", "open")
+    await markInvoiceCreated({ invoice: invoice({ id: "901" }) })
+    const before = m.writes.length
+    await markInvoiceOnContact({ invoice: invoice(), status: "payment_failed" })
+    expect(m.writes).toHaveLength(before)
+    expect(field("invoice_failed_id")).toBeUndefined()
+  })
+
+  test("T9: an older invoice's failure never clears the latest's own failure", async () => {
+    await markInvoiceCreated({ invoice: invoice() })
+    m.rows.set("901", "open")
+    await markInvoiceCreated({ invoice: invoice({ id: "901" }) })
+    await markInvoiceOnContact({
+      invoice: invoice({ id: "901" }),
+      status: "payment_failed",
+    })
+    await markInvoiceOnContact({ invoice: invoice(), status: "payment_failed" })
+    expect(field("invoice_failed_id")).toBe("901")
+    expect(field("invoice_last_status")).toBe("payment_failed")
+  })
+
+  test("T10: concurrent failures of an older and the latest invoice keep the latest's", async () => {
+    await markInvoiceCreated({ invoice: invoice() })
+    m.rows.set("901", "open")
+    await markInvoiceCreated({ invoice: invoice({ id: "901" }) })
+    const release = holdNextWrite("invoice_last_status")
+    const failB = markInvoiceOnContact({
+      invoice: invoice({ id: "901" }),
+      status: "payment_failed",
+    })
+    await settle()
+    await markInvoiceOnContact({ invoice: invoice(), status: "payment_failed" })
+    release()
+    await failB
+    expect(field("invoice_failed_id")).toBe("901")
+    expect(field("invoice_last_status")).toBe("payment_failed")
+  })
+
+  test("T6: a row that flips on every write stops after 4 writes and warns (bounded)", async () => {
+    await markInvoiceCreated({ invoice: invoice() })
+    const { logger } = await import("../src/logger")
+    // Every status write flips the row again, so the field never settles.
+    let flips = 0
+    const statuses = ["paid", "open"]
+    m.rows.set("900", "paid")
+    const original = m.fields.set.bind(m.fields)
+    m.fields.set = ((key: string, value: string) => {
+      original(key, value)
+      if (key === "cf:invoice_last_status") {
+        flips++
+        m.rows.set("900", statuses[flips % 2] as string)
+      }
+      return m.fields
+    }) as typeof m.fields.set
+    try {
+      await markInvoiceStatusOnContact({ invoice: invoice() })
+    } finally {
+      m.fields.set = original
+    }
+    expect(flips).toBe(4)
+    expect(logger.warn).toHaveBeenCalledTimes(1)
   })
 })
