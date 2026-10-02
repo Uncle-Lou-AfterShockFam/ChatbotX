@@ -47,16 +47,16 @@ vi.mock("@chatbotx.io/database/client", () => {
 
 vi.mock("../src/custom-field/service", () => ({
   customFieldService: {
-    resolveByNameAndType: async (arg: {
+    resolveByNameAndType: (arg: {
       fields: { name: string; type: string }[]
     }) => {
       m.resolveCalls.push(arg)
-      return {
+      return Promise.resolve({
         idMap: new Map(
           arg.fields.map((f) => [`${f.type}:${f.name}`, idOf(f.name)]),
         ),
         createdIds: [],
-      }
+      })
     },
   },
 }))
@@ -108,7 +108,7 @@ const field = (name: string) => m.fields.get(idOf(name))
 
 /** Holds the next write of `name` until the returned release() runs. */
 function holdNextWrite(name: string): () => void {
-  let release = () => {}
+  let release: () => void = () => undefined
   m.holdField = name
   m.hold = new Promise<void>((resolve) => {
     release = resolve
