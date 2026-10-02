@@ -18,7 +18,8 @@ import { tagService } from "../tag/service"
  * - `invoice_last_status`: the status of the invoice `invoice_last_id` names,
  *   from its row (`open`, `paid`, `partiallyPaid`, ...), or `payment_failed`
  *   while that invoice is open and its last payment attempt failed (s237)
- * - `invoice_failed_id`: the id of the invoice whose payment last FAILED (s237)
+ * - `invoice_failed_id`: the latest invoice whose payment FAILED while it was
+ *   the latest and open (s237); an older invoice's failure is not recorded
  * - `invoice_paid_id`: the id of the invoice that was just PAID. A flow waits
  *   per invoice with `customFieldChanged` on it and matchValue
  *   `{{raw:invoice_last_id}}` (the wait captures the id at wait start).
@@ -244,20 +245,13 @@ export async function markInvoiceOnContact(props: {
 }
 
 /**
- * `invoice_failed_id` records which invoice failed (written first, so a
- * racing sync can tell whose failure the status is); `payment_failed` then
- * lands only on the latest invoice while its row is still open. The caller's
- * sync corrects it if the row or the latest invoice moved meanwhile.
+ * A failed payment of the contact's LATEST, still-open invoice: record its id
+ * in `invoice_failed_id`, then write `payment_failed`. An older invoice's
+ * failure writes nothing (it must not clear the latest's own failure, s237
+ * probe T9). A create racing these writes is corrected by the caller's sync:
+ * `invoice_failed_id` then names an invoice that is no longer the latest.
  */
 async function markPaymentFailed(invoice: InvoiceModel): Promise<void> {
-  const base = {
-    workspaceId: invoice.workspaceId,
-    contactId: invoice.contactId,
-  }
-  await setFields({
-    ...base,
-    values: { [INVOICE_FAILED_ID_FIELD]: invoice.id },
-  })
   const field = { name: INVOICE_LAST_ID_FIELD, type: "shortText" as const }
   const { idMap } = await customFieldService.resolveByNameAndType({
     workspaceId: invoice.workspaceId,
@@ -279,6 +273,14 @@ async function markPaymentFailed(invoice: InvoiceModel): Promise<void> {
   if (lastId !== invoice.id || row?.status !== "open") {
     return
   }
+  const base = {
+    workspaceId: invoice.workspaceId,
+    contactId: invoice.contactId,
+  }
+  await setFields({
+    ...base,
+    values: { [INVOICE_FAILED_ID_FIELD]: invoice.id },
+  })
   await setFields({
     ...base,
     values: { [INVOICE_LAST_STATUS_FIELD]: PAYMENT_FAILED },

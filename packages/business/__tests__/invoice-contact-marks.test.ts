@@ -362,12 +362,43 @@ describe("payment_failed belongs to ONE invoice (s237 probe T8, T6)", () => {
     expect(field("invoice_last_status")).toBe("open")
   })
 
-  test("an older invoice's failure records its id but never the latest's status", async () => {
+  test("an older invoice's failure writes nothing", async () => {
     m.rows.set("901", "open")
     await markInvoiceCreated({ invoice: invoice({ id: "901" }) })
+    const before = m.writes.length
     await markInvoiceOnContact({ invoice: invoice(), status: "payment_failed" })
-    expect(field("invoice_failed_id")).toBe("900")
-    expect(field("invoice_last_status")).toBe("open")
+    expect(m.writes).toHaveLength(before)
+    expect(field("invoice_failed_id")).toBeUndefined()
+  })
+
+  test("T9: an older invoice's failure never clears the latest's own failure", async () => {
+    await markInvoiceCreated({ invoice: invoice() })
+    m.rows.set("901", "open")
+    await markInvoiceCreated({ invoice: invoice({ id: "901" }) })
+    await markInvoiceOnContact({
+      invoice: invoice({ id: "901" }),
+      status: "payment_failed",
+    })
+    await markInvoiceOnContact({ invoice: invoice(), status: "payment_failed" })
+    expect(field("invoice_failed_id")).toBe("901")
+    expect(field("invoice_last_status")).toBe("payment_failed")
+  })
+
+  test("T10: concurrent failures of an older and the latest invoice keep the latest's", async () => {
+    await markInvoiceCreated({ invoice: invoice() })
+    m.rows.set("901", "open")
+    await markInvoiceCreated({ invoice: invoice({ id: "901" }) })
+    const release = holdNextWrite("invoice_last_status")
+    const failB = markInvoiceOnContact({
+      invoice: invoice({ id: "901" }),
+      status: "payment_failed",
+    })
+    await settle()
+    await markInvoiceOnContact({ invoice: invoice(), status: "payment_failed" })
+    release()
+    await failB
+    expect(field("invoice_failed_id")).toBe("901")
+    expect(field("invoice_last_status")).toBe("payment_failed")
   })
 
   test("T6: a row that flips on every write stops after 4 writes and warns (bounded)", async () => {
