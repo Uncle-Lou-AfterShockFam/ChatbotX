@@ -216,3 +216,27 @@ describe("webhook status marks follow the contact's LATEST invoice (s237)", () =
     expect(m.setValue).not.toHaveBeenCalled()
   })
 })
+
+describe("a newer invoice created between the latest check and the status write (s237 review)", () => {
+  test("the newer invoice's row status is written back after the stale write", async () => {
+    m.findValue.mockReset()
+    // Check sees this invoice; the re-read after the write sees the newer one.
+    m.findValue.mockResolvedValueOnce("900").mockResolvedValueOnce("901")
+    m.rowStatus.value = "open"
+    await markInvoiceOnContact({ invoice: invoice(), status: "paid" })
+    const statuses = m.setValue.mock.calls
+      .map(([arg]) => arg as { keyword: string; value: string })
+      .filter((a) => a.keyword === "invoice_last_status")
+      .map((a) => a.value)
+    expect(statuses).toEqual(["paid", "open"])
+    expect(written().invoice_paid_id).toBe("900")
+  })
+
+  test("the newer invoice's row is gone: no repair write", async () => {
+    m.findValue.mockReset()
+    m.findValue.mockResolvedValueOnce("900").mockResolvedValueOnce("901")
+    m.rowStatus.value = null
+    await markInvoiceStatusOnContact({ invoice: invoice({ status: "open" }) })
+    expect(m.setValue).toHaveBeenCalledTimes(1)
+  })
+})

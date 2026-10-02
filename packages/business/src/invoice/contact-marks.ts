@@ -104,19 +104,12 @@ export async function markInvoiceCreated(props: {
   if (!current || current.status === invoice.status) {
     return
   }
-  const lastIdField = ids.get(INVOICE_LAST_ID_FIELD)
-  const lastId = lastIdField
-    ? await contactCustomFieldService.findValue({
-        contactId: invoice.contactId,
-        customFieldId: lastIdField,
-      })
-    : null
-  if (lastId === invoice.id) {
-    await setFields({
-      ...base,
-      values: { [INVOICE_LAST_STATUS_FIELD]: current.status },
-    })
-  }
+  await writeLatestStatus({
+    invoice,
+    status: current.status,
+    lastIdField: ids.get(INVOICE_LAST_ID_FIELD),
+    contactInboxId: props.contactInboxId,
+  })
 }
 
 /**
@@ -128,13 +121,9 @@ export async function markInvoiceCreated(props: {
 export async function markInvoiceStatusOnContact(props: {
   invoice: InvoiceModel
 }): Promise<void> {
-  if (!(await isContactsLatestInvoice(props.invoice))) {
-    return
-  }
-  await setFields({
-    workspaceId: props.invoice.workspaceId,
-    contactId: props.invoice.contactId,
-    values: { [INVOICE_LAST_STATUS_FIELD]: props.invoice.status },
+  await writeLatestStatus({
+    invoice: props.invoice,
+    status: props.invoice.status,
   })
 }
 
@@ -142,25 +131,62 @@ export async function markInvoiceStatusOnContact(props: {
  * s237: `invoice_last_status` describes the invoice `invoice_last_id` names.
  * A status change of an OLDER invoice (paid, refunded, failed while a newer
  * one is open) must not overwrite it: live, #26's payment wrote `paid` while
- * the contact's latest, #28, was open.
+ * the contact's latest, #28, was open. The check and the write are not
+ * atomic, so a newer invoice's create can land in between; the id is read
+ * again after the write and, when it moved, the newer invoice's row status
+ * is written back (that create's own status write may have come first).
  */
-async function isContactsLatestInvoice(
-  invoice: InvoiceModel,
-): Promise<boolean> {
-  const field = { name: INVOICE_LAST_ID_FIELD, type: "shortText" as const }
-  const { idMap } = await customFieldService.resolveByNameAndType({
-    workspaceId: invoice.workspaceId,
-    fields: [field],
-  })
-  const customFieldId = idMap.get(customFieldResolutionKey(field))
-  if (!customFieldId) {
-    return false
+async function writeLatestStatus(props: {
+  invoice: InvoiceModel
+  status: string
+  lastIdField?: string
+  contactInboxId?: string
+}): Promise<void> {
+  const { invoice } = props
+  let lastIdField = props.lastIdField
+  if (!lastIdField) {
+    const field = { name: INVOICE_LAST_ID_FIELD, type: "shortText" as const }
+    const { idMap } = await customFieldService.resolveByNameAndType({
+      workspaceId: invoice.workspaceId,
+      fields: [field],
+    })
+    lastIdField = idMap.get(customFieldResolutionKey(field))
   }
-  const lastId = await contactCustomFieldService.findValue({
+  if (!lastIdField) {
+    return
+  }
+  const readLastId = () =>
+    contactCustomFieldService.findValue({
+      contactId: invoice.contactId,
+      customFieldId: lastIdField,
+    })
+  if ((await readLastId()) !== invoice.id) {
+    return
+  }
+  const base = {
+    workspaceId: invoice.workspaceId,
     contactId: invoice.contactId,
-    customFieldId,
+    contactInboxId: props.contactInboxId,
+  }
+  await setFields({
+    ...base,
+    values: { [INVOICE_LAST_STATUS_FIELD]: props.status },
   })
-  return lastId === invoice.id
+  const newerId = await readLastId()
+  if (!newerId || newerId === invoice.id) {
+    return
+  }
+  const [newer] = await db
+    .select({ status: invoiceModel.status })
+    .from(invoiceModel)
+    .where(eq(invoiceModel.id, newerId))
+    .limit(1)
+  if (newer) {
+    await setFields({
+      ...base,
+      values: { [INVOICE_LAST_STATUS_FIELD]: newer.status },
+    })
+  }
 }
 
 /**
@@ -172,10 +198,8 @@ export async function markInvoiceOnContact(props: {
   status: string
 }): Promise<void> {
   const { invoice } = props
+  await writeLatestStatus({ invoice, status: props.status })
   const values: Record<string, string> = {}
-  if (await isContactsLatestInvoice(invoice)) {
-    values[INVOICE_LAST_STATUS_FIELD] = props.status
-  }
   if (props.status === "paid") {
     values[INVOICE_PAID_ID_FIELD] = invoice.id
   }
