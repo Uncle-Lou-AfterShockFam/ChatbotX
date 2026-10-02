@@ -128,6 +128,9 @@ export async function markInvoiceCreated(props: {
 export async function markInvoiceStatusOnContact(props: {
   invoice: InvoiceModel
 }): Promise<void> {
+  if (!(await isContactsLatestInvoice(props.invoice))) {
+    return
+  }
   await setFields({
     workspaceId: props.invoice.workspaceId,
     contactId: props.invoice.contactId,
@@ -135,14 +138,43 @@ export async function markInvoiceStatusOnContact(props: {
   })
 }
 
-/** A provider status change (webhook): status field, and on paid the id + tag. */
+/**
+ * s237: `invoice_last_status` describes the invoice `invoice_last_id` names.
+ * A status change of an OLDER invoice (paid, refunded, failed while a newer
+ * one is open) must not overwrite it: live, #26's payment wrote `paid` while
+ * the contact's latest, #28, was open.
+ */
+async function isContactsLatestInvoice(
+  invoice: InvoiceModel,
+): Promise<boolean> {
+  const field = { name: INVOICE_LAST_ID_FIELD, type: "shortText" as const }
+  const { idMap } = await customFieldService.resolveByNameAndType({
+    workspaceId: invoice.workspaceId,
+    fields: [field],
+  })
+  const customFieldId = idMap.get(customFieldResolutionKey(field))
+  if (!customFieldId) {
+    return false
+  }
+  const lastId = await contactCustomFieldService.findValue({
+    contactId: invoice.contactId,
+    customFieldId,
+  })
+  return lastId === invoice.id
+}
+
+/**
+ * A provider status change (webhook): on paid the id + tag (any invoice, so a
+ * per-invoice wait wakes), and the status field while it is the latest.
+ */
 export async function markInvoiceOnContact(props: {
   invoice: InvoiceModel
   status: string
 }): Promise<void> {
   const { invoice } = props
-  const values: Record<string, string> = {
-    [INVOICE_LAST_STATUS_FIELD]: props.status,
+  const values: Record<string, string> = {}
+  if (await isContactsLatestInvoice(invoice)) {
+    values[INVOICE_LAST_STATUS_FIELD] = props.status
   }
   if (props.status === "paid") {
     values[INVOICE_PAID_ID_FIELD] = invoice.id
@@ -150,11 +182,13 @@ export async function markInvoiceOnContact(props: {
   if (props.status === "partiallyPaid") {
     values[INVOICE_DEPOSIT_PAID_ID_FIELD] = invoice.id
   }
-  await setFields({
-    workspaceId: invoice.workspaceId,
-    contactId: invoice.contactId,
-    values,
-  })
+  if (Object.keys(values).length > 0) {
+    await setFields({
+      workspaceId: invoice.workspaceId,
+      contactId: invoice.contactId,
+      values,
+    })
+  }
   if (props.status === "paid") {
     await tagService.attachByNamesToContacts({
       workspaceId: invoice.workspaceId,

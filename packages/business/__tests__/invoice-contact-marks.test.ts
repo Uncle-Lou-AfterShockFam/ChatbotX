@@ -9,6 +9,7 @@ const m = vi.hoisted(() => ({
   resolve: vi.fn(),
   setValue: vi.fn(),
   findValue: vi.fn(),
+  attach: vi.fn(),
   /** The row status the post-write re-read sees (null = row gone). */
   rowStatus: { value: "open" as string | null },
 }))
@@ -35,9 +36,12 @@ vi.mock("../src/contact-custom-field/service", () => ({
     findValue: (...a: unknown[]) => m.findValue(...a),
   },
 }))
-vi.mock("../src/tag/service", () => ({ tagService: {} }))
+vi.mock("../src/tag/service", () => ({
+  tagService: { attachByNamesToContacts: (...a: unknown[]) => m.attach(...a) },
+}))
 
-const { markInvoiceCreated } = await import("../src/invoice/contact-marks")
+const { markInvoiceCreated, markInvoiceOnContact, markInvoiceStatusOnContact } =
+  await import("../src/invoice/contact-marks")
 
 const invoice = (over: Record<string, unknown> = {}) =>
   ({
@@ -162,5 +166,53 @@ describe("markInvoiceCreated", () => {
         { name: "invoice_last_status", type: "shortText" },
       ],
     })
+  })
+})
+
+describe("webhook status marks follow the contact's LATEST invoice (s237)", () => {
+  test("the latest invoice paid: status, paid id and tag", async () => {
+    await markInvoiceOnContact({ invoice: invoice(), status: "paid" })
+    expect(written()).toEqual({
+      invoice_last_status: "paid",
+      invoice_paid_id: "900",
+    })
+    expect(m.attach).toHaveBeenCalledTimes(1)
+  })
+
+  test("an OLDER invoice paid while a newer one is open: paid id + tag, never the status", async () => {
+    m.findValue.mockResolvedValue("901")
+    await markInvoiceOnContact({ invoice: invoice(), status: "paid" })
+    expect(written()).toEqual({ invoice_paid_id: "900" })
+    expect(m.attach).toHaveBeenCalledTimes(1)
+  })
+
+  test("an older invoice's deposit: deposit id only", async () => {
+    m.findValue.mockResolvedValue("901")
+    await markInvoiceOnContact({ invoice: invoice(), status: "partiallyPaid" })
+    expect(written()).toEqual({ invoice_deposit_paid_id: "900" })
+  })
+
+  test("an older invoice's failed payment writes nothing", async () => {
+    m.findValue.mockResolvedValue("901")
+    await markInvoiceOnContact({ invoice: invoice(), status: "payment_failed" })
+    expect(m.setValue).not.toHaveBeenCalled()
+    expect(m.attach).not.toHaveBeenCalled()
+  })
+
+  test("no invoice_last_id field resolved: the status is not written", async () => {
+    m.resolve.mockResolvedValue({ idMap: new Map() })
+    await markInvoiceOnContact({ invoice: invoice(), status: "payment_failed" })
+    expect(m.setValue).not.toHaveBeenCalled()
+  })
+
+  test("a refund rollback of the latest writes its status; of an older one, nothing", async () => {
+    await markInvoiceStatusOnContact({
+      invoice: invoice({ status: "partiallyPaid" }),
+    })
+    expect(written()).toEqual({ invoice_last_status: "partiallyPaid" })
+    vi.clearAllMocks()
+    m.findValue.mockResolvedValue("901")
+    await markInvoiceStatusOnContact({ invoice: invoice({ status: "open" }) })
+    expect(m.setValue).not.toHaveBeenCalled()
   })
 })

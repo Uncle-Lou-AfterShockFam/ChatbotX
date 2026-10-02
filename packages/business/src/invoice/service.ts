@@ -491,7 +491,15 @@ class InvoiceService extends BaseService {
     }
     const [opened] = await db
       .update(invoiceModel)
-      .set({ ...result.set, lastError: null, updatedAt: new Date() })
+      .set({
+        ...result.set,
+        // s237: opened already paid (an adopted, settled provider copy).
+        ...(result.set.status === "paid"
+          ? { amountPaid: sql`${invoiceModel.total}` }
+          : {}),
+        lastError: null,
+        updatedAt: new Date(),
+      })
       .where(
         and(eq(invoiceModel.id, invoice.id), eq(invoiceModel.status, "draft")),
       )
@@ -635,7 +643,17 @@ class InvoiceService extends BaseService {
     }
     const [row] = await (props.tx ?? db)
       .update(invoiceModel)
-      .set({ status: props.to, ...props.set, updatedAt: new Date() })
+      .set({
+        status: props.to,
+        ...props.set,
+        // s237: a provider-reported payment (Stripe invoice, WooCommerce,
+        // QuickBooks) settles the whole invoice; only the Checkout ledger
+        // (`payments.ts`) pays in parts, and it never comes through here.
+        ...(props.to === "paid"
+          ? { amountPaid: sql`${invoiceModel.total}` }
+          : {}),
+        updatedAt: new Date(),
+      })
       .where(
         and(
           eq(invoiceModel.id, props.invoiceId),
