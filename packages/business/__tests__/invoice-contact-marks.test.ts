@@ -236,15 +236,6 @@ describe("webhook marks follow the contact's LATEST invoice (s237)", () => {
     expect(field("invoice_last_status")).toBe("payment_failed")
   })
 
-  test("an older invoice's failed payment writes nothing", async () => {
-    m.rows.set("901", "open")
-    await markInvoiceCreated({ invoice: invoice({ id: "901" }) })
-    const before = m.writes.length
-    await markInvoiceOnContact({ invoice: invoice(), status: "payment_failed" })
-    expect(m.writes).toHaveLength(before)
-    expect(m.attach).not.toHaveBeenCalled()
-  })
-
   test("a refund rollback of the latest moves its status; of an older one, nothing", async () => {
     m.rows.set("900", "paid")
     await markInvoiceCreated({ invoice: invoice() })
@@ -342,5 +333,65 @@ describe("a late write never leaves a stale status (s237 probe T1-T4)", () => {
     release()
     await failed
     expect(field("invoice_last_status")).toBe("paid")
+  })
+
+  test("T7: a held failure write of an older invoice lands after a newer create", async () => {
+    await markInvoiceCreated({ invoice: invoice() })
+    const release = holdNextWrite("invoice_last_status")
+    const failA = markInvoiceOnContact({
+      invoice: invoice(),
+      status: "payment_failed",
+    })
+    await settle()
+    m.rows.set("901", "open")
+    await markInvoiceCreated({ invoice: invoice({ id: "901" }) })
+    release()
+    await failA
+    expect(field("invoice_last_id")).toBe("901")
+    expect(field("invoice_last_status")).toBe("open")
+  })
+})
+
+describe("payment_failed belongs to ONE invoice (s237 probe T8, T6)", () => {
+  test("T8: A failed, then B is created: B is open, not failed", async () => {
+    await markInvoiceCreated({ invoice: invoice() })
+    await markInvoiceOnContact({ invoice: invoice(), status: "payment_failed" })
+    expect(field("invoice_failed_id")).toBe("900")
+    m.rows.set("901", "open")
+    await markInvoiceCreated({ invoice: invoice({ id: "901" }) })
+    expect(field("invoice_last_status")).toBe("open")
+  })
+
+  test("an older invoice's failure records its id but never the latest's status", async () => {
+    m.rows.set("901", "open")
+    await markInvoiceCreated({ invoice: invoice({ id: "901" }) })
+    await markInvoiceOnContact({ invoice: invoice(), status: "payment_failed" })
+    expect(field("invoice_failed_id")).toBe("900")
+    expect(field("invoice_last_status")).toBe("open")
+  })
+
+  test("T6: a row that flips on every write stops after 4 writes and warns (bounded)", async () => {
+    await markInvoiceCreated({ invoice: invoice() })
+    const { logger } = await import("../src/logger")
+    // Every status write flips the row again, so the field never settles.
+    let flips = 0
+    const statuses = ["paid", "open"]
+    m.rows.set("900", "paid")
+    const original = m.fields.set.bind(m.fields)
+    m.fields.set = ((key: string, value: string) => {
+      original(key, value)
+      if (key === "cf:invoice_last_status") {
+        flips++
+        m.rows.set("900", statuses[flips % 2] as string)
+      }
+      return m.fields
+    }) as typeof m.fields.set
+    try {
+      await markInvoiceStatusOnContact({ invoice: invoice() })
+    } finally {
+      m.fields.set = original
+    }
+    expect(flips).toBe(4)
+    expect(logger.warn).toHaveBeenCalledTimes(1)
   })
 })

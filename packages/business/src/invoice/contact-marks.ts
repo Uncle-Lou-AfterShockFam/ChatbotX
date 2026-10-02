@@ -15,7 +15,10 @@ import { tagService } from "../tag/service"
  * - `invoice_pdf_link`: its PDF (hub `/pay/<t>/pdf` for stripeCheckout and
  *   woocommerce, which serves the receipt once paid; Stripe's PDF for
  *   stripeInvoice; "" for a woocommerce invoice opened before s213b)
- * - `invoice_last_status`: its latest status (`open`, `paid`, `payment_failed`, ...)
+ * - `invoice_last_status`: the status of the invoice `invoice_last_id` names,
+ *   from its row (`open`, `paid`, `partiallyPaid`, ...), or `payment_failed`
+ *   while that invoice is open and its last payment attempt failed (s237)
+ * - `invoice_failed_id`: the id of the invoice whose payment last FAILED (s237)
  * - `invoice_paid_id`: the id of the invoice that was just PAID. A flow waits
  *   per invoice with `customFieldChanged` on it and matchValue
  *   `{{raw:invoice_last_id}}` (the wait captures the id at wait start).
@@ -34,6 +37,7 @@ export const INVOICE_PAID_ID_FIELD = "invoice_paid_id"
 export const INVOICE_PAID_TAG = "invoice-paid"
 export const INVOICE_DEPOSIT_PAID_ID_FIELD = "invoice_deposit_paid_id"
 export const INVOICE_DEPOSIT_PAID_TAG = "invoice-deposit-paid"
+export const INVOICE_FAILED_ID_FIELD = "invoice_failed_id"
 
 async function setFields(props: {
   workspaceId: string
@@ -67,7 +71,7 @@ async function setFields(props: {
   return ids
 }
 
-/** Rounds a converging writer re-checks before it gives up (a writer racing it converges it too). */
+/** Rounds a converging writer runs; its last round only verifies. */
 const SYNC_MAX_ROUNDS = 4
 
 /**
@@ -79,25 +83,27 @@ const SYNC_MAX_ROUNDS = 4
  * when the field differs, read again, until they agree. No lock: each row
  * change (create, webhook CAS, refund) is followed by a mark that ends in this
  * loop, so the LAST writer to finish leaves the current truth.
- * `payment_failed` is not a row status: it stands while the row is still open
- * (the known gap stays: a later mark of a non-open status replaces it).
+ * `payment_failed` is not a row status: it stands only while
+ * `invoice_failed_id` names the latest invoice and its row is still open.
  */
 async function syncLatestStatus(props: {
   workspaceId: string
   contactId: string
   contactInboxId?: string
 }): Promise<void> {
-  const fields = [INVOICE_LAST_ID_FIELD, INVOICE_LAST_STATUS_FIELD].map(
-    (name) => ({ name, type: "shortText" as const }),
-  )
+  const fields = [
+    INVOICE_LAST_ID_FIELD,
+    INVOICE_LAST_STATUS_FIELD,
+    INVOICE_FAILED_ID_FIELD,
+  ].map((name) => ({ name, type: "shortText" as const }))
   const { idMap } = await customFieldService.resolveByNameAndType({
     workspaceId: props.workspaceId,
     fields,
   })
-  const [lastIdField, statusField] = fields.map((f) =>
+  const [lastIdField, statusField, failedIdField] = fields.map((f) =>
     idMap.get(customFieldResolutionKey(f)),
   )
-  if (!(lastIdField && statusField)) {
+  if (!(lastIdField && statusField && failedIdField)) {
     return
   }
   const read = (customFieldId: string) =>
@@ -105,7 +111,7 @@ async function syncLatestStatus(props: {
       contactId: props.contactId,
       customFieldId,
     })
-  for (let round = 0; round < SYNC_MAX_ROUNDS; round++) {
+  for (let round = 0; round <= SYNC_MAX_ROUNDS; round++) {
     const lastId = await read(lastIdField)
     if (!lastId) {
       return
@@ -124,11 +130,18 @@ async function syncLatestStatus(props: {
       return
     }
     const current = await read(statusField)
+    if (current === row.status) {
+      return
+    }
     if (
-      current === row.status ||
-      (current === PAYMENT_FAILED && row.status === "open")
+      current === PAYMENT_FAILED &&
+      row.status === "open" &&
+      (await read(failedIdField)) === lastId
     ) {
       return
+    }
+    if (round === SYNC_MAX_ROUNDS) {
+      break
     }
     await setFields({
       ...props,
@@ -231,10 +244,20 @@ export async function markInvoiceOnContact(props: {
 }
 
 /**
- * `payment_failed` lands only on the latest invoice while its row is still
- * open; the caller's sync then corrects it if the row moved meanwhile.
+ * `invoice_failed_id` records which invoice failed (written first, so a
+ * racing sync can tell whose failure the status is); `payment_failed` then
+ * lands only on the latest invoice while its row is still open. The caller's
+ * sync corrects it if the row or the latest invoice moved meanwhile.
  */
 async function markPaymentFailed(invoice: InvoiceModel): Promise<void> {
+  const base = {
+    workspaceId: invoice.workspaceId,
+    contactId: invoice.contactId,
+  }
+  await setFields({
+    ...base,
+    values: { [INVOICE_FAILED_ID_FIELD]: invoice.id },
+  })
   const field = { name: INVOICE_LAST_ID_FIELD, type: "shortText" as const }
   const { idMap } = await customFieldService.resolveByNameAndType({
     workspaceId: invoice.workspaceId,
@@ -257,8 +280,7 @@ async function markPaymentFailed(invoice: InvoiceModel): Promise<void> {
     return
   }
   await setFields({
-    workspaceId: invoice.workspaceId,
-    contactId: invoice.contactId,
+    ...base,
     values: { [INVOICE_LAST_STATUS_FIELD]: PAYMENT_FAILED },
   })
 }
