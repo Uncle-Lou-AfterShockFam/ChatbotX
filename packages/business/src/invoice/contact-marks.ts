@@ -1,10 +1,11 @@
-import { db, eq } from "@chatbotx.io/database/client"
+import { and, db, eq } from "@chatbotx.io/database/client"
 import { invoicePdfUrl } from "@chatbotx.io/database/partials"
 import { invoiceModel } from "@chatbotx.io/database/schema"
 import type { InvoiceModel } from "@chatbotx.io/database/types"
 import { customFieldResolutionKey } from "@chatbotx.io/utils/custom-field"
 import { contactCustomFieldService } from "../contact-custom-field/service"
 import { customFieldService } from "../custom-field/service"
+import { logger } from "../logger"
 import { tagService } from "../tag/service"
 
 /**
@@ -66,16 +67,86 @@ async function setFields(props: {
   return ids
 }
 
+/** Rounds a converging writer re-checks before it gives up (a writer racing it converges it too). */
+const SYNC_MAX_ROUNDS = 4
+
 /**
- * The create-time write: which invoice is the contact's latest, and its link.
- * A webhook may move the row (open -> paid) and mark the contact while this
- * write is in flight with the older status (s212b review), so the row is
- * re-read AFTER the write and a moved status is written again: the webhook
- * marks only after its status CAS, so the re-read sees any status it wrote.
- * Only while the contact still names THIS invoice: a newer invoice's marks
- * must never carry an older invoice's status. Known gap: `payment_failed` is
- * not a row status, so a later mark of the same invoice writes `open` over it
- * (as the flow step's re-mark of a reused invoice always did).
+ * s237: `invoice_last_status` always describes the invoice `invoice_last_id`
+ * names, read from its ROW, never from a status a caller decided on earlier
+ * (the live run had #26's payment write `paid` while the latest, #28, was
+ * open; a blind probe then showed every pass-the-status-in shape can land
+ * late). Every mark ends here: read the named invoice's row, write its status
+ * when the field differs, read again, until they agree. No lock: each row
+ * change (create, webhook CAS, refund) is followed by a mark that ends in this
+ * loop, so the LAST writer to finish leaves the current truth.
+ * `payment_failed` is not a row status: it stands while the row is still open
+ * (the known gap stays: a later mark of a non-open status replaces it).
+ */
+async function syncLatestStatus(props: {
+  workspaceId: string
+  contactId: string
+  contactInboxId?: string
+}): Promise<void> {
+  const fields = [INVOICE_LAST_ID_FIELD, INVOICE_LAST_STATUS_FIELD].map(
+    (name) => ({ name, type: "shortText" as const }),
+  )
+  const { idMap } = await customFieldService.resolveByNameAndType({
+    workspaceId: props.workspaceId,
+    fields,
+  })
+  const [lastIdField, statusField] = fields.map((f) =>
+    idMap.get(customFieldResolutionKey(f)),
+  )
+  if (!(lastIdField && statusField)) {
+    return
+  }
+  const read = (customFieldId: string) =>
+    contactCustomFieldService.findValue({
+      contactId: props.contactId,
+      customFieldId,
+    })
+  for (let round = 0; round < SYNC_MAX_ROUNDS; round++) {
+    const lastId = await read(lastIdField)
+    if (!lastId) {
+      return
+    }
+    const [row] = await db
+      .select({ status: invoiceModel.status })
+      .from(invoiceModel)
+      .where(
+        and(
+          eq(invoiceModel.id, lastId),
+          eq(invoiceModel.contactId, props.contactId),
+        ),
+      )
+      .limit(1)
+    if (!row) {
+      return
+    }
+    const current = await read(statusField)
+    if (
+      current === row.status ||
+      (current === PAYMENT_FAILED && row.status === "open")
+    ) {
+      return
+    }
+    await setFields({
+      ...props,
+      values: { [INVOICE_LAST_STATUS_FIELD]: row.status },
+    })
+  }
+  logger.warn(
+    { contactId: props.contactId },
+    "invoice_last_status did not settle; a concurrent mark converges it",
+  )
+}
+
+const PAYMENT_FAILED = "payment_failed"
+
+/**
+ * The create-time write: which invoice is the contact's latest, and its link;
+ * then the status converges from the row (a webhook may already have moved it,
+ * s212b review).
  */
 export async function markInvoiceCreated(props: {
   invoice: InvoiceModel
@@ -87,29 +158,15 @@ export async function markInvoiceCreated(props: {
     contactId: invoice.contactId,
     contactInboxId: props.contactInboxId,
   }
-  const ids = await setFields({
+  await setFields({
     ...base,
     values: {
       [INVOICE_LINK_FIELD]: invoice.hostedUrl ?? "",
       [INVOICE_PDF_LINK_FIELD]: invoicePdfUrl(invoice) ?? "",
       [INVOICE_LAST_ID_FIELD]: invoice.id,
-      [INVOICE_LAST_STATUS_FIELD]: invoice.status,
     },
   })
-  const [current] = await db
-    .select({ status: invoiceModel.status })
-    .from(invoiceModel)
-    .where(eq(invoiceModel.id, invoice.id))
-    .limit(1)
-  if (!current || current.status === invoice.status) {
-    return
-  }
-  await writeLatestStatus({
-    invoice,
-    status: current.status,
-    lastIdField: ids.get(INVOICE_LAST_ID_FIELD),
-    contactInboxId: props.contactInboxId,
-  })
+  await syncLatestStatus(base)
 }
 
 /**
@@ -121,84 +178,26 @@ export async function markInvoiceCreated(props: {
 export async function markInvoiceStatusOnContact(props: {
   invoice: InvoiceModel
 }): Promise<void> {
-  await writeLatestStatus({
-    invoice: props.invoice,
-    status: props.invoice.status,
+  await syncLatestStatus({
+    workspaceId: props.invoice.workspaceId,
+    contactId: props.invoice.contactId,
   })
-}
-
-/**
- * s237: `invoice_last_status` describes the invoice `invoice_last_id` names.
- * A status change of an OLDER invoice (paid, refunded, failed while a newer
- * one is open) must not overwrite it: live, #26's payment wrote `paid` while
- * the contact's latest, #28, was open. The check and the write are not
- * atomic, so a newer invoice's create can land in between; the id is read
- * again after the write and, when it moved, the newer invoice's row status
- * is written back (that create's own status write may have come first).
- */
-async function writeLatestStatus(props: {
-  invoice: InvoiceModel
-  status: string
-  lastIdField?: string
-  contactInboxId?: string
-}): Promise<void> {
-  const { invoice } = props
-  let lastIdField = props.lastIdField
-  if (!lastIdField) {
-    const field = { name: INVOICE_LAST_ID_FIELD, type: "shortText" as const }
-    const { idMap } = await customFieldService.resolveByNameAndType({
-      workspaceId: invoice.workspaceId,
-      fields: [field],
-    })
-    lastIdField = idMap.get(customFieldResolutionKey(field))
-  }
-  if (!lastIdField) {
-    return
-  }
-  const readLastId = () =>
-    contactCustomFieldService.findValue({
-      contactId: invoice.contactId,
-      customFieldId: lastIdField,
-    })
-  if ((await readLastId()) !== invoice.id) {
-    return
-  }
-  const base = {
-    workspaceId: invoice.workspaceId,
-    contactId: invoice.contactId,
-    contactInboxId: props.contactInboxId,
-  }
-  await setFields({
-    ...base,
-    values: { [INVOICE_LAST_STATUS_FIELD]: props.status },
-  })
-  const newerId = await readLastId()
-  if (!newerId || newerId === invoice.id) {
-    return
-  }
-  const [newer] = await db
-    .select({ status: invoiceModel.status })
-    .from(invoiceModel)
-    .where(eq(invoiceModel.id, newerId))
-    .limit(1)
-  if (newer) {
-    await setFields({
-      ...base,
-      values: { [INVOICE_LAST_STATUS_FIELD]: newer.status },
-    })
-  }
 }
 
 /**
  * A provider status change (webhook): on paid the id + tag (any invoice, so a
- * per-invoice wait wakes), and the status field while it is the latest.
+ * per-invoice wait wakes); the status field converges to the latest invoice.
+ * A failed payment of the latest, still-open invoice writes `payment_failed`.
  */
 export async function markInvoiceOnContact(props: {
   invoice: InvoiceModel
   status: string
 }): Promise<void> {
   const { invoice } = props
-  await writeLatestStatus({ invoice, status: props.status })
+  const base = {
+    workspaceId: invoice.workspaceId,
+    contactId: invoice.contactId,
+  }
   const values: Record<string, string> = {}
   if (props.status === "paid") {
     values[INVOICE_PAID_ID_FIELD] = invoice.id
@@ -207,12 +206,12 @@ export async function markInvoiceOnContact(props: {
     values[INVOICE_DEPOSIT_PAID_ID_FIELD] = invoice.id
   }
   if (Object.keys(values).length > 0) {
-    await setFields({
-      workspaceId: invoice.workspaceId,
-      contactId: invoice.contactId,
-      values,
-    })
+    await setFields({ ...base, values })
   }
+  if (props.status === PAYMENT_FAILED) {
+    await markPaymentFailed(invoice)
+  }
+  await syncLatestStatus(base)
   if (props.status === "paid") {
     await tagService.attachByNamesToContacts({
       workspaceId: invoice.workspaceId,
@@ -229,4 +228,37 @@ export async function markInvoiceOnContact(props: {
       emitFor: "all",
     })
   }
+}
+
+/**
+ * `payment_failed` lands only on the latest invoice while its row is still
+ * open; the caller's sync then corrects it if the row moved meanwhile.
+ */
+async function markPaymentFailed(invoice: InvoiceModel): Promise<void> {
+  const field = { name: INVOICE_LAST_ID_FIELD, type: "shortText" as const }
+  const { idMap } = await customFieldService.resolveByNameAndType({
+    workspaceId: invoice.workspaceId,
+    fields: [field],
+  })
+  const lastIdField = idMap.get(customFieldResolutionKey(field))
+  if (!lastIdField) {
+    return
+  }
+  const lastId = await contactCustomFieldService.findValue({
+    contactId: invoice.contactId,
+    customFieldId: lastIdField,
+  })
+  const [row] = await db
+    .select({ status: invoiceModel.status })
+    .from(invoiceModel)
+    .where(eq(invoiceModel.id, invoice.id))
+    .limit(1)
+  if (lastId !== invoice.id || row?.status !== "open") {
+    return
+  }
+  await setFields({
+    workspaceId: invoice.workspaceId,
+    contactId: invoice.contactId,
+    values: { [INVOICE_LAST_STATUS_FIELD]: PAYMENT_FAILED },
+  })
 }
